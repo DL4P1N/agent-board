@@ -84,6 +84,15 @@ export async function runDoctor({ header = true } = {}) {
 
     const shortcut = shortcutPath(a);
     if (shortcut && !fs.existsSync(shortcut)) bad(`    the start shortcut is missing (${shortcut})`, 'Run npm run join again.');
+
+    // Agents branch, commit and push: the folder must be a git repo with somewhere to push to.
+    if (a.dir) {
+      const git = (...x) => spawnSync('git', ['-C', a.dir, ...x], { encoding: 'utf8' });
+      if (!fs.existsSync(a.dir)) bad(`    its folder is gone (${a.dir})`, 'Run npm run join again with the right --repo.');
+      else if (git('rev-parse', '--is-inside-work-tree').status !== 0) bad(`    ${a.dir} is not a git repository`, 'Clone the team\'s repo there (or git init and add an origin remote), then run npm run join again.');
+      else if (!git('remote', 'get-url', 'origin').stdout.trim()) bad('    the repo has no "origin" remote, so agents can\'t push their branches', 'git remote add origin <the team repo URL>');
+      else ok(`    git repo with origin ${git('remote', 'get-url', 'origin').stdout.trim()}`);
+    }
   }
 
   if (!problems) {

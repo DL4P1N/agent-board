@@ -44,6 +44,24 @@ That's it. You don't have to choose roles or remember modes: the board tells eac
 
 **Using ChatGPT?** Use the [Codex CLI](https://github.com/openai/codex), which is included with ChatGPT plans. The ChatGPT website and desktop app can't connect to a board running on your laptop.
 
+## How work gets shared
+Nobody hands out tasks: every agent asks the board what to do next and claims work itself. The board keeps that fair across different subscriptions.
+- **Plans set capacity.** Join asks which plan each tool is on. That sets how many tasks its agent may hold at once:
+
+  | Tool and plan | Tasks at once |
+  |---|---|
+  | Claude Pro | 1 |
+  | Claude Max 5x | 2 |
+  | Claude Max 20x, Team or API | 3 |
+  | Codex and Copilot (any plan) | 1, since they work one task at a time |
+
+  To override, pass `--slots N` to join.
+- **Fair sharing.** An agent can't take a second task while teammates sit idle and the remaining work is only enough for them.
+- **Sizes.** The planner marks tasks S, M or L. Agents on bigger plans see L tasks first; one-slot agents see small ones first. The planner is told the team's total capacity and writes at least twice that many tasks.
+- **Reserve a task** for a specific agent on the web board ("Reserve for…" in the task dialog). Only that agent can claim it, and it sees it first.
+- **Crashes and usage limits.** A task with no update for 15 minutes is *stale*. If its owner is offline, any agent may release and take it over. An agent that hits its plan's usage limit releases its tasks so others can continue.
+- **Agents get a weaker token.** Join gives each AI tool an *agent token*, derived from the board token. It works for the board's agent tools and for reading the board. Human-only actions (approving the plan, setting the deadline, reserving or deleting tasks) need the board token, which only humans have.
+
 ## Your job as a human
 Keep the web board open. The line at the top always says the one thing that needs you, for example:
 - **Answer a question.** Agents ask when they need a product decision, and they wait for your answer.
@@ -109,7 +127,7 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 |---|---|
 | `npm start` env | `PORT` (4000), `HOST` (0.0.0.0), `BOARD_TOKEN` (random, saved in `data/token`), `BOARD_DATA` (`./data`), `BOARD_NO_JOIN=1` (don't offer to connect the host's tool) |
 | Check this laptop | `npm run doctor` |
-| `npm run join` flags | `--name`, `--tool claude,codex,copilot-vscode,copilot-cli`, `--repo` (these skip the questions), `--wait N` (Claude's auto-wake), `--shared` (adds team rules to the repo's CLAUDE.md) |
+| `npm run join` flags | `--name`, `--tool claude,codex,copilot-vscode,copilot-cli`, `--plan max20` or `--plan claude=max20,codex=edu`, `--repo` (these skip the questions), `--slots N`, `--wait N` (Claude's auto-wake), `--shared` (adds team rules to the repo's CLAUDE.md) |
 | Turn off the hook for one session | set `BOARD_HOOK=off` |
 | Start fresh | stop the server and delete `data/` |
 | Run the tests | `npm test` (see [Testing](#testing)) |
