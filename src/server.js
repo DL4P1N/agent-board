@@ -43,7 +43,9 @@ function agentFrom(req) {
 // ---------- MCP (stateless streamable HTTP) ----------
 app.post('/mcp', auth, async (req, res) => {
   // A Claude that just came online: nudge web boards to refresh (SSE {kind:'presence'}).
-  if (board.touch(agentFrom(req), 'agent')) board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
+  const cameOnline = board.touch(agentFrom(req), 'agent');
+  const clientChanged = req.body?.method === 'initialize' && board.setClient(agentFrom(req), clientLabel(req.body.params?.clientInfo));
+  if (cameOnline || clientChanged) board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
   const server = buildMcpServer(board, agentFrom(req));
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   res.on('close', () => {
@@ -166,12 +168,32 @@ app.listen(PORT, HOST, () => {
   console.log(`  npm run join -- --url http://localhost:${PORT} --token ${TOKEN}\n`);
 });
 
+// Friendly name for the AI tool behind an MCP connection (from initialize's clientInfo.name).
+function clientLabel(info) {
+  const n = String(info?.name || '').toLowerCase();
+  if (!n) return null;
+  if (n.includes('claude')) return 'Claude Code';
+  if (n.includes('codex')) return 'Codex';
+  if (n.includes('visual studio code') || n.includes('vscode')) return 'Copilot (VS Code)';
+  if (n.includes('copilot')) return 'Copilot CLI';
+  return String(info.name).slice(0, 40);
+}
+
+// How to start the orchestrator in each supported tool (shown on the web board).
+const AGENT_TOOLS = [
+  { id: 'claude', name: 'Claude Code', start: '/board', where: 'Type it in Claude Code, opened in the hackathon repo.' },
+  { id: 'codex', name: 'Codex (ChatGPT)', start: '$board', where: 'Type it in the Codex CLI, opened in the hackathon repo.' },
+  { id: 'copilot-vscode', name: 'GitHub Copilot in VS Code', start: '/board', where: 'Open the hackathon repo in VS Code, switch Copilot Chat to Agent mode, then type it.' },
+  { id: 'copilot-cli', name: 'GitHub Copilot CLI', start: 'Join the team board: call the board get_playbook tool and follow it.', where: 'Paste it into the Copilot CLI, opened in the hackathon repo.' },
+];
+
 // Copy-paste join commands + web links, for the web board's "invite teammates" step.
 function setupInfo() {
   const addrs = reachableAddresses();
   const list = [...addrs, { ip: 'localhost', label: 'this machine only', rank: 9 }];
   return {
     port: PORT,
+    agent_tools: AGENT_TOOLS,
     clone_command: 'git clone https://github.com/DL4P1N/claude-board && cd claude-board && npm install',
     join_commands: list.map((a) => ({
       label: a.label,

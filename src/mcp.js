@@ -2,8 +2,13 @@
 // bound to the calling agent's identity from the X-Agent header.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const MAX_WAIT_S = 90;
+const PLAYBOOK_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'playbook.md');
+const playbook = () => fs.readFileSync(PLAYBOOK_PATH, 'utf8');
 
 export function buildMcpServer(board, baseAgent) {
   const server = new McpServer(
@@ -11,7 +16,8 @@ export function buildMcpServer(board, baseAgent) {
     {
       instructions:
         'Shared coordination board for a team of humans and Claude agents working on one git repo. ' +
-        'Start with board_status: its next_action field tells you exactly what to do now (set the goal, plan, claim work, or merge). Follow it. ' +
+        'If you were asked to join or work on the board, call get_playbook first and follow it. ' +
+        'Then use board_status: its next_action field tells you exactly what to do now (set the goal, plan, claim work, or merge). ' +
         'Claim a task before working on it; work on its branch, never on main (unless you are the integrator). ' +
         'Lock only shared hot files (schemas, package.json, route tables) before editing them. ' +
         'When idle or waiting, call wait_for_events with the last cursor. Post when blocked; use ask_human for decisions only a person can make. ' +
@@ -41,6 +47,23 @@ export function buildMcpServer(board, baseAgent) {
       inputSchema: { as: asArg },
     },
     wrap(({ as }) => board.status(who(as)))
+  );
+
+  server.registerTool(
+    'get_playbook',
+    {
+      title: 'Get the playbook',
+      description: 'How to work as this laptop\'s orchestrator on the team board (works for Claude Code, Codex, Copilot and any other agent). Call this when asked to join the board, then follow it.',
+      inputSchema: {},
+    },
+    wrap(() => playbook())
+  );
+
+  // Same playbook as an MCP prompt, for clients that surface prompts as slash commands.
+  server.registerPrompt(
+    'board',
+    { title: 'Join the team board', description: 'Start working as this laptop\'s orchestrator on the team board.' },
+    () => ({ messages: [{ role: 'user', content: { type: 'text', text: 'Join the team board and follow this playbook:\n\n' + playbook() } }] })
   );
 
   server.registerTool(

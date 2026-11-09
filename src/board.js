@@ -55,6 +55,7 @@ export class Board {
         name TEXT NOT NULL,
         kind TEXT NOT NULL,
         last_seen INTEGER NOT NULL,
+        client TEXT,
         PRIMARY KEY (name, kind)
       );
       CREATE TABLE IF NOT EXISTS questions (
@@ -68,6 +69,13 @@ export class Board {
         answered_at INTEGER
       );
     `);
+    this.migrate();
+  }
+
+  // Older boards created presence_v2 without the client column.
+  migrate() {
+    const cols = this.db.prepare('PRAGMA table_info(presence_v2)').all().map((c) => c.name);
+    if (!cols.includes('client')) this.db.exec('ALTER TABLE presence_v2 ADD COLUMN client TEXT');
   }
 
   // ---------- events ----------
@@ -354,16 +362,26 @@ export class Board {
     return kind === 'agent' && (!prev || now - prev.last_seen >= AGENT_ONLINE_MS);
   }
 
+  // Which AI tool an agent uses (from the MCP initialize handshake), e.g. "Claude Code", "Codex".
+  setClient(name, client) {
+    const root = String(name || '').split('/')[0];
+    if (!root || !client) return false;
+    const r = this.db.prepare("UPDATE presence_v2 SET client = ? WHERE name = ? AND kind = 'agent' AND (client IS NULL OR client != ?)").run(client, root, client);
+    return r.changes > 0;
+  }
+
   // Agents count as online if they called the board in the last 10 min (orchestrators can be busy for a while).
   presence(humansOnline = new Set()) {
     const rows = this.db.prepare('SELECT * FROM presence_v2 ORDER BY name, kind').all();
     const out = rows.map((r) => ({
       name: r.name,
+      person: personOf(r.name),
       kind: r.kind,
+      client: r.client || null,
       last_seen: r.last_seen,
       online: r.kind === 'human' ? humansOnline.has(r.name) : Date.now() - r.last_seen < AGENT_ONLINE_MS,
     }));
-    for (const h of humansOnline) if (!out.some((p) => p.name === h && p.kind === 'human')) out.push({ name: h, kind: 'human', last_seen: Date.now(), online: true });
+    for (const h of humansOnline) if (!out.some((p) => p.name === h && p.kind === 'human')) out.push({ name: h, person: h, kind: 'human', last_seen: Date.now(), online: true });
     return out;
   }
 
@@ -419,7 +437,7 @@ export class Board {
       if (mine.length < 3) {
         steps.push(
           claimable.length
-            ? `Claimable now (highest priority first): ${claimable.slice(0, 5).map((t) => `#${t.id} P${t.priority} ${t.title}`).join('; ')}. claim_task one per free subagent (max 3 active).`
+            ? `Claimable now (highest priority first): ${claimable.slice(0, 5).map((t) => `#${t.id} P${t.priority} ${t.title}`).join('; ')}. claim_task and do it (agents with background subagents: one per subagent, max 3 active; otherwise one at a time).`
             : 'No open tasks are claimable right now (all taken or waiting on dependencies). Help on the help channel, review others\' work, or create_task for gaps you notice; then wait_for_events.'
         );
       }
@@ -456,6 +474,11 @@ export function sameTeam(a, b) {
   const ra = a.split('/')[0];
   const rb = b.split('/')[0];
   return ra === rb;
+}
+
+// The person behind an agent name: join names extra tools on one laptop "<person>-<tool>".
+export function personOf(name) {
+  return String(name || '').split('/')[0].replace(/-(claude|codex|copilot|copilotcli)$/, '');
 }
 
 function normPath(p) {

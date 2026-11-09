@@ -249,18 +249,26 @@
   .gloss { margin: 8px 0 0; max-height: 70vh; overflow-y: auto; padding-right: 4px; }
   .step, .panel, .col, #now { scroll-margin-top: 64px; }
   .panel-hint { font-size: 12px; color: var(--muted); margin: -4px 0 8px; }
+  .pill.tool { background: transparent; border: 1px solid var(--line); color: var(--muted); line-height: 14px; }
+  .tools { list-style: none; margin: 6px 0 6px; padding: 0; border: 1px solid var(--line); border-radius: 8px; }
+  .tool-r { display: grid; grid-template-columns: minmax(150px, 210px) minmax(0, 1fr); gap: 2px 12px; align-items: center; padding: 8px 10px; border-top: 1px solid var(--line); }
+  .tool-r:first-child { border-top: 0; }
+  .tool-r .tn { font-weight: 600; }
+  .tool-r .tw { grid-column: 2; font-size: 12px; color: var(--muted); }
+  .tool-r .cmd { margin: 0; }
+  @media (max-width: 600px) { .tool-r { grid-template-columns: minmax(0, 1fr); } .tool-r .tw { grid-column: 1; } }
 </style>
 </head>
 <body>
 <form id="gate" class="gate" hidden novalidate>
   <h1>Claude Board</h1>
-  <p style="margin:6px 0 0">Your hackathon team's shared task board. Every teammate's Claude Code takes tasks from here; on this page you watch progress, answer the agents' questions and steer.</p>
+  <p style="margin:6px 0 0">Your hackathon team's shared task board. Every teammate's AI coding agent (Claude Code, Codex or GitHub Copilot) takes tasks from here; on this page you watch progress, answer the agents' questions and steer.</p>
   <label for="g-token">Board token</label>
   <input id="g-token" autocomplete="off" spellcheck="false" required>
   <p class="hint">The password for this board. It's in the link the host shared (<code>…?token=…</code>), or printed by <code>npm start</code> on the host laptop.</p>
   <label for="g-name">Your name</label>
   <input id="g-name" autocomplete="nickname" spellcheck="false" placeholder="e.g. dana" required>
-  <p class="hint">Agents will @mention you by this name. If you connect your own Claude, use the same name there.</p>
+  <p class="hint">Agents will @mention you by this name. If you connect your own AI agent, use the same name there.</p>
   <div id="g-err" class="err" role="alert"></div>
   <button type="submit" id="g-go">Enter board</button>
 </form>
@@ -268,7 +276,7 @@
 <div id="app" hidden>
   <header>
     <h1>Claude Board</h1>
-    <span class="tagline">your team's Claude Code agents, on one task board</span>
+    <span class="tagline">your team's AI coding agents, on one task board</span>
     <span id="conn" class="conn" role="status">Connecting…</span>
     <div class="needs" id="needs"></div>
     <span class="sp"></span>
@@ -287,7 +295,7 @@
     <section id="setup" class="panel setup" aria-label="Team setup guide"></section>
 
     <section class="panel" aria-labelledby="p-h">
-      <div class="sec-h"><h2 id="p-h" style="font-size:13px">Who's doing what</h2><span class="muted">one card per laptop: its main Claude and the helper agents it started · click a name to filter the board</span></div>
+      <div class="sec-h"><h2 id="p-h" style="font-size:13px">Who's doing what</h2><span class="muted">one card per laptop: its main agent, which AI tool it runs, and any helper agents it started · click a name to filter the board</span></div>
       <div class="people" id="people"></div>
     </section>
 
@@ -317,7 +325,7 @@
             <input id="msg" autocomplete="off" aria-label="Message" placeholder="Message… (@name to mention)">
             <button type="submit" id="send">Send</button>
           </form>
-          <p class="hint">Agents read this chat. Write <code>@alice</code> to talk to alice's Claude, <code>@all</code> for everyone · click any name to @mention it · Enter sends · press / to focus</p>
+          <p class="hint">Agents read this chat. Write <code>@alice</code> to talk to alice's agent, <code>@all</code> for everyone · click any name to @mention it · Enter sends · press / to focus</p>
         </section>
         <section class="panel" aria-labelledby="l-h">
           <div class="sec-h"><h2 id="l-h" style="font-size:13px">File locks</h2><span class="muted" id="l-count"></span></div>
@@ -361,15 +369,17 @@
   <div class="dh"><h2 id="hd-title">What everything means</h2><button type="button" class="x" data-close aria-label="Close">×</button></div>
   <dl class="gloss">
     <dt>Claude Board</dt>
-    <dd>A shared to-do list for a hackathon team that builds with Claude Code. Each teammate's Claude takes tasks from here, works on them in its own git branch, and reports back. Humans watch, answer questions and steer from this page.</dd>
-    <dt>Main Claude (orchestrator)</dt>
-    <dd>The Claude Code session on a laptop where someone typed <code>/board</code>. It claims tasks and hands each one to a helper agent. It shows up under the laptop owner's name, e.g. <code>alice</code>.</dd>
+    <dd>A shared to-do list for a hackathon team that builds with AI coding agents. Each teammate's agent takes tasks from here, works on them in its own git branch, and reports back. Humans watch, answer questions and steer from this page.</dd>
+    <dt>Agent (and which tool)</dt>
+    <dd>The AI coding tool on a teammate's laptop, connected to this board. A team can mix tools: <b>Claude Code</b>, <b>Codex (ChatGPT)</b>, <b>GitHub Copilot in VS Code</b> or <b>GitHub Copilot CLI</b>. The small label next to a name (e.g. <span class="pill tool">Codex</span>) shows which one; it appears once that agent has connected.</dd>
+    <dt>Main agent (orchestrator)</dt>
+    <dd>The agent session on a laptop where someone typed the start command (e.g. <code>/board</code> in Claude Code; Start here, step 3 lists each tool). It claims tasks and reports back, and shows up under the laptop owner's name, e.g. <code>alice</code>. Any of the supported tools can be the orchestrator. Claude Code can run several helper agents in parallel; the others work through one task at a time.</dd>
     <dt>Helper agent (subagent)</dt>
-    <dd>A worker the main Claude starts for one task, shown as <code>owner/helper</code>, e.g. <code>alice/ui-worker</code>.</dd>
+    <dd>A worker the main agent starts for one task, shown as <code>owner/helper</code>, e.g. <code>alice/ui-worker</code>. Today only Claude Code starts helpers.</dd>
     <dt>Planner</dt>
-    <dd>The first Claude that sees the goal. It reads the repo and writes the task list (the backlog). After that it works like everyone else.</dd>
+    <dd>The first agent that sees the goal. It reads the repo and writes the task list (the backlog). After that it works like everyone else.</dd>
     <dt>Integrator (merges to main)</dt>
-    <dd>The one person whose Claude merges finished branches into <code>main</code>, runs the tests and marks tasks Done. Having just one avoids merge chaos. Pick them in Start here; if nobody is picked, the first Claude with finished work takes the job.</dd>
+    <dd>The one person whose agent merges finished branches into <code>main</code>, runs the tests and marks tasks Done. Having just one avoids merge chaos. Pick them in Start here; if nobody is picked, the first agent with finished work takes the job.</dd>
     <dt>Task statuses</dt>
     <dd><b>Open</b> ready to pick up → <b>Claimed</b> an agent took it → <b>In progress</b> being worked on → <b>Blocked</b> stuck, needs help → <b>Review</b> pushed to a branch, waiting to be merged → <b>Done</b> merged into main. Drag cards between columns to change a status yourself.</dd>
     <dt>Waits on #3</dt>
@@ -381,7 +391,7 @@
     <dt>Questions</dt>
     <dd>When an agent needs a human decision it asks here and waits. Answer in the orange box at the top; the agent continues as soon as you reply.</dd>
     <dt>Talking to agents</dt>
-    <dd>Agents read the chat in Activity. Write <code>@alice</code> to address alice's Claude, <code>@alice/ui-worker</code> for one helper, or <code>@all</code> for everyone. <code>#12</code> links to task 12.</dd>
+    <dd>Agents read the chat in Activity. Write <code>@alice</code> to address alice's agent, <code>@alice/ui-worker</code> for one helper, or <code>@all</code> for everyone. <code>#12</code> links to task 12.</dd>
     <dt>Keyboard</dt>
     <dd><code>n</code> new task · <code>/</code> write a message · <code>?</code> this help · <code>Esc</code> closes dialogs.</dd>
   </dl>
@@ -412,7 +422,10 @@ let editing = null; // snapshot of the task open in the dialog
 
 // ---------- helpers ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const root = (a) => String(a || '').split('/')[0];
+// An agent's own name without its helper part: "dana-codex/ui" -> "dana-codex".
+const agentRoot = (a) => String(a || '').split('/')[0];
+// The person behind a name. With several AI tools on one laptop, join names them "<person>-<tool>".
+const root = (a) => agentRoot(a).replace(/-(claude|codex|copilot|copilotcli)$/, '');
 const sameTeam = (a, b) => !!a && !!b && root(a) === root(b);
 const hue = (name) => { let h = 0; for (const c of root(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return HUES[h % HUES.length]; };
 const hs = (name) => `style="--h:${hue(name)}"`;
@@ -541,16 +554,16 @@ function people() {
   return [...map.values()].sort((a, b) => (b.name === me) - (a.name === me) || a.name.localeCompare(b.name));
 }
 
-// Who is connected: laptops whose Claude talked to the board (agents) and people with this page open (humans).
+// Who is connected: laptops whose agent talked to the board (agents) and people with this page open (humans).
 // One name can be both (the join script and this page use the same name), so we also infer "agent" from
 // things only agents do (claiming, locking, asking, helper agents named owner/helper).
 function roster() {
   const map = new Map();
-  const get = (n) => { if (!map.has(n)) map.set(n, { name: n, agent: false, agentOnline: false, human: false, humanOnline: false, last: 0 }); return map.get(n); };
+  const get = (n) => { if (!map.has(n)) map.set(n, { name: n, agent: false, agentOnline: false, human: false, humanOnline: false, last: 0, client: null, clients: [] }); return map.get(n); };
   const now = Date.now();
   for (const p of state.presence || []) {
-    const r = get(p.name); r.last = Math.max(r.last, p.last_seen || 0);
-    if (p.kind === 'agent') { r.agent = true; if (p.online) r.agentOnline = true; }
+    const r = get(p.person || root(p.name)); r.last = Math.max(r.last, p.last_seen || 0);
+    if (p.kind === 'agent') { r.agent = true; if (p.online) r.agentOnline = true; if (p.client && !r.clients.includes(String(p.client))) r.clients.push(String(p.client)); r.client = r.clients.join(', ') || null; }
     else { r.human = true; if (p.online) r.humanOnline = true; }
   }
   for (const e of state.events) {
@@ -563,6 +576,11 @@ function roster() {
   if (me) { const r = get(me); r.human = true; r.humanOnline = true; }
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
+// Which AI tool a laptop's agent uses ("Codex", "Claude Code", …), or null until it reports it.
+const clientOf = (name) => { const a = agentRoot(name); const pr = state.presence || []; const p = pr.find((x) => x.name === a && x.kind === 'agent') || pr.find((x) => x.kind === 'agent' && root(x.name) === root(a) && x.client); return p?.client ? String(p.client) : null; };
+// "alice's agent (Codex)" / "alice's agent"
+const agentOf = (name) => { const c = clientOf(name); return `${name}'s agent${c ? ` (${c})` : ''}`; };
+const toolPill = (c) => c ? `<span class="pill tool" title="AI tool: ${esc(c)}">${esc(c)}</span>` : '';
 
 // The five setup steps, driven by live state.
 function setupInfo() {
@@ -574,8 +592,8 @@ function setupInfo() {
     { key: 'invite', title: 'Connect everyone\'s laptop to this board', done: agents.length > 0,
       sum: agents.length ? `${agents.length} laptop${agents.length > 1 ? 's' : ''} connected` : 'nobody connected yet' },
     { key: 'goal', title: 'Say what you\'re building', done: !!S.goal, sum: S.goal ? short(S.goal, 60) : 'not set' },
-    { key: 'start', title: 'Start Claude on every laptop', done: agentsOn.length > 0,
-      sum: agentsOn.length ? `${agentsOn.length} Claude${agentsOn.length > 1 ? 's' : ''} online` : 'no Claude online' },
+    { key: 'start', title: 'Start the agent on every laptop', done: agentsOn.length > 0,
+      sum: agentsOn.length ? `${plural(agentsOn.length, 'agent')} online` : 'no agent online' },
     { key: 'backlog', title: 'Get a task list', done: n > 0,
       sum: n ? `${n} task${n > 1 ? 's' : ''}${S.planner ? ` · planned by ${S.planner}` : ''}` : S.planner ? `${S.planner} is planning…` : 'no tasks yet' },
     { key: 'integrator', title: 'Pick who merges to main', done: !!S.integrator, sum: S.integrator ? S.integrator : 'optional · not picked' },
@@ -645,8 +663,8 @@ function renderNow(qOpen, unread, si) {
     text = {
       invite: 'Connect your first laptop: run the two commands in step 1 of Start here',
       goal: 'Write what you\'re building (1–3 sentences) so the agents can plan',
-      start: si.agents.length ? 'No Claude is online right now: open Claude Code in your project and type /board' : 'Open Claude Code in your project folder and type /board',
-      backlog: !S.goal ? 'Write the goal first, then the agents plan the tasks' : S.planner ? `Nothing to do yet: ${S.planner}'s Claude is writing the task list` : 'Nothing to do yet: waiting for a Claude to start writing the task list (or add tasks yourself)',
+      start: si.agents.length ? 'No agent is online right now: start yours in your project folder (step 3 shows what to type in each tool)' : 'Start your AI agent in your project folder: step 3 shows what to type in each tool',
+      backlog: !S.goal ? 'Write the goal first, then the agents plan the tasks' : S.planner ? `Nothing to do yet: ${agentOf(S.planner)} is writing the task list` : 'Nothing to do yet: waiting for an agent to start writing the task list (or add tasks yourself)',
     }[si.cur];
     if (si.cur === 'backlog' && S.goal) kind = 'ok';
   }
@@ -666,15 +684,15 @@ function renderSetup(si) {
   if (!setupOpen(si.complete)) {
     patch(el, `<div class="sumbar">
       <span class="goal" title="${esc(S.goal || 'No goal set yet')}"><b>Goal:</b> ${S.goal ? esc(S.goal) : '<span class="muted">not set</span>'}</span>
-      <span title="The person whose Claude merges finished branches into main">Merges to main: ${S.integrator ? nameTag(S.integrator) : '<span class="muted">not picked yet</span>'}</span>
-      <span title="Claude = a laptop whose Claude Code is connected (seen in the last 10 min). Watching = people with this page open." style="display:inline-flex;align-items:center;gap:5px"><span class="on ${si.agentsOn.length ? 'y' : ''}"></span>${plural(si.agentsOn.length, 'Claude')} online · ${si.watchers.length} watching</span>
+      <span title="The person whose agent merges finished branches into main">Merges to main: ${S.integrator ? nameTag(S.integrator) : '<span class="muted">not picked yet</span>'}</span>
+      <span title="Agents = laptops whose AI agent is connected (seen in the last 10 min). Watching = people with this page open." style="display:inline-flex;align-items:center;gap:5px"><span class="on ${si.agentsOn.length ? 'y' : ''}"></span>${plural(si.agentsOn.length, 'agent')} online · ${si.watchers.length} watching</span>
       <span class="acts"><button type="button" class="ghost" data-act="invite" data-fk="s-inv">Invite teammates</button><button type="button" class="ghost" data-act="setup-open" data-fk="s-open" aria-expanded="false">Setup${si.doneCount < 5 ? ` ${si.doneCount}/5` : ''}</button></span></div>`);
     return;
   }
   const body = { invite: stepInvite, goal: stepGoal, start: stepStart, backlog: stepBacklog, integrator: stepIntegrator };
   patch(el, `<div class="sh"><h2>Start here</h2><span class="muted">${si.doneCount} of 5 done · steps tick off by themselves</span><span class="sp"></span>
       <button type="button" class="ghost" data-act="setup-close" data-fk="s-close" style="font-size:12px;padding:3px 10px" aria-expanded="true">Hide setup</button></div>
-    <p class="intro">This board coordinates your team's Claude Code agents. They split the goal into small tasks, claim them, build each one in its own git branch, and ask you here when they need a decision.</p>
+    <p class="intro">This board coordinates your team's AI coding agents: Claude Code, Codex or GitHub Copilot, mixed however you like. They split the goal into small tasks, claim them, build each one in its own git branch, and ask you here when they need a decision.</p>
     <ol class="steps">${si.steps.map((s, i) => {
       const open = stepOpen(s.key, si.cur);
       return `<li class="step ${s.done ? 'done' : ''} ${s.key === si.cur ? 'cur' : ''}" id="step-${s.key}">
@@ -686,9 +704,10 @@ function renderSetup(si) {
 function chips(si) {
   return `<div class="chips">${si.ros.filter((r) => r.agent || r.humanOnline).map((r) => {
     const bits = [];
-    if (r.agent) bits.push(r.agentOnline ? 'Claude online' : 'Claude offline');
+    if (r.agent) bits.push(`${r.client || 'agent'} ${r.agentOnline ? 'online' : 'offline'}`);
     if (r.humanOnline) bits.push(r.name === me ? 'you' : 'watching');
-    const tip = (r.agent ? (r.agentOnline ? 'This laptop\'s Claude talked to the board in the last 10 minutes. ' : `This laptop's Claude was last seen ${ago(r.last)}. `) : 'No Claude connected under this name. ') + (r.humanOnline ? 'Has this page open.' : '');
+    const ag = `This laptop's agent${r.client ? ` (${r.client})` : ''}`;
+    const tip = (r.agent ? (r.agentOnline ? `${ag} talked to the board in the last 10 minutes. ` : `${ag} was last seen ${ago(r.last)}. `) : 'No agent connected under this name. ') + (r.humanOnline ? 'Has this page open.' : '');
     return `<span class="chip" title="${esc(tip)}"><span class="on ${r.agentOnline || r.humanOnline ? 'y' : ''}"></span><span class="pc" ${hs(r.name)}>${esc(r.name)}</span><span class="muted">${esc(bits.join(' · '))}</span></span>`;
   }).join('')}</div>`;
 }
@@ -697,9 +716,9 @@ function stepInvite(si) {
   if (!su || !su.join_commands?.length) return '<p>Ask the host for the join command printed by <code>npm start</code>.</p>' + chips(si);
   const [best, ...rest] = su.join_commands;
   const onlyLocal = best.ip === 'localhost';
-  return `<p>Each teammate runs these two commands in a terminal on their own laptop (you too, if your laptop will run Claude). They connect that laptop's Claude Code to this board.</p>
+  return `<p>Each teammate runs these two commands in a terminal on their own laptop (you too, if your laptop will run an AI agent). They connect that laptop's agent to this board.</p>
     <div class="sub">1 · Get the board tool (once per laptop)</div>${cmdBox(su.clone_command, 'clone', 'install command')}
-    <div class="sub">2 · Connect to this board: run it inside the <code>claude-board</code> folder; it asks for your name and your project folder</div>${cmdBox(best.command, 'join', 'join command')}
+    <div class="sub">2 · Connect to this board: run it inside the <code>claude-board</code> folder; it asks for your name, your project folder and which AI tool(s) you use</div>${cmdBox(best.command, 'join', 'join command')}
     ${onlyLocal ? '<p class="note">No network address found, so teammates can\'t reach this laptop yet. Join the same wifi, or start Tailscale, then reload.</p>' : `<p class="hint">Address: ${esc(best.label)}.</p>`}
     ${rest.length ? `<button type="button" class="link muted" data-act="addrs" data-fk="addrs" aria-expanded="${ui.addrs}" style="font-size:12px;margin-top:4px">${ui.addrs ? '▾' : '▸'} Other addresses (if that one doesn't connect)</button>
       ${ui.addrs ? rest.map((a, i) => `<div class="sub">${esc(a.label)}</div>${cmdBox(a.command, 'alt' + i, 'join command for ' + a.label)}`).join('') : ''}` : ''}
@@ -709,42 +728,47 @@ function stepInvite(si) {
 function stepGoal() {
   const S = state.settings;
   if (S.goal && !ui.editGoal) return `<p class="goaltext">${esc(S.goal)}</p><button type="button" class="ghost" data-act="goal-edit" data-fk="goal-edit" style="font-size:12px;padding:3px 10px">Edit goal</button>`;
-  return `<p>In 1–3 sentences: what are you building, and what should the demo show? The agents plan their tasks from this. (A Claude may also ask you and fill it in.)</p>
+  return `<p>In 1–3 sentences: what are you building, and what should the demo show? The agents plan their tasks from this. (An agent may also ask you and fill it in.)</p>
     <form class="goalform" data-goalform><label class="vh" for="goal-in">Project goal</label>
       <textarea id="goal-in" data-keep="goal" rows="2" maxlength="1000" title="Enter saves · Shift+Enter adds a new line" placeholder="e.g. A web app where hackathon teams submit their project and everyone votes. The demo shows submitting, voting and a live leaderboard.">${esc(S.goal)}</textarea>
       <button type="submit" data-fk="goal-save">Save goal</button>${S.goal ? '<button type="button" class="ghost" data-act="goal-cancel" data-fk="goal-cancel">Cancel</button>' : ''}</form>`;
 }
 function stepStart(si) {
-  return `<p>On each laptop, open Claude Code in your hackathon project folder and type:</p>${cmdBox('/board', 'board', '/board')}
-    <p class="muted">That Claude becomes the laptop's <b>main Claude</b> (the "orchestrator"): it takes tasks from this board and hands each one to a helper agent that works in its own git branch. If Claude says it doesn't know <code>/board</code>, re-run the connect command from step 1.</p>
-    <p>${si.agentsOn.length ? `Online now: ${si.agentsOn.map((r) => nameTag(r.name)).join(', ')}` : 'No Claude online yet. It shows up here a few seconds after it starts.'}</p>`;
+  const tools = state.setup?.agent_tools?.length ? state.setup.agent_tools : [{ id: 'claude', name: 'Claude Code', start: '/board', where: 'Type it in Claude Code, opened in the hackathon repo.' }];
+  return `<p>On each laptop, open your AI tool in the hackathon project folder and start the board. Find your tool below:</p>
+    <ul class="tools">${tools.map((t) => `<li class="tool-r"><span class="tn">${esc(t.name)}</span>${cmdBox(t.start, 'start-' + t.id, `start command for ${t.name}`)}<span class="tw">${esc(t.where || '')}</span></li>`).join('')}</ul>
+    <p class="muted">That session becomes the laptop's <b>main agent</b> (the "orchestrator"): it takes tasks from this board and builds each one in its own git branch. Claude Code can also hand tasks to several helper agents at once; the other tools work one task at a time. If the tool doesn't know the command, re-run the connect command from step 1 and pick that tool.</p>
+    <p>${si.agentsOn.length ? `Online now: ${si.agentsOn.map((r) => `${nameTag(r.name)}${r.client ? ` <span class="muted">(${esc(r.client)})</span>` : ''}`).join(', ')}` : 'No agent online yet. It shows up here a few seconds after it starts.'}</p>`;
 }
 function stepBacklog() {
   const S = state.settings; const n = state.tasks.length;
   const add = '<div class="inl"><span class="muted">You can always add tasks yourself:</span><button type="button" class="ghost" data-act="new-task" data-fk="s-new" style="font-size:12px;padding:3px 10px">+ New task</button></div>';
   if (n) return `<p>${plural(n, 'task')} on the board${S.planner ? `, written by the planner, ${nameTag(S.planner)}` : ''}. Agents claim them on their own, highest priority first.</p>${add}`;
-  if (!S.goal) return `<p>Write the goal first (step 2). Then the first Claude that types <code>/board</code> becomes the <b>planner</b> and writes the task list from it automatically.</p>${add}`;
-  if (S.planner) return `<p>${nameTag(S.planner)}'s Claude is the <b>planner</b> and is writing the task list now<span class="dots"></span> Cards appear on the board below as it goes.</p>${add}`;
-  return `<p>The first Claude that types <code>/board</code> becomes the <b>planner</b> and writes the task list from the goal automatically.</p>${add}`;
+  if (!S.goal) return `<p>Write the goal first (step 2). Then the first agent that starts on the board (step 3) becomes the <b>planner</b> and writes the task list from it automatically.</p>${add}`;
+  if (S.planner) { const c = clientOf(S.planner); return `<p>${nameTag(S.planner)}'s agent${c ? ` (${esc(c)})` : ''} is the <b>planner</b> and is writing the task list now<span class="dots"></span> Cards appear on the board below as it goes.</p>${add}`; }
+  return `<p>The first agent that starts on the board (step 3) becomes the <b>planner</b> and writes the task list from the goal automatically.</p>${add}`;
 }
 function stepIntegrator(si) {
   const S = state.settings;
   const review = state.tasks.filter((t) => t.status === 'review').length;
-  const names = [...new Set([...si.ros.map((r) => r.name), ...people().map((p) => p.name), S.integrator].filter(Boolean))].sort();
-  return `<p>One person's Claude merges finished branches into <code>main</code> and runs the tests, so changes don't collide.${S.integrator ? '' : ' If nobody is picked, the first Claude with finished work takes the job.'}</p>
+  // Individual agents, not people: with two tools on one laptop only ONE of them should merge.
+  const agentNames = (state.presence || []).filter((p) => p.kind === 'agent').map((p) => p.name);
+  const assignees = state.tasks.map((t) => t.assignee && agentRoot(t.assignee));
+  const names = [...new Set([...agentNames, ...assignees, S.integrator].filter(Boolean))].sort();
+  return `<p>One person's agent merges finished branches into <code>main</code> and runs the tests, so changes don't collide.${S.integrator ? '' : ' If nobody is picked, the first agent with finished work takes the job.'}</p>
     ${review && !S.integrator ? `<p class="note">${plural(review, 'finished task is', 'finished tasks are')} waiting to be merged.</p>` : ''}
     <div class="inl"><label for="integ-sel" style="margin:0">Merges to main</label>
-      <select id="integ-sel" data-fk="integ"><option value="">Nobody yet (first Claude with finished work)</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.integrator ? 'selected' : ''}>${esc(n)}${n === me ? ' (you)' : ''}</option>`).join('')}</select></div>`;
+      <select id="integ-sel" data-fk="integ"><option value="">Nobody yet (first agent with finished work)</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.integrator ? 'selected' : ''}>${esc(n)}${n === me ? ' (you)' : ''}</option>`).join('')}</select></div>`;
 }
 function renderBoardEmpty(si) {
   const el = $('board-empty'); const S = state.settings;
   el.hidden = state.tasks.length > 0;
   if (state.tasks.length) return patch(el, '');
   let msg;
-  if (!S.goal) msg = '<b>No tasks yet.</b> Once the goal is set (Start here, step 2), the first Claude on the board writes the task list. You can also add tasks yourself with <b>+ New task</b>.';
-  else if (S.planner) msg = `${nameTag(S.planner)}'s Claude (the planner) is writing the task list<span class="dots"></span> Cards appear here as it creates them.`;
-  else if (si.agentsOn.length) msg = '<b>No tasks yet.</b> Waiting for a Claude to become the planner and write the task list<span class="dots"></span>';
-  else msg = '<b>No tasks yet.</b> The first Claude that types <code>/board</code> becomes the planner and writes the task list from the goal. Or add tasks yourself with <b>+ New task</b>.';
+  if (!S.goal) msg = '<b>No tasks yet.</b> Once the goal is set (Start here, step 2), the first agent on the board writes the task list. You can also add tasks yourself with <b>+ New task</b>.';
+  else if (S.planner) { const c = clientOf(S.planner); msg = `${nameTag(S.planner)}'s agent${c ? ` (${esc(c)})` : ''}, the planner, is writing the task list<span class="dots"></span> Cards appear here as it creates them.`; }
+  else if (si.agentsOn.length) msg = '<b>No tasks yet.</b> Waiting for an agent to become the planner and write the task list<span class="dots"></span>';
+  else msg = '<b>No tasks yet.</b> The first agent that starts on the board (Start here, step 3) becomes the planner and writes the task list from the goal. Or add tasks yourself with <b>+ New task</b>.';
   patch(el, msg);
 }
 
@@ -770,21 +794,23 @@ function renderPeople() {
   const ps = people();
   const r = filterRoot();
   patch($('people'), ps.length ? ps.map((p) => {
-    const agents = [...p.agents.values()].sort((a, b) => (b.id === p.name) - (a.id === p.name) || b.last - a.last);
+    // Main agents (one per AI tool) first, each followed by its helpers.
+    const agents = [...p.agents.values()].sort((a, b) => agentRoot(a.id).localeCompare(agentRoot(b.id)) || a.id.includes('/') - b.id.includes('/') || b.last - a.last);
     const sel = r === p.name;
     const S = state.settings;
     const hasAgent = p.r.agent || p.agents.size > 1 || agents.some((a) => a.tasks.length);
     const pills = [
       p.name === me ? '<span class="pill">you</span>' : '',
-      p.r.agentOnline ? '<span class="pill ok" title="This laptop\'s Claude talked to the board in the last 10 minutes">Claude online</span>' : hasAgent ? '<span class="pill" title="No contact from this laptop\'s Claude for 10+ minutes">Claude offline</span>' : '',
-      S.planner === p.name ? '<span class="pill role" title="Planner: wrote the task list from the goal">planner</span>' : '',
-      S.integrator === p.name ? '<span class="pill role" title="Integrator: merges finished branches into main">merges to main</span>' : '',
+      hasAgent ? toolPill(p.r.client) : '',
+      p.r.agentOnline ? '<span class="pill ok" title="This laptop\'s agent talked to the board in the last 10 minutes">agent online</span>' : hasAgent ? '<span class="pill" title="No contact from this laptop\'s agent for 10+ minutes">agent offline</span>' : '',
+      S.planner && root(S.planner) === p.name ? '<span class="pill role" title="Planner: wrote the task list from the goal">planner</span>' : '',
+      S.integrator && root(S.integrator) === p.name ? '<span class="pill role" title="Integrator: merges finished branches into main">merges to main</span>' : '',
     ].join('');
-    if (!hasAgent) { // a human with the page open, no Claude under this name
+    if (!hasAgent) { // a human with the page open, no agent under this name
       const lt = agents[0]?.lastText;
       return `<div class="person ${sel ? 'sel' : ''}" ${hs(p.name)}><div class="ph"><span class="pdot"></span><button type="button" class="link pc" data-mention="${esc(p.name)}" title="Mention @${esc(p.name)}">${esc(p.name)}</button>${pills}
         <span class="sp"></span><span class="muted" style="font-size:12px">${p.last ? 'active ' + ago(p.last) : ''}</span></div>
-        <ul><li class="muted">${p.r.humanOnline ? 'Watching this page. ' : ''}No Claude connected under this name${p.name === me ? ' yet (Start here, steps 1 and 3)' : ''}.</li>
+        <ul><li class="muted">${p.r.humanOnline ? 'Watching this page. ' : ''}No AI agent connected under this name${p.name === me ? ' yet (Start here, steps 1 and 3)' : ''}.</li>
         ${lt ? `<li><div class="last" title="${esc(lt)}">${esc(short(lt, 120))}</div></li>` : ''}</ul></div>`;
     }
     return `<div class="person ${sel ? 'sel' : ''}" ${hs(p.name)}>
@@ -792,13 +818,14 @@ function renderPeople() {
         ${pills}${p.asks ? `<button type="button" class="pill warn" style="border:0;cursor:pointer" data-go="questions">${p.asks} question${p.asks > 1 ? 's' : ''} for you</button>` : ''}
         <span class="sp"></span><span class="muted" style="font-size:12px">${p.last ? 'active ' + ago(p.last) : 'no activity yet'}</span></div>
       <ul>${agents.map((a) => {
-        const label = a.id === p.name ? 'main Claude' : a.id.slice(p.name.length + 1);
+        const [orch, helper] = a.id.split('/'); const tool = clientOf(orch);
+        const label = helper ? helper : orch === p.name && p.agents.size < 2 ? 'main agent' : `main agent${tool ? ` · ${tool}` : orch !== p.name ? ` · ${orch.slice(p.name.length + 1)}` : ''}`;
         const tasks = a.tasks.map((t) => `<div class="tk"><span class="pill s-${t.status}">${LABEL[t.status]}</span>${isStale(t) ? '<span class="pill warn">stale</span>' : ''}<button type="button" class="link" data-open-task="${t.id}" data-fk="pt-${t.id}" title="${esc(t.title)}">#${t.id} ${esc(t.title)}</button></div>`).join('');
         if (!tasks && !a.last && a.id === p.name && p.agents.size > 1) return '';
-        return `<li><div class="tk"><button type="button" class="link an" data-mention="${esc(a.id)}" title="${a.id === p.name ? 'The Claude where /board runs (orchestrator); it hands tasks to helper agents. ' : 'Helper agent (subagent) working on one task. '}Click to @mention ${esc(a.id)}">${esc(label)}</button>${tasks ? '' : '<span class="muted">· idle</span>'}<span class="sp"></span>${a.last ? `<span class="muted" style="font-size:11px">${ago(a.last)}</span>` : ''}</div>
+        return `<li><div class="tk"><button type="button" class="link an" data-mention="${esc(a.id)}" title="${!a.id.includes('/') ? `A main agent${tool ? ` (${esc(tool)})` : ''} on this laptop (orchestrator): it claims tasks from the board. ` : 'Helper agent (subagent) working on one task. '}Click to @mention ${esc(a.id)}">${esc(label)}</button>${tasks ? '' : '<span class="muted">· idle</span>'}<span class="sp"></span>${a.last ? `<span class="muted" style="font-size:11px">${ago(a.last)}</span>` : ''}</div>
           ${tasks}${a.lastText ? `<div class="last" title="${esc(a.lastText)}">${esc(short(a.lastText, 120))}</div>` : ''}</li>`;
       }).join('')}</ul></div>`;
-  }).join('') : '<div class="muted">Nobody yet. When a teammate\'s Claude connects, it appears here with what it\'s working on.</div>');
+  }).join('') : '<div class="muted">Nobody yet. When a teammate\'s AI agent connects, it appears here with what it\'s working on.</div>');
 }
 
 function renderFilter() {
@@ -858,7 +885,7 @@ function evHtml(e) {
 function settingsText(e) {
   return String(e.text).split('; ').map((part) => {
     const m = part.match(/^(planner|integrator) → (.*)$/); if (!m) return part;
-    const [, role, v] = m; const self = v === root(e.author);
+    const [, role, v] = m; const self = v === agentRoot(e.author);
     if (v === 'nobody') return role === 'planner' ? 'cleared the planner role' : 'cleared who merges to main';
     if (role === 'planner') return self ? 'is now the planner (writes the task list)' : `made ${v} the planner (writes the task list)`;
     return self ? 'will merge finished work into main (integrator)' : `picked ${v} to merge finished work into main (integrator)`;
@@ -960,7 +987,7 @@ document.addEventListener('change', async (ev) => {
   const v = ev.target.value;
   try {
     state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ integrator: v }) });
-    toast(v ? `${v} will merge finished work into main` : 'Cleared. The first Claude with finished work will take the job.');
+    toast(v ? `${v} will merge finished work into main` : 'Cleared. The first agent with finished work will take the job.');
     render(); scheduleReload();
   } catch (e) { toast(e.message, true); render(); }
 });
