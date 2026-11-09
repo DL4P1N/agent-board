@@ -13,9 +13,12 @@ npm start
 ```
 It prints the web board link and the join command for teammates. It then offers to connect the host's own AI tool in the same window.
 
-**2. Everyone else joins** with the command the host's window (or the web board's *Start here* step 1) shows:
+**2. Everyone else joins.** First time on a laptop, get the tool. If you already have a `claude-board` folder from before, run `git pull` in it instead:
 ```
 git clone https://github.com/DL4P1N/claude-board && cd claude-board
+```
+Then, in the `claude-board` folder, run the join command that the host's window (or the web board's *Start here* step 1) shows:
+```
 npm run join -- --url http://<host-ip>:4000 --token <token>
 ```
 The join command asks three things: your name, which AI tool(s) you use, and where your copy of the hackathon repo is. Then it connects each tool, installs its `/board` shortcut, and **tests the connection**. When it says *All good*, it also tells you exactly what to type.

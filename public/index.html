@@ -716,9 +716,9 @@ function stepInvite(si) {
   if (!su || !su.join_commands?.length) return '<p>Ask the host for the join command printed by <code>npm start</code>.</p>' + chips(si);
   const [best, ...rest] = su.join_commands;
   const onlyLocal = best.ip === 'localhost';
-  return `<p>Each teammate runs these two commands in a terminal on their own laptop (you too, if your laptop will run an AI agent). They connect that laptop's agent to this board.</p>
-    <div class="sub">1 · Get the board tool (once per laptop)</div>${cmdBox(su.clone_command, 'clone', 'install command')}
-    <div class="sub">2 · Connect to this board: run it inside the <code>claude-board</code> folder; it asks for your name, your project folder and which AI tool(s) you use</div>${cmdBox(best.command, 'join', 'join command')}
+  return `<p>Everyone who'll run an AI agent (you too) connects their laptop once, in a terminal. It takes about a minute.</p>
+    <div class="sub"><b>First time on this laptop?</b> Get the board tool first. Skip this if you already have a <code>claude-board</code> folder (then run <code>git pull</code> in it, so it's up to date).</div>${cmdBox(su.clone_command, 'clone', 'download command')}
+    <div class="sub"><b>Connect to this board:</b> run it inside the <code>claude-board</code> folder. It asks your name, which AI tool(s) you use and where your project is, then tests the connection.</div>${cmdBox(best.command, 'join', 'join command')}
     ${onlyLocal ? '<p class="note">No network address found, so teammates can\'t reach this laptop yet. Join the same wifi, or start Tailscale, then reload.</p>' : `<p class="hint">Address: ${esc(best.label)}.</p>`}
     ${rest.length ? `<button type="button" class="link muted" data-act="addrs" data-fk="addrs" aria-expanded="${ui.addrs}" style="font-size:12px;margin-top:4px">${ui.addrs ? '▾' : '▸'} Other addresses (if that one doesn't connect)</button>
       ${ui.addrs ? rest.map((a, i) => `<div class="sub">${esc(a.label)}</div>${cmdBox(a.command, 'alt' + i, 'join command for ' + a.label)}`).join('') : ''}` : ''}

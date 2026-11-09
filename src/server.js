@@ -164,7 +164,10 @@ const httpServer = app.listen(PORT, HOST, () => {
   if (!addrs.length) {
     console.log('\n    ⚠ No network address found, so teammates can\'t reach this laptop. Join the wifi or start Tailscale.');
   }
-  console.log('\n 2. Teammates run this in their claude-board folder (it asks the rest):');
+  console.log('\n 2. Teammates connect their laptop. First time only, get the tool:');
+  console.log('      git clone https://github.com/DL4P1N/claude-board && cd claude-board');
+  console.log('    (already have the claude-board folder? run git pull in it instead)');
+  console.log('    Then, in the claude-board folder (it asks the rest):');
   console.log(`      npm run join -- --url http://${best}:${PORT} --token ${TOKEN}`);
   for (const a of addrs.slice(1)) console.log(`      (or ${a.ip} if that doesn't connect: ${a.label})`);
   console.log(`\n Keep this window open. After a \`git pull\` the board reloads by itself.`);
