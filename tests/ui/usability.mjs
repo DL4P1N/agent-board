@@ -218,7 +218,9 @@ try {
   await p.$eval('#feed', (f) => { f.scrollTop = 150; }); await sleep(200);
   const anc = await p.evaluate(() => { const f = $('feed'); for (const n of f.children) if (n.offsetTop + n.offsetHeight > f.scrollTop) return { id: n.dataset.eid, off: n.offsetTop - f.scrollTop }; });
   for (let i = 0; i < 3; i++) await rest('chen', '/messages', 'POST', { text: 'new message ' + i });
-  await sleep(900);
+  // Wait for the live update to land (the "new messages" button appears) instead of a fixed sleep: slow machines vary.
+  await p.waitForFunction(() => !document.getElementById('jump').hidden, { timeout: 5000 }).catch(() => {});
+  await sleep(200);
   const anc2 = await p.evaluate((id) => { const f = $('feed'); const n = f.querySelector(`[data-eid="${id}"]`); return n ? n.offsetTop - f.scrollTop : null; }, anc.id);
   check('B feed scroll anchor kept when new events arrive', anc2 !== null && Math.abs(anc2 - anc.off) <= 2 && !(await p.$eval('#jump', (j) => j.hidden)), `${anc.off} → ${anc2}`);
   check('B consecutive status lines grouped', await p.evaluate(() => document.querySelectorAll('#feed .ev.sys.cont').length > 0));

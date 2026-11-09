@@ -196,8 +196,8 @@ try {
   await np.click('#notify-btn'); await sleep(150);
   check('bell toggles off; stored', await np.evaluate(() => $('notify-btn').getAttribute('aria-pressed') === 'false' && localStorage.getItem('board-notify') === 'off'));
   await np.evaluate(() => { window.__perm = 'denied'; Notification.permission = 'default'; });
-  await np.click('#notify-btn'); await sleep(200);
-  check('permission denied: stays off and explains how to allow it', await np.evaluate(() => $('notify-btn').getAttribute('aria-pressed') === 'false' && /blocked for this page/.test($('toasts').innerText)));
+  await np.click('#notify-btn');
+  check('permission denied: stays off and explains how to allow it', await until(np, () => $('notify-btn').getAttribute('aria-pressed') === 'false' && /blocked for this page/.test($('toasts').innerText)));
   await np.close();
 
   // ================= export =================
