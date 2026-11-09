@@ -201,6 +201,8 @@ function setupCodex({ mcpUrl }) {
   }
   ok('connected Codex to the board (MCP server "board", tools pre-approved)');
   installOurFile(path.join(TEMPLATES, 'codex-skill', 'SKILL.md'), path.join(os.homedir(), '.agents', 'skills', 'board', 'SKILL.md'), 'the $board skill');
+  console.log('  • Codex\'s sandbox keeps .git read-only, so it asks before each git commit/push. Answer "don\'t ask again" for git,');
+  console.log('    or start it with `codex --sandbox danger-full-access` if you trust it on this laptop.');
 }
 
 function setupCopilotVSCode({ mcpUrl, dir }) {

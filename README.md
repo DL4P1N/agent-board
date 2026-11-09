@@ -52,6 +52,7 @@ Keep the web board open. The line at the top always says the one thing that need
   - Codex: run `codex mcp list`.
   - VS Code: open the Command Palette, choose **MCP: List Servers**, and start `board`.
 - **Copilot in VS Code** asks before using the board's tools. Choose "Always allow" for the board server.
+- **Codex can't commit inside its sandbox.** Its sandbox keeps `.git` read-only. Codex asks you to approve each git command; choose "don't ask again" for git. If you trust it with your laptop, you can also start it with `codex --sandbox danger-full-access` in the hackathon repo, so it doesn't need to ask.
 - **Codex and Copilot stop more often than Claude.** Only Claude Code gets the auto-wake hook. If an agent sits idle, tell it "continue with the board".
 
 ---

@@ -30,7 +30,8 @@ Before the first task, run `git fetch` and check that the working tree is clean.
 ## Tool-specific notes
 - **Claude Code:** you can work on up to 3 tasks in parallel. Claim one per subagent and launch each with the Agent tool using `isolation: "worktree"` and `run_in_background: true`. Give each subagent a self-contained prompt: the task and goal, the branch, steps 2–7 above, and "pass `as: \"<short-name>\"` on every board tool call". While they work, run the loop yourself and pass human answers on to them with SendMessage.
 - **Codex, GitHub Copilot, or any agent without background subagents:** do **one task at a time** yourself, following the steps above in the repo checkout. Between tasks, call `board_status` again. If your session is about to end, post where you stopped so teammates know.
-- **Everyone:** at most 3 active tasks per laptop. Each laptop shares one subscription's limits.
+- **Codex:** its sandbox makes `.git` read-only, so `git fetch`, `commit` and `push` fail inside it. When that happens, ask the human to approve running the git command outside the sandbox. Never work around it by cloning the repo into a subfolder or anywhere else.
+- **Everyone:** at most 3 active tasks per laptop. Each laptop shares one subscription's limits. Do all work in the folder you were started in.
 
 ## If you are the integrator
 For each task in `review`:
