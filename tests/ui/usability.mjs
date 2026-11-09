@@ -9,9 +9,10 @@ const results = [];
 const check = (n, ok, x = '') => results.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const rest = (who, path, method = 'GET', body) => fetch(BASE + '/api' + path, { method, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer testtok', 'X-Agent': who }, body: body && JSON.stringify(body) }).then((r) => r.json());
-async function agent(name, client = 'claude-code') {
+// slots: how many tasks the agent's plan lets it hold at once (the busy board needs more than the default).
+async function agent(name, client = 'claude-code', slots = 0) {
   const c = new Client({ name: client, version: '1' });
-  await c.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp?agent=${encodeURIComponent(name)}&token=testtok`)));
+  await c.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp?agent=${encodeURIComponent(name)}&token=testtok${slots ? `&slots=${slots}` : ''}`)));
   return async (tool, args = {}) => { const r = await c.callTool({ name: tool, arguments: args }); const t = r.content[0].text; if (r.isError) console.log('ERR', name, tool, t); try { return JSON.parse(t); } catch { return t; } };
 }
 
@@ -115,11 +116,16 @@ try {
   await reload(page); await sleep(400);
   check('A collapsed Setup button names what is left', (await txt(page, '[data-act="setup-open"]')) === 'Setup: pick merger', await txt(page, '[data-act="setup-open"]'));
   check('A summary bar: "Connect a laptop" + repo', /Connect a laptop/.test(await txt(page, '#setup')) && /Repo: https:\/\/github.com\/team\/vote-app/.test(await txt(page, '#setup')));
+  // One task for two idle agents: the low-priority offer asks for more tasks first...
+  check('A All good + "2 agents are idle: add tasks…"', /All good/.test(await txt(page, '#now .na')) && /2 agents are idle: add tasks or ask the planner for more/.test(await txt(page, '#now .na2')), await txt(page, '#now'));
+  // ...and once there is enough work, it suggests picking a merger.
+  const t1b = await erin('create_task', { title: 'Database schema' });
+  await reload(page); await sleep(300);
   check('A All good + "While you wait: pick who merges to main"', /All good/.test(await txt(page, '#now .na')) && /While you wait: pick who merges to main/.test(await txt(page, '#now .na2')), await txt(page, '#now'));
 
   // Every task done ranks above an unread mention
   await page.$eval('#feed', (f) => { f.scrollTop = 0; });
-  await rest('dana', `/tasks/${t1.id}`, 'PATCH', { status: 'done' });
+  for (const t of [t1, t1b]) await rest('dana', `/tasks/${t.id}`, 'PATCH', { status: 'done' });
   await erin('post', { text: '@dana all merged!' }); await sleep(500);
   check('A all-done outranks mentions', /Every task is done/.test(await txt(page, '#now')) && !!(await page.$('#needs .m')), await txt(page, '#now'));
   await page.close();
@@ -127,8 +133,8 @@ try {
   // ================= Part B: busy board =================
   await board.restart();
   const A = {
-    alice: await agent('alice', 'claude-code'), bob: await agent('bob', 'Visual Studio Code'), chen: await agent('chen', 'codex-mcp-client'),
-    erin: await agent('erin', 'GitHub Copilot CLI'), dc: await agent('dana-claude', 'claude-code'), dx: await agent('dana-codex', 'codex-mcp-client'),
+    alice: await agent('alice', 'claude-code', 5), bob: await agent('bob', 'Visual Studio Code', 5), chen: await agent('chen', 'codex-mcp-client', 5),
+    erin: await agent('erin', 'GitHub Copilot CLI', 5), dc: await agent('dana-claude', 'claude-code', 5), dx: await agent('dana-codex', 'codex-mcp-client', 5),
   };
   for (const a of Object.values(A)) await a('board_status');
   await A.alice('set_goal', { goal: 'A voting app for hackathon projects: teams submit, everyone votes, a live leaderboard shows the winners at the demo.' });

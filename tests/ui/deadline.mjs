@@ -97,8 +97,10 @@ try {
   const nowF = await txt(page, '#now');
   check('frozen: What to do now mentions the freeze, merge and test', /Feature freeze: agents won't start new tasks\. Help merge and test/.test(nowF) && /Write-up for your submission/.test(nowF), nowF);
   check('frozen: board banner explains + offers the write-up', await page.evaluate(() => { const n = $('board-note'); return !n.hidden && n.classList.contains('k-freeze') && /Feature freeze since/.test(n.innerText) && !!n.querySelector('[data-act="export-md"]') && !!n.querySelector('[data-act="export-json"]'); }));
-  const refused = await alice('claim_task', { id: t1.id });
+  // t1 is priority 1 (bug fixes stay claimable during the freeze), so try a normal-priority task.
+  const refused = await alice('claim_task', { id: t2.id });
   check('frozen: an agent claim is refused', /Feature freeze/.test(errText(refused)), errText(refused).slice(0, 120));
+  check('frozen: banner says priority-1 bug fixes can still be claimed', /Priority-1 tasks \(bug fixes\) can still be claimed/.test(await txt(page, '#board-note')));
   await page.click('#now [data-go="wrapup"]'); await sleep(400);
   check('"Write-up for your submission" jumps to the export buttons', await page.evaluate(() => document.activeElement?.dataset.act === 'export-md'));
   await shots(page, 'frozen');
@@ -197,7 +199,8 @@ try {
   check('bell toggles off; stored', await np.evaluate(() => $('notify-btn').getAttribute('aria-pressed') === 'false' && localStorage.getItem('board-notify') === 'off'));
   await np.evaluate(() => { window.__perm = 'denied'; Notification.permission = 'default'; });
   await np.click('#notify-btn');
-  check('permission denied: stays off and explains how to allow it', await until(np, () => $('notify-btn').getAttribute('aria-pressed') === 'false' && /blocked for this page/.test($('toasts').innerText)));
+  // The explanation shows as a toast and on the bell itself; toasts can be pushed out by others (max 3), so accept either.
+  check('permission denied: stays off and explains how to allow it', await until(np, () => $('notify-btn').getAttribute('aria-pressed') === 'false' && (/blocked for this page/.test($('toasts').innerText) || /blocked for this page/.test($('notify-btn').title))));
   await np.close();
 
   // ================= export =================
