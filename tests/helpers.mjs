@@ -22,13 +22,14 @@ const freePort = () => new Promise((resolve, reject) => {
 
 // Starts `node src/server.js` on a free port with an empty data folder.
 // restart() replaces it with a fresh, empty board on the same port.
-export async function startBoard() {
+// env: extra environment for the server, e.g. { PUBLIC_URL }.
+export async function startBoard({ env = {} } = {}) {
   const port = await freePort();
   const board = { port, base: `http://localhost:${port}`, token: TOKEN, dataDir: '', child: null };
   const launch = async (keepData = false) => {
     if (!keepData) board.dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-test-'));
     board.child = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js')], {
-      env: { ...process.env, PORT: String(port), BOARD_TOKEN: TOKEN, BOARD_DATA: board.dataDir, BOARD_NO_JOIN: '1' },
+      env: { ...process.env, PORT: String(port), BOARD_TOKEN: TOKEN, BOARD_DATA: board.dataDir, BOARD_NO_JOIN: '1', ...env },
       stdio: 'ignore',
     });
     for (let i = 0; i < 80; i++) {

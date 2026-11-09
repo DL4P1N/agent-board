@@ -13,6 +13,8 @@ npm start
 ```
 It prints the web board link and the join command for teammates. It then offers to connect the host's own AI tool in the same window.
 
+**Teammates on different networks?** Run `npm run tunnel` instead of `npm start`. It opens a free [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) (no account needed) and puts its `https://….trycloudflare.com` address in the join command, the invite message and the web board link. Install `cloudflared` once: `winget install --id Cloudflare.cloudflared` on Windows, `brew install cloudflared` on macOS. The address stays the same while that window is open, including reloads after `git pull`; restarting `npm run tunnel` gives a new one, so everyone re-runs join. Anyone with the address still needs the board token.
+
 **2. Everyone else joins.** First time on a laptop, get the tool. If you already have a `claude-board` folder from before, run `git pull` in it instead:
 ```
 git clone https://github.com/DL4P1N/claude-board && cd claude-board
@@ -77,7 +79,7 @@ Keep the web board open. The line at the top always says the one thing that need
 
 ## If it can't connect
 Start with `npm run doctor`. It checks the board, the token, the server's version and each tool, and says what to fix. The usual causes:
-- **Teammates can't reach the host's IP.** If the venue wifi blocks it, install [Tailscale](https://tailscale.com) on every laptop. The board lists Tailscale addresses first. On Windows, allow Node through the firewall when it asks.
+- **Teammates can't reach the host's IP.** If the venue wifi blocks it, restart the board with `npm run tunnel` (see Quick start), or install [Tailscale](https://tailscale.com) on every laptop. The board lists Tailscale addresses first. On Windows, allow Node through the firewall when it asks.
 - **The host's board is outdated.** Run `git pull` in the host's claude-board folder. The board reloads by itself.
 - **Your tool was set up before the board was restarted with a new token.** Run the join command from the web board again.
 - **Copilot in VS Code** asks before using the board's tools. Choose "Always allow" for the board server.
@@ -125,7 +127,8 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 
 | | |
 |---|---|
-| `npm start` env | `PORT` (4000), `HOST` (0.0.0.0), `BOARD_TOKEN` (random, saved in `data/token`), `BOARD_DATA` (`./data`), `BOARD_NO_JOIN=1` (don't offer to connect the host's tool) |
+| `npm start` env | `PORT` (4000), `HOST` (0.0.0.0), `BOARD_TOKEN` (random, saved in `data/token`), `BOARD_DATA` (`./data`), `BOARD_NO_JOIN=1` (don't offer to connect the host's tool) , `PUBLIC_URL` (a public address to list first; `npm run tunnel` sets it) |
+| `npm run tunnel` env | same as `npm start`, plus `CLOUDFLARED` (path to the cloudflared binary) |
 | Check this laptop | `npm run doctor` |
 | `npm run join` flags | `--name`, `--tool claude,codex,copilot-vscode,copilot-cli`, `--plan max20` or `--plan claude=max20,codex=edu`, `--repo` (these skip the questions), `--slots N`, `--wait N` (Claude's auto-wake), `--shared` (adds team rules to the repo's CLAUDE.md) |
 | Turn off the hook for one session | set `BOARD_HOOK=off` |

@@ -1118,7 +1118,7 @@ function chips(si) {
   }).join('')}</div>`;
 }
 // Friendlier wording for the server's address labels; the adapter name stays in the tooltip.
-const addrText = (a) => a.ip === 'localhost' ? 'Only works on this laptop' : /^same wifi/i.test(a.label) ? 'Works for teammates on the same wifi' : /^Tailscale/i.test(a.label) ? 'Works across networks (Tailscale)' : /^virtual/i.test(a.label) ? 'Virtual adapter: probably not reachable' : a.label;
+const addrText = (a) => a.ip === 'localhost' ? 'Only works on this laptop' : /^same wifi/i.test(a.label) ? 'Works for teammates on the same wifi' : /^Tailscale/i.test(a.label) ? 'Works across networks (Tailscale)' : /^Cloudflare/i.test(a.label) ? 'Works from any network (Cloudflare tunnel)' : /^virtual/i.test(a.label) ? 'Virtual adapter: probably not reachable' : a.label;
 function boardLink() {
   const best = state.setup?.join_commands?.[0];
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
@@ -1146,7 +1146,7 @@ function stepInvite(si) {
     <div class="inl" style="margin:6px 0 4px"><button type="button" data-act="copy-invite" data-fk="s-invite">Copy invite message</button><span class="muted" style="font-size:12px">One message for your team chat with every step below${state.settings.repo ? ' and the project repo' : ''}.</span></div>
     <div class="sub"><b>First time on this laptop?</b> Get the board tool first. Skip this if you already have a <code>claude-board</code> folder (then run <code>git pull</code> in it, so it's up to date).</div>${cmdBox(su.clone_command, 'clone', 'download command')}
     <div class="sub"><b>Connect to this board:</b> run it inside the <code>claude-board</code> folder. It asks your name, which AI tool(s) you use and where your project is, then tests the connection.</div>${cmdBox(best.command, 'join', 'join command')}
-    ${onlyLocal ? '<p class="note">No network address found, so teammates can\'t reach this laptop yet. Join the same wifi, or start Tailscale, then reload.</p>' : `<p class="hint" title="${esc(best.label)}">${esc(addrText(best))}.</p>`}
+    ${onlyLocal ? '<p class="note">No network address found, so teammates can\'t reach this laptop yet. Join the same wifi, start Tailscale, or restart the board with <code>npm run tunnel</code>.</p>' : `<p class="hint" title="${esc(best.label)}">${esc(addrText(best))}.</p>`}
     ${rest.length ? `<button type="button" class="link muted" data-act="addrs" data-fk="addrs" aria-expanded="${ui.addrs}" style="font-size:12px;margin-top:4px">${ui.addrs ? '▾' : '▸'} Other addresses (if that one doesn't connect)</button>
       ${ui.addrs ? rest.map((a, i) => `<div class="sub" title="${esc(a.label)}">${esc(addrText(a))}</div>${cmdBox(a.command, 'alt' + i, 'join command: ' + addrText(a))}`).join('') : ''}` : ''}
     <div class="sub">Just want to watch? Send them this page's link</div>${cmdBox(best.web_url, 'web', 'board link')}

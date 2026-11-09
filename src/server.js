@@ -15,6 +15,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 4000);
 const HOST = process.env.HOST || '0.0.0.0';
 const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'));
+// A public https address for this board, e.g. the Cloudflare tunnel that `npm run tunnel` opens.
+const PUBLIC_URL = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
 
 const board = new Board(DATA_DIR);
 const TOKEN = loadToken();
@@ -207,21 +209,21 @@ app.get('/health', (_req, res) => res.json({ ok: true, app: 'claude-board', vers
 app.use(express.static(path.join(ROOT, 'public')));
 
 const httpServer = app.listen(PORT, HOST, () => {
-  const addrs = reachableAddresses();
-  const best = addrs[0]?.ip || 'localhost';
+  const addrs = boardAddresses();
+  const best = addrs[0]?.base || `http://localhost:${PORT}`;
   const line = '─'.repeat(64);
   console.log(`\n${line}\n Claude Board is running  (version ${VERSION}, port ${PORT})\n${line}`);
   console.log('\n 1. Open the web board. It walks everyone through setup:');
-  console.log(`      http://${best}:${PORT}/?token=${TOKEN}`);
+  console.log(`      ${best}/?token=${TOKEN}`);
   if (!addrs.length) {
-    console.log('\n    ⚠ No network address found, so teammates can\'t reach this laptop. Join the wifi or start Tailscale.');
+    console.log('\n    ⚠ No network address found, so teammates can\'t reach this laptop. Join the wifi, start Tailscale, or use  npm run tunnel');
   }
   console.log('\n 2. Teammates connect their laptop. First time only, get the tool:');
   console.log('      git clone https://github.com/DL4P1N/claude-board && cd claude-board');
   console.log('    (already have the claude-board folder? run git pull in it instead)');
   console.log('    Then, in the claude-board folder (it asks the rest):');
-  console.log(`      npm run join -- --url http://${best}:${PORT} --token ${TOKEN}`);
-  for (const a of addrs.slice(1)) console.log(`      (or ${a.ip} if that doesn't connect: ${a.label})`);
+  console.log(`      npm run join -- --url ${best} --token ${TOKEN}`);
+  for (const a of addrs.slice(1)) console.log(`      (or ${a.base} if that doesn't connect: ${a.label})`);
   console.log(`\n Keep this window open. After a \`git pull\` the board reloads by itself.`);
   console.log(`${line}\n`);
   offerHostJoin();
@@ -265,10 +267,10 @@ function offerHostJoin() {
     const child = spawn(process.execPath, [path.join(ROOT, 'scripts', 'join.mjs'), '--url', `http://localhost:${PORT}`, '--token', TOKEN], { stdio: 'inherit' });
     child.on('exit', () => {
       // Join's output pushed the banner off screen: repeat what the host needs next.
-      const best = reachableAddresses()[0]?.ip || 'localhost';
+      const best = boardAddresses()[0]?.base || `http://localhost:${PORT}`;
       console.log(`\n The board keeps running here. Keep this window open.`);
-      console.log(` Web board:       http://${best}:${PORT}/?token=${TOKEN}`);
-      console.log(` Teammates join:  npm run join -- --url http://${best}:${PORT} --token ${TOKEN}\n`);
+      console.log(` Web board:       ${best}/?token=${TOKEN}`);
+      console.log(` Teammates join:  npm run join -- --url ${best} --token ${TOKEN}\n`);
     });
   });
 }
@@ -294,8 +296,7 @@ const AGENT_TOOLS = [
 
 // Copy-paste join commands + web links, for the web board's "invite teammates" step.
 function setupInfo() {
-  const addrs = reachableAddresses();
-  const list = [...addrs, { ip: 'localhost', label: 'this machine only', rank: 9 }];
+  const list = [...boardAddresses(), { ip: 'localhost', base: `http://localhost:${PORT}`, label: 'this machine only' }];
   return {
     port: PORT,
     version: VERSION,
@@ -304,10 +305,17 @@ function setupInfo() {
     join_commands: list.map((a) => ({
       label: a.label,
       ip: a.ip,
-      command: `npm run join -- --url http://${a.ip}:${PORT} --token ${TOKEN}`,
-      web_url: `http://${a.ip}:${PORT}/?token=${TOKEN}`,
+      command: `npm run join -- --url ${a.base} --token ${TOKEN}`,
+      web_url: `${a.base}/?token=${TOKEN}`,
     })),
   };
+}
+
+// Where teammates can reach this board, best first: the public tunnel (if any), then network addresses.
+function boardAddresses() {
+  const lan = reachableAddresses().map((a) => ({ ...a, base: `http://${a.ip}:${PORT}` }));
+  if (!PUBLIC_URL) return lan;
+  return [{ ip: new URL(PUBLIC_URL).hostname, base: PUBLIC_URL, label: 'Cloudflare tunnel (works from any network)' }, ...lan];
 }
 
 // Non-internal IPv4 addresses, most useful first: Tailscale, then private LAN, then anything else.

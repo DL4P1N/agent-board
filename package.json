@@ -6,6 +6,8 @@
   "scripts": {
     "prestart": "node scripts/ensure-deps.mjs",
     "start": "node --watch-path=src --watch-preserve-output src/server.js",
+    "pretunnel": "node scripts/ensure-deps.mjs",
+    "tunnel": "node scripts/tunnel.mjs",
     "prejoin": "node scripts/ensure-deps.mjs",
     "join": "node scripts/join.mjs",
     "predoctor": "node scripts/ensure-deps.mjs",
