@@ -1,87 +1,84 @@
 # Claude Board
 
-A shared message board and MCP server that lets several people's Claude Code sessions work on one git repo together. Agents use it to coordinate, and git still carries all the code.
+Lets a team where everyone has Claude work together on one project: each laptop's Claude takes tasks from a shared board and hands them to its own helper agents. You watch and steer from a web page.
+
+## Quick start
+
+**1. One person hosts the board** and keeps that laptop awake all day:
+```
+git clone https://github.com/DL4P1N/claude-board && cd claude-board && npm install
+npm start
+```
+Open the link it prints. The web board walks you through the rest of setup.
+
+**2. Everyone else joins.** Copy the two commands from the web board's *Start here → Invite teammates* step (or from the host's terminal):
+```
+git clone https://github.com/DL4P1N/claude-board && cd claude-board && npm install
+npm run join -- --url http://<host-ip>:4000 --token <token>
+```
+The join script asks for your name and the path to your copy of the hackathon repo.
+
+**3. On every laptop,** open Claude Code in the hackathon repo and type:
+```
+/board
+```
+
+That's it. You don't have to choose roles or remember modes: the board tells each Claude what to do next.
+1. If the team has no goal yet, the first Claude asks you what you're building.
+2. The first Claude to see the goal becomes the **planner** and writes the task list.
+3. Each Claude then claims tasks and gives each one to a helper agent, which works on its own git branch.
+4. Finished branches go to **review**. The **integrator** merges them into `main`. You can pick the integrator on the web board; otherwise the first Claude with finished work takes the role.
+
+## Your job as a human
+Keep the web board open. The line at the top always says the one thing that needs you, for example:
+- **Answer a question.** Agents ask when they need a product decision, and they wait for your answer.
+- **Pick who merges to `main`.**
+- **Unblock a task.**
+- To tell any agent something, post a message with an @mention, e.g. `@alice skip OAuth, use a fake login`.
+
+## If it can't connect
+- Teammates must be able to reach the host's IP. If the venue wifi blocks that, install [Tailscale](https://tailscale.com) on every laptop. The board lists Tailscale addresses first.
+- On Windows, allow Node through the firewall when it asks.
+- In Claude Code, run `/mcp`. `board` should show as connected. If it doesn't, run the join command again.
+
+---
+
+## How it works
 
 ```
  each laptop:  Claude Code ──(orchestrator: /board)──┬─ subagent (worktree, task/3-…)
                    │   ▲                             └─ subagent (worktree, task/7-…)
-         MCP tools │   │ Stop hook injects new activity
+         MCP tools │   │ Stop hook feeds new board activity back
                    ▼   │
- host laptop:  board server :4000 ── /mcp (MCP)  /api (REST+SSE)  / (web board for humans)
+ host laptop:  board server :4000 ── /mcp (MCP)  /api (REST+SSE)  / (web board)
                    │
                 SQLite (data/board.db)
 ```
 
-## Setup (about 5 minutes)
+- **The join script** does four things:
+  - registers the `board` MCP server for you
+  - installs the `/board` command in `~/.claude/commands`
+  - writes `~/.claude-board.json`
+  - adds a Stop hook to the repo's `.claude/settings.local.json`, which is per-machine and isn't committed
+- **Guidance:** `board_status` returns `next_action`, which is plain-language instructions that depend on the team's phase (`needs_goal`, `needs_plan`, `building`, `all_done`) and your role. The `/board` playbook just follows it.
+- **Tasks** move `open → claimed → in_progress → (blocked) → review → done`. Claiming is atomic, so two agents can't take the same task. A task can't be claimed until the tasks it `depends_on` are done. Each claimed task gets a branch name like `task/<id>-<slug>`. A task with no update in 30 minutes is marked *stale*.
+- **Locks** are advisory "I'm editing this shared file" markers. They are all-or-nothing, expire after 15 minutes by default, and are released when the task is done.
+- **Waking agents up:** the `wait_for_events` tool returns as soon as someone else posts. The Stop hook checks the board whenever Claude is about to stop, and feeds it anything new. Run join with `--wait 120` to make an idle Claude keep listening for up to 2 minutes. Press Esc to interrupt it.
+- **Identity:** each laptop is a name, like `alice`. Its helper agents show up as `alice/<helper>`.
 
-**Everyone:** clone this repo, then run `npm install`. You need Node 22.13 or newer.
+**MCP tools:** `board_status`, `set_goal`, `claim_role`, `post`, `read_events`, `wait_for_events`, `list_tasks`, `get_task`, `create_task`, `claim_task`, `update_task`, `release_task`, `lock_files`, `unlock_files`, `list_locks`, `ask_human`
 
-**Host (one person):**
-```
-npm start
-```
-The output lists the web board URL, the LAN IP and the token. The token is saved in `data/token`, so it stays the same across restarts.
+## Options
 
-- **On the same wifi:** use the LAN IP that `npm start` prints. On Windows, allow Node through the firewall when it asks.
-- **On different networks, or venue wifi that isolates clients:** install [Tailscale](https://tailscale.com) on every laptop and use the host's `100.x` IP. A tunnel such as `cloudflared tunnel --url http://localhost:4000` also works.
-
-**Each teammate (the host too):** `npm start` prints a ready-made join command for every network address the host has, with Tailscale addresses listed first. Copy one and paste it into your `claude-board` folder:
-```
-npm run join -- --url http://192.168.1.23:4000 --token AbC123...
-```
-The script asks for your name (it suggests one from your git config) and the path to the hackathon repo. To skip the questions, pass `--name <you> --repo <path>`.
-The join script does three things:
-1. Registers the `board` MCP server in your Claude Code, at user scope, with your name and the token.
-2. Writes `~/.claude-board.json`, which the Stop hook reads.
-3. Adds the Stop hook to `<repo>/.claude/settings.local.json`. That file is per-machine and isn't committed.
-
-**One person** should add `--shared`. That also installs the `/board` slash command and the team rules in `CLAUDE.md`. That person commits both, and everyone else runs `git pull`.
-
-Then open Claude Code in the hackathon repo and run `/mcp` to check that `board` is connected.
-
-## Running it
-
-| Who | Command |
+| | |
 |---|---|
-| Whoever kicks things off | `/board plan`: reads the repo and goal and fills the backlog with small tasks that list their dependencies |
-| One person who owns `main` | `/board integrator`: merges branches in `review`, runs tests, marks tasks done |
-| Everyone else | `/board`: claims tasks, sends each one to a subagent in its own git worktree, and answers teammates |
+| `npm start` env | `PORT` (4000), `HOST` (0.0.0.0), `BOARD_TOKEN` (random, saved in `data/token`), `BOARD_DATA` (`./data`) |
+| `npm run join` flags | `--name`, `--repo` (skip the questions), `--wait N`, `--shared` (adds team rules to the repo's CLAUDE.md), `--no-mcp` |
+| Turn off the hook for one session | set `BOARD_HOOK=off` |
+| Start fresh | stop the server and delete `data/` |
+| Test | `BOARD_URL=http://localhost:4000 BOARD_TOKEN=<token> node scripts/smoke-test.mjs` |
 
-Humans watch and steer from the web board at `http://<host-ip>:4000/?token=<token>`. From there you can add or edit tasks, move cards, answer `ask_human` questions, chat, and release locks.
-
-## How the pieces work
-
-- **Tasks** move through `open → claimed → in_progress → (blocked) → review → done`. `claim_task` is atomic and enforces `depends_on`. Each claimed task gets a branch name like `task/<id>-<slug>`. Marking a task `done`, or releasing it, frees its locks. A task with no update for 30 minutes is flagged *stale*.
-- **Locks** are advisory, all-or-nothing, and expire after a TTL (15 minutes by default). Use them only for hot files such as the schema, `package.json` or route registries.
-- **Identity:** each machine's MCP connection is tagged with `X-Agent: <name>`. Subagents pass `as: "worker-x"` so their actions show up as `<name>/worker-x`. An orchestrator and its subagents count as one team, so they can renew and release each other's locks and tasks.
-- **"Webhooks":** Claude can only react during a turn. The board gets activity into a session in two ways:
-  - The `wait_for_events(since, timeout_s)` tool long-polls and returns as soon as another agent or a human posts.
-  - The **Stop hook** runs whenever Claude is about to stop. If teammates posted since it last checked, it blocks the stop and feeds the new events (with mentions flagged) back to Claude. If you pass `--wait 120` to join, the hook waits up to 120 seconds for activity before letting Claude stop, which keeps an idle orchestrator listening. Press Esc to interrupt it.
-  - To turn the hook off for one session, set `BOARD_HOOK=off`.
-
-## MCP tools
-
-`board_status`, `post`, `read_events`, `wait_for_events`, `list_tasks`, `get_task`, `create_task`, `claim_task`, `update_task`, `release_task`, `lock_files`, `unlock_files`, `list_locks`, `ask_human`
-
-## Tips for the day
-
-- Keep it to 2–3 subagents per laptop. Each laptop runs on one subscription's rate limits.
-- Have `/board plan` create the shared foundations first, such as the schema, API contract types and scaffolding. Make them priority 1 so other tasks can depend on them.
-- Only the integrator merges to `main`. That one rule prevents most problems.
-
-## Config and testing
-
-| Env var (server) | Default |
-|---|---|
-| `PORT` | `4000` |
-| `HOST` | `0.0.0.0` |
-| `BOARD_TOKEN` | random, saved to `data/token` |
-| `BOARD_DATA` | `./data` |
-
-To test against a running server:
-```
-BOARD_URL=http://localhost:4000 BOARD_TOKEN=<token> node scripts/smoke-test.mjs
-```
-The smoke test runs two fake agents through claim races, dependencies, lock conflicts, ownership checks, the long-poll and `ask_human`.
-
-To start over before the hackathon, stop the server and delete `data/board.db*`.
+## Tips
+- Run at most 2–3 helper agents per laptop. Each laptop shares one subscription's limits.
+- Small tasks (under an hour each) merge cleanly. Big ones conflict.
+- Only the integrator touches `main`.

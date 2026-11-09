@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// Per-machine setup. Run on every teammate's computer:
-//   npm run join -- --url http://100.x.y.z:4000 --token TOKEN --name alice --repo ../hackathon-app
+// Per-machine setup. Paste the command the host's `npm start` (or the web board) prints:
+//   npm run join -- --url http://100.x.y.z:4000 --token TOKEN
+// It asks for your name and hackathon repo path, then: registers the `board` MCP server,
+// installs the /board command for you, and installs the auto-wake Stop hook in the repo.
 // Options:
+//   --name NAME --repo PATH   skip the questions
 //   --wait N     Stop hook long-polls N seconds for teammate activity before letting Claude stop (default 0)
-//   --shared     ALSO install the shared files (/board command, CLAUDE.md rules) into the repo.
-//                Only ONE person should do this and commit them, so the others don't get untracked-file conflicts.
+//   --shared     ALSO append team rules to the repo's CLAUDE.md (optional; one person commits it)
 //   --no-mcp     skip `claude mcp add`
 import fs from 'node:fs';
 import os from 'node:os';
@@ -79,6 +81,20 @@ if (!args['no-mcp']) {
   else console.error(`✗ claude mcp add failed. Run manually:\n  ${cmd}`);
 }
 
+// 2b. Install the /board command for this user (all projects), so nobody has to commit it.
+{
+  const cmdDir = path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'commands');
+  const dest = path.join(cmdDir, 'board.md');
+  const src = path.join(ROOT, 'templates', 'commands', 'board.md');
+  fs.mkdirSync(cmdDir, { recursive: true });
+  if (fs.existsSync(dest) && !fs.readFileSync(dest, 'utf8').includes('<!-- claude-board -->')) {
+    console.error(`✗ ${dest} already exists and isn't ours, so it was left alone. Use the playbook at ${src} instead.`);
+  } else {
+    fs.copyFileSync(src, dest);
+    console.log(`✓ installed the /board command → ${dest}`);
+  }
+}
+
 // 3. Repo-local wiring.
 if (args.repo) {
   const repo = path.resolve(args.repo);
@@ -96,13 +112,8 @@ if (args.repo) {
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
   console.log(`✓ Stop hook installed in ${settingsPath}`);
 
-  // 3b. Shared, committed files — only with --shared.
+  // 3b. Optional: team rules in the repo's CLAUDE.md (one person commits it).
   if (args.shared) {
-    const cmdDir = path.join(claudeDir, 'commands');
-    fs.mkdirSync(cmdDir, { recursive: true });
-    fs.copyFileSync(path.join(ROOT, 'templates', 'commands', 'board.md'), path.join(cmdDir, 'board.md'));
-    console.log(`✓ installed /board command → ${path.join(cmdDir, 'board.md')}`);
-
     const mdPath = path.join(repo, 'CLAUDE.md');
     const snippet = fs.readFileSync(path.join(ROOT, 'templates', 'CLAUDE.board.md'), 'utf8');
     const existing = fs.existsSync(mdPath) ? fs.readFileSync(mdPath, 'utf8') : '';
@@ -112,15 +123,22 @@ if (args.repo) {
     } else {
       console.log(`• ${mdPath} already has team rules`);
     }
-    console.log('  → commit .claude/commands/board.md and CLAUDE.md so teammates get them.');
+    console.log('  → commit CLAUDE.md so teammates get the rules.');
   }
 }
 
 if (!args.repo) {
-  console.log('\n• No repo given, so the Stop hook was NOT installed. Re-run with --repo <path-to-hackathon-repo> to add it.');
+  console.log('\n• No repo given, so the auto-wake hook was NOT installed. Re-run with --repo <path-to-hackathon-repo> to add it.');
 }
-console.log(`\nDone. Restart Claude Code in the repo, run /mcp to confirm "board" is connected, then type /board to start orchestrating as "${name}".`);
-console.log(`Web board: ${url}/?token=${token}`);
+const repoHint = args.repo ? path.resolve(args.repo) : 'your hackathon repo';
+console.log(`
+────────────────────────────────────────────────────────
+ You're in as "${name}". Next:
+   1. Open the web board:  ${url}/?token=${token}
+   2. In a terminal:       cd "${repoHint}"  then  claude
+   3. In Claude Code type:  /board
+ The board tells everyone (people and agents) what to do next.
+────────────────────────────────────────────────────────`);
 
 function defaultName() {
   const r = spawnSync('git config user.name', { shell: true, encoding: 'utf8' });

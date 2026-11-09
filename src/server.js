@@ -42,6 +42,8 @@ function agentFrom(req) {
 
 // ---------- MCP (stateless streamable HTTP) ----------
 app.post('/mcp', auth, async (req, res) => {
+  // A Claude that just came online: nudge web boards to refresh (SSE {kind:'presence'}).
+  if (board.touch(agentFrom(req), 'agent')) board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
   const server = buildMcpServer(board, agentFrom(req));
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   res.on('close', () => {
@@ -64,17 +66,36 @@ app.delete('/mcp', methodNotAllowed);
 // ---------- REST API ----------
 const api = express.Router();
 api.use(auth);
+// The web board sends X-Agent with the human's name; the Stop hook doesn't send it.
+api.use((req, _res, next) => {
+  if (req.method !== 'GET' && req.get('x-agent')) board.touch(agentFrom(req), 'human');
+  next();
+});
 const h = (fn) => async (req, res) => {
   try { res.json(await fn(req, res)); } catch (e) { res.status(400).json({ error: String(e?.message || e) }); }
 };
 
-api.get('/state', h(() => ({
-  tasks: board.listTasks(),
-  locks: board.listLocks(),
-  questions: board.listQuestions(),
-  events: board.recentEvents(200),
-  cursor: board.latestEventId(),
-})));
+// Humans with the web board open (by name -> open SSE connection count).
+const humansOnline = new Map();
+const onlineHumans = () => new Set([...humansOnline].filter(([, n]) => n > 0).map(([k]) => k));
+
+api.get('/state', h((req) => {
+  const g = board.nextAction(agentFrom(req));
+  return {
+    tasks: board.listTasks(),
+    locks: board.listLocks(),
+    questions: board.listQuestions(),
+    events: board.recentEvents(200),
+    cursor: board.latestEventId(),
+    settings: board.getSettings(),
+    phase: g.phase,
+    presence: board.presence(onlineHumans()),
+    setup: setupInfo(),
+  };
+}));
+
+// Humans edit goal/roles from the web board.
+api.put('/settings', h((req) => board.setSettings(agentFrom(req), req.body || {}, { human: true })));
 
 // Used by the Stop hook. wait>0 long-polls.
 api.get('/events', h(async (req) => {
@@ -102,9 +123,22 @@ api.get('/stream', (req, res) => {
   const send = (ev) => res.write(`data: ${JSON.stringify(ev)}\n\n`);
   const ping = setInterval(() => res.write(': ping\n\n'), 20000);
   board.bus.on('event', send);
+  // ?name=<human> marks that person as watching the board.
+  const human = String(req.query.name || '').replace(/[^\w.-]/g, '').slice(0, 64);
+  const presenceChanged = () => board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
+  if (human) {
+    humansOnline.set(human, (humansOnline.get(human) || 0) + 1);
+    board.touch(human, 'human');
+    presenceChanged();
+  }
   req.on('close', () => {
     clearInterval(ping);
     board.bus.off('event', send);
+    if (human) {
+      humansOnline.set(human, Math.max(0, (humansOnline.get(human) || 1) - 1));
+      board.touch(human, 'human');
+      presenceChanged();
+    }
   });
 });
 
@@ -118,7 +152,7 @@ app.listen(PORT, HOST, () => {
   console.log(`\nClaude Board running on port ${PORT}`);
   console.log(`  Token: ${TOKEN}`);
   console.log(`  Data:  ${DATA_DIR}\n`);
-  console.log('Web board (open in a browser; share with teammates):');
+  console.log('Open the web board. It walks the whole team through setup and shows what to do next:');
   console.log(`  http://${best}:${PORT}/?token=${TOKEN}\n`);
   if (!addrs.length) {
     console.log('No network address found: teammates cannot reach this machine. Connect to wifi or start Tailscale.\n');
@@ -131,6 +165,22 @@ app.listen(PORT, HOST, () => {
   console.log(`  # this machine`);
   console.log(`  npm run join -- --url http://localhost:${PORT} --token ${TOKEN}\n`);
 });
+
+// Copy-paste join commands + web links, for the web board's "invite teammates" step.
+function setupInfo() {
+  const addrs = reachableAddresses();
+  const list = [...addrs, { ip: 'localhost', label: 'this machine only', rank: 9 }];
+  return {
+    port: PORT,
+    clone_command: 'git clone https://github.com/DL4P1N/claude-board && cd claude-board && npm install',
+    join_commands: list.map((a) => ({
+      label: a.label,
+      ip: a.ip,
+      command: `npm run join -- --url http://${a.ip}:${PORT} --token ${TOKEN}`,
+      web_url: `http://${a.ip}:${PORT}/?token=${TOKEN}`,
+    })),
+  };
+}
 
 // Non-internal IPv4 addresses, most useful first: Tailscale, then private LAN, then anything else.
 function reachableAddresses() {

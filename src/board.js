@@ -7,6 +7,7 @@ import path from 'node:path';
 
 const STATUSES = ['open', 'claimed', 'in_progress', 'blocked', 'review', 'done'];
 const STALE_MS = 30 * 60 * 1000;
+const AGENT_ONLINE_MS = 10 * 60 * 1000;
 
 export class Board {
   constructor(dataDir) {
@@ -45,6 +46,16 @@ export class Board {
         task_id INTEGER,
         reason TEXT NOT NULL DEFAULT '',
         expires_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT ''
+      );
+      CREATE TABLE IF NOT EXISTS presence_v2 (
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        last_seen INTEGER NOT NULL,
+        PRIMARY KEY (name, kind)
       );
       CREATE TABLE IF NOT EXISTS questions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -293,6 +304,132 @@ export class Board {
     return this.db.prepare(sql).all();
   }
 
+  // ---------- settings: project goal + roles ----------
+  getSettings() {
+    const rows = this.db.prepare('SELECT key, value FROM settings').all();
+    const s = { goal: '', integrator: '', planner: '' };
+    for (const r of rows) s[r.key] = r.value;
+    return s;
+  }
+
+  // human=true: web UI (may overwrite anything). Agents may only fill an empty goal.
+  setSettings(author, patch, { human = false } = {}) {
+    const cur = this.getSettings();
+    const changes = [];
+    for (const key of ['goal', 'integrator', 'planner']) {
+      if (patch[key] === undefined) continue;
+      let val = String(patch[key] ?? '').trim();
+      if (key !== 'goal') val = val.split('/')[0];
+      if (val === cur[key]) continue;
+      if (!human && key === 'goal' && cur.goal) throw new Error(`The goal is already set: "${cur.goal}". Only humans can change it (on the web board).`);
+      this.db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, val);
+      changes.push(key === 'goal' ? `set the goal: ${val || '(cleared)'}` : `${key} → ${val || 'nobody'}`);
+    }
+    if (changes.length) this.emit({ author, kind: 'settings', channel: 'general', text: changes.join('; ') });
+    return this.getSettings();
+  }
+
+  // Atomic: take a role if nobody has it (or you already do).
+  claimRole(author, role) {
+    if (!['planner', 'integrator'].includes(role)) throw new Error('role must be planner or integrator');
+    const root = author.split('/')[0];
+    const cur = this.getSettings()[role];
+    if (cur && cur !== root) throw new Error(`${cur} is already the ${role}. Carry on as a worker.`);
+    if (cur === root) return { role, holder: root, already: true };
+    this.setSettings(author, { [role]: root }, { human: true });
+    return { role, holder: root };
+  }
+
+  // ---------- presence ----------
+  // A person's Claude ("agent") and their browser ("human") are tracked separately, even under the same name.
+  // Returns true when an agent comes online (new, or silent for 10+ min), so callers can push a live update.
+  touch(name, kind) {
+    const root = String(name || '').split('/')[0];
+    if (!root || root === 'anonymous' || root === 'board' || !['agent', 'human'].includes(kind)) return false;
+    const prev = this.db.prepare('SELECT last_seen FROM presence_v2 WHERE name = ? AND kind = ?').get(root, kind);
+    const now = Date.now();
+    this.db
+      .prepare('INSERT INTO presence_v2 (name, kind, last_seen) VALUES (?,?,?) ON CONFLICT(name, kind) DO UPDATE SET last_seen = excluded.last_seen')
+      .run(root, kind, now);
+    return kind === 'agent' && (!prev || now - prev.last_seen >= AGENT_ONLINE_MS);
+  }
+
+  // Agents count as online if they called the board in the last 10 min (orchestrators can be busy for a while).
+  presence(humansOnline = new Set()) {
+    const rows = this.db.prepare('SELECT * FROM presence_v2 ORDER BY name, kind').all();
+    const out = rows.map((r) => ({
+      name: r.name,
+      kind: r.kind,
+      last_seen: r.last_seen,
+      online: r.kind === 'human' ? humansOnline.has(r.name) : Date.now() - r.last_seen < AGENT_ONLINE_MS,
+    }));
+    for (const h of humansOnline) if (!out.some((p) => p.name === h && p.kind === 'human')) out.push({ name: h, kind: 'human', last_seen: Date.now(), online: true });
+    return out;
+  }
+
+  // ---------- guidance ----------
+  // What phase is the team in, and what should THIS agent do next? Plain-language instructions.
+  nextAction(agent) {
+    const root = agent.split('/')[0];
+    const s = this.getSettings();
+    const tasks = this.listTasks();
+    const mine = tasks.filter((t) => t.assignee && sameTeam(agent, t.assignee) && t.status !== 'done');
+    const review = tasks.filter((t) => t.status === 'review');
+    const doneIds = new Set(tasks.filter((t) => t.status === 'done').map((t) => t.id));
+    const claimable = tasks.filter((t) => t.status === 'open' && t.depends_on.every((d) => doneIds.has(d)));
+    const openQs = this.listQuestions({ open_only: true });
+    const role = s.integrator === root ? 'integrator' : s.planner === root && tasks.length === 0 ? 'planner' : 'worker';
+
+    let phase;
+    if (!s.goal) phase = 'needs_goal';
+    else if (!tasks.length) phase = 'needs_plan';
+    else if (tasks.every((t) => t.status === 'done')) phase = 'all_done';
+    else phase = 'building';
+
+    const steps = [];
+    if (phase === 'needs_goal') {
+      steps.push(
+        'The team has not set a project goal yet. Ask the human you are chatting with: "What are we building, and what should the demo show?" ' +
+        'Then call set_goal with 1–3 sentences. (Humans can also type it on the web board. If set_goal says a goal already exists, just continue.)'
+      );
+    } else if (phase === 'needs_plan') {
+      if (!s.planner) steps.push('Nobody is planning yet. Call claim_role("planner"). If you get it, write the backlog (see below); if not, wait.');
+      if (s.planner === root || !s.planner) {
+        steps.push(
+          'As planner: read the repo and the goal, then create_task for every piece of work. Keep tasks small (one branch, under an hour), ' +
+          'write acceptance criteria in the description, set depends_on, and make foundations (scaffolding, schema, API contracts) priority 1. ' +
+          'Post a short summary in general when done, then work as a normal worker.'
+        );
+      } else {
+        steps.push(`${s.planner} is writing the backlog. Call wait_for_events until tasks appear, then claim one.`);
+      }
+    } else if (phase === 'all_done') {
+      steps.push('Every task is done. Post a status update in general and ask_human whether there is more to do. Suggest follow-up tasks with create_task if you see gaps.');
+    } else {
+      if (role === 'integrator') {
+        steps.push(
+          review.length
+            ? `You own main. Merge first: ${review.map((t) => `#${t.id} (${t.branch})`).join(', ')}. For each: fetch the branch, review, merge into main, run build/tests, push, update_task done. If it breaks, set it back to in_progress with a note @mentioning the assignee.`
+            : 'You own main. Nothing is waiting in review right now, so work as a worker below and check back when something reaches review.'
+        );
+      } else if (!s.integrator && review.length) {
+        steps.push(`${review.length} task(s) are waiting in review and nobody owns main. Call claim_role("integrator"). If you get it, merge them; if not, carry on.`);
+      }
+      if (mine.length) steps.push(`You have active tasks: ${mine.map((t) => `#${t.id} ${t.title} [${t.status}]`).join('; ')}. Keep them moving (or dispatch them to subagents) before claiming more.`);
+      if (mine.length < 3) {
+        steps.push(
+          claimable.length
+            ? `Claimable now (highest priority first): ${claimable.slice(0, 5).map((t) => `#${t.id} P${t.priority} ${t.title}`).join('; ')}. claim_task one per free subagent (max 3 active).`
+            : 'No open tasks are claimable right now (all taken or waiting on dependencies). Help on the help channel, review others\' work, or create_task for gaps you notice; then wait_for_events.'
+        );
+      }
+    }
+    if (openQs.length) steps.push(`${openQs.length} question(s) are waiting for humans. Don't re-ask them; answers arrive as "answer" events.`);
+    if (!s.integrator && phase === 'building' && role !== 'integrator' && !review.length) steps.push('Note: nobody owns main yet. The first agent with work in review should claim_role("integrator").');
+
+    return { phase, your_role: role, goal: s.goal, roles: { planner: s.planner, integrator: s.integrator }, next_action: steps.join('\n') };
+  }
+
   // ---------- summary ----------
   status(agent) {
     const tasks = this.listTasks();
@@ -300,6 +437,7 @@ export class Board {
     for (const t of tasks) counts[t.status]++;
     return {
       you: agent,
+      ...this.nextAction(agent),
       cursor: this.latestEventId(),
       task_counts: counts,
       your_tasks: tasks.filter((t) => t.assignee && sameTeam(agent, t.assignee) && t.status !== 'done'),

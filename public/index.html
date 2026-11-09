@@ -81,6 +81,8 @@
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; box-shadow: var(--shadow); min-width: 0; }
   .panel > h2, .sec-h { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .sec-h .muted { font-weight: 400; }
+  .sec-h { flex-wrap: wrap; row-gap: 2px; }
+  @media (max-width: 760px) { .board.none { display: none; } }
 
   /* questions: the one thing that must not be missed */
   .attn { background: var(--warn-soft); border: 1px solid var(--warn-line); border-left: 4px solid var(--warn); }
@@ -182,18 +184,83 @@
   .toast { background: var(--ink); color: var(--bg); padding: 8px 12px; border-radius: 8px; font-size: 13px; max-width: 420px; box-shadow: 0 4px 14px rgba(0,0,0,.25); pointer-events: none; overflow-wrap: anywhere; }
   .toast.bad { background: var(--bad); color: #fff; }
   @media (max-width: 600px) { header { padding: 8px 12px; } main { padding: 12px; } .filter span { display: none; } .person .last { display: none; } }
+
+  /* newcomer guidance */
+  .tagline { font-size: 12px; color: var(--muted); }
+  @media (max-width: 980px) { .tagline { display: none; } }
+  button.help { width: 30px; height: 30px; padding: 0; border-radius: 50%; font-weight: 700; }
+  .pill.ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+  .pill.role { background: var(--accent-soft); color: var(--accent); }
+  .now { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); border-left: 4px solid var(--ok); background: var(--panel); box-shadow: var(--shadow); }
+  .now.k-urgent { background: var(--warn-soft); border-color: var(--warn-line); border-left-color: var(--warn); }
+  .now.k-setup { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); border-left-color: var(--accent); }
+  .now .nl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; flex: 0 0 auto; }
+  .now .na { font-size: 15px; font-weight: 600; flex: 1 1 260px; min-width: 0; }
+  .now .na .go { color: var(--muted); font-weight: 400; font-size: 13px; }
+  .phases { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; font-size: 12px; color: var(--muted); }
+  .phases .ph-l { margin-right: 4px; }
+  .phases span.p { padding: 1px 8px; border-radius: 10px; }
+  .phases span.p.past { color: var(--ok); }
+  .phases span.p.cur { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .phases .arr { opacity: .5; }
+
+  .setup > .sh { display: flex; align-items: baseline; gap: 6px 10px; flex-wrap: wrap; }
+  .setup > .sh h2 { font-size: 15px; }
+  .setup .intro { margin: 6px 0 0; color: var(--muted); max-width: 820px; }
+  .steps { list-style: none; margin: 10px 0 0; padding: 0; }
+  .step { border-top: 1px solid var(--line); padding: 6px 0; }
+  .step-h { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; width: 100%; background: none; color: var(--ink); border: 0; padding: 4px 2px; text-align: left; white-space: normal; border-radius: 6px; }
+  .step-h:hover .step-t { text-decoration: underline; }
+  .mk { flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .step.done .mk { background: var(--ok); border-color: var(--ok); color: var(--panel); }
+  .step.cur .mk { border-color: var(--accent); color: var(--accent); }
+  .step-t { font-weight: 600; flex: 1 1 200px; min-width: 0; }
+  .step.done .step-t { font-weight: 500; color: var(--muted); }
+  .step-s { font-size: 12px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .step.done .step-s { color: var(--ok); }
+  .step-b { margin: 4px 0 8px 34px; max-width: 860px; }
+  .step-b p { margin: 4px 0; }
+  @media (max-width: 600px) { .step-b { margin-left: 0; } .step-s { flex-basis: 100%; padding-left: 32px; } }
+  .cmd { display: flex; gap: 6px; align-items: stretch; margin: 4px 0 6px; min-width: 0; }
+  .cmd code { flex: 1 1 auto; display: block; padding: 6px 8px; min-width: 0; }
+  .cmd button { font-size: 12px; padding: 4px 10px; flex: 0 0 auto; }
+  .sub { font-size: 12px; color: var(--muted); margin: 8px 0 2px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 9px; border-radius: 12px; background: var(--chip); max-width: 100%; }
+  .on { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); opacity: .6; flex: 0 0 auto; }
+  .on.y { background: var(--ok); opacity: 1; }
+  .goalform { display: flex; gap: 6px; align-items: flex-end; margin-top: 4px; }
+  .goalform textarea { min-height: 56px; }
+  .goaltext { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; margin: 4px 0; }
+  .inl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+  .inl select { width: auto; max-width: 100%; }
+  .sumbar { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 13px; }
+  .sumbar .goal { flex: 1 1 260px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sumbar .acts { display: flex; gap: 6px; }
+  .sumbar .acts button { font-size: 12px; padding: 3px 10px; }
+  .col .cd { font-size: 11.5px; line-height: 1.3; color: var(--muted); margin: -4px 4px 8px; }
+  .board-empty { border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; background: var(--panel); }
+  .board-empty b { font-weight: 600; }
+  .dots::after { content: "…"; animation: blink 1.4s infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  @media (prefers-reduced-motion: reduce) { .dots::after { animation: none; } }
+  .gloss dt { font-weight: 700; margin-top: 10px; }
+  .gloss dd { margin: 2px 0 0; color: var(--ink); }
+  .gloss { margin: 8px 0 0; max-height: 70vh; overflow-y: auto; padding-right: 4px; }
+  .step, .panel, .col, #now { scroll-margin-top: 64px; }
+  .panel-hint { font-size: 12px; color: var(--muted); margin: -4px 0 8px; }
 </style>
 </head>
 <body>
 <form id="gate" class="gate" hidden novalidate>
   <h1>Claude Board</h1>
-  <p class="muted" style="margin:4px 0 0">Watch and steer your team's agents.</p>
+  <p style="margin:6px 0 0">Your hackathon team's shared task board. Every teammate's Claude Code takes tasks from here; on this page you watch progress, answer the agents' questions and steer.</p>
   <label for="g-token">Board token</label>
   <input id="g-token" autocomplete="off" spellcheck="false" required>
-  <p class="hint">Printed by <code>npm start</code> on the host laptop.</p>
+  <p class="hint">The password for this board. It's in the link the host shared (<code>…?token=…</code>), or printed by <code>npm start</code> on the host laptop.</p>
   <label for="g-name">Your name</label>
   <input id="g-name" autocomplete="nickname" spellcheck="false" placeholder="e.g. dana" required>
-  <p class="hint">Use the name you gave <code>npm run join</code>, so @mentions reach you.</p>
+  <p class="hint">Agents will @mention you by this name. If you connect your own Claude, use the same name there.</p>
   <div id="g-err" class="err" role="alert"></div>
   <button type="submit" id="g-go">Enter board</button>
 </form>
@@ -201,21 +268,26 @@
 <div id="app" hidden>
   <header>
     <h1>Claude Board</h1>
+    <span class="tagline">your team's Claude Code agents, on one task board</span>
     <span id="conn" class="conn" role="status">Connecting…</span>
     <div class="needs" id="needs"></div>
     <span class="sp"></span>
     <label class="filter"><span>Show</span><select id="filter" aria-label="Show tasks for"></select></label>
     <button id="new-task-btn" title="New task (N)">+ New task</button>
     <button id="me-btn" class="ghost" title="Change your name or token">you: <b id="me"></b></button>
+    <button id="help-btn" class="ghost help" title="What does everything mean? (?)" aria-label="Help: what everything on this page means">?</button>
   </header>
   <main>
+    <section id="now" class="now" aria-label="What to do now"></section>
     <section id="q-panel" class="panel attn" aria-labelledby="q-h" hidden>
       <h2 id="q-h"></h2>
       <div class="qs" id="questions"></div>
     </section>
 
+    <section id="setup" class="panel setup" aria-label="Team setup guide"></section>
+
     <section class="panel" aria-labelledby="p-h">
-      <div class="sec-h"><h2 id="p-h" style="font-size:13px">Who's doing what</h2><span class="muted">click a name to filter the board</span></div>
+      <div class="sec-h"><h2 id="p-h" style="font-size:13px">Who's doing what</h2><span class="muted">one card per laptop: its main Claude and the helper agents it started · click a name to filter the board</span></div>
       <div class="people" id="people"></div>
     </section>
 
@@ -223,6 +295,7 @@
       <section aria-labelledby="b-h" style="min-width:0">
         <h2 id="b-h" class="vh">Tasks</h2>
         <div class="filterbar" id="filterbar" hidden></div>
+        <div class="board-empty" id="board-empty" role="status" hidden></div>
         <div class="board" id="board"></div>
         <p class="hint">Drag a card to another column to change its status, or open it (click / Enter) to edit.</p>
       </section>
@@ -244,10 +317,11 @@
             <input id="msg" autocomplete="off" aria-label="Message" placeholder="Message… (@name to mention)">
             <button type="submit" id="send">Send</button>
           </form>
-          <p class="hint">Enter sends · click any name to @mention it · press / to focus</p>
+          <p class="hint">Agents read this chat. Write <code>@alice</code> to talk to alice's Claude, <code>@all</code> for everyone · click any name to @mention it · Enter sends · press / to focus</p>
         </section>
         <section class="panel" aria-labelledby="l-h">
           <div class="sec-h"><h2 id="l-h" style="font-size:13px">File locks</h2><span class="muted" id="l-count"></span></div>
+          <p class="panel-hint">"I'm editing this shared file, don't touch it." Agents set these themselves; they expire on their own.</p>
           <ul class="locks" id="locks"></ul>
         </section>
       </div>
@@ -283,12 +357,45 @@
   </form>
 </dialog>
 
+<dialog id="help-dlg" aria-labelledby="hd-title">
+  <div class="dh"><h2 id="hd-title">What everything means</h2><button type="button" class="x" data-close aria-label="Close">×</button></div>
+  <dl class="gloss">
+    <dt>Claude Board</dt>
+    <dd>A shared to-do list for a hackathon team that builds with Claude Code. Each teammate's Claude takes tasks from here, works on them in its own git branch, and reports back. Humans watch, answer questions and steer from this page.</dd>
+    <dt>Main Claude (orchestrator)</dt>
+    <dd>The Claude Code session on a laptop where someone typed <code>/board</code>. It claims tasks and hands each one to a helper agent. It shows up under the laptop owner's name, e.g. <code>alice</code>.</dd>
+    <dt>Helper agent (subagent)</dt>
+    <dd>A worker the main Claude starts for one task, shown as <code>owner/helper</code>, e.g. <code>alice/ui-worker</code>.</dd>
+    <dt>Planner</dt>
+    <dd>The first Claude that sees the goal. It reads the repo and writes the task list (the backlog). After that it works like everyone else.</dd>
+    <dt>Integrator (merges to main)</dt>
+    <dd>The one person whose Claude merges finished branches into <code>main</code>, runs the tests and marks tasks Done. Having just one avoids merge chaos. Pick them in Start here; if nobody is picked, the first Claude with finished work takes the job.</dd>
+    <dt>Task statuses</dt>
+    <dd><b>Open</b> ready to pick up → <b>Claimed</b> an agent took it → <b>In progress</b> being worked on → <b>Blocked</b> stuck, needs help → <b>Review</b> pushed to a branch, waiting to be merged → <b>Done</b> merged into main. Drag cards between columns to change a status yourself.</dd>
+    <dt>Waits on #3</dt>
+    <dd>A dependency: the task can't be picked up until task #3 is done.</dd>
+    <dt>Stale</dt>
+    <dd>A task that has been Claimed or In progress for 30+ minutes with no update. The agent may be stuck or gone; ask it in chat, or drag the card back to Open.</dd>
+    <dt>File lock</dt>
+    <dd>"I'm editing this shared file, don't touch it." Agents set these on busy files (like <code>package.json</code>) and they expire on their own. Release one only if its owner is gone.</dd>
+    <dt>Questions</dt>
+    <dd>When an agent needs a human decision it asks here and waits. Answer in the orange box at the top; the agent continues as soon as you reply.</dd>
+    <dt>Talking to agents</dt>
+    <dd>Agents read the chat in Activity. Write <code>@alice</code> to address alice's Claude, <code>@alice/ui-worker</code> for one helper, or <code>@all</code> for everyone. <code>#12</code> links to task 12.</dd>
+    <dt>Keyboard</dt>
+    <dd><code>n</code> new task · <code>/</code> write a message · <code>?</code> this help · <code>Esc</code> closes dialogs.</dd>
+  </dl>
+</dialog>
+
 <div id="toasts" aria-live="polite"></div>
 
 <script>
 const STATUSES = ['open', 'claimed', 'in_progress', 'blocked', 'review', 'done'];
 const LABEL = { open: 'Open', claimed: 'Claimed', in_progress: 'In progress', blocked: 'Blocked', review: 'Review', done: 'Done' };
 const HINT = { open: 'Ready for an agent to claim', claimed: 'Picked up, not started yet', in_progress: 'Being worked on', blocked: 'Stuck: needs help', review: 'Waiting to be merged', done: 'Merged / finished' };
+const COL_DESC = { open: 'Ready for an agent to pick up', claimed: 'An agent took it; not started yet', in_progress: 'An agent is working on it now', blocked: 'Stuck: needs a decision or help', review: 'Pushed to a branch, waiting for the integrator to merge', done: 'Merged into main' };
+const PHASES = [['needs_goal', 'Set the goal'], ['needs_plan', 'Write tasks'], ['building', 'Build'], ['all_done', 'Done']];
+const AGENT_ONLINE_MS = 10 * 60 * 1000;
 const ACTIVE = ['claimed', 'in_progress', 'blocked', 'review'];
 const STALE_MS = 30 * 60 * 1000;
 const HUES = [215, 150, 275, 325, 185, 95, 250, 45, 300, 165]; // person colours, kept away from the red/orange used for warnings
@@ -298,8 +405,8 @@ const store = { get: (k) => { try { return localStorage.getItem(k); } catch { re
 const qs = new URLSearchParams(location.search);
 let token = qs.get('token') || store.get('board-token') || '';
 let me = store.get('board-name') || '';
-let state = { tasks: [], locks: [], questions: [], events: [] };
-let ui = { filter: store.get('board-filter') || '', tab: store.get('board-tab') || 'all', showAllDone: false, confirmLock: null, dragging: false };
+let state = { tasks: [], locks: [], questions: [], events: [], settings: { goal: '', integrator: '', planner: '' }, phase: 'needs_goal', presence: [], setup: null };
+let ui = { filter: store.get('board-filter') || '', tab: store.get('board-tab') || 'all', showAllDone: false, confirmLock: null, dragging: false, steps: {}, editGoal: false, addrs: false };
 let seenMention = Number(store.get('board-seen-mention') || 0);
 let editing = null; // snapshot of the task open in the dialog
 
@@ -398,7 +505,12 @@ $('me-btn').onclick = () => showGate();
 
 // ---------- data ----------
 async function load() {
-  try { state = await api('/state'); setConn(esOpen ? 'live' : 'connecting'); render(); }
+  try {
+    const s = await api('/state');
+    s.settings = { goal: '', integrator: '', planner: '', ...(s.settings || {}) };
+    s.presence = s.presence || []; s.phase = s.phase || (s.tasks.length ? 'building' : 'needs_goal');
+    state = s; setConn(esOpen ? 'live' : 'connecting'); render();
+  }
   catch (e) { if (e.message !== 'Token rejected') setConn('down', e.message); }
 }
 let reloadTimer;
@@ -416,13 +528,64 @@ function people() {
     return p.agents.get(id);
   };
   if (me) get(me);
-  for (const e of state.events) { const a = get(e.author); if (a && e.ts >= a.last) { a.last = e.ts; a.lastText = e.kind === 'message' ? `“${e.text}”` : e.text; } }
+  const ros = roster();
+  for (const r of ros) if (r.agent || r.humanOnline) get(r.name);
+  for (const e of state.events) { const a = get(e.author); if (a && e.ts >= a.last) { a.last = e.ts; a.lastText = e.kind === 'message' ? `“${e.text}”` : e.kind === 'settings' ? settingsText(e) : e.text; } }
   for (const t of state.tasks) { if (t.assignee && ACTIVE.includes(t.status)) get(t.assignee)?.tasks.push(t); }
   for (const l of state.locks) get(l.owner);
   for (const q of state.questions) { if (!q.answer && get(q.asker)) map.get(root(q.asker)).asks++; }
-  for (const p of map.values()) p.last = Math.max(0, ...[...p.agents.values()].map((a) => a.last));
+  for (const p of map.values()) {
+    p.last = Math.max(0, ...[...p.agents.values()].map((a) => a.last));
+    p.r = ros.find((r) => r.name === p.name) || { agent: false, agentOnline: false, humanOnline: false };
+  }
   return [...map.values()].sort((a, b) => (b.name === me) - (a.name === me) || a.name.localeCompare(b.name));
 }
+
+// Who is connected: laptops whose Claude talked to the board (agents) and people with this page open (humans).
+// One name can be both (the join script and this page use the same name), so we also infer "agent" from
+// things only agents do (claiming, locking, asking, helper agents named owner/helper).
+function roster() {
+  const map = new Map();
+  const get = (n) => { if (!map.has(n)) map.set(n, { name: n, agent: false, agentOnline: false, human: false, humanOnline: false, last: 0 }); return map.get(n); };
+  const now = Date.now();
+  for (const p of state.presence || []) {
+    const r = get(p.name); r.last = Math.max(r.last, p.last_seen || 0);
+    if (p.kind === 'agent') { r.agent = true; if (p.online) r.agentOnline = true; }
+    else { r.human = true; if (p.online) r.humanOnline = true; }
+  }
+  for (const e of state.events) {
+    const n = root(e.author); if (!n || n === 'board' || n === 'anonymous') continue;
+    if (['task_claimed', 'lock', 'question'].includes(e.kind) || String(e.author).includes('/')) {
+      const r = get(n); r.agent = true; if (now - e.ts < AGENT_ONLINE_MS) r.agentOnline = true;
+    }
+  }
+  for (const t of state.tasks) if (t.assignee) get(root(t.assignee)).agent = true;
+  if (me) { const r = get(me); r.human = true; r.humanOnline = true; }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// The five setup steps, driven by live state.
+function setupInfo() {
+  const S = state.settings; const ros = roster();
+  const agents = ros.filter((r) => r.agent); const agentsOn = agents.filter((r) => r.agentOnline);
+  const watchers = ros.filter((r) => r.humanOnline);
+  const n = state.tasks.length;
+  const steps = [
+    { key: 'invite', title: 'Connect everyone\'s laptop to this board', done: agents.length > 0,
+      sum: agents.length ? `${agents.length} laptop${agents.length > 1 ? 's' : ''} connected` : 'nobody connected yet' },
+    { key: 'goal', title: 'Say what you\'re building', done: !!S.goal, sum: S.goal ? short(S.goal, 60) : 'not set' },
+    { key: 'start', title: 'Start Claude on every laptop', done: agentsOn.length > 0,
+      sum: agentsOn.length ? `${agentsOn.length} Claude${agentsOn.length > 1 ? 's' : ''} online` : 'no Claude online' },
+    { key: 'backlog', title: 'Get a task list', done: n > 0,
+      sum: n ? `${n} task${n > 1 ? 's' : ''}${S.planner ? ` · planned by ${S.planner}` : ''}` : S.planner ? `${S.planner} is planning…` : 'no tasks yet' },
+    { key: 'integrator', title: 'Pick who merges to main', done: !!S.integrator, sum: S.integrator ? S.integrator : 'optional · not picked' },
+  ];
+  const cur = (steps.find((s) => !s.done) || {}).key || null;
+  const complete = !!S.goal && agents.length > 0 && n > 0;
+  return { steps, cur, complete, agents, agentsOn, watchers, ros, doneCount: steps.filter((s) => s.done).length };
+}
+function setupOpen(complete) { if (ui.forceSetup) return true; const p = store.get('board-setup'); return complete ? p === 'open' : p !== 'closed'; }
+function stepOpen(key, cur) { return key in ui.steps ? ui.steps[key] : key === cur; }
 function filterRoot() { return ui.filter === 'me' ? root(me) : ui.filter; }
 function taskVisible(t) {
   const r = filterRoot(); if (!r) return true;
@@ -439,6 +602,10 @@ function render() {
   if (ui.tab === 'me' && unread.length) { markMentionsSeen(); return render(); }
   document.title = (qOpen.length + unread.length ? `(${qOpen.length + unread.length}) ` : '') + 'Claude Board';
   renderNeeds(qOpen, unread);
+  const si = setupInfo();
+  renderNow(qOpen, unread, si);
+  renderSetup(si);
+  renderBoardEmpty(si);
   renderQuestions(qOpen);
   renderPeople();
   renderFilter();
@@ -457,6 +624,128 @@ function renderNeeds(qOpen, unread) {
     blocked ? `<button class="b" data-go="blocked" data-fk="n-b" title="Show the Blocked column">${blocked} blocked</button>` : '',
     stale ? `<button class="b" data-go="stale" data-fk="n-s" title="Claimed or in progress with no update for 30+ min">${stale} stale</button>` : '',
   ].join(''));
+}
+
+const plural = (n, w, ws = w + 's') => `${n} ${n === 1 ? w : ws}`;
+const cmdBox = (text, key, what) => `<div class="cmd"><code>${esc(text)}</code><button type="button" class="ghost" data-copy="${esc(text)}" data-fk="cp-${key}" aria-label="Copy ${esc(what)}">Copy</button></div>`;
+const nameTag = (n) => `<b class="pc" ${hs(n)}>${esc(n)}</b>`;
+
+// The single most important thing for this human to do right now.
+function renderNow(qOpen, unread, si) {
+  const S = state.settings;
+  const review = state.tasks.filter((t) => t.status === 'review').length;
+  const blocked = state.tasks.filter((t) => t.status === 'blocked').length;
+  let kind = 'ok', text, go = '';
+  if (qOpen.length) { kind = 'urgent'; go = 'questions'; text = `Answer ${plural(qOpen.length, 'question')}: ${qOpen.length > 1 ? 'agents are' : 'an agent is'} waiting for you`; }
+  else if (review && !S.integrator) { kind = 'urgent'; go = 'step-integrator'; text = `Pick who merges to main: ${plural(review, 'finished task is', 'finished tasks are')} waiting to be merged`; }
+  else if (blocked) { kind = 'urgent'; go = 'blocked'; text = `${plural(blocked, 'task is', 'tasks are')} blocked: read why and help`; }
+  else if (unread.length) { kind = 'setup'; go = 'mentions'; text = `${plural(unread.length, 'new message mentions', 'new messages mention')} you`; }
+  else if (si.cur && si.cur !== 'integrator') {
+    kind = 'setup'; go = 'step-' + si.cur;
+    text = {
+      invite: 'Connect your first laptop: run the two commands in step 1 of Start here',
+      goal: 'Write what you\'re building (1–3 sentences) so the agents can plan',
+      start: si.agents.length ? 'No Claude is online right now: open Claude Code in your project and type /board' : 'Open Claude Code in your project folder and type /board',
+      backlog: !S.goal ? 'Write the goal first, then the agents plan the tasks' : S.planner ? `Nothing to do yet: ${S.planner}'s Claude is writing the task list` : 'Nothing to do yet: waiting for a Claude to start writing the task list (or add tasks yourself)',
+    }[si.cur];
+    if (si.cur === 'backlog' && S.goal) kind = 'ok';
+  }
+  else if (state.phase === 'all_done') { go = 'compose'; text = 'Every task is done. Check the result, then add more tasks or tell the agents what\'s next in chat'; }
+  else text = 'All good: agents are working. Keep this page open; questions for you will appear here';
+  const el = $('now'); el.className = 'now k-' + kind;
+  const pi = PHASES.findIndex(([k]) => k === state.phase);
+  const phases = `<span class="phases" title="Where the team is: set a goal → the planner writes tasks → agents build → everything merged"><span class="ph-l">Phase</span>${PHASES.map(([k, l], i) =>
+    `${i ? '<span class="arr" aria-hidden="true">›</span>' : ''}<span class="p ${i < pi ? 'past' : i === pi ? 'cur' : ''}" ${i === pi ? 'aria-current="step"' : ''}>${l}</span>`).join('')}</span>`;
+  patch(el, `<span class="nl">What to do now</span>${go
+    ? `<button type="button" class="link na" data-go="${go}" data-fk="now-go">${esc(text)} <span class="go" aria-hidden="true">→</span></button>`
+    : `<span class="na">${esc(text)}</span>`}${phases}`);
+}
+
+function renderSetup(si) {
+  const S = state.settings; const el = $('setup');
+  if (!setupOpen(si.complete)) {
+    patch(el, `<div class="sumbar">
+      <span class="goal" title="${esc(S.goal || 'No goal set yet')}"><b>Goal:</b> ${S.goal ? esc(S.goal) : '<span class="muted">not set</span>'}</span>
+      <span title="The person whose Claude merges finished branches into main">Merges to main: ${S.integrator ? nameTag(S.integrator) : '<span class="muted">not picked yet</span>'}</span>
+      <span title="Claude = a laptop whose Claude Code is connected (seen in the last 10 min). Watching = people with this page open." style="display:inline-flex;align-items:center;gap:5px"><span class="on ${si.agentsOn.length ? 'y' : ''}"></span>${plural(si.agentsOn.length, 'Claude')} online · ${si.watchers.length} watching</span>
+      <span class="acts"><button type="button" class="ghost" data-act="invite" data-fk="s-inv">Invite teammates</button><button type="button" class="ghost" data-act="setup-open" data-fk="s-open" aria-expanded="false">Setup${si.doneCount < 5 ? ` ${si.doneCount}/5` : ''}</button></span></div>`);
+    return;
+  }
+  const body = { invite: stepInvite, goal: stepGoal, start: stepStart, backlog: stepBacklog, integrator: stepIntegrator };
+  patch(el, `<div class="sh"><h2>Start here</h2><span class="muted">${si.doneCount} of 5 done · steps tick off by themselves</span><span class="sp"></span>
+      <button type="button" class="ghost" data-act="setup-close" data-fk="s-close" style="font-size:12px;padding:3px 10px" aria-expanded="true">Hide setup</button></div>
+    <p class="intro">This board coordinates your team's Claude Code agents. They split the goal into small tasks, claim them, build each one in its own git branch, and ask you here when they need a decision.</p>
+    <ol class="steps">${si.steps.map((s, i) => {
+      const open = stepOpen(s.key, si.cur);
+      return `<li class="step ${s.done ? 'done' : ''} ${s.key === si.cur ? 'cur' : ''}" id="step-${s.key}">
+        <button type="button" class="step-h" data-step="${s.key}" data-fk="sh-${s.key}" aria-expanded="${open}" aria-controls="sb-${s.key}">
+          <span class="mk" aria-hidden="true">${s.done ? '✓' : i + 1}</span><span class="step-t">${esc(s.title)}${s.done ? '<span class="vh"> (done)</span>' : ''}</span><span class="step-s">${esc(s.sum)}</span></button>
+        ${open ? `<div class="step-b" id="sb-${s.key}">${body[s.key](si)}</div>` : ''}</li>`;
+    }).join('')}</ol>`);
+}
+function chips(si) {
+  return `<div class="chips">${si.ros.filter((r) => r.agent || r.humanOnline).map((r) => {
+    const bits = [];
+    if (r.agent) bits.push(r.agentOnline ? 'Claude online' : 'Claude offline');
+    if (r.humanOnline) bits.push(r.name === me ? 'you' : 'watching');
+    const tip = (r.agent ? (r.agentOnline ? 'This laptop\'s Claude talked to the board in the last 10 minutes. ' : `This laptop's Claude was last seen ${ago(r.last)}. `) : 'No Claude connected under this name. ') + (r.humanOnline ? 'Has this page open.' : '');
+    return `<span class="chip" title="${esc(tip)}"><span class="on ${r.agentOnline || r.humanOnline ? 'y' : ''}"></span><span class="pc" ${hs(r.name)}>${esc(r.name)}</span><span class="muted">${esc(bits.join(' · '))}</span></span>`;
+  }).join('')}</div>`;
+}
+function stepInvite(si) {
+  const su = state.setup;
+  if (!su || !su.join_commands?.length) return '<p>Ask the host for the join command printed by <code>npm start</code>.</p>' + chips(si);
+  const [best, ...rest] = su.join_commands;
+  const onlyLocal = best.ip === 'localhost';
+  return `<p>Each teammate runs these two commands in a terminal on their own laptop (you too, if your laptop will run Claude). They connect that laptop's Claude Code to this board.</p>
+    <div class="sub">1 · Get the board tool (once per laptop)</div>${cmdBox(su.clone_command, 'clone', 'install command')}
+    <div class="sub">2 · Connect to this board: run it inside the <code>claude-board</code> folder; it asks for your name and your project folder</div>${cmdBox(best.command, 'join', 'join command')}
+    ${onlyLocal ? '<p class="note">No network address found, so teammates can\'t reach this laptop yet. Join the same wifi, or start Tailscale, then reload.</p>' : `<p class="hint">Address: ${esc(best.label)}.</p>`}
+    ${rest.length ? `<button type="button" class="link muted" data-act="addrs" data-fk="addrs" aria-expanded="${ui.addrs}" style="font-size:12px;margin-top:4px">${ui.addrs ? '▾' : '▸'} Other addresses (if that one doesn't connect)</button>
+      ${ui.addrs ? rest.map((a, i) => `<div class="sub">${esc(a.label)}</div>${cmdBox(a.command, 'alt' + i, 'join command for ' + a.label)}`).join('') : ''}` : ''}
+    <div class="sub">Just want to watch? Send them this page's link</div>${cmdBox(best.web_url, 'web', 'board link')}
+    <div class="sub">Connected now</div>${chips(si)}`;
+}
+function stepGoal() {
+  const S = state.settings;
+  if (S.goal && !ui.editGoal) return `<p class="goaltext">${esc(S.goal)}</p><button type="button" class="ghost" data-act="goal-edit" data-fk="goal-edit" style="font-size:12px;padding:3px 10px">Edit goal</button>`;
+  return `<p>In 1–3 sentences: what are you building, and what should the demo show? The agents plan their tasks from this. (A Claude may also ask you and fill it in.)</p>
+    <form class="goalform" data-goalform><label class="vh" for="goal-in">Project goal</label>
+      <textarea id="goal-in" data-keep="goal" rows="2" maxlength="1000" title="Enter saves · Shift+Enter adds a new line" placeholder="e.g. A web app where hackathon teams submit their project and everyone votes. The demo shows submitting, voting and a live leaderboard.">${esc(S.goal)}</textarea>
+      <button type="submit" data-fk="goal-save">Save goal</button>${S.goal ? '<button type="button" class="ghost" data-act="goal-cancel" data-fk="goal-cancel">Cancel</button>' : ''}</form>`;
+}
+function stepStart(si) {
+  return `<p>On each laptop, open Claude Code in your hackathon project folder and type:</p>${cmdBox('/board', 'board', '/board')}
+    <p class="muted">That Claude becomes the laptop's <b>main Claude</b> (the "orchestrator"): it takes tasks from this board and hands each one to a helper agent that works in its own git branch. If Claude says it doesn't know <code>/board</code>, re-run the connect command from step 1.</p>
+    <p>${si.agentsOn.length ? `Online now: ${si.agentsOn.map((r) => nameTag(r.name)).join(', ')}` : 'No Claude online yet. It shows up here a few seconds after it starts.'}</p>`;
+}
+function stepBacklog() {
+  const S = state.settings; const n = state.tasks.length;
+  const add = '<div class="inl"><span class="muted">You can always add tasks yourself:</span><button type="button" class="ghost" data-act="new-task" data-fk="s-new" style="font-size:12px;padding:3px 10px">+ New task</button></div>';
+  if (n) return `<p>${plural(n, 'task')} on the board${S.planner ? `, written by the planner, ${nameTag(S.planner)}` : ''}. Agents claim them on their own, highest priority first.</p>${add}`;
+  if (!S.goal) return `<p>Write the goal first (step 2). Then the first Claude that types <code>/board</code> becomes the <b>planner</b> and writes the task list from it automatically.</p>${add}`;
+  if (S.planner) return `<p>${nameTag(S.planner)}'s Claude is the <b>planner</b> and is writing the task list now<span class="dots"></span> Cards appear on the board below as it goes.</p>${add}`;
+  return `<p>The first Claude that types <code>/board</code> becomes the <b>planner</b> and writes the task list from the goal automatically.</p>${add}`;
+}
+function stepIntegrator(si) {
+  const S = state.settings;
+  const review = state.tasks.filter((t) => t.status === 'review').length;
+  const names = [...new Set([...si.ros.map((r) => r.name), ...people().map((p) => p.name), S.integrator].filter(Boolean))].sort();
+  return `<p>One person's Claude merges finished branches into <code>main</code> and runs the tests, so changes don't collide.${S.integrator ? '' : ' If nobody is picked, the first Claude with finished work takes the job.'}</p>
+    ${review && !S.integrator ? `<p class="note">${plural(review, 'finished task is', 'finished tasks are')} waiting to be merged.</p>` : ''}
+    <div class="inl"><label for="integ-sel" style="margin:0">Merges to main</label>
+      <select id="integ-sel" data-fk="integ"><option value="">Nobody yet (first Claude with finished work)</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.integrator ? 'selected' : ''}>${esc(n)}${n === me ? ' (you)' : ''}</option>`).join('')}</select></div>`;
+}
+function renderBoardEmpty(si) {
+  const el = $('board-empty'); const S = state.settings;
+  el.hidden = state.tasks.length > 0;
+  if (state.tasks.length) return patch(el, '');
+  let msg;
+  if (!S.goal) msg = '<b>No tasks yet.</b> Once the goal is set (Start here, step 2), the first Claude on the board writes the task list. You can also add tasks yourself with <b>+ New task</b>.';
+  else if (S.planner) msg = `${nameTag(S.planner)}'s Claude (the planner) is writing the task list<span class="dots"></span> Cards appear here as it creates them.`;
+  else if (si.agentsOn.length) msg = '<b>No tasks yet.</b> Waiting for a Claude to become the planner and write the task list<span class="dots"></span>';
+  else msg = '<b>No tasks yet.</b> The first Claude that types <code>/board</code> becomes the planner and writes the task list from the goal. Or add tasks yourself with <b>+ New task</b>.';
+  patch(el, msg);
 }
 
 function renderQuestions(qOpen) {
@@ -483,18 +772,33 @@ function renderPeople() {
   patch($('people'), ps.length ? ps.map((p) => {
     const agents = [...p.agents.values()].sort((a, b) => (b.id === p.name) - (a.id === p.name) || b.last - a.last);
     const sel = r === p.name;
+    const S = state.settings;
+    const hasAgent = p.r.agent || p.agents.size > 1 || agents.some((a) => a.tasks.length);
+    const pills = [
+      p.name === me ? '<span class="pill">you</span>' : '',
+      p.r.agentOnline ? '<span class="pill ok" title="This laptop\'s Claude talked to the board in the last 10 minutes">Claude online</span>' : hasAgent ? '<span class="pill" title="No contact from this laptop\'s Claude for 10+ minutes">Claude offline</span>' : '',
+      S.planner === p.name ? '<span class="pill role" title="Planner: wrote the task list from the goal">planner</span>' : '',
+      S.integrator === p.name ? '<span class="pill role" title="Integrator: merges finished branches into main">merges to main</span>' : '',
+    ].join('');
+    if (!hasAgent) { // a human with the page open, no Claude under this name
+      const lt = agents[0]?.lastText;
+      return `<div class="person ${sel ? 'sel' : ''}" ${hs(p.name)}><div class="ph"><span class="pdot"></span><button type="button" class="link pc" data-mention="${esc(p.name)}" title="Mention @${esc(p.name)}">${esc(p.name)}</button>${pills}
+        <span class="sp"></span><span class="muted" style="font-size:12px">${p.last ? 'active ' + ago(p.last) : ''}</span></div>
+        <ul><li class="muted">${p.r.humanOnline ? 'Watching this page. ' : ''}No Claude connected under this name${p.name === me ? ' yet (Start here, steps 1 and 3)' : ''}.</li>
+        ${lt ? `<li><div class="last" title="${esc(lt)}">${esc(short(lt, 120))}</div></li>` : ''}</ul></div>`;
+    }
     return `<div class="person ${sel ? 'sel' : ''}" ${hs(p.name)}>
       <div class="ph"><span class="pdot"></span><button type="button" class="link pc" data-filter="${esc(p.name)}" data-fk="pf-${esc(p.name)}" aria-pressed="${sel}" title="${sel ? 'Show everyone' : `Show only ${esc(p.name)}'s tasks`}">${esc(p.name)}</button>
-        ${p.name === me ? '<span class="pill">you</span>' : ''}${p.asks ? `<button type="button" class="pill warn" style="border:0;cursor:pointer" data-go="questions">${p.asks} question${p.asks > 1 ? 's' : ''} for you</button>` : ''}
+        ${pills}${p.asks ? `<button type="button" class="pill warn" style="border:0;cursor:pointer" data-go="questions">${p.asks} question${p.asks > 1 ? 's' : ''} for you</button>` : ''}
         <span class="sp"></span><span class="muted" style="font-size:12px">${p.last ? 'active ' + ago(p.last) : 'no activity yet'}</span></div>
       <ul>${agents.map((a) => {
-        const label = a.id === p.name ? 'orchestrator' : a.id.slice(p.name.length + 1);
+        const label = a.id === p.name ? 'main Claude' : a.id.slice(p.name.length + 1);
         const tasks = a.tasks.map((t) => `<div class="tk"><span class="pill s-${t.status}">${LABEL[t.status]}</span>${isStale(t) ? '<span class="pill warn">stale</span>' : ''}<button type="button" class="link" data-open-task="${t.id}" data-fk="pt-${t.id}" title="${esc(t.title)}">#${t.id} ${esc(t.title)}</button></div>`).join('');
         if (!tasks && !a.last && a.id === p.name && p.agents.size > 1) return '';
-        return `<li><div class="tk"><button type="button" class="link an" data-mention="${esc(a.id)}" title="Mention @${esc(a.id)}">${esc(label)}</button>${tasks ? '' : '<span class="muted">· idle</span>'}<span class="sp"></span>${a.last ? `<span class="muted" style="font-size:11px">${ago(a.last)}</span>` : ''}</div>
+        return `<li><div class="tk"><button type="button" class="link an" data-mention="${esc(a.id)}" title="${a.id === p.name ? 'The Claude where /board runs (orchestrator); it hands tasks to helper agents. ' : 'Helper agent (subagent) working on one task. '}Click to @mention ${esc(a.id)}">${esc(label)}</button>${tasks ? '' : '<span class="muted">· idle</span>'}<span class="sp"></span>${a.last ? `<span class="muted" style="font-size:11px">${ago(a.last)}</span>` : ''}</div>
           ${tasks}${a.lastText ? `<div class="last" title="${esc(a.lastText)}">${esc(short(a.lastText, 120))}</div>` : ''}</li>`;
       }).join('')}</ul></div>`;
-  }).join('') : '<div class="muted">Nobody yet. Teammates appear here once their agents post or claim a task.</div>');
+  }).join('') : '<div class="muted">Nobody yet. When a teammate\'s Claude connects, it appears here with what it\'s working on.</div>');
 }
 
 function renderFilter() {
@@ -515,14 +819,15 @@ function card(t) {
   const aria = `#${t.id} ${t.title}. ${LABEL[t.status]}${t.assignee ? ', ' + t.assignee : ', unassigned'}${t.priority === 1 ? ', high priority' : ''}${stale ? ', stale' : ''}`;
   return `<article class="card ${t.assignee ? 'has-owner' : ''} ${stale ? 'stale' : ''}" ${t.assignee ? hs(t.assignee) : ''} data-id="${t.id}" data-fk="card-${t.id}" tabindex="0" role="button" draggable="true" aria-label="${esc(aria)}">
     <div class="ct"><span class="id">#${t.id}</span> ${esc(t.title)}</div>
-    <div class="cm">${t.priority === 1 ? '<span class="pill bad">P1</span>' : t.priority >= 3 ? '<span class="pill">low</span>' : ''}
-      ${t.assignee ? `<span class="pc" ${hs(t.assignee)}>${esc(t.assignee)}</span>` : t.status !== 'done' ? '<span>unassigned</span>' : ''}
-      ${waiting.length && t.status !== 'done' ? `<span class="pill warn" title="Can't be claimed until these are done">waits on ${waiting.map((d) => '#' + d.id).join(' ')}</span>` : deps.length ? `<span title="Dependencies done">after ${deps.map((d) => '#' + d.id).join(' ')} ✓</span>` : ''}
-      ${stale ? `<span class="pill warn" title="No update for 30+ minutes">stale</span>` : ''}
+    <div class="cm">${t.priority === 1 ? '<span class="pill bad" title="Priority 1: do first (often something other tasks build on)">P1</span>' : t.priority >= 3 ? '<span class="pill" title="Low priority: nice to have">low</span>' : ''}
+      ${t.assignee ? `<span class="pc" ${hs(t.assignee)} title="Assigned to ${esc(t.assignee)}">${esc(t.assignee)}</span>` : t.status !== 'done' ? '<span title="No agent has picked this up yet">unassigned</span>' : ''}
+      ${waiting.length && t.status !== 'done' ? `<span class="pill warn" title="Depends on other tasks: can't be picked up until these are done">waits on ${waiting.map((d) => '#' + d.id).join(' ')}</span>` : deps.length ? `<span title="Dependencies done">after ${deps.map((d) => '#' + d.id).join(' ')} ✓</span>` : ''}
+      ${stale ? `<span class="pill warn" title="Stale: no update for 30+ minutes. The agent may be stuck; ask it in chat or drag the card back to Open">stale</span>` : ''}
       <span title="Last update ${esc(new Date(t.updated_at).toLocaleString())}">${ago(t.updated_at)}</span></div></article>`;
 }
 function renderBoard() {
   const visible = state.tasks.filter(taskVisible);
+  $('board').classList.toggle('none', !state.tasks.length);
   patch($('board'), STATUSES.map((s) => {
     let items = visible.filter((t) => t.status === s);
     let more = '';
@@ -532,9 +837,9 @@ function renderBoard() {
       else if (ui.showAllDone && items.length > DONE_SHOWN) more = `<button class="ghost more" data-show-done data-fk="more-done">Show fewer</button>`;
     }
     const total = visible.filter((t) => t.status === s).length;
-    const empty = !state.tasks.length && s === 'open' ? 'No tasks yet. Run <code>/board plan</code> in Claude Code, or use “+ New task”.' : 'Nothing here';
-    return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}" aria-label="${LABEL[s]}, ${total} tasks"><h3 title="${HINT[s]}"><span>${LABEL[s]}</span><span>${total}</span></h3>
-      ${items.length ? items.map(card).join('') : `<div class="empty">${empty}</div>`}${more}</div>`;
+    const empty = !state.tasks.length ? '' : filterRoot() && !total ? 'None for this filter' : 'Nothing here';
+    return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}" aria-label="${LABEL[s]}, ${total} tasks. ${COL_DESC[s]}"><h3 title="${HINT[s]}"><span>${LABEL[s]}</span><span>${total}</span></h3><p class="cd">${COL_DESC[s]}</p>
+      ${items.length ? items.map(card).join('') : empty ? `<div class="empty">${empty}</div>` : ''}${more}</div>`;
   }).join(''));
 }
 
@@ -542,12 +847,22 @@ function evHtml(e) {
   const chat = e.kind === 'message' || e.kind === 'question' || e.kind === 'answer';
   const mention = mentionsMe(e);
   if (!chat) {
-    return `<div class="ev sys"><div class="eh"><span class="eb">${who(e.author)} ${fmt(e.text)}</span>${timeEl(e.ts)}</div></div>`;
+    return `<div class="ev sys"><div class="eh"><span class="eb">${who(e.author)} ${fmt(e.kind === 'settings' ? settingsText(e) : e.text)}</span>${timeEl(e.ts)}</div></div>`;
   }
   const tag = e.kind === 'question' ? '<span class="pill warn">asked the humans</span>' : e.kind === 'answer' ? '<span class="pill">answered</span>' : '';
   const open = e.kind === 'question' && state.questions.some((q) => q.id === e.data?.question_id && !q.answer);
   return `<div class="ev ${mention ? 'mention' : ''} ${open ? 'question' : ''}"><div class="eh">${who(e.author)}${tag}${e.channel !== 'general' ? `<span class="ch">#${esc(e.channel)}</span>` : ''}${timeEl(e.ts)}</div>
     <div class="eb">${fmt(e.text)}</div></div>`;
+}
+// "planner → alice; integrator → nobody" in plain words.
+function settingsText(e) {
+  return String(e.text).split('; ').map((part) => {
+    const m = part.match(/^(planner|integrator) → (.*)$/); if (!m) return part;
+    const [, role, v] = m; const self = v === root(e.author);
+    if (v === 'nobody') return role === 'planner' ? 'cleared the planner role' : 'cleared who merges to main';
+    if (role === 'planner') return self ? 'is now the planner (writes the task list)' : `made ${v} the planner (writes the task list)`;
+    return self ? 'will merge finished work into main (integrator)' : `picked ${v} to merge finished work into main (integrator)`;
+  }).join('; ');
 }
 function renderFeed(unreadCount) {
   const tabs = { all: () => true, chat: (e) => ['message', 'question', 'answer'].includes(e.kind), me: (e) => mentionsMe(e) };
@@ -584,6 +899,11 @@ document.addEventListener('click', (ev) => {
   const el = ev.target.closest('button, .card, [data-open-task]'); if (!el) return;
   const d = el.dataset;
   if (el.classList.contains('card')) return openTask(Number(d.id));
+  if (d.copy) return copyText(d.copy, el);
+  if (d.step) { const si = setupInfo(); ui.steps[d.step] = !stepOpen(d.step, si.cur); return render(); }
+  if (d.act) return doAct(d.act);
+  if (d.go && d.go.startsWith('step-')) return goStep(d.go.slice(5));
+  if (d.go === 'compose') { $('msg').scrollIntoView({ behavior: 'smooth', block: 'center' }); return $('msg').focus({ preventScroll: true }); }
   if (d.openTask) return openTask(Number(d.openTask));
   if (d.mention) return mention(d.mention);
   if ('filter' in d && el.id !== 'filter') { setFilter(filterRoot() === d.filter && d.filter ? '' : d.filter); return; }
@@ -594,7 +914,7 @@ document.addEventListener('click', (ev) => {
   if (d.unlockYes) { const p = d.unlockYes; ui.confirmLock = null; act(api('/locks/release', { method: 'POST', body: JSON.stringify({ paths: [p] }) }), `Released lock on ${p}`).catch(() => {}); return render(); }
   if (d.go === 'questions') { $('q-panel').scrollIntoView({ behavior: 'smooth', block: 'start' }); return $('questions').querySelector('textarea')?.focus({ preventScroll: true }); }
   if (d.go === 'mentions') { ui.tab = 'me'; store.set('board-tab', 'me'); markMentionsSeen(); render(); return $('feed').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-  if (d.go === 'blocked') return $('col-blocked')?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+  if (d.go === 'blocked') { $('col-blocked')?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }); return $('col-blocked')?.querySelector('.card')?.focus({ preventScroll: true }); }
   if (d.go === 'stale') { const c = document.querySelector('.card.stale'); c?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return c?.focus({ preventScroll: true }); }
 });
 document.addEventListener('keydown', (ev) => {
@@ -603,13 +923,28 @@ document.addEventListener('keydown', (ev) => {
   const typing = ev.target.closest?.('input, textarea, select, dialog');
   if (typing || ev.ctrlKey || ev.metaKey || ev.altKey) return;
   if (ev.key === 'n' || ev.key === 'N') { ev.preventDefault(); openTask(null); }
+  else if (ev.key === '?') { ev.preventDefault(); openHelp(); }
   else if (ev.key === '/') { ev.preventDefault(); $('msg').focus(); }
 });
 // Question answers: Enter sends, Shift+Enter newline.
 document.addEventListener('keydown', (ev) => {
-  if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && ev.target.matches?.('[data-qform] textarea')) { ev.preventDefault(); ev.target.form.requestSubmit(); }
+  if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && ev.target.matches?.('[data-qform] textarea, [data-goalform] textarea')) { ev.preventDefault(); ev.target.form.requestSubmit(); }
 });
 document.addEventListener('submit', async (ev) => {
+  const gf = ev.target.closest('[data-goalform]');
+  if (gf) {
+    ev.preventDefault();
+    const ta = gf.querySelector('textarea'); const btn = gf.querySelector('button[type=submit]');
+    const goal = ta.value.trim();
+    if (!goal) { ta.focus(); return toast('Write a sentence or two about what you are building first.', true); }
+    btn.disabled = true;
+    try {
+      state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ goal }) });
+      ui.editGoal = false; ui.steps.goal = false; toast('Goal saved. The agents will plan from it.'); render(); scheduleReload();
+      document.querySelector('[data-fk="sh-goal"]')?.focus({ preventScroll: true });
+    } catch (e) { toast(e.message, true); btn.disabled = false; }
+    return;
+  }
   const f = ev.target.closest('[data-qform]'); if (!f) return;
   ev.preventDefault();
   const ta = f.querySelector('textarea'); const btn = f.querySelector('button');
@@ -619,6 +954,51 @@ document.addEventListener('submit', async (ev) => {
   try { await act(api(`/questions/${f.dataset.qform}/answer`, { method: 'POST', body: JSON.stringify({ answer }) }), `Answer sent to ${f.dataset.asker}`); }
   catch { btn.disabled = false; btn.textContent = 'Answer'; }
 });
+
+document.addEventListener('change', async (ev) => {
+  if (ev.target.id !== 'integ-sel') return;
+  const v = ev.target.value;
+  try {
+    state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ integrator: v }) });
+    toast(v ? `${v} will merge finished work into main` : 'Cleared. The first Claude with finished work will take the job.');
+    render(); scheduleReload();
+  } catch (e) { toast(e.message, true); render(); }
+});
+function doAct(a) {
+  if (a === 'setup-open' || a === 'setup-close') {
+    store.set('board-setup', a === 'setup-open' ? 'open' : 'closed'); ui.forceSetup = false; render();
+    return document.querySelector(`[data-fk="${a === 'setup-open' ? 's-close' : 's-open'}"]`)?.focus();
+  }
+  if (a === 'invite') return goStep('invite');
+  if (a === 'addrs') { ui.addrs = !ui.addrs; return render(); }
+  if (a === 'goal-edit') { ui.editGoal = true; render(); const t = $('goal-in'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } return; }
+  if (a === 'goal-cancel') { ui.editGoal = false; render(); return document.querySelector('[data-fk="goal-edit"]')?.focus(); }
+  if (a === 'new-task') return openTask(null);
+}
+function goStep(key) {
+  const si = setupInfo();
+  if (!setupOpen(si.complete)) ui.forceSetup = true; // open for this visit only
+  ui.steps[key] = true; render();
+  const li = $('step-' + key); if (!li) return;
+  li.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  (li.querySelector('.step-b textarea, .step-b select, .step-b [data-copy]') || li.querySelector('.step-h'))?.focus({ preventScroll: true });
+}
+async function copyText(text, btn) {
+  let ok = false;
+  try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); ok = true; } } catch {}
+  if (!ok) { // plain http on a LAN address: the async clipboard API isn't available
+    const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.append(ta); ta.select(); try { ok = document.execCommand('copy'); } catch {} ta.remove();
+  }
+  btn?.focus({ preventScroll: true });
+  if (ok && btn) { btn.textContent = 'Copied ✓'; setTimeout(() => { if (btn.isConnected) btn.textContent = 'Copy'; }, 1500); }
+  toast(ok ? 'Copied. Paste it in a terminal.' : 'Could not copy automatically: select the text and copy it by hand.', !ok);
+}
+const helpDlg = $('help-dlg');
+function openHelp() { if (!helpDlg.open) helpDlg.showModal(); helpDlg.querySelector('.x').focus(); }
+$('help-btn').onclick = openHelp;
+helpDlg.addEventListener('click', (ev) => { if (ev.target.closest('[data-close]')) return helpDlg.close();
+  if (ev.target === helpDlg) { const r = helpDlg.getBoundingClientRect(); if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) helpDlg.close(); } });
 
 function setFilter(v) { ui.filter = v; store.set('board-filter', v); render(); }
 $('filter').addEventListener('change', (e) => setFilter(e.target.value));
@@ -765,7 +1145,7 @@ function setConn(kind, msg) {
 }
 function connect() {
   es?.close();
-  es = new EventSource('/api/stream?token=' + encodeURIComponent(token));
+  es = new EventSource('/api/stream?token=' + encodeURIComponent(token) + '&name=' + encodeURIComponent(me));
   es.onopen = () => { esOpen = true; setConn('live'); if (hadError) { hadError = false; load(); } };
   es.onmessage = scheduleReload;
   es.onerror = () => { esOpen = false; hadError = true; setConn('down', 'Disconnected, retrying…'); };
@@ -778,7 +1158,7 @@ async function start() {
   store.set('board-token', token);
   $('gate').hidden = true; $('app').hidden = false;
   await load(); connect();
-  if (!started) { started = true; setInterval(render, 20000); } // keep "ago", stale and lock timers fresh
+  if (!started) { started = true; setInterval(() => (esOpen ? load() : render()), 20000); } // keep timers fresh; agents coming online don't emit events
 }
 start();
 </script>

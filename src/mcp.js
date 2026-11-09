@@ -11,7 +11,8 @@ export function buildMcpServer(board, baseAgent) {
     {
       instructions:
         'Shared coordination board for a team of humans and Claude agents working on one git repo. ' +
-        'Start with board_status. Claim a task before working on it; work on its branch, never on main. ' +
+        'Start with board_status: its next_action field tells you exactly what to do now (set the goal, plan, claim work, or merge). Follow it. ' +
+        'Claim a task before working on it; work on its branch, never on main (unless you are the integrator). ' +
         'Lock only shared hot files (schemas, package.json, route tables) before editing them. ' +
         'When idle or waiting, call wait_for_events with the last cursor. Post when blocked; use ask_human for decisions only a person can make. ' +
         'Subagents should pass `as` (e.g. "auth-worker") so their actions are attributed as "<you>/<as>".',
@@ -34,10 +35,34 @@ export function buildMcpServer(board, baseAgent) {
     'board_status',
     {
       title: 'Board status',
-      description: 'Overview: your active tasks, open tasks, stale tasks, locks, unanswered human questions, recent activity, and the current event cursor. Call this first.',
+      description:
+        'Call this first, and again whenever you are unsure what to do. Returns next_action (plain-language instructions for you right now), ' +
+        'the team phase (needs_goal, needs_plan, building, all_done), the project goal, roles (planner, integrator), your role, your tasks, open tasks, locks, questions, recent activity, and the event cursor.',
       inputSchema: { as: asArg },
     },
     wrap(({ as }) => board.status(who(as)))
+  );
+
+  server.registerTool(
+    'set_goal',
+    {
+      title: 'Set project goal',
+      description: 'Set the team\'s project goal (1–3 sentences: what we are building and what the demo should show). Only works if no goal is set yet; humans can change it on the web board.',
+      inputSchema: { goal: z.string().min(5) },
+    },
+    wrap(({ goal }) => board.setSettings(baseAgent, { goal }))
+  );
+
+  server.registerTool(
+    'claim_role',
+    {
+      title: 'Claim a role',
+      description:
+        'Atomically take a team role if nobody has it. planner = writes the initial backlog. integrator = owns main: merges branches in review, runs tests, marks tasks done. ' +
+        'Fails if someone else already holds it; then carry on as a worker. Humans can reassign roles on the web board.',
+      inputSchema: { role: z.enum(['planner', 'integrator']) },
+    },
+    wrap(({ role }) => board.claimRole(baseAgent, role))
   );
 
   server.registerTool(
