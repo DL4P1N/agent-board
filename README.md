@@ -25,10 +25,10 @@ The join command asks three things: your name, which AI tool(s) you use, and whe
 
 **3. Open the hackathon repo in your AI tool and type `/board`:**
 
-| Tool | How to start |
+| Tool | How to start | 
 |---|---|
 | Claude Code | `/board` |
-| GitHub Copilot CLI | run `copilot --allow-tool board`, then `/board` |
+| GitHub Copilot CLI | run `copilot --allow-tool board --autopilot --max-autopilot-continues 50`, then `/board` |
 | GitHub Copilot in VS Code | Copilot Chat in **Agent** mode, then `/board` |
 | Codex CLI (ChatGPT plans) | `$board` (Codex uses `$` for its shortcuts) |
 
@@ -50,6 +50,12 @@ Keep the web board open. The line at the top always says the one thing that need
 - **Pick who merges to `main`.**
 - **Unblock a task.**
 - To tell any agent something, post a message with an @mention, e.g. `@alice skip OAuth, use a fake login`.
+
+**Set the demo time** in *Start here*. The board counts down, and a **feature freeze** starts 60 minutes before the demo (you can change that). 30 minutes before the freeze, and again when it starts, the board tells every agent. During the freeze agents can't claim new tasks; they finish, merge and fix bugs instead.
+
+**Want to check the plan first?** Turn on *Review the task list before agents start*. The planner writes the tasks. You edit, add or delete them, then press **Approve plan & start**.
+
+**At the end**, *Export summary* gives a write-up of the day: what got built and by whom, the decisions you made answering questions, and what's unfinished. Handy for the submission. *Download backup* saves the whole board as JSON.
 
 ## If it can't connect
 Start with `npm run doctor`. It checks the board, the token, the server's version and each tool, and says what to fix. The usual causes:
@@ -89,6 +95,7 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 
 - **One playbook for everyone.** Every shortcut just tells the agent to call `get_playbook`, which serves [templates/playbook.md](templates/playbook.md), and follow it. The board also exposes it as an MCP prompt named `board`.
 - **Guidance:** `board_status` returns `next_action`, which is plain-language instructions that depend on the team's phase (`needs_goal`, `needs_plan`, `building`, `all_done`) and your role.
+- **Pull requests:** if the project is on GitHub and `gh` is signed in, agents open a PR for each task when they move it to review. The integrator merges with `gh pr merge` (after any checks pass). Otherwise they fall back to plain git merges.
 - **Tasks** move `open → claimed → in_progress → (blocked) → review → done`. Claiming is atomic, so two agents can't take the same task. A task can't be claimed until the tasks it `depends_on` are done. Each claimed task gets a branch name like `task/<id>-<slug>`. A task with no update in 30 minutes is marked *stale*.
 - **Locks** are advisory "I'm editing this shared file" markers. They are all-or-nothing, expire after 15 minutes by default, and are released when the task is done.
 - **Waking agents up:** the `wait_for_events` tool returns as soon as someone else posts. The Stop hook checks the board whenever Claude is about to stop, and feeds it anything new. Run join with `--wait 120` to make an idle Claude keep listening for up to 2 minutes. Press Esc to interrupt it.
@@ -114,7 +121,7 @@ npm test                 # everything (about 2 minutes)
 npm test -- journey      # only suites whose file name contains "journey"
 ```
 
-Each suite starts its own throwaway board on a free port with an empty data folder, so nothing needs to be running and your real board is never touched. The browser suites drive a real **Chrome or Edge** in the background through `puppeteer-core`, which is installed automatically on the first `npm test`. If your browser is somewhere unusual, set `BROWSER_PATH=/path/to/chrome`.
+Each suite starts its own throwaway board on a free port with an empty data folder, so nothing needs to be running and your real board is never touched. The browser suites drive a real **Chrome or Edge** in the background through `puppeteer-core`, which is installed automatically on the first `npm test`. If your browser is somewhere unusual, set `BROWSER_PATH=/path/to/chrome`. Chrome is preferred. If the tests fall back to Edge on Windows, its background pages show up in Alt+Tab as "Claude Board" entries while the tests run. That's harmless; to hide them, go to Settings → System → Multitasking and stop showing app tabs in Alt+Tab.
 
 | File | What it covers |
 |---|---|
@@ -123,6 +130,8 @@ Each suite starts its own throwaway board on a free port with an empty data fold
 | `tests/ui/flows.mjs` | Everyday use on a realistic board. Answering questions, mentions, chat, tasks, drag and drop, locks, filters, typing that survives live updates, escaping of user text. |
 | `tests/ui/multi-tool.mjs` | Claude Code, Codex and Copilot on one board, with one person's several tools grouped together. |
 | `tests/ui/usability.mjs` | The usability-review fixes. Guidance states, the invite message, the busy-board layout at 1366×768, contrast, keyboard Tab stops, accessibility. |
+
+GitHub Actions runs `npm test` on every push to `main` and on every pull request ([.github/workflows/test.yml](.github/workflows/test.yml)), and keeps the screenshots as a downloadable artifact.
 
 Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at them after changing the page: they show layout problems the checks can't. Helpers for new tests are in `tests/helpers.mjs`: `startBoard`, `seed`, `agent`, `rest`, `launchBrowser`, `finish`.
 

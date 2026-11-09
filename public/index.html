@@ -320,6 +320,32 @@
   .tool-r .cmds { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .tool-r .cmds .sub { margin: 0; }
   @media (max-width: 600px) { .tool-r { grid-template-columns: minmax(0, 1fr); } .tool-r .tw { grid-column: 1; } }
+
+  /* deadline countdown, plan approval, notifications, export */
+  .clock { font-size: 12px; padding: 2px 10px; min-height: 24px; border-radius: 12px; background: var(--chip); color: var(--ink); border: 1px solid var(--line); font-weight: 500; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+  .clock:hover { border-color: var(--muted); }
+  .clock.warn { background: var(--warn-soft); color: var(--warn); border-color: var(--warn-line); font-weight: 600; }
+  .clock.frozen { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); font-weight: 700; }
+  .clock.past { color: var(--muted); }
+  .clock .ico { width: 13px; height: 13px; }
+  button.bell { width: 30px; height: 30px; padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+  button.bell .ico { width: 15px; height: 15px; }
+  button.bell[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+  button.bell .slash { display: none; }
+  button.bell.blocked .slash { display: inline; }
+  .now .appr { font-size: 14px; font-weight: 600; padding: 6px 14px; flex: 0 0 auto; }
+  .dlform input[type="datetime-local"] { flex: 0 1 220px; width: auto; }
+  .dlform input[type="number"] { flex: 0 0 5.5em; width: 5.5em; }
+  .dlform .u { color: var(--muted); }
+  .bnote { border: 1px solid var(--line); border-left: 4px solid var(--ok); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; background: var(--panel); }
+  .bnote.k-appr { border-left-color: var(--accent); background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+  .bnote.k-freeze { border-left-color: var(--warn); background: var(--warn-soft); border-color: var(--warn-line); }
+  .bnote p { margin: 0; }
+  .bnote .inl { margin-top: 8px; }
+  .bnote .inl button { font-size: 12px; padding: 3px 10px; }
+  .xacts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+  .xacts button { font-size: 12px; padding: 3px 10px; }
+  .appr-done { color: var(--ok); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -343,6 +369,7 @@
     <h1>Claude Board</h1>
     <span class="tagline">your team's AI coding agents, on one task board</span>
     <span id="conn" class="conn" role="status">Connecting…</span>
+    <button type="button" id="clock" class="clock" data-act="clock" hidden></button>
     <div class="needs" id="needs"></div>
     <span class="sp"></span>
     <div class="hacts">
@@ -350,6 +377,7 @@
       <button id="new-task-btn" title="New task (N)">+ New task</button>
       <button id="link-btn" class="ghost" title="Copy this board's link (it includes the token) to send to a teammate" aria-label="Copy board link"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 9.5l3-3M7 4.5l1.2-1.2a2.8 2.8 0 014 4L11 8.5M9 11.5l-1.2 1.2a2.8 2.8 0 01-4-4L5 7.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="lt"> Copy link</span></button>
       <span class="hpair">
+        <button id="notify-btn" class="ghost bell" type="button" aria-pressed="false" aria-label="Desktop notifications" title="Notify me when this tab is in the background"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.5V7a4 4 0 018 0v4.5l1.2 1.2H2.8zM6.5 13.5a1.6 1.6 0 003 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><path class="slash" d="M2.5 2.5l11 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
         <button id="me-btn" class="ghost" title="Change your name or token">you: <b id="me"></b></button>
         <button id="help-btn" class="ghost help" title="What does everything mean? (?)" aria-label="Help: what everything on this page means">?</button>
       </span>
@@ -375,6 +403,7 @@
       <section aria-labelledby="b-h" style="min-width:0">
         <h2 id="b-h" class="vh">Tasks</h2>
         <div class="filterbar" id="filterbar" hidden></div>
+        <div class="bnote" id="board-note" tabindex="-1" hidden></div>
         <div class="board-empty" id="board-empty" role="status" hidden></div>
         <div class="board" id="board" tabindex="-1"></div>
         <p class="hint">Drag a card to another column, or use its <b>Move…</b> button, to change its status. Open a card (click / Enter) to edit it.</p>
@@ -431,6 +460,7 @@
     <div class="hist" id="td-hist-wrap"><div class="sec-h">Activity on this task</div><div class="feed" id="td-history"></div></div>
     <div class="df">
       <button type="button" class="ghost" id="td-mention" hidden>Message assignee</button>
+      <button type="button" class="ghost" id="td-delete" hidden>Delete task</button>
       <span class="sp"></span>
       <button type="button" class="ghost" data-close>Cancel</button>
       <button type="submit" id="td-save">Save</button>
@@ -467,6 +497,15 @@
     <dd>When an agent needs a human decision it asks here and waits. Answer in the orange box at the top; the agent continues as soon as you reply.</dd>
     <dt>Talking to agents</dt>
     <dd>Agents read the chat in Activity. Write <code>@alice</code> to address alice's agent, <code>@alice/ui-worker</code> for one helper, or <code>@all</code> for everyone. <code>#12</code> links to task 12.</dd>
+    <dt>Demo time &amp; feature freeze</dt>
+    <dd>Set when the demo starts in Start here, step 2. The header counts down to it. At the <b>feature freeze</b> (by default 60 minutes before) agents stop claiming new tasks and finish, push and merge what they have, so <code>main</code> works for the demo. The board posts a reminder 30 minutes before the freeze and at the freeze.</dd>
+    <dt>Plan approval</dt>
+    <dd>Optional (Start here, step 4). When it's on, agents wait after the planner writes the task list until a human checks it and presses <b>Approve plan &amp; start</b>. You can edit and add tasks before approving.</dd>
+    <dt>Desktop notifications</dt>
+    <dd>Press the bell in the header to get a desktop notification while this tab is in the background: a new question for the humans, a message that @mentions you, a task that gets blocked, and the feature-freeze reminders. Click a notification to jump to it. Nothing is sent for your own actions.</dd>
+    <dt>Write-up &amp; backup</dt>
+    <dd>A markdown summary of the day (goal, who built what, decisions, what's unfinished) for your submission, and a JSON backup of everything on the board.
+      <div class="xacts"><button type="button" class="ghost" data-act="export-md">Download summary (.md)</button><button type="button" class="ghost" data-act="export-copy">Copy summary</button><button type="button" class="ghost" data-act="export-json">Download backup (JSON)</button></div></dd>
     <dt>Keyboard</dt>
     <dd><code>n</code> new task · <code>/</code> write a message · <code>?</code> this help · <code>Esc</code> closes dialogs. On a focused card: <code>Enter</code> opens it; its <b>Move…</b> button changes its status.
       <label class="keys"><input type="checkbox" id="keys-on"> Single-key shortcuts (<code>n</code>, <code>/</code>, <code>?</code>) on</label>
@@ -493,7 +532,8 @@ const store = { get: (k) => { try { return localStorage.getItem(k); } catch { re
 const qs = new URLSearchParams(location.search);
 let token = qs.get('token') || store.get('board-token') || '';
 let me = store.get('board-name') || '';
-let state = { tasks: [], locks: [], questions: [], events: [], settings: { goal: '', repo: '', integrator: '', planner: '' }, phase: 'needs_goal', presence: [], setup: null };
+const DEFAULT_SETTINGS = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '' };
+let state = { tasks: [], locks: [], questions: [], events: [], settings: { ...DEFAULT_SETTINGS }, phase: 'needs_goal', presence: [], setup: null };
 let ui = { filter: store.get('board-filter') || '', tab: store.get('board-tab') || 'all', showAllDone: false, confirmLock: null, dragging: false, steps: {}, editGoal: false, editRepo: false, addrs: false, openPeople: new Set(), moveMenu: null, doneOpen: store.get('board-done') };
 let seenMention = Number(store.get('board-seen-mention') || 0);
 let editing = null; // snapshot of the task open in the dialog
@@ -580,6 +620,7 @@ function announce(msg) { const a = $('announcer'); a.textContent = ''; setTimeou
 
 async function api(path, opts = {}) {
   let r;
+  if (opts.method === 'PATCH' && /^\/tasks\/\d+$/.test(path)) { try { const b = JSON.parse(opts.body); if (b.status) selfMoves.set(Number(path.split('/')[2]), { status: b.status, ts: Date.now() }); } catch {} }
   try {
     r = await fetch('/api' + path, { ...opts, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, 'X-Agent': me, ...(opts.headers || {}) } });
   } catch { throw new Error('Cannot reach the board server. Is it still running?'); }
@@ -616,7 +657,7 @@ $('me-btn').onclick = () => showGate();
 async function load() {
   try {
     const s = await api('/state');
-    s.settings = { goal: '', repo: '', integrator: '', planner: '', ...(s.settings || {}) };
+    s.settings = { ...DEFAULT_SETTINGS, ...(s.settings || {}) };
     s.presence = s.presence || []; s.phase = s.phase || (s.tasks.length ? 'building' : 'needs_goal');
     state = s; setConn(esOpen ? 'live' : 'connecting'); render();
   }
@@ -715,12 +756,12 @@ function setupInfo() {
     // Step 1 is never "finished": there can always be another laptop to connect.
     { key: 'invite', title: 'Connect everyone\'s laptop to this board', done: agents.length > 0, ongoing: true, left: 'connect a laptop',
       sum: agents.length ? `${plural(agents.length, 'laptop')} connected · invite more` : 'nobody connected yet' },
-    { key: 'goal', title: 'Say what you\'re building', done: !!S.goal, left: 'set the goal', sum: S.goal ? short(S.goal, 60) : 'not set' },
+    { key: 'goal', title: 'Say what you\'re building', done: !!S.goal, left: 'set the goal', sum: (S.goal ? short(S.goal, 60) : 'not set') + (Number(S.deadline) ? ` · demo ${when(Number(S.deadline))}` : '') },
     { key: 'start', title: 'Start the agent on every laptop', done: startedA.length > 0, left: 'start an agent',
       sum: startedA.length ? `${plural(startedA.length, 'agent')} started${waitingA.length ? ` · ${waitingA.length} connected, not started` : ''}`
         : waitingA.length ? `${plural(waitingA.length, 'agent')} connected, not started yet` : 'no agent started yet' },
-    { key: 'backlog', title: 'Get a task list', done: n > 0, left: 'get tasks',
-      sum: n ? `${n} task${n > 1 ? 's' : ''}${S.planner ? ` · planned by ${S.planner}` : ''}` : S.planner ? `${S.planner} is planning…` : 'no tasks yet' },
+    { key: 'backlog', title: 'Get a task list', done: n > 0 && !approvalWait(), left: approvalWait() ? 'approve the plan' : 'get tasks',
+      sum: n ? `${n} task${n > 1 ? 's' : ''}${S.planner ? ` · planned by ${S.planner}` : ''}${approvalWait() ? ' · waiting for your approval' : ''}` : (S.planner ? `${S.planner} is planning…` : 'no tasks yet') + (S.require_approval ? ' · you approve it first' : '') },
     { key: 'integrator', title: 'Pick who merges to main', done: !!S.integrator, left: 'pick merger', sum: S.integrator ? S.integrator : 'optional · not picked' },
   ];
   const cur = (steps.find((s) => !s.done) || {}).key || null;
@@ -737,6 +778,149 @@ function taskVisible(t) {
 const openQuestions = () => state.questions.filter((q) => !q.answer).sort((a, b) => a.id - b.id);
 const unreadMentions = () => state.events.filter((e) => mentionsMe(e) && e.id > seenMention);
 
+// Demo deadline / feature freeze, computed locally so the countdown moves between server refreshes.
+const WARN_MS = 30 * 60e3;
+function timeNow() {
+  const S = state.settings; const deadline = Number(S.deadline) || 0;
+  if (!deadline) return { deadline: 0, frozen: false, warn: false, past: false };
+  const fm = Number(S.freeze_minutes) || 0; const freezeAt = deadline - fm * 60e3; const now = Date.now();
+  const frozen = now >= freezeAt;
+  return { deadline, freezeAt, fm, frozen, past: now >= deadline, warn: !frozen && freezeAt - now <= WARN_MS };
+}
+// "3h 12m", "45m", "2d 4h"
+function dur(ms) {
+  const m = Math.max(1, Math.ceil(ms / 60e3)); const h = Math.floor(m / 60);
+  if (h >= 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
+  return h ? `${h}h ${m % 60}m` : `${m}m`;
+}
+// "14:00", or "Tue 14:00" when it isn't today.
+const when = (ts) => new Date(ts).toDateString() === new Date().toDateString() ? clock(ts) : `${new Date(ts).toLocaleDateString([], { weekday: 'short' })} ${clock(ts)}`;
+const approvalWait = () => state.phase === 'awaiting_approval';
+const CLOCK_ICO = '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.8V8l2.2 1.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+let prevFrozen = null;
+function renderClock() {
+  const t = timeNow(); const b = $('clock');
+  b.hidden = !t.deadline;
+  if (!t.deadline) { prevFrozen = null; return; }
+  const now = Date.now();
+  let text, cls = '', tip;
+  if (t.past) { text = `Demo time (${when(t.deadline)})`; cls = 'past'; tip = 'The demo deadline has passed. Click to change it.'; }
+  else if (t.frozen) { text = `Feature freeze — finish & merge · demo in ${dur(t.deadline - now)}`; cls = 'frozen'; tip = `Feature freeze since ${when(t.freezeAt)}: agents don't take new tasks. Demo at ${when(t.deadline)}. Click to change the time.`; }
+  else {
+    text = `Demo in ${dur(t.deadline - now)}${t.fm ? ` · freeze ${t.warn ? 'in ' + dur(t.freezeAt - now) : when(t.freezeAt)}` : ''}`;
+    cls = t.warn ? 'warn' : ''; tip = `Demo at ${when(t.deadline)}${t.fm ? `; feature freeze at ${when(t.freezeAt)} (${t.fm} min before): agents stop taking new tasks then` : ''}. Click to change.`;
+  }
+  const html = CLOCK_ICO + `<span>${esc(text)}</span>`;
+  if (b._html !== html) { b.innerHTML = html; b._html = html; }
+  b.className = 'clock ' + cls; b.title = tip; b.setAttribute('aria-label', `${text}. Change the demo time`);
+  // One polite announcement when the freeze starts while the page is open.
+  if (prevFrozen === false && t.frozen && !t.past) announce(`Feature freeze started. Agents won't take new tasks; help merge and test.`);
+  prevFrozen = t.frozen;
+}
+// Re-render when the countdown crosses a boundary (warn / freeze / deadline); otherwise only the header ticks.
+let timeKey = '';
+function tickTime() {
+  if ($('app').hidden) return;
+  const t = timeNow(); const key = `${t.deadline}|${t.warn}|${t.frozen}|${t.past}`;
+  if (key !== timeKey) { timeKey = key; return render(); }
+  renderClock();
+}
+
+// ---------- export: write-up + backup ----------
+async function fetchExport(kind) {
+  let r;
+  try { r = await fetch('/api/' + (kind === 'json' ? 'export' : 'summary'), { headers: { Authorization: 'Bearer ' + token } }); }
+  catch { throw new Error('Cannot reach the board server. Is it still running?'); }
+  if (r.status === 401) { showGate('That token was rejected. Check it with the host.'); throw new Error('Token rejected'); }
+  if (!r.ok) throw new Error(`Could not get the ${kind === 'json' ? 'backup' : 'summary'} (${r.status})`);
+  return r.text();
+}
+async function exportFile(kind, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const text = await fetchExport(kind);
+    if (kind === 'copy') return copyText(text, btn, 'Summary copied (markdown). Paste it into your submission.');
+    const day = new Date().toISOString().slice(0, 10);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: kind === 'json' ? 'application/json' : 'text/markdown' }));
+    a.download = kind === 'json' ? `claude-board-backup-${day}.json` : `claude-board-summary-${day}.md`;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    toast(kind === 'json' ? 'Backup downloaded (JSON).' : 'Summary downloaded (markdown).');
+  } catch (e) { if (e.message !== 'Token rejected') toast(e.message, true); }
+  finally { if (btn) { btn.disabled = false; btn.focus({ preventScroll: true }); } }
+}
+const exportBtns = (k) => `<button type="button" data-act="export-md" data-fk="${k}-md">Download summary (.md)</button><button type="button" class="ghost" data-act="export-copy" data-fk="${k}-cp">Copy summary</button><button type="button" class="ghost" data-act="export-json" data-fk="${k}-js">Download backup (JSON)</button>`;
+
+// ---------- desktop notifications (opt-in; only while this tab is in the background) ----------
+let notifyOn = store.get('board-notify') === 'on';
+const hasNotify = () => 'Notification' in window;
+function notifyState() {
+  if (!hasNotify()) return 'unsupported';
+  if (Notification.permission === 'denied') return 'denied';
+  return notifyOn && Notification.permission === 'granted' ? 'on' : 'off';
+}
+function renderBell() {
+  const b = $('notify-btn'); const st = notifyState();
+  b.setAttribute('aria-pressed', String(st === 'on'));
+  b.classList.toggle('blocked', st === 'denied' || st === 'unsupported');
+  b.title = { on: 'Desktop notifications on: questions, @mentions of you, blocked tasks and the feature freeze, while this tab is in the background. Click to turn off.',
+    off: 'Notify me: get a desktop notification for questions, @mentions of you, blocked tasks and the feature freeze while this tab is in the background',
+    denied: 'Notifications are blocked for this page in your browser settings', unsupported: 'This browser can\'t show desktop notifications' }[st];
+}
+async function toggleNotify() {
+  if (!hasNotify()) return toast('This browser can\'t show desktop notifications. The tab title still counts what\'s waiting for you.', true);
+  if (notifyState() === 'on') { notifyOn = false; store.set('board-notify', 'off'); renderBell(); return toast('Desktop notifications off.'); }
+  if (!window.isSecureContext) return toast('Browsers only allow notifications on https or localhost, not on this address. The tab title still counts what\'s waiting for you.', true);
+  let p = Notification.permission;
+  if (p === 'default') { try { p = await Notification.requestPermission(); } catch { p = Notification.permission; } }
+  if (p !== 'granted') {
+    notifyOn = false; store.set('board-notify', 'off'); renderBell();
+    return toast(p === 'denied' ? 'Notifications are blocked for this page. Allow them in your browser\'s site settings (the icon left of the address), then press the bell again.' : 'Notifications stay off: the browser didn\'t get a yes.', true);
+  }
+  notifyOn = true; store.set('board-notify', 'on'); renderBell();
+  toast('Notifications on. You\'ll get one when this tab is in the background.');
+}
+// Status changes this page made itself, so "blocked" by you doesn't notify you.
+const selfMoves = new Map();
+let notifyCursor = null;
+function noteFor(e) {
+  if (e.kind === 'question') {
+    const qid = e.data?.question_id;
+    if (!state.questions.some((q) => q.id === qid && !q.answer)) return null;
+    return { title: `Question from ${e.author}`, body: short(e.text, 180), tag: 'q-' + qid, go: () => goQuestion(qid) };
+  }
+  if (e.author === 'board' && e.kind === 'message' && /feature freeze/i.test(e.text)) {
+    return { title: /in 30 minutes/i.test(e.text) ? 'Feature freeze in 30 minutes' : 'Feature freeze', body: short(e.text.replace(/^@all\s*/, ''), 180), tag: 'freeze-' + e.id, go: focusNow };
+  }
+  if (e.kind === 'message' && mentionsMe(e)) {
+    return { title: `${e.author} mentioned you`, body: short(e.text, 180), tag: 'm-' + e.id, go: () => goMention(e.id) };
+  }
+  if (e.kind === 'task_updated' && e.data?.status === 'blocked' && e.task_id) {
+    const s = selfMoves.get(e.task_id);
+    if (s && s.status === 'blocked' && Date.now() - s.ts < 2 * 60e3) return null;
+    const t = taskById(e.task_id); if (!t || t.status !== 'blocked') return null;
+    const note = blockedNote(t);
+    return { title: `#${t.id} is blocked`, body: short(`${t.title}${note ? ` — ${note}` : ''}`, 180), tag: 'b-' + t.id, go: () => goCard(t.id) };
+  }
+  return null;
+}
+function checkNotify() {
+  const maxId = state.events.reduce((m, e) => Math.max(m, e.id), 0);
+  if (notifyCursor === null) { notifyCursor = maxId; return; } // history on first load never notifies
+  const fresh = state.events.filter((e) => e.id > notifyCursor);
+  notifyCursor = Math.max(notifyCursor, maxId);
+  if (!fresh.length || notifyState() !== 'on' || !document.hidden) return;
+  const notes = fresh.map(noteFor).filter(Boolean);
+  const shown = notes.length > 3 ? [{ title: 'Claude Board', body: `${notes.length} things need you: ${notes.map((n) => n.title).join('; ')}`, tag: 'many', go: focusNow }] : notes;
+  for (const n of shown) {
+    try {
+      const x = new Notification(n.title, { body: n.body, tag: n.tag });
+      x.onclick = () => { try { window.focus(); } catch {} try { x.close(); } catch {} n.go(); };
+    } catch {}
+  }
+}
+
 // ---------- render ----------
 let prevQIds = null;
 function render() {
@@ -752,10 +936,12 @@ function render() {
   if (ui.tab === 'me' && unread.length) { markMentionsSeen(); return render(); }
   document.title = (qOpen.length + unread.length ? `(${qOpen.length + unread.length}) ` : '') + 'Claude Board';
   renderNeeds(qOpen, unread);
+  renderClock(); renderBell();
   const si = setupInfo();
   renderNow(qOpen, unread, si);
   renderSetup(si);
   renderBoardEmpty(si);
+  renderBoardNote();
   renderQuestions(qOpen);
   renderPeople();
   renderFilter();
@@ -763,6 +949,7 @@ function render() {
   renderFeed(unread.length);
   renderLocks();
   if ($('task-dlg').open) renderDialogLive();
+  checkNotify();
 }
 
 function renderNeeds(qOpen, unread) {
@@ -785,11 +972,14 @@ function renderNow(qOpen, unread, si) {
   const S = state.settings; const T = state.tasks.length;
   const review = state.tasks.filter((t) => t.status === 'review').length;
   const blocked = state.tasks.filter((t) => t.status === 'blocked').length;
-  let kind = 'ok', text, go = '', text2 = '', go2 = '';
+  let kind = 'ok', text, go = '', text2 = '', go2 = '', appr = false;
+  const tm = timeNow();
   if (qOpen.length) { kind = 'urgent'; go = 'questions'; text = `Answer ${plural(qOpen.length, 'question')}: ${qOpen.length > 1 ? 'agents are' : 'an agent is'} waiting for you`; }
+  else if (approvalWait()) { kind = 'setup'; go = 'board'; appr = true; text = `Review the task list (${plural(T, 'task')}), then approve it: agents wait until you do`; }
   else if (review && !S.integrator) { kind = 'urgent'; go = 'step-integrator'; text = `Pick who merges to main: ${plural(review, 'finished task is', 'finished tasks are')} waiting to be merged`; }
   else if (blocked) { kind = 'urgent'; go = 'blocked'; text = `${plural(blocked, 'task is', 'tasks are')} blocked: read why and help`; }
-  else if (state.phase === 'all_done') { go = 'compose'; text = 'Every task is done. Check the result, then add more tasks or tell the agents what\'s next in chat'; }
+  else if (state.phase === 'all_done') { go = 'compose'; text = 'Every task is done. Check the result, then add more tasks or tell the agents what\'s next in chat'; go2 = 'wrapup'; text2 = 'Write-up for your submission'; }
+  else if (tm.frozen && !tm.past) { kind = 'urgent'; go = review ? 'review' : 'compose'; text = `Feature freeze: agents won't start new tasks. Help merge and test ${review ? `the ${plural(review, 'task')} in Review` : 'main'}, then rehearse the demo`; go2 = 'wrapup'; text2 = 'Write-up for your submission'; }
   else if (unread.length) { kind = 'setup'; go = 'mentions'; text = `${plural(unread.length, 'new message mentions', 'new messages mention')} you`; }
   else if (si.cur && si.cur !== 'integrator') {
     kind = 'setup'; go = 'step-' + si.cur;
@@ -804,7 +994,7 @@ function renderNow(qOpen, unread, si) {
     if (si.cur === 'backlog' && S.goal) kind = 'ok';
   }
   else text = 'All good: agents are working. Keep this page open; questions for you will appear here';
-  if (kind === 'ok' && me && state.phase !== 'all_done') {
+  if (kind === 'ok' && me && state.phase !== 'all_done' && !text2) {
     const mine = si.ros.find((r) => r.name === root(me));
     const mineStarted = si.startedA.some((a) => root(a.name) === root(me));
     const othersStarted = si.startedA.some((a) => root(a.name) !== root(me));
@@ -814,12 +1004,14 @@ function renderNow(qOpen, unread, si) {
   const el = $('now'); el.className = 'now k-' + kind;
   // Phase track. "Connect" leads while no laptop is connected, so it never contradicts the line above.
   const curP = si.cur === 'invite' && !T ? 'connect' : state.phase;
-  const ci = ALL_PHASES.findIndex(([k]) => k === curP);
-    const phases = `<span class="phases" title="Where the team is: connect laptops → set a goal → the planner writes tasks → agents build → everything merged"><span class="ph-l">Phase</span>${ALL_PHASES.map(([k, l], i) =>
+  // With plan approval on, a "Review plan" step sits between writing tasks and building.
+  const track = S.require_approval || approvalWait() ? [...ALL_PHASES.slice(0, 3), ['awaiting_approval', 'Review plan'], ...ALL_PHASES.slice(3)] : ALL_PHASES;
+  const ci = track.findIndex(([k]) => k === curP);
+  const phases = `<span class="phases" title="Where the team is: connect laptops → set a goal → the planner writes tasks${track !== ALL_PHASES ? ' → humans approve them' : ''} → agents build → everything merged"><span class="ph-l">Phase</span>${track.map(([k, l], i) =>
     `${i ? '<span class="arr" aria-hidden="true">›</span>' : ''}<span class="p ${k === curP ? 'cur' : i < ci ? 'past' : ''}" ${k === curP ? 'aria-current="step"' : ''}>${l}</span>`).join('')}</span>`;
   patch(el, `<span class="nl">What to do now</span>${go
     ? `<button type="button" class="link na" data-go="${go}" data-fk="now-go">${esc(text)} <span class="go" aria-hidden="true">→</span></button>`
-    : `<span class="na">${esc(text)}</span>`}${text2 ? `<button type="button" class="link na2" data-go="${go2}" data-fk="now-go2">${esc(text2)} <span aria-hidden="true">→</span></button>` : ''}${phases}`);
+    : `<span class="na">${esc(text)}</span>`}${appr ? '<button type="button" class="appr" data-act="approve" data-fk="now-appr">Approve plan &amp; start</button>' : ''}${text2 ? `<button type="button" class="link na2" data-go="${go2}" data-fk="now-go2">${esc(text2)} <span aria-hidden="true">→</span></button>` : ''}${phases}`);
 }
 
 function renderSetup(si) {
@@ -907,7 +1099,29 @@ function stepGoal() {
       <button type="submit" class="ghost" data-fk="repo-save" style="font-size:12px;padding:4px 10px">Save repo</button>${S.repo ? '<button type="button" class="ghost" data-act="repo-cancel" data-fk="repo-cancel" style="font-size:12px;padding:4px 10px">Cancel</button>' : ''}
       <p class="hint" id="repo-hint" style="flex-basis:100%;margin:0">The git repo you're all building in. It goes into the invite message, and agents see it too.</p>
       <div class="err" id="repo-err" style="flex-basis:100%;margin:0">${esc(ui.repoErr || '')}</div></form>`;
-  return goal + repo;
+  return goal + repo + deadlineBlock();
+}
+// "2026-11-09T17:00" in local time, for <input type="datetime-local">.
+const localInput = (ts) => { const d = new Date(ts); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+// Default demo time: today 17:00, or 3 hours from now (on the hour) if 17:00 is close or past.
+function defaultDeadline() {
+  const d = new Date(); d.setHours(17, 0, 0, 0);
+  if (d.getTime() - Date.now() < 2 * 3600e3) { const x = new Date(Date.now() + 3 * 3600e3); x.setMinutes(0, 0, 0); return x.getTime(); }
+  return d.getTime();
+}
+function deadlineBlock() {
+  const S = state.settings; const t = timeNow();
+  if (t.deadline && !ui.editDeadline) {
+    return `<div class="repo"><span class="muted">Demo:</span> <b>${esc(when(t.deadline))}</b><span class="muted" aria-hidden="true">·</span><span>${t.fm ? `feature freeze ${esc(when(t.freezeAt))} <span class="muted">(${t.fm} min before)</span>` : 'no feature freeze'}</span>
+      <button type="button" class="ghost" data-act="dl-edit" data-fk="dl-edit" style="font-size:12px;padding:3px 10px">Change time</button></div>`;
+  }
+  const fm = S.freeze_minutes === '' || S.freeze_minutes == null ? '60' : S.freeze_minutes;
+  return `<form class="repo dlform" data-dlform><label for="dl-in">Demo time <span class="muted" style="font-weight:400">(optional)</span></label>
+      <input id="dl-in" type="datetime-local" data-keep="dl" value="${esc(localInput(t.deadline || defaultDeadline()))}" step="60" aria-describedby="dl-hint dl-err" ${ui.dlErr ? 'aria-invalid="true"' : ''}>
+      <label for="fz-in">Feature freeze</label><input id="fz-in" type="number" data-keep="fz" value="${esc(fm)}" min="0" max="600" step="5" inputmode="numeric" aria-describedby="fz-u dl-hint"><span class="u" id="fz-u">min before</span>
+      <button type="submit" class="ghost" data-fk="dl-save" style="font-size:12px;padding:4px 10px">Save time</button>${t.deadline ? '<button type="button" class="ghost" data-act="dl-cancel" data-fk="dl-cancel" style="font-size:12px;padding:4px 10px">Cancel</button><button type="button" class="ghost" data-act="dl-clear" data-fk="dl-clear" style="font-size:12px;padding:4px 10px">Remove deadline</button>' : ''}
+      <p class="hint" id="dl-hint" style="flex-basis:100%;margin:0">When the demo starts. The header counts down to it. At the feature freeze agents stop taking new tasks and get what they have merged, so main works for the demo.</p>
+      <div class="err" id="dl-err" style="flex-basis:100%;margin:0">${esc(ui.dlErr || '')}</div></form>`;
 }
 function stepStart(si) {
   const tools = state.setup?.agent_tools?.length ? state.setup.agent_tools : [{ id: 'claude', name: 'Claude Code', start: '/board', where: 'Type it in Claude Code, opened in the hackathon repo.' }];
@@ -926,9 +1140,19 @@ function stepStart(si) {
     <p>${si.startedA.length ? `Started: ${si.startedA.map(label).join(', ')}` : 'No agent started yet. It shows up here a few seconds after someone types the start command.'}</p>
     ${si.waitingA.length ? `<p class="ns-txt">Connected but not started: ${si.waitingA.map((a) => `${label(a)} — type <code>${esc(startCmd(a.client))}</code> in it`).join('; ')}</p>` : ''}`;
 }
+function approvalBox() {
+  const S = state.settings;
+  return `<label class="keys"><input type="checkbox" id="appr-on" data-fk="appr" ${S.require_approval ? 'checked' : ''} aria-describedby="appr-hint"> Review the task list before agents start</label>
+    <p class="hint" id="appr-hint">${approvalWait() ? 'Agents are waiting. Edit or add tasks, then approve.'
+      : S.require_approval && S.plan_approved ? '<span class="appr-done">Plan approved ✓</span> Agents are working through it.'
+      : S.require_approval ? 'After the planner writes the tasks, agents wait until someone here presses Approve plan &amp; start.'
+      : 'Off: agents start on tasks as soon as the planner writes them.'}</p>
+    ${approvalWait() ? '<div class="inl"><button type="button" data-act="approve" data-fk="s-appr">Approve plan &amp; start</button></div>' : ''}`;
+}
 function stepBacklog() {
   const S = state.settings; const n = state.tasks.length;
-  const add = '<div class="inl"><span class="muted">You can always add tasks yourself:</span><button type="button" class="ghost" data-act="new-task" data-fk="s-new" style="font-size:12px;padding:3px 10px">+ New task</button></div>';
+  const add = '<div class="inl"><span class="muted">You can always add tasks yourself:</span><button type="button" class="ghost" data-act="new-task" data-fk="s-new" style="font-size:12px;padding:3px 10px">+ New task</button></div>' + approvalBox();
+  if (n && approvalWait()) return `<p>${plural(n, 'task')} on the board${S.planner ? `, written by the planner, ${nameTag(S.planner)}` : ''}. Check them below: open a card to edit it, or add what's missing. Agents start claiming once you approve.</p>${add}`;
   if (n) return `<p>${plural(n, 'task')} on the board${S.planner ? `, written by the planner, ${nameTag(S.planner)}` : ''}. Agents claim them on their own, highest priority first.</p>${add}`;
   if (!S.goal) return `<p>Write the goal first (step 2). Then the first agent that starts on the board (step 3) becomes the <b>planner</b> and writes the task list from it automatically.</p>${add}`;
   if (S.planner) { const c = clientOf(S.planner); return `<p>${nameTag(S.planner)}'s agent${c ? ` (${esc(c)})` : ''} is the <b>planner</b> and is writing the task list now<span class="dots"></span> Cards appear on the board below as it goes.</p>${add}`; }
@@ -957,6 +1181,25 @@ function renderBoardEmpty(si) {
   else if (si.waitingA.length) msg = `<b>No tasks yet.</b> ${plural(si.waitingA.length, 'agent is', 'agents are')} connected but nobody started one: type <code>/board</code> in it (<code>$board</code> in Codex). The first one that starts writes the task list.`;
   else msg = '<b>No tasks yet.</b> The first agent that starts on the board (Start here, step 3) becomes the planner and writes the task list from the goal. Or add tasks yourself with <b>+ New task</b>.';
   patch(el, msg);
+}
+
+// A banner above the board: waiting for plan approval, the feature freeze, or the end-of-day write-up.
+function renderBoardNote() {
+  const el = $('board-note'); const t = timeNow(); const done = state.phase === 'all_done' && state.tasks.length;
+  let kind = '', html = '';
+  if (approvalWait()) {
+    kind = 'appr';
+    html = `<p><b>Agents are waiting for your approval.</b> Check the task list below before they start: open a card to change it, or add what's missing with <b>+ New task</b>. They start claiming as soon as you approve.</p>
+      <div class="inl"><button type="button" data-act="approve" data-fk="bn-appr">Approve plan &amp; start</button><button type="button" class="ghost" data-act="new-task" data-fk="bn-new">+ New task</button></div>`;
+  } else if (done) {
+    html = `<p><b>Every task is merged.</b> Write-up for your submission: a summary of the goal, who built what, the decisions you made and what's unfinished.</p><div class="inl">${exportBtns('bn')}</div>`;
+  } else if (t.frozen && !t.past) {
+    kind = 'freeze';
+    html = `<p><b>Feature freeze since ${esc(when(t.freezeAt))}</b> (demo at ${esc(when(t.deadline))}). Agents have been told not to claim new tasks: they finish, push and merge what they have. Help test <code>main</code> and get Review merged.</p>
+      <div class="inl"><span class="muted" style="font-size:12px">Write-up for your submission:</span>${exportBtns('bn')}</div>`;
+  }
+  el.hidden = !html; el.className = 'bnote' + (kind ? ' k-' + kind : '');
+  patch(el, html);
 }
 
 function renderQuestions(qOpen) {
@@ -1201,6 +1444,28 @@ function goQuestion(id) {
   const c = $('q-' + id); if (!c) return toast('That question was already answered.');
   c.scrollIntoView({ behavior: smooth(), block: 'center' }); $('qa-' + id)?.focus({ preventScroll: true });
 }
+function goCard(id) {
+  const c = document.querySelector(`.card[data-id="${id}"]`);
+  if (!c) return openTask(id);
+  c.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); c.focus({ preventScroll: true });
+}
+function goMention(eid) {
+  ui.tab = 'me'; store.set('board-tab', 'me'); markMentionsSeen(); $('feed')._html = undefined; render();
+  const n = $('feed').querySelector(`[data-eid="${eid}"]`);
+  $('feed').scrollIntoView({ behavior: smooth(), block: 'center' });
+  if (n) $('feed').scrollTop = n.offsetTop - 8;
+  $('feed').focus({ preventScroll: true });
+}
+function goBoard() {
+  const c = $('board').querySelector('.card'); $('b-h').parentElement.scrollIntoView({ behavior: smooth(), block: 'start' });
+  (c || $('board')).focus({ preventScroll: true });
+}
+function goWrapup() {
+  const n = $('board-note');
+  if (n.hidden) return openHelp();
+  n.scrollIntoView({ behavior: smooth(), block: 'center' });
+  (n.querySelector('[data-act^="export"]') || n).focus({ preventScroll: true });
+}
 function skipTo(where) {
   if (where === 'chat') { $('msg').scrollIntoView({ block: 'center' }); return $('msg').focus({ preventScroll: true }); }
   const c = $('board').querySelector('.card'); ($('board').hidden || !state.tasks.length ? $('board-empty') : $('board')).scrollIntoView({ block: 'start' });
@@ -1226,7 +1491,7 @@ document.addEventListener('click', (ev) => {
   if (d.goQ) return goQuestion(Number(d.goQ));
   if (d.copy) return copyText(d.copy, el);
   if (d.step) { const si = setupInfo(); ui.steps[d.step] = !stepOpen(d.step, si.cur); return render(); }
-  if (d.act) return doAct(d.act);
+  if (d.act) return doAct(d.act, el);
   if (d.go && d.go.startsWith('step-')) return goStep(d.go.slice(5));
   if (d.go === 'compose') { $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); return $('msg').focus({ preventScroll: true }); }
   if (d.openTask) return openTask(Number(d.openTask));
@@ -1240,6 +1505,9 @@ document.addEventListener('click', (ev) => {
   if (d.go === 'questions') { $('q-panel').scrollIntoView({ behavior: smooth(), block: 'start' }); return $('questions').querySelector('textarea')?.focus({ preventScroll: true }); }
   if (d.go === 'mentions') { ui.tab = 'me'; store.set('board-tab', 'me'); markMentionsSeen(); render(); return $('feed').scrollIntoView({ behavior: smooth(), block: 'center' }); }
   if (d.go === 'blocked') { $('col-blocked')?.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); return $('col-blocked')?.querySelector('.card')?.focus({ preventScroll: true }); }
+  if (d.go === 'board') return goBoard();
+  if (d.go === 'wrapup') return goWrapup();
+  if (d.go === 'review') { $('col-review')?.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); return ($('col-review')?.querySelector('.card') || $('col-review'))?.focus({ preventScroll: true }); }
   if (d.go === 'stale') { const c = document.querySelector('.card.stale'); c?.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); return c?.focus({ preventScroll: true }); }
 });
 document.addEventListener('keydown', (ev) => {
@@ -1258,6 +1526,7 @@ document.addEventListener('keydown', (ev) => {
 });
 document.addEventListener('input', (ev) => {
   if (ev.target.id === 'goal-in' && ui.goalErr) { ui.goalErr = ''; ev.target.removeAttribute('aria-invalid'); $('goal-err').textContent = ''; }
+  if (ev.target.id === 'dl-in' && ui.dlErr) { ui.dlErr = ''; ev.target.removeAttribute('aria-invalid'); $('dl-err').textContent = ''; }
   if (ev.target.id === 'repo-in' && ui.repoErr) { ui.repoErr = ''; ev.target.removeAttribute('aria-invalid'); $('repo-err').textContent = ''; }
   if (['td-name', 'td-deps'].includes(ev.target.id) && ev.target.getAttribute('aria-invalid')) ev.target.removeAttribute('aria-invalid');
 });
@@ -1273,6 +1542,24 @@ document.addEventListener('submit', async (ev) => {
       state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ goal }) });
       ui.editGoal = false; ui.goalErr = ''; ui.steps.goal = !state.settings.repo; toast('Goal saved. The agents will plan from it.'); render(); scheduleReload();
       document.querySelector('[data-fk="sh-goal"]')?.focus({ preventScroll: true });
+    } catch (e) { toast(e.message, true); btn.disabled = false; }
+    return;
+  }
+  const df = ev.target.closest('[data-dlform]');
+  if (df) {
+    ev.preventDefault();
+    const v = $('dl-in').value; const ts = v ? new Date(v).getTime() : NaN;
+    const fm = Math.max(0, Math.min(600, Math.round(Number($('fz-in').value) || 0)));
+    ui.dlErr = '';
+    if (!Number.isFinite(ts)) ui.dlErr = 'Pick the date and time of the demo.';
+    else if (ts <= Date.now()) ui.dlErr = 'That time has already passed. Pick a time later than now.';
+    if (ui.dlErr) { render(); return $('dl-in')?.focus(); }
+    const btn = df.querySelector('button[type=submit]'); btn.disabled = true;
+    try {
+      state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: ts, freeze_minutes: fm }) });
+      ui.editDeadline = false; ui.dlErr = '';
+      toast(`Demo at ${when(ts)}${fm ? `; feature freeze at ${when(ts - fm * 60e3)}` : ''}. Agents see it too.`); render(); scheduleReload();
+      document.querySelector('[data-fk="dl-edit"]')?.focus({ preventScroll: true });
     } catch (e) { toast(e.message, true); btn.disabled = false; }
     return;
   }
@@ -1309,6 +1596,15 @@ document.addEventListener('submit', async (ev) => {
 
 document.addEventListener('change', async (ev) => {
   if (ev.target.id === 'keys-on') { keysOn = ev.target.checked; store.set('board-keys', keysOn ? 'on' : 'off'); return applyKeys(); }
+  if (ev.target.id === 'appr-on') {
+    const on = ev.target.checked;
+    try {
+      state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ require_approval: on }) });
+      toast(on ? 'Plan approval on: agents wait for your OK on the task list before they start.' : 'Plan approval off: agents start on tasks right away.');
+      render(); scheduleReload();
+    } catch (e) { toast(e.message, true); render(); }
+    return;
+  }
   if (ev.target.id !== 'integ-sel') return;
   const v = ev.target.value;
   try {
@@ -1323,7 +1619,27 @@ function applyKeys() {
   $('new-task-btn').title = keysOn ? 'New task (N)' : 'New task';
   $('help-btn').title = keysOn ? 'What does everything mean? (?)' : 'What does everything mean?';
 }
-function doAct(a) {
+async function approvePlan() {
+  try {
+    state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ plan_approved: true }) });
+    toast('Plan approved. Agents can start claiming tasks.'); announce('Plan approved. Agents can start.');
+    await load(); focusNow();
+  } catch (e) { toast(e.message, true); }
+}
+function doAct(a, el) {
+  if (a === 'approve') return approvePlan();
+  if (a === 'export-md') return exportFile('md', el);
+  if (a === 'export-copy') return exportFile('copy', el);
+  if (a === 'export-json') return exportFile('json', el);
+  if (a === 'clock') return goStep('goal', 'dl');
+  if (a === 'dl-edit') { ui.editDeadline = true; render(); return $('dl-in')?.focus(); }
+  if (a === 'dl-cancel') { ui.editDeadline = false; ui.dlErr = ''; render(); return document.querySelector('[data-fk="dl-edit"]')?.focus(); }
+  if (a === 'dl-clear') {
+    return api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: '' }) }).then((st) => {
+      state.settings = st; ui.editDeadline = false; ui.dlErr = ''; toast('Deadline removed. No countdown or feature freeze.'); render(); scheduleReload();
+      $('dl-in')?.focus();
+    }).catch((e) => toast(e.message, true));
+  }
   if (a === 'setup-open' || a === 'setup-close') {
     store.set('board-setup', a === 'setup-open' ? 'open' : 'closed'); ui.forceSetup = false; render();
     return document.querySelector(`[data-fk="${a === 'setup-open' ? 's-close' : 's-open'}"]`)?.focus();
@@ -1341,12 +1657,13 @@ function doAct(a) {
   }
   if (a === 'new-task') return openTask(null);
 }
-function goStep(key) {
+function goStep(key, focus) {
   const si = setupInfo();
   if (!setupOpen(si.complete)) ui.forceSetup = true; // open for this visit only
   ui.steps[key] = true; render();
   const li = $('step-' + key); if (!li) return;
   li.scrollIntoView({ behavior: smooth(), block: 'start' });
+  if (focus === 'dl') { const n = li.querySelector('#dl-in, [data-fk="dl-edit"]'); if (n) { n.scrollIntoView({ behavior: smooth(), block: 'center' }); return n.focus({ preventScroll: true }); } }
   (li.querySelector('.step-b [data-act="copy-invite"], .step-b textarea, .step-b select, .step-b [data-copy]') || li.querySelector('.step-h'))?.focus({ preventScroll: true });
 }
 async function copyText(text, btn, okMsg = 'Copied. Paste it in a terminal.') {
@@ -1364,6 +1681,7 @@ async function copyText(text, btn, okMsg = 'Copied. Paste it in a terminal.') {
   }
   toast(ok ? okMsg : 'Could not copy automatically: select the text and copy it by hand.', !ok);
 }
+$('notify-btn').onclick = toggleNotify;
 $('link-btn').onclick = () => copyText(boardLink(), $('link-btn'), 'Board link copied. Anyone with it can open this board.');
 const helpDlg = $('help-dlg');
 function openHelp() { if (!helpDlg.open) helpDlg.showModal(); helpDlg.querySelector('.x').focus(); }
@@ -1449,6 +1767,7 @@ function openTask(id) {
   $('td-hist-wrap').hidden = !t;
   $('td-history')._html = undefined;
   $('td-mention').hidden = !t?.assignee;
+  $('td-delete').hidden = !t; resetDelete();
   if (!dlg.open) dlg.showModal();
   renderDialogLive();
   $('td-name').focus();
@@ -1494,6 +1813,22 @@ dlg.addEventListener('click', (ev) => { if (ev.target.closest('[data-close]')) r
 dlg.addEventListener('close', () => { editing = null; $('td-discard').hidden = true; });
 $('td-desc').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); $('task-form').requestSubmit(); } });
 $('td-mention').onclick = () => { const a = editing?.assignee; const id = editing?.id; if (a) { mention(a); $('msg').value += `re #${id}: `; } };
+// Delete asks for a second click (inline confirm, no browser popup).
+let deleteArmed = null;
+function resetDelete() { clearTimeout(deleteArmed); deleteArmed = null; $('td-delete').textContent = 'Delete task'; $('td-delete').classList.remove('danger'); }
+$('td-delete').onclick = async () => {
+  const t = editing; if (!t) return;
+  if (!deleteArmed) {
+    $('td-delete').textContent = `Click again to delete #${t.id}`; $('td-delete').classList.add('danger');
+    deleteArmed = setTimeout(resetDelete, 5000);
+    return;
+  }
+  resetDelete();
+  try {
+    await api(`/tasks/${t.id}`, { method: 'DELETE' });
+    dlg.close(); toast(`Deleted #${t.id} ${t.title}`); scheduleReload();
+  } catch (e) { $('td-err').textContent = `Couldn't delete: ${e.message}`; }
+};
 $('task-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const err = $('td-err'); err.textContent = '';
@@ -1564,7 +1899,7 @@ async function start() {
   $('gate').hidden = true; $('app').hidden = false;
   applyKeys();
   await load(); connect();
-  if (!started) { started = true; setInterval(() => (esOpen ? load() : render()), 20000); } // keep timers fresh; agents coming online don't emit events
+  if (!started) { started = true; setInterval(() => (esOpen ? load() : render()), 20000); setInterval(tickTime, 30000); } // keep timers fresh; agents coming online don't emit events
 }
 start();
 </script>

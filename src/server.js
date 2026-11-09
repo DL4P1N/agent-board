@@ -149,6 +149,7 @@ api.get('/export', (_req, res) => {
 api.post('/messages', h((req) => board.post(agentFrom(req), req.body)));
 api.post('/tasks', h((req) => board.createTask(agentFrom(req), req.body)));
 api.patch('/tasks/:id', h((req) => board.updateTask(agentFrom(req), Number(req.params.id), req.body, { human: true })));
+api.delete('/tasks/:id', h((req) => board.deleteTask(agentFrom(req), Number(req.params.id))));
 api.post('/questions/:id/answer', h((req) => board.answer(agentFrom(req), Number(req.params.id), req.body.answer)));
 api.post('/locks/release', h((req) => board.unlockFiles(agentFrom(req), { paths: req.body.paths, force: true })));
 

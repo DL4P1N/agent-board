@@ -261,6 +261,21 @@ export class Board {
     return this.updateTask(author, id, { status: 'open', note: note ? `released: ${note}` : 'released' });
   }
 
+  // Humans only (web board): remove a task, its locks, and references to it from other tasks' depends_on.
+  deleteTask(author, id) {
+    const task = this.getTask(id);
+    if (!task) throw new Error(`task #${id} not found`);
+    this.releaseLocksForTask(id);
+    for (const t of this.listTasks()) {
+      if (t.depends_on.includes(id)) {
+        this.db.prepare('UPDATE tasks SET depends_on = ? WHERE id = ?').run(JSON.stringify(t.depends_on.filter((d) => d !== id)), t.id);
+      }
+    }
+    this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+    this.emit({ author, kind: 'task_deleted', channel: 'tasks', task_id: id, text: `deleted #${id} ${task.title}${task.assignee ? ` (was ${task.status}, ${task.assignee})` : ''}` });
+    return { deleted: id };
+  }
+
   // ---------- locks ----------
   purgeLocks() {
     this.db.prepare('DELETE FROM locks WHERE expires_at < ?').run(Date.now());
