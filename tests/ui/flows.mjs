@@ -93,13 +93,13 @@ await sleep(200);
 const derr = await page.$eval('#td-err', (e) => e.textContent);
 check('bad dependency id rejected inline', /99/.test(derr), derr);
 // SSE arrives while dialog open: typed values survive
-await page.click('#td-name', { clickCount: 3 });
+await page.click('#td-name', { count: 3 });
 await page.type('#td-name', 'Seed demo data script');
 await rest('chen', '/messages', 'POST', { text: 'ping during dialog' });
 await sleep(600);
 check('dialog stays open and keeps input through SSE', await page.evaluate(() => document.getElementById('task-dlg').open && document.getElementById('td-name').value === 'Seed demo data script'));
 await page.screenshot({ path: `${out}/v2-dialog-new.png` });
-await page.click('#td-deps', { clickCount: 3 });
+await page.click('#td-deps', { count: 3 });
 await page.type('#td-deps', '1');
 await page.click('#td-save');
 await page.waitForFunction(() => !document.getElementById('task-dlg').open, { timeout: 5000 });

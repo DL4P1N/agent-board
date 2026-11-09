@@ -77,7 +77,7 @@ try {
   await page.type('#repo-in', 'not a url');
   await page.click('[data-fk="repo-save"]'); await sleep(200);
   check('A bad repo URL: inline error + aria-invalid', await page.evaluate(() => $('repo-in')?.getAttribute('aria-invalid') === 'true' && /git URL/.test($('repo-err').textContent)));
-  await page.click('#repo-in', { clickCount: 3 }); await page.type('#repo-in', 'https://github.com/team/vote-app');
+  await page.click('#repo-in', { count: 3 }); await page.type('#repo-in', 'https://github.com/team/vote-app');
   await page.click('[data-fk="repo-save"]'); await sleep(500);
   const st1 = await rest('dana', '/state');
   check('A repo saved to settings', st1.settings.repo === 'https://github.com/team/vote-app', st1.settings.repo);

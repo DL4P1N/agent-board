@@ -126,7 +126,7 @@ try {
   await page.click('#new-task-btn'); await page.type('#td-name', 'Seed demo data'); await page.click('#td-save');
   check('awaiting: humans can still add tasks', await until(page, () => state.tasks.some((t) => t.title === 'Seed demo data')));
   await page.evaluate((id) => openTask(id), t3.id); await sleep(150);
-  await page.click('#td-name', { clickCount: 3 }); await page.type('#td-name', 'Live leaderboard page'); await page.click('#td-save');
+  await page.click('#td-name', { count: 3 }); await page.type('#td-name', 'Live leaderboard page'); await page.click('#td-save');
   check('awaiting: humans can still edit tasks', await until(page, (id) => state.tasks.find((t) => t.id === id)?.title === 'Live leaderboard page', t3.id));
   await page.evaluate(() => { localStorage.setItem('board-setup', 'closed'); ui.forceSetup = false; ui.steps = {}; render(); }); await sleep(150);
   await shots(page, 'approval');
