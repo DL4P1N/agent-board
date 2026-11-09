@@ -16,7 +16,9 @@ if (major < 22 || (major === 22 && minor < 13)) {
 }
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-const missing = Object.keys(pkg.dependencies || {}).filter((d) => !fs.existsSync(path.join(ROOT, 'node_modules', d, 'package.json')));
+// --dev (used by `npm test`) also checks test-only dependencies.
+const wanted = { ...pkg.dependencies, ...(process.argv.includes('--dev') ? pkg.devDependencies : {}) };
+const missing = Object.keys(wanted).filter((d) => !fs.existsSync(path.join(ROOT, 'node_modules', d, 'package.json')));
 if (missing.length) {
   console.log(`Installing dependencies (first run: ${missing.join(', ')})…`);
   const r = spawnSync('npm install --no-audit --no-fund', { cwd: ROOT, shell: true, stdio: 'inherit' });

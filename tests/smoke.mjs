@@ -1,12 +1,15 @@
 #!/usr/bin/env node
-// End-to-end check against a running board: two MCP clients act as different agents.
-//   BOARD_URL=http://localhost:4000 BOARD_TOKEN=... node scripts/smoke-test.mjs
+// Agent-side end-to-end check: two MCP clients act as different agents.
+// Starts its own throwaway board, or checks a running one:
+//   BOARD_URL=http://localhost:4000 BOARD_TOKEN=... node tests/smoke.mjs
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import assert from 'node:assert/strict';
+import { startBoard } from './helpers.mjs';
 
-const URL_ = (process.env.BOARD_URL || 'http://localhost:4000').replace(/\/$/, '');
-const TOKEN = process.env.BOARD_TOKEN;
+const board = process.env.BOARD_URL ? null : await startBoard();
+const URL_ = (process.env.BOARD_URL || board.base).replace(/\/$/, '');
+const TOKEN = process.env.BOARD_TOKEN || board?.token;
 if (!TOKEN) { console.error('set BOARD_TOKEN'); process.exit(1); }
 const tag = Date.now().toString(36);
 
@@ -82,3 +85,4 @@ assert.ok(q.question_id);
 
 console.log('\nALL SMOKE TESTS PASSED');
 await a.c.close(); await b.c.close();
+await board?.stop();

@@ -9,7 +9,9 @@
     "prejoin": "node scripts/ensure-deps.mjs",
     "join": "node scripts/join.mjs",
     "predoctor": "node scripts/ensure-deps.mjs",
-    "doctor": "node scripts/doctor.mjs"
+    "doctor": "node scripts/doctor.mjs",
+    "pretest": "node scripts/ensure-deps.mjs --dev",
+    "test": "node tests/run.mjs"
   },
   "type": "module",
   "dependencies": {
@@ -20,5 +22,8 @@
   "private": true,
   "engines": {
     "node": ">=22.13"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.43.1"
   }
 }

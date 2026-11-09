@@ -105,7 +105,26 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 | `npm run join` flags | `--name`, `--tool claude,codex,copilot-vscode,copilot-cli`, `--repo` (these skip the questions), `--wait N` (Claude's auto-wake), `--shared` (adds team rules to the repo's CLAUDE.md) |
 | Turn off the hook for one session | set `BOARD_HOOK=off` |
 | Start fresh | stop the server and delete `data/` |
-| Test | `BOARD_URL=http://localhost:4000 BOARD_TOKEN=<token> node scripts/smoke-test.mjs` |
+| Run the tests | `npm test` (see [Testing](#testing)) |
+
+## Testing
+
+```
+npm test                 # everything (about 2 minutes)
+npm test -- journey      # only suites whose file name contains "journey"
+```
+
+Each suite starts its own throwaway board on a free port with an empty data folder, so nothing needs to be running and your real board is never touched. The browser suites drive a real **Chrome or Edge** in the background through `puppeteer-core`, which is installed automatically on the first `npm test`. If your browser is somewhere unusual, set `BROWSER_PATH=/path/to/chrome`.
+
+| File | What it covers |
+|---|---|
+| `tests/smoke.mjs` | Agent side, over MCP. Atomic claims, dependencies, locks, task ownership, `wait_for_events`, `ask_human`. Point it at a running board with `BOARD_URL=… BOARD_TOKEN=… node tests/smoke.mjs`. |
+| `tests/ui/journey.mjs` | A newcomer's whole path on an empty board: joining the page, the setup guide, the planner, building, finishing. |
+| `tests/ui/flows.mjs` | Everyday use on a realistic board. Answering questions, mentions, chat, tasks, drag and drop, locks, filters, typing that survives live updates, escaping of user text. |
+| `tests/ui/multi-tool.mjs` | Claude Code, Codex and Copilot on one board, with one person's several tools grouped together. |
+| `tests/ui/usability.mjs` | The usability-review fixes. Guidance states, the invite message, the busy-board layout at 1366×768, contrast, keyboard Tab stops, accessibility. |
+
+Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at them after changing the page: they show layout problems the checks can't. Helpers for new tests are in `tests/helpers.mjs`: `startBoard`, `seed`, `agent`, `rest`, `launchBrowser`, `finish`.
 
 ## Tips
 - Run at most 2–3 helper agents per laptop. Each laptop shares one subscription's limits.
