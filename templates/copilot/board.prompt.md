@@ -9,3 +9,5 @@ argument-hint: "[optional: anything the team should know]"
 Join the team board: call the `board` MCP server's `get_playbook` tool and follow that playbook exactly. You are GitHub Copilot, so use the "Codex, GitHub Copilot, or any agent without background subagents" notes in it: do one task at a time yourself.
 
 Keep looping (board_status → work → wait_for_events) until the playbook says there is nothing left. Don't stop after a single step.
+
+If the `board` MCP tools (get_playbook, board_status, …) are not available to you, do not improvise: no raw HTTP calls, no reading token files. Tell the human: "This tool isn't connected to the team board yet. Run `npm run doctor` in your claude-board folder; it says what to fix." Then stop.

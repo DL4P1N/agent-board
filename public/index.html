@@ -737,7 +737,7 @@ function stepStart(si) {
   const tools = state.setup?.agent_tools?.length ? state.setup.agent_tools : [{ id: 'claude', name: 'Claude Code', start: '/board', where: 'Type it in Claude Code, opened in the hackathon repo.' }];
   return `<p>On each laptop, open your AI tool in the hackathon project folder and start the board. Find your tool below:</p>
     <ul class="tools">${tools.map((t) => `<li class="tool-r"><span class="tn">${esc(t.name)}</span>${cmdBox(t.start, 'start-' + t.id, `start command for ${t.name}`)}<span class="tw">${esc(t.where || '')}</span></li>`).join('')}</ul>
-    <p class="muted">That session becomes the laptop's <b>main agent</b> (the "orchestrator"): it takes tasks from this board and builds each one in its own git branch. Claude Code can also hand tasks to several helper agents at once; the other tools work one task at a time. If the tool doesn't know the command, re-run the connect command from step 1 and pick that tool.</p>
+    <p class="muted">That session becomes the laptop's <b>main agent</b> (the "orchestrator"): it takes tasks from this board and builds each one in its own git branch. Claude Code can also hand tasks to several helper agents at once; the other tools work one task at a time. If the tool doesn't know the command or can't see the board, run <code>npm run doctor</code> in the claude-board folder: it checks the connection and says what to fix.</p>
     <p>${si.agentsOn.length ? `Online now: ${si.agentsOn.map((r) => `${nameTag(r.name)}${r.client ? ` <span class="muted">(${esc(r.client)})</span>` : ''}`).join(', ')}` : 'No agent online yet. It shows up here a few seconds after it starts.'}</p>`;
 }
 function stepBacklog() {

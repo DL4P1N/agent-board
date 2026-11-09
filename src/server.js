@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { Board } from './board.js';
@@ -16,6 +17,11 @@ const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'))
 
 const board = new Board(DATA_DIR);
 const TOKEN = loadToken();
+// Which claude-board code this server runs (git commit), so join/doctor can spot an outdated board.
+const VERSION = (() => {
+  const r = spawnSync('git', ['-C', ROOT, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' });
+  return r.status === 0 ? r.stdout.trim() : 'unknown';
+})();
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -145,28 +151,66 @@ api.get('/stream', (req, res) => {
 });
 
 app.use('/api', api);
-app.get('/health', (_req, res) => res.json({ ok: true }));
+app.get('/health', (_req, res) => res.json({ ok: true, app: 'claude-board', version: VERSION }));
 app.use(express.static(path.join(ROOT, 'public')));
 
-app.listen(PORT, HOST, () => {
+const httpServer = app.listen(PORT, HOST, () => {
   const addrs = reachableAddresses();
   const best = addrs[0]?.ip || 'localhost';
-  console.log(`\nClaude Board running on port ${PORT}`);
-  console.log(`  Token: ${TOKEN}`);
-  console.log(`  Data:  ${DATA_DIR}\n`);
-  console.log('Open the web board. It walks the whole team through setup and shows what to do next:');
-  console.log(`  http://${best}:${PORT}/?token=${TOKEN}\n`);
+  const line = '─'.repeat(64);
+  console.log(`\n${line}\n Claude Board is running  (version ${VERSION}, port ${PORT})\n${line}`);
+  console.log('\n 1. Open the web board. It walks everyone through setup:');
+  console.log(`      http://${best}:${PORT}/?token=${TOKEN}`);
   if (!addrs.length) {
-    console.log('No network address found: teammates cannot reach this machine. Connect to wifi or start Tailscale.\n');
+    console.log('\n    ⚠ No network address found, so teammates can\'t reach this laptop. Join the wifi or start Tailscale.');
   }
-  console.log('Teammates: copy-paste ONE of these in their claude-board folder (it asks for name + repo path):');
-  for (const a of addrs) {
-    console.log(`  # ${a.label}`);
-    console.log(`  npm run join -- --url http://${a.ip}:${PORT} --token ${TOKEN}`);
-  }
-  console.log(`  # this machine`);
-  console.log(`  npm run join -- --url http://localhost:${PORT} --token ${TOKEN}\n`);
+  console.log('\n 2. Teammates run this in their claude-board folder (it asks the rest):');
+  console.log(`      npm run join -- --url http://${best}:${PORT} --token ${TOKEN}`);
+  for (const a of addrs.slice(1)) console.log(`      (or ${a.ip} if that doesn't connect: ${a.label})`);
+  console.log(`\n Keep this window open. After a \`git pull\` the board reloads by itself.`);
+  console.log(` Data: ${DATA_DIR}\n${line}\n`);
+  offerHostJoin();
 });
+
+httpServer.on('error', async (e) => {
+  if (e.code !== 'EADDRINUSE') throw e;
+  let other = null;
+  try { other = await (await fetch(`http://localhost:${PORT}/health`, { signal: AbortSignal.timeout(2000) })).json(); } catch {}
+  if (other?.app === 'claude-board') {
+    console.error(`\n✗ A board is already running on port ${PORT} (version ${other.version}).`);
+    console.error(other.version !== VERSION
+      ? `  It's running different code than this folder (${VERSION}). Close its window (Ctrl+C there) and run npm start again.`
+      : `  Use that one (its window shows the links), or close it first with Ctrl+C in its window.`);
+  } else {
+    console.error(`\n✗ Port ${PORT} is already used by another program. Start the board on another port, e.g.:  PORT=4001 npm start`);
+  }
+  process.exit(1);
+});
+
+// The host usually runs an AI agent too: offer to connect it right here instead of a second terminal.
+function offerHostJoin() {
+  if (!process.stdin.isTTY || process.env.BOARD_NO_JOIN) return;
+  const declined = path.join(DATA_DIR, '.host-join-declined');
+  if (fs.existsSync(declined)) return;
+  let cfg = null;
+  try { cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude-board.json'), 'utf8')); } catch {}
+  if (cfg?.token === TOKEN) {
+    console.log(` This laptop is connected as "${cfg.agent}". (Re-run setup any time: npm run join -- --url http://localhost:${PORT} --token ${TOKEN})\n`);
+    return;
+  }
+  process.stdout.write(' Connect this laptop\'s AI tool to the board now? [Y/n] ');
+  process.stdin.setEncoding('utf8');
+  process.stdin.once('data', (answer) => {
+    process.stdin.pause();
+    if (/^\s*n/i.test(answer)) {
+      fs.writeFileSync(declined, '');
+      console.log(` Skipped. To connect later, run in another terminal:\n   npm run join -- --url http://localhost:${PORT} --token ${TOKEN}\n`);
+      return;
+    }
+    const child = spawn(process.execPath, [path.join(ROOT, 'scripts', 'join.mjs'), '--url', `http://localhost:${PORT}`, '--token', TOKEN], { stdio: 'inherit' });
+    child.on('exit', () => console.log(`\n The board keeps running here. Keep this window open.\n`));
+  });
+}
 
 // Friendly name for the AI tool behind an MCP connection (from initialize's clientInfo.name).
 function clientLabel(info) {
@@ -184,7 +228,7 @@ const AGENT_TOOLS = [
   { id: 'claude', name: 'Claude Code', start: '/board', where: 'Type it in Claude Code, opened in the hackathon repo.' },
   { id: 'codex', name: 'Codex (ChatGPT)', start: '$board', where: 'Type it in the Codex CLI, opened in the hackathon repo.' },
   { id: 'copilot-vscode', name: 'GitHub Copilot in VS Code', start: '/board', where: 'Open the hackathon repo in VS Code, switch Copilot Chat to Agent mode, then type it.' },
-  { id: 'copilot-cli', name: 'GitHub Copilot CLI', start: 'Join the team board: call the board get_playbook tool and follow it.', where: 'Paste it into the Copilot CLI, opened in the hackathon repo.' },
+  { id: 'copilot-cli', name: 'GitHub Copilot CLI', start: '/board', where: 'Start it with  copilot --allow-tool board  in the hackathon repo, then type it.' },
 ];
 
 // Copy-paste join commands + web links, for the web board's "invite teammates" step.
@@ -193,8 +237,9 @@ function setupInfo() {
   const list = [...addrs, { ip: 'localhost', label: 'this machine only', rank: 9 }];
   return {
     port: PORT,
+    version: VERSION,
     agent_tools: AGENT_TOOLS,
-    clone_command: 'git clone https://github.com/DL4P1N/claude-board && cd claude-board && npm install',
+    clone_command: 'git clone https://github.com/DL4P1N/claude-board && cd claude-board',
     join_commands: list.map((a) => ({
       label: a.label,
       ip: a.ip,

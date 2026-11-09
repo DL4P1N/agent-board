@@ -8,7 +8,7 @@
 //   claude          Claude Code   → MCP server + /board command + auto-wake Stop hook (in the repo)
 //   codex           Codex CLI     → MCP server (tools pre-approved) + $board skill
 //   copilot-vscode  Copilot in VS Code (Agent mode) → .vscode/mcp.json + /board prompt file (in the repo, git-ignored locally)
-//   copilot-cli     Copilot CLI   → ~/.copilot/mcp-config.json
+//   copilot-cli     Copilot CLI   → ~/.copilot/mcp-config.json + /board skill
 // Other options:
 //   --name NAME --repo PATH   skip the questions
 //   --wait N     Claude's Stop hook long-polls N seconds for teammate activity before letting Claude stop (default 0)
@@ -19,6 +19,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import readline from 'node:readline/promises';
+import { runDoctor, CONFIG_PATH } from './doctor.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEMPLATES = path.join(ROOT, 'templates');
@@ -27,7 +28,7 @@ const TOOLS = {
   claude: { label: 'Claude Code', bin: 'claude', start: 'type  /board' },
   codex: { label: 'Codex CLI', bin: 'codex', start: 'type  $board' },
   'copilot-vscode': { label: 'GitHub Copilot in VS Code', bin: 'code', start: 'open Copilot Chat in Agent mode and type  /board' },
-  'copilot-cli': { label: 'GitHub Copilot CLI', bin: 'copilot', start: 'paste:  Join the team board: call the board get_playbook tool and follow it.' },
+  'copilot-cli': { label: 'GitHub Copilot CLI', bin: 'copilot', start: 'run  copilot --allow-tool board  then type  /board' },
 };
 
 const args = parseArgs(process.argv.slice(2));
@@ -96,9 +97,10 @@ try {
 
 // Identity + token travel in the URL, so the same URL works in every tool (no custom headers needed).
 const urlFor = (agent) => `${url}/mcp?agent=${encodeURIComponent(agent)}&token=${encodeURIComponent(token)}`;
-// The Claude Stop hook reads this; it needs Claude's own board name.
+// The Claude Stop hook reads `agent`; `npm run doctor` reads `agents`.
 const claudeAgent = plan.find((p) => p.tool === 'claude')?.agent || name;
-writeJson(path.join(os.homedir(), '.claude-board.json'), { url, token, agent: claudeAgent, hook_wait: wait });
+const saveConfig = (agents) => writeJson(CONFIG_PATH, { url, token, agent: claudeAgent, hook_wait: wait, agents: agents.map(({ tool, agent, dir }) => ({ tool, agent, dir })) });
+saveConfig(plan);
 
 const done = [];
 for (const p of plan) {
@@ -116,18 +118,14 @@ for (const p of plan) {
   }
 }
 
-// ---------- summary ----------
+// ---------- verify + summary ----------
+saveConfig(done);
+const problems = await runDoctor();
 console.log(`
 ────────────────────────────────────────────────────────────
- You're in as "${name}". Next:
-   1. Open the web board:  ${url}/?token=${token}
-   2. Start your agent${done.length > 1 ? 's, each in its own folder' : ''}:`);
-for (const p of done) {
-  console.log(`      ${TOOLS[p.tool].label}${multi ? ` (${p.agent})` : ''}`);
-  console.log(`        open:  ${p.dir ? `"${p.dir}"` : 'your hackathon repo'}`);
-  console.log(`        then:  ${TOOLS[p.tool].start}`);
-}
-console.log(` The board tells everyone (people and agents) what to do next.
+ ${problems ? `⚠ ${problems} problem(s) above. Fix them, then check again with:  npm run doctor` : `You're in as "${name}".`}
+ Web board:  ${url}/?token=${token}
+ The board tells everyone (people and agents) what to do next.
 ────────────────────────────────────────────────────────────`);
 
 // ======================================================================
@@ -171,9 +169,12 @@ function setupClaude({ mcpUrl, dir }) {
   settings.hooks ??= {};
   settings.hooks.Stop = (settings.hooks.Stop || []).filter((g) => !JSON.stringify(g).includes('board-stop-hook'));
   settings.hooks.Stop.push({ hooks: [{ type: 'command', command: `node "${hookPath}"`, timeout: wait + 30 }] });
+  // Don't ask before every board call in this repo.
+  settings.permissions ??= {};
+  settings.permissions.allow = [...new Set([...(settings.permissions.allow || []), 'mcp__board'])];
   writeJson(settingsPath, settings);
   keepOutOfGit(settingsPath, settingsCreated, dir);
-  ok(`auto-wake hook installed (${settingsPath})`);
+  ok(`auto-wake hook installed and board tools pre-approved (${settingsPath})`);
 
   if (args.shared) {
     const mdPath = path.join(dir, 'CLAUDE.md');
@@ -230,6 +231,7 @@ function setupCopilotCli({ mcpUrl }) {
   cfg.mcpServers.board = { type: 'http', url: mcpUrl, tools: ['*'] };
   writeJson(cfgPath, cfg);
   ok(`connected Copilot CLI to the board (${cfgPath})`);
+  installOurFile(path.join(TEMPLATES, 'copilot-cli-skill', 'SKILL.md'), path.join(path.dirname(cfgPath), 'skills', 'board', 'SKILL.md'), 'the /board skill');
   if (!onPath('copilot')) console.log('  • `copilot` is not installed yet. The config is ready for when it is.');
 }
 

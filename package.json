@@ -1,11 +1,15 @@
 {
   "name": "claude-board",
   "version": "1.0.0",
-  "description": "Shared message board + MCP server for coordinating multiple Claude Code agents",
+  "description": "Shared task board + MCP server so a team's AI coding agents (Claude Code, Codex, GitHub Copilot) can work on one repo together",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "join": "node scripts/join.mjs"
+    "prestart": "node scripts/ensure-deps.mjs",
+    "start": "node --watch-path=src --watch-preserve-output src/server.js",
+    "prejoin": "node scripts/ensure-deps.mjs",
+    "join": "node scripts/join.mjs",
+    "predoctor": "node scripts/ensure-deps.mjs",
+    "doctor": "node scripts/doctor.mjs"
   },
   "type": "module",
   "dependencies": {
