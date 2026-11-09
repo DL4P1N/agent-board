@@ -41,6 +41,19 @@ if (!url || !token) {
   process.exit(1);
 }
 
+// ---------- check the board first, so the questions can use what's on it ----------
+let boardState = null;
+try {
+  const r = await fetch(`${url}/api/state`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) });
+  if (r.status === 401) fail('The board rejected the token. Copy the join command from the web board again (the host may have started a fresh board).');
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  boardState = await r.json();
+  ok(`board reachable at ${url}${boardState.settings?.goal ? ` (goal: ${boardState.settings.goal.slice(0, 60)}${boardState.settings.goal.length > 60 ? '…' : ''})` : ''}`);
+} catch (e) {
+  bad(`cannot reach board at ${url}: ${e.message}`);
+  console.error('  Same wifi? Firewall allowing the port? Using the Tailscale IP? Continuing anyway; run npm run doctor later.');
+}
+
 // ---------- questions (only for what wasn't passed) ----------
 const interactive = process.stdin.isTTY && !args.yes;
 const rl = interactive ? readline.createInterface({ input: process.stdin, output: process.stdout }) : null;
@@ -50,26 +63,55 @@ const ask = async (q, def) => {
   return a || def;
 };
 
-const name = String(args.name || (await ask('Your name on the board (short, no spaces)', defaultName())) || '').replace(/[^\w.-]/g, '');
-if (!name) fail('A name is required (--name NAME).');
+// Names already on this board that this laptop didn't set up before (so re-running join is fine).
+const previous = (() => { try { const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); return c.token === token ? c : null; } catch { return null; } })();
+const mine = new Set([previous?.agent, ...(previous?.agents || []).map((a) => a.agent)].filter(Boolean));
+const taken = (n) => (boardState?.presence || []).find((p) => p.kind === 'agent' && (p.person || p.name) === n && !mine.has(p.name));
+
+let name = '';
+for (let attempt = 0; attempt < 5 && !name; attempt++) {
+  const n = String(args.name || (await ask('Your name on the board (short, no spaces)', previous?.agent?.replace(/-(claude|codex|copilot|copilotcli)$/, '') || defaultName())) || '').replace(/[^\w.-]/g, '');
+  if (!n) fail('A name is required (--name NAME).');
+  const t = taken(n);
+  if (t && rl && !args.name) {
+    console.log(`  "${n}" is already on this board${t.client ? ` (${t.client})` : ''}. If that's not you on another laptop, pick a different name, or you'll share tasks with them.`);
+    if (!/^y/i.test(await ask(`  Use "${n}" anyway? (y/N)`, 'N'))) continue;
+  } else if (t) {
+    console.log(`  • "${n}" is already on this board. If that's someone else, re-run with a different --name.`);
+  }
+  name = n;
+}
+if (!name) fail('No name chosen.');
 
 const installed = Object.keys(TOOLS).filter((t) => onPath(TOOLS[t].bin));
 if (!args.tool && rl) {
   console.log('\nWhich AI tool(s) will you use on this laptop?');
   for (const [id, t] of Object.entries(TOOLS)) console.log(`  ${id.padEnd(15)} ${t.label}${installed.includes(id) ? '  (installed)' : ''}`);
 }
-const toolAnswer = String(args.tool || (await ask('Tool(s), comma-separated', installed[0] || 'claude')) || '');
+const toolAnswer = String(args.tool || (await ask('Tool(s), comma-separated', previous?.agents?.map((a) => a.tool).join(',') || installed[0] || 'claude')) || '');
 const tools = [...new Set(toolAnswer.split(/[\s,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean))];
 const unknown = tools.filter((t) => !TOOLS[t]);
 if (unknown.length || !tools.length) fail(`Unknown tool(s): ${unknown.join(', ') || '(none)'}. Pick from: ${Object.keys(TOOLS).join(', ')}`);
 
 const multi = tools.length > 1;
+// The team's project repo (if the host set it on the board): suggest an existing copy next to claude-board, or offer to clone it.
+const projectUrl = boardState?.settings?.repo || '';
+const projectName = projectUrl ? path.basename(projectUrl.replace(/\.git$/, '').replace(/[\\/]+$/, '')) : '';
+const sibling = projectName ? path.resolve(ROOT, '..', projectName) : '';
 if (!args.repo) {
-  const needs = multi
+  const why = multi
     ? 'required: each tool gets its own git worktree of it'
-    : tools.includes('copilot-vscode') ? 'required for Copilot in VS Code' : 'for the auto-wake hook; blank to skip';
-  const r = await ask(`Path to your copy of the hackathon repo (${needs})`, '');
+    : tools.includes('copilot-vscode') ? 'required for Copilot in VS Code'
+    : tools.includes('claude') ? 'installs the auto-wake hook there; blank to skip' : 'so join can tell you where to start your agent; blank to skip';
+  const def = previous?.agents?.[0]?.dir || (sibling && fs.existsSync(sibling) ? sibling : '');
+  if (projectUrl && !def && rl) console.log(`\nThe team's project is ${projectUrl}. Leave the next answer blank to clone it into ${sibling}.`);
+  const r = await ask(`Path to your copy of the hackathon repo (${why})`, def);
   if (r) args.repo = r.replace(/^["']|["']$/g, '');
+  else if (projectUrl && rl && !fs.existsSync(sibling)) {
+    const c = sh(`git clone ${q(projectUrl)} ${q(sibling)}`);
+    if (c.status === 0) { ok(`cloned ${projectUrl} → ${sibling}`); args.repo = sibling; }
+    else bad(`git clone failed: ${(c.stderr || '').trim().split('\n').pop()}`);
+  }
 }
 rl?.close();
 const repo = args.repo ? path.resolve(args.repo) : null;
@@ -84,16 +126,6 @@ const plan = tools.map((t, i) => ({
   agent: multi ? `${name}-${SHORT[t]}` : name,
   dir: !repo ? null : i === 0 ? repo : `${repo}-${SHORT[t]}`,
 }));
-
-// ---------- check the board ----------
-try {
-  const r = await fetch(`${url}/api/cursor`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) });
-  if (!r.ok) throw new Error(`HTTP ${r.status} (wrong token?)`);
-  ok(`board reachable at ${url}`);
-} catch (e) {
-  bad(`cannot reach board at ${url}: ${e.message}`);
-  console.error('  Same wifi? Firewall allowing the port? Using the Tailscale IP? Continuing anyway.');
-}
 
 // Identity + token travel in the URL, so the same URL works in every tool (no custom headers needed).
 const urlFor = (agent) => `${url}/mcp?agent=${encodeURIComponent(agent)}&token=${encodeURIComponent(token)}`;
@@ -123,7 +155,7 @@ saveConfig(done);
 const problems = await runDoctor();
 console.log(`
 ────────────────────────────────────────────────────────────
- ${problems ? `⚠ ${problems} problem(s) above. Fix them, then check again with:  npm run doctor` : `You're in as "${name}".`}
+ ${problems ? `⚠ ${problems} problem(s) above. Fix them, then check again with:  npm run doctor` : `You're in as "${name}"${multi ? ` (agents: ${done.map((p) => p.agent).join(', ')})` : ''}.`}
  Web board:  ${url}/?token=${token}
  The board tells everyone (people and agents) what to do next.
 ────────────────────────────────────────────────────────────`);

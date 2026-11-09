@@ -25,6 +25,8 @@ export function buildMcpServer(board, baseAgent) {
     }
   );
 
+  // First real use of the board (someone typed /board): show this agent as started on the web board.
+  const started = () => { if (board.markStarted(baseAgent)) board.bus.emit('event', { id: 0, kind: 'presence', text: '' }); };
   const who = (as) => {
     if (!as) return baseAgent;
     const clean = String(as).trim().replace(/\s+/g, '-');
@@ -46,7 +48,7 @@ export function buildMcpServer(board, baseAgent) {
         'the team phase (needs_goal, needs_plan, building, all_done), the project goal, roles (planner, integrator), your role, your tasks, open tasks, locks, questions, recent activity, and the event cursor.',
       inputSchema: { as: asArg },
     },
-    wrap(({ as }) => board.status(who(as)))
+    wrap(({ as }) => { started(); return board.status(who(as)); })
   );
 
   server.registerTool(
@@ -56,7 +58,7 @@ export function buildMcpServer(board, baseAgent) {
       description: 'How to work as this laptop\'s orchestrator on the team board (works for Claude Code, Codex, Copilot and any other agent). Call this when asked to join the board, then follow it.',
       inputSchema: {},
     },
-    wrap(() => playbook())
+    wrap(() => { started(); return playbook(); })
   );
 
   // Same playbook as an MCP prompt, for clients that surface prompts as slash commands.

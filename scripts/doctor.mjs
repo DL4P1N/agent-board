@@ -59,7 +59,8 @@ export async function runDoctor({ header = true } = {}) {
   // 3. Each agent: the board answers as that agent, and the tool's config points at this board
   for (const a of agents) {
     console.log(`  ${LABEL[a.tool] || a.tool} (as "${a.agent}")${a.dir ? ` in ${a.dir}` : ''}`);
-    const mcpUrl = `${url}/mcp?agent=${encodeURIComponent(a.agent)}&token=${encodeURIComponent(token)}`;
+    // probe=1: checking must not make this agent look online/started on the board.
+    const mcpUrl = `${url}/mcp?agent=${encodeURIComponent(a.agent)}&token=${encodeURIComponent(token)}&probe=1`;
     let tools = [];
     try {
       const r = await fetch(mcpUrl, {
@@ -115,6 +116,6 @@ function shortcutPath({ tool, dir }) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const n = await runDoctor();
-  process.exit(n ? 1 : 0);
+  // exitCode, not process.exit(): exiting while fetch sockets are still closing crashes Node on Windows.
+  process.exitCode = (await runDoctor()) ? 1 : 0;
 }

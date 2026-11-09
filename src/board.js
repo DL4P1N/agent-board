@@ -76,6 +76,7 @@ export class Board {
   migrate() {
     const cols = this.db.prepare('PRAGMA table_info(presence_v2)').all().map((c) => c.name);
     if (!cols.includes('client')) this.db.exec('ALTER TABLE presence_v2 ADD COLUMN client TEXT');
+    if (!cols.includes('started_at')) this.db.exec('ALTER TABLE presence_v2 ADD COLUMN started_at INTEGER');
   }
 
   // ---------- events ----------
@@ -197,7 +198,10 @@ export class Board {
   updateTask(author, id, { status, note, branch, title, description, priority, assignee }, { human = false } = {}) {
     const task = this.getTask(id);
     if (!task) throw new Error(`task #${id} not found`);
-    if (!human && task.assignee && !sameTeam(author, task.assignee) && status && status !== task.status) {
+    // The integrator merges other people's work, so it may move a task out of review (to done, or back to in_progress).
+    const integrator = this.getSettings().integrator;
+    const isIntegratorMove = integrator && sameTeam(author, integrator) && task.status === 'review' && ['done', 'in_progress'].includes(status);
+    if (!human && !isIntegratorMove && task.assignee && !sameTeam(author, task.assignee) && status && status !== task.status) {
       throw new Error(`task #${id} is assigned to ${task.assignee}; post a message to them instead of changing its status.`);
     }
     if (status && !STATUSES.includes(status)) throw new Error(`status must be one of ${STATUSES.join(', ')}`);
@@ -315,7 +319,7 @@ export class Board {
   // ---------- settings: project goal + roles ----------
   getSettings() {
     const rows = this.db.prepare('SELECT key, value FROM settings').all();
-    const s = { goal: '', integrator: '', planner: '' };
+    const s = { goal: '', repo: '', integrator: '', planner: '' };
     for (const r of rows) s[r.key] = r.value;
     return s;
   }
@@ -324,14 +328,14 @@ export class Board {
   setSettings(author, patch, { human = false } = {}) {
     const cur = this.getSettings();
     const changes = [];
-    for (const key of ['goal', 'integrator', 'planner']) {
+    for (const key of ['goal', 'repo', 'integrator', 'planner']) {
       if (patch[key] === undefined) continue;
       let val = String(patch[key] ?? '').trim();
-      if (key !== 'goal') val = val.split('/')[0];
+      if (key === 'integrator' || key === 'planner') val = val.split('/')[0];
       if (val === cur[key]) continue;
       if (!human && key === 'goal' && cur.goal) throw new Error(`The goal is already set: "${cur.goal}". Only humans can change it (on the web board).`);
       this.db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, val);
-      changes.push(key === 'goal' ? `set the goal: ${val || '(cleared)'}` : `${key} → ${val || 'nobody'}`);
+      changes.push(key === 'goal' ? `set the goal: ${val || '(cleared)'}` : key === 'repo' ? `set the project repo: ${val || '(cleared)'}` : `${key} → ${val || 'nobody'}`);
     }
     if (changes.length) this.emit({ author, kind: 'settings', channel: 'general', text: changes.join('; ') });
     return this.getSettings();
@@ -362,6 +366,12 @@ export class Board {
     return kind === 'agent' && (!prev || now - prev.last_seen >= AGENT_ONLINE_MS);
   }
 
+  markStarted(name) {
+    const root = String(name || '').split('/')[0];
+    const r = this.db.prepare("UPDATE presence_v2 SET started_at = ? WHERE name = ? AND kind = 'agent' AND started_at IS NULL").run(Date.now(), root);
+    return r.changes > 0;
+  }
+
   // Which AI tool an agent uses (from the MCP initialize handshake), e.g. "Claude Code", "Codex".
   setClient(name, client) {
     const root = String(name || '').split('/')[0];
@@ -380,6 +390,8 @@ export class Board {
       client: r.client || null,
       last_seen: r.last_seen,
       online: r.kind === 'human' ? humansOnline.has(r.name) : Date.now() - r.last_seen < AGENT_ONLINE_MS,
+      // An agent has really started (someone typed /board) once it reads the playbook or the board status.
+      started: r.kind === 'agent' ? !!r.started_at : undefined,
     }));
     for (const h of humansOnline) if (!out.some((p) => p.name === h && p.kind === 'human')) out.push({ name: h, person: h, kind: 'human', last_seen: Date.now(), online: true });
     return out;
@@ -445,7 +457,7 @@ export class Board {
     if (openQs.length) steps.push(`${openQs.length} question(s) are waiting for humans. Don't re-ask them; answers arrive as "answer" events.`);
     if (!s.integrator && phase === 'building' && role !== 'integrator' && !review.length) steps.push('Note: nobody owns main yet. The first agent with work in review should claim_role("integrator").');
 
-    return { phase, your_role: role, goal: s.goal, roles: { planner: s.planner, integrator: s.integrator }, next_action: steps.join('\n') };
+    return { phase, your_role: role, goal: s.goal, repo: s.repo, roles: { planner: s.planner, integrator: s.integrator }, next_action: steps.join('\n') };
   }
 
   // ---------- summary ----------

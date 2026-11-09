@@ -49,8 +49,10 @@ function agentFrom(req) {
 // ---------- MCP (stateless streamable HTTP) ----------
 app.post('/mcp', auth, async (req, res) => {
   // A Claude that just came online: nudge web boards to refresh (SSE {kind:'presence'}).
-  const cameOnline = board.touch(agentFrom(req), 'agent');
-  const clientChanged = req.body?.method === 'initialize' && board.setClient(agentFrom(req), clientLabel(req.body.params?.clientInfo));
+  // ?probe=1: a connection check (join/doctor), not a running agent, so it doesn't count as presence.
+  const probe = req.query.probe === '1';
+  const cameOnline = !probe && board.touch(agentFrom(req), 'agent');
+  const clientChanged = !probe && req.body?.method === 'initialize' && board.setClient(agentFrom(req), clientLabel(req.body.params?.clientInfo));
   if (cameOnline || clientChanged) board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
   const server = buildMcpServer(board, agentFrom(req));
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
@@ -171,7 +173,7 @@ const httpServer = app.listen(PORT, HOST, () => {
   console.log(`      npm run join -- --url http://${best}:${PORT} --token ${TOKEN}`);
   for (const a of addrs.slice(1)) console.log(`      (or ${a.ip} if that doesn't connect: ${a.label})`);
   console.log(`\n Keep this window open. After a \`git pull\` the board reloads by itself.`);
-  console.log(` Data: ${DATA_DIR}\n${line}\n`);
+  console.log(`${line}\n`);
   offerHostJoin();
 });
 
@@ -211,7 +213,13 @@ function offerHostJoin() {
       return;
     }
     const child = spawn(process.execPath, [path.join(ROOT, 'scripts', 'join.mjs'), '--url', `http://localhost:${PORT}`, '--token', TOKEN], { stdio: 'inherit' });
-    child.on('exit', () => console.log(`\n The board keeps running here. Keep this window open.\n`));
+    child.on('exit', () => {
+      // Join's output pushed the banner off screen: repeat what the host needs next.
+      const best = reachableAddresses()[0]?.ip || 'localhost';
+      console.log(`\n The board keeps running here. Keep this window open.`);
+      console.log(` Web board:       http://${best}:${PORT}/?token=${TOKEN}`);
+      console.log(` Teammates join:  npm run join -- --url http://${best}:${PORT} --token ${TOKEN}\n`);
+    });
   });
 }
 

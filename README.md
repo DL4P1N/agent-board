@@ -21,7 +21,7 @@ Then, in the `claude-board` folder, run the join command that the host's window 
 ```
 npm run join -- --url http://<host-ip>:4000 --token <token>
 ```
-The join command asks three things: your name, which AI tool(s) you use, and where your copy of the hackathon repo is. Then it connects each tool, installs its `/board` shortcut, and **tests the connection**. When it says *All good*, it also tells you exactly what to type.
+The join command asks three things: your name, which AI tool(s) you use, and where your copy of the hackathon repo is. If the host put the project's repo URL on the web board, join suggests your existing copy, or clones it for you. If you pick a name someone else already uses, join warns you. Then it connects each tool, installs its `/board` shortcut, and **tests the connection**. When it says *All good*, it also tells you exactly what to type.
 
 **3. Open the hackathon repo in your AI tool and type `/board`:**
 
