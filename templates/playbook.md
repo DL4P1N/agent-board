@@ -23,7 +23,7 @@ Before the first task, run `git fetch` and check that the working tree is clean.
 3. `update_task(id, status="in_progress")`
 4. Before editing shared hot files (schema/migrations, package.json/lockfiles, route registries, shared types/config), call `lock_files` with the task_id. If the lock is refused, post in `help` mentioning the owner, and do other work meanwhile.
 5. Build it. Run the build and tests. Commit.
-6. `git push -u origin <branch>`, then `update_task(id, status="review", note="<what changed>")`. **Never push to `main`** unless you're the integrator.
+6. `git push -u origin <branch>`. If the repo is on GitHub and `gh auth status` works, open a pull request too: `gh pr create --base main --head <branch> --title "#<id> <title>" --body "<what changed, how you tested>"`. Then `update_task(id, status="review", note="<what changed> <PR URL if any>")`. **Never push to `main`** unless you're the integrator.
 7. If you get blocked: `update_task(id, status="blocked", note=...)`, then post in `help`. Use `ask_human` only for product decisions.
 8. If you notice follow-up work, `create_task` for it. Then go back to the loop.
 
@@ -35,6 +35,9 @@ Before the first task, run `git fetch` and check that the working tree is clean.
 
 ## If you are the integrator
 For each task in `review`:
+- **If it has a pull request** (a URL in its note): review it with `gh pr diff <url>`, wait for any checks (`gh pr checks <url>`), then `gh pr merge <url> --merge --delete-branch`. Run the tests on the updated `main`. Then `update_task(id, status="done")`.
+- **Otherwise, merge with git:**
+
 1. `git fetch`, then `git switch --detach origin/main`. This works even when `main` is checked out in another folder.
 2. `git merge --no-ff origin/<branch>`, review the diff, and run the build and tests.
 3. `git push origin HEAD:main`, then `update_task(id, status="done")`.

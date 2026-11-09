@@ -79,7 +79,9 @@ export function findBrowser() {
 
 export async function launchBrowser(opts = {}) {
   const { default: puppeteer } = await import('puppeteer-core');
-  return puppeteer.launch({ headless: true, ...opts, executablePath: findBrowser() });
+  // CI containers (GitHub Actions) need --no-sandbox for Chrome.
+  const args = [...(opts.args || []), ...(process.env.CI ? ['--no-sandbox', '--disable-dev-shm-usage'] : [])];
+  return puppeteer.launch({ headless: true, ...opts, args, executablePath: findBrowser() });
 }
 
 // Screenshots go to tests/ui/shots/<suite>/ (git-ignored).

@@ -13,7 +13,7 @@ export const START = {
   claude: 'open Claude Code there and type  /board',
   codex: 'open Codex there and type  $board',
   'copilot-vscode': 'open the folder in VS Code, Copilot Chat in Agent mode, type  /board',
-  'copilot-cli': 'run  copilot --allow-tool board  there, then type  /board',
+  'copilot-cli': 'run  copilot --allow-tool board --autopilot --max-autopilot-continues 50  there, then type  /board',
 };
 const LABEL = { claude: 'Claude Code', codex: 'Codex', 'copilot-vscode': 'Copilot in VS Code', 'copilot-cli': 'Copilot CLI' };
 

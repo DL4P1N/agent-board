@@ -8,6 +8,29 @@ import path from 'node:path';
 const STATUSES = ['open', 'claimed', 'in_progress', 'blocked', 'review', 'done'];
 const STALE_MS = 30 * 60 * 1000;
 const AGENT_ONLINE_MS = 10 * 60 * 1000;
+const HUMAN_ONLY = ['deadline', 'freeze_minutes', 'require_approval', 'plan_approved'];
+
+const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+// Deadline / feature-freeze state from settings.
+export function timeInfo(s, now = Date.now()) {
+  const deadline = Number(s.deadline) || 0;
+  if (!deadline) return { deadline: 0, frozen: false };
+  const freezeAt = deadline - (Number(s.freeze_minutes) || 0) * 60e3;
+  const left = Math.max(0, deadline - now);
+  const h = Math.floor(left / 3600e3);
+  const m = Math.round((left % 3600e3) / 60e3);
+  return { deadline, freezeAt, frozen: now >= freezeAt, deadlineLabel: clock(deadline), freezeLabel: clock(freezeAt), leftLabel: h ? `${h}h ${m}m` : `${m}m` };
+}
+
+function describeSetting(key, val, cur) {
+  if (key === 'goal') return `set the goal: ${val || '(cleared)'}`;
+  if (key === 'repo') return `set the project repo: ${val || '(cleared)'}`;
+  if (key === 'deadline') return val ? `set the demo deadline to ${new Date(Number(val)).toLocaleString()}` : 'cleared the deadline';
+  if (key === 'freeze_minutes') return `feature freeze starts ${val} min before the deadline`;
+  if (key === 'require_approval') return val ? 'turned on plan approval: agents wait for a human OK before starting tasks' : 'turned off plan approval';
+  if (key === 'plan_approved') return val ? 'approved the task list: agents can start' : 'withdrew approval of the task list';
+  return `${key} → ${val || 'nobody'}`;
+}
 
 export class Board {
   constructor(dataDir) {
@@ -180,6 +203,8 @@ export class Board {
   claimTask(author, id) {
     const task = this.getTask(id);
     if (!task) throw new Error(`task #${id} not found`);
+    const gate = this.claimGate();
+    if (gate) throw new Error(gate);
     const blockers = task.depends_on.map((d) => this.getTask(d)).filter((d) => d && d.status !== 'done');
     if (blockers.length) {
       throw new Error(`task #${id} depends on unfinished task(s): ${blockers.map((b) => `#${b.id} (${b.status})`).join(', ')}`);
@@ -319,7 +344,7 @@ export class Board {
   // ---------- settings: project goal + roles ----------
   getSettings() {
     const rows = this.db.prepare('SELECT key, value FROM settings').all();
-    const s = { goal: '', repo: '', integrator: '', planner: '' };
+    const s = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '' };
     for (const r of rows) s[r.key] = r.value;
     return s;
   }
@@ -328,14 +353,22 @@ export class Board {
   setSettings(author, patch, { human = false } = {}) {
     const cur = this.getSettings();
     const changes = [];
-    for (const key of ['goal', 'repo', 'integrator', 'planner']) {
+    for (const key of ['goal', 'repo', 'integrator', 'planner', 'deadline', 'freeze_minutes', 'require_approval', 'plan_approved']) {
       if (patch[key] === undefined) continue;
       let val = String(patch[key] ?? '').trim();
       if (key === 'integrator' || key === 'planner') val = val.split('/')[0];
+      if (HUMAN_ONLY.includes(key) && !human) throw new Error(`Only humans can change ${key} (on the web board).`);
+      if (key === 'deadline' && val) {
+        const t = /^\d+$/.test(val) ? Number(val) : Date.parse(val);
+        if (!Number.isFinite(t)) throw new Error('deadline must be a date/time');
+        val = String(t);
+      }
+      if (key === 'freeze_minutes') val = String(Math.max(0, Math.min(600, Math.round(Number(val) || 0))));
+      if (key === 'require_approval' || key === 'plan_approved') val = /^(1|true|yes|on)$/i.test(val) ? '1' : '';
       if (val === cur[key]) continue;
       if (!human && key === 'goal' && cur.goal) throw new Error(`The goal is already set: "${cur.goal}". Only humans can change it (on the web board).`);
       this.db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, val);
-      changes.push(key === 'goal' ? `set the goal: ${val || '(cleared)'}` : key === 'repo' ? `set the project repo: ${val || '(cleared)'}` : `${key} → ${val || 'nobody'}`);
+      changes.push(describeSetting(key, val, cur));
     }
     if (changes.length) this.emit({ author, kind: 'settings', channel: 'general', text: changes.join('; ') });
     return this.getSettings();
@@ -414,7 +447,9 @@ export class Board {
     if (!s.goal) phase = 'needs_goal';
     else if (!tasks.length) phase = 'needs_plan';
     else if (tasks.every((t) => t.status === 'done')) phase = 'all_done';
+    else if (s.require_approval && !s.plan_approved) phase = 'awaiting_approval';
     else phase = 'building';
+    const time = timeInfo(s);
 
     const steps = [];
     if (phase === 'needs_goal') {
@@ -433,6 +468,12 @@ export class Board {
       } else {
         steps.push(`${s.planner} is writing the backlog. Call wait_for_events until tasks appear, then claim one.`);
       }
+    } else if (phase === 'awaiting_approval') {
+      steps.push(
+        s.planner === root
+          ? 'The task list is written. The humans want to approve it before anyone starts: post a short summary of the plan in general, answer questions about it, adjust tasks if they ask, then wait_for_events until it is approved.'
+          : 'The humans are reviewing the task list before work starts. Read it (list_tasks) and post in general if something is missing, then wait_for_events until it is approved.'
+      );
     } else if (phase === 'all_done') {
       steps.push('Every task is done. Post a status update in general and ask_human whether there is more to do. Suggest follow-up tasks with create_task if you see gaps.');
     } else {
@@ -446,7 +487,9 @@ export class Board {
         steps.push(`${review.length} task(s) are waiting in review and nobody owns main. Call claim_role("integrator"). If you get it, merge them; if not, carry on.`);
       }
       if (mine.length) steps.push(`You have active tasks: ${mine.map((t) => `#${t.id} ${t.title} [${t.status}]`).join('; ')}. Keep them moving (or dispatch them to subagents) before claiming more.`);
-      if (mine.length < 3) {
+      if (time.frozen) {
+        steps.push(`FEATURE FREEZE (since ${time.freezeLabel}, demo at ${time.deadlineLabel}): do not claim or start new tasks. Finish and push what you have, get it merged, fix bugs on main, and help the integrator. Unfinished tasks you can't land in time: release_task them with a note.`);
+      } else if (mine.length < 3) {
         steps.push(
           claimable.length
             ? `Claimable now (highest priority first): ${claimable.slice(0, 5).map((t) => `#${t.id} P${t.priority} ${t.title}`).join('; ')}. claim_task and do it (agents with background subagents: one per subagent, max 3 active; otherwise one at a time).`
@@ -454,10 +497,66 @@ export class Board {
         );
       }
     }
+    if (time.deadline && !time.frozen && phase !== 'all_done') steps.push(`Demo at ${time.deadlineLabel} (${time.leftLabel} left); feature freeze at ${time.freezeLabel}. Prefer small tasks that can land before the freeze.`);
     if (openQs.length) steps.push(`${openQs.length} question(s) are waiting for humans. Don't re-ask them; answers arrive as "answer" events.`);
     if (!s.integrator && phase === 'building' && role !== 'integrator' && !review.length) steps.push('Note: nobody owns main yet. The first agent with work in review should claim_role("integrator").');
 
-    return { phase, your_role: role, goal: s.goal, repo: s.repo, roles: { planner: s.planner, integrator: s.integrator }, next_action: steps.join('\n') };
+    return { phase, your_role: role, goal: s.goal, repo: s.repo, deadline: time.deadline ? new Date(time.deadline).toISOString() : null, feature_freeze: time.frozen, roles: { planner: s.planner, integrator: s.integrator }, next_action: steps.join('\n') };
+  }
+
+  // Why claiming is not allowed right now, or '' if it is.
+  claimGate() {
+    const s = this.getSettings();
+    if (s.require_approval && !s.plan_approved) return 'The humans have not approved the task list yet. Wait (wait_for_events); they approve it on the web board.';
+    const t = timeInfo(s);
+    if (t.frozen) return `Feature freeze since ${t.freezeLabel} (demo at ${t.deadlineLabel}): don't start new tasks. Finish and merge what is in progress, or help the integrator.`;
+    return '';
+  }
+
+  // Markdown write-up of the day: goal, who built what, decisions, what's unfinished.
+  summary() {
+    const s = this.getSettings();
+    const tasks = this.listTasks();
+    const done = tasks.filter((t) => t.status === 'done');
+    const notDone = tasks.filter((t) => t.status !== 'done');
+    const answered = this.db.prepare('SELECT * FROM questions WHERE answer IS NOT NULL ORDER BY answered_at').all();
+    const byPerson = new Map();
+    for (const t of done) {
+      const who = personOf(t.assignee || t.created_by);
+      if (!byPerson.has(who)) byPerson.set(who, []);
+      byPerson.get(who).push(t);
+    }
+    const first = this.db.prepare('SELECT MIN(ts) AS a, MAX(ts) AS b FROM events').get();
+    const fmt = (ms) => (ms ? new Date(ms).toLocaleString() : '');
+    const L = [];
+    L.push('# Team board summary', '');
+    if (s.goal) L.push(`**Goal:** ${s.goal}`, '');
+    if (s.repo) L.push(`**Repo:** ${s.repo}`, '');
+    L.push(`**Done:** ${done.length} of ${tasks.length} tasks${first.a ? ` · ${fmt(first.a)} – ${fmt(first.b)}` : ''}`, '');
+    L.push('## What got built', '');
+    if (!done.length) L.push('_Nothing merged yet._', '');
+    for (const [who, list] of [...byPerson].sort((a, b) => b[1].length - a[1].length)) {
+      L.push(`### ${who} (${list.length})`);
+      for (const t of list) L.push(`- #${t.id} ${t.title}${t.assignee && t.assignee !== who ? ` _(by ${t.assignee})_` : ''}`);
+      L.push('');
+    }
+    if (answered.length) {
+      L.push('## Decisions (questions answered by humans)', '');
+      for (const q of answered) L.push(`- **${q.question}** → ${q.answer} _(${q.answered_by})_`);
+      L.push('');
+    }
+    if (notDone.length) {
+      L.push('## Not finished', '');
+      for (const t of notDone) L.push(`- #${t.id} ${t.title} — ${t.status}${t.assignee ? ` (${t.assignee})` : ''}`);
+      L.push('');
+    }
+    return L.join('\n');
+  }
+
+  // Everything on the board, for backups.
+  exportAll() {
+    const all = (table) => this.db.prepare(`SELECT * FROM ${table}`).all();
+    return { exported_at: new Date().toISOString(), settings: this.getSettings(), tasks: this.listTasks(), questions: all('questions'), locks: all('locks'), events: all('events').map((e) => ({ ...e, data: e.data ? JSON.parse(e.data) : null })) };
   }
 
   // ---------- summary ----------

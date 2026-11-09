@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { Board } from './board.js';
+import { Board, timeInfo } from './board.js';
 import { buildMcpServer } from './mcp.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -99,6 +99,8 @@ api.get('/state', h((req) => {
     cursor: board.latestEventId(),
     settings: board.getSettings(),
     phase: g.phase,
+    // Deadline / feature freeze: {deadline, freezeAt, frozen} (ms), so the page can count down.
+    time: timeInfo(board.getSettings()),
     presence: board.presence(onlineHumans()),
     setup: setupInfo(),
   };
@@ -119,6 +121,30 @@ api.get('/events', h(async (req) => {
   return { events, cursor: events.length ? events.at(-1).id : Math.max(since, board.latestEventId()) };
 }));
 api.get('/cursor', h(() => ({ cursor: board.latestEventId() })));
+
+// Announce the feature freeze (30 min warning, then the freeze itself) so waiting agents wake up.
+const announced = new Set();
+setInterval(() => {
+  const t = timeInfo(board.getSettings());
+  if (!t.deadline) return;
+  const key = (k) => `${t.deadline}:${t.freezeAt}:${k}`;
+  const now = Date.now();
+  if (!t.frozen && t.freezeAt - now <= 30 * 60e3 && !announced.has(key('warn'))) {
+    announced.add(key('warn'));
+    board.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all Feature freeze in 30 minutes (${t.freezeLabel}); demo at ${t.deadlineLabel}. Don't start big tasks now. Aim to get what you have merged.` });
+  }
+  if (t.frozen && now < t.deadline && !announced.has(key('freeze'))) {
+    announced.add(key('freeze'));
+    board.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all FEATURE FREEZE. Demo at ${t.deadlineLabel}. Don't claim new tasks. Finish, push and merge what you have; release anything that can't land in time.` });
+  }
+}, 20e3).unref();
+
+// End-of-day write-up (markdown) and a full JSON backup of the board.
+api.get('/summary', (_req, res) => res.type('text/markdown; charset=utf-8').send(board.summary()));
+api.get('/export', (_req, res) => {
+  res.set('Content-Disposition', `attachment; filename="claude-board-${new Date().toISOString().slice(0, 10)}.json"`);
+  res.json(board.exportAll());
+});
 
 api.post('/messages', h((req) => board.post(agentFrom(req), req.body)));
 api.post('/tasks', h((req) => board.createTask(agentFrom(req), req.body)));
@@ -239,7 +265,7 @@ const AGENT_TOOLS = [
   { id: 'claude', name: 'Claude Code', start: '/board', where: 'Type it in Claude Code, opened in the hackathon repo.' },
   { id: 'codex', name: 'Codex (ChatGPT)', start: '$board', where: 'Type it in the Codex CLI, opened in the hackathon repo.' },
   { id: 'copilot-vscode', name: 'GitHub Copilot in VS Code', start: '/board', where: 'Open the hackathon repo in VS Code, switch Copilot Chat to Agent mode, then type it.' },
-  { id: 'copilot-cli', name: 'GitHub Copilot CLI', start: '/board', where: 'Start it with  copilot --allow-tool board  in the hackathon repo, then type it.' },
+  { id: 'copilot-cli', name: 'GitHub Copilot CLI', start: '/board', where: 'Start it with  copilot --allow-tool board --autopilot --max-autopilot-continues 50  in the hackathon repo, then type it. (--autopilot keeps it working without you typing "continue".)' },
 ];
 
 // Copy-paste join commands + web links, for the web board's "invite teammates" step.

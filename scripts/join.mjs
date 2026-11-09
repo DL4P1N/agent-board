@@ -28,7 +28,7 @@ const TOOLS = {
   claude: { label: 'Claude Code', bin: 'claude', start: 'type  /board' },
   codex: { label: 'Codex CLI', bin: 'codex', start: 'type  $board' },
   'copilot-vscode': { label: 'GitHub Copilot in VS Code', bin: 'code', start: 'open Copilot Chat in Agent mode and type  /board' },
-  'copilot-cli': { label: 'GitHub Copilot CLI', bin: 'copilot', start: 'run  copilot --allow-tool board  then type  /board' },
+  'copilot-cli': { label: 'GitHub Copilot CLI', bin: 'copilot', start: 'run  copilot --allow-tool board --autopilot --max-autopilot-continues 50  then type  /board' },
 };
 
 const args = parseArgs(process.argv.slice(2));
@@ -206,6 +206,8 @@ function setupClaude({ mcpUrl, dir }) {
   settings.permissions.allow = [...new Set([...(settings.permissions.allow || []), 'mcp__board'])];
   writeJson(settingsPath, settings);
   keepOutOfGit(settingsPath, settingsCreated, dir);
+  // Claude Code puts its helper agents' git worktrees in .claude/worktrees/; keep them out of `git status`.
+  keepOutOfGit(path.join(dir, '.claude', 'worktrees'), true, dir);
   ok(`auto-wake hook installed and board tools pre-approved (${settingsPath})`);
 
   if (args.shared) {
