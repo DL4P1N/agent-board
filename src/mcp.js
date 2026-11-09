@@ -29,8 +29,10 @@ export function buildMcpServer(board, baseAgent) {
   const started = () => { if (board.markStarted(baseAgent)) board.bus.emit('event', { id: 0, kind: 'presence', text: '' }); };
   const who = (as) => {
     if (!as) return baseAgent;
-    const clean = String(as).trim().replace(/\s+/g, '-');
-    return clean.startsWith(baseAgent + '/') || clean === baseAgent ? clean : `${baseAgent}/${clean}`;
+    // Helper names: short, plain characters only (no slashes, so nobody can pose as another agent).
+    const clean = String(as).trim().replace(/\s+/g, '-').replace(/^.*\//, '').replace(/[^\w.-]/g, '').slice(0, 40);
+    if (!clean) return baseAgent;
+    return clean === baseAgent ? baseAgent : `${baseAgent}/${clean}`;
   };
   const asArg = z.string().optional().describe('Optional sub-identity, e.g. your subagent name. Attributed as "<agent>/<as>".');
   const ok = (obj) => ({ content: [{ type: 'text', text: typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2) }] });
@@ -179,23 +181,24 @@ export function buildMcpServer(board, baseAgent) {
     'create_task',
     {
       title: 'Create task',
-      description: 'Add a task to the backlog. Keep tasks small (1 branch, < ~1 hour). priority: 1=high, 2=normal, 3=low. depends_on: task ids that must be done first.',
+      description: 'Add a task to the backlog. Keep tasks small (1 branch, < ~1 hour). priority: 1=high, 2=normal, 3=low (priority-1 tasks stay claimable during the feature freeze, so use it for bug fixes). size: S/M/L (agents on bigger plans get L tasks first). depends_on: ids of existing tasks that must be done first.',
       inputSchema: {
         title: z.string(),
         description: z.string().optional().describe('Acceptance criteria, relevant files, interfaces to respect'),
         priority: z.number().int().min(1).max(3).optional(),
+        size: z.enum(['S', 'M', 'L']).optional().describe('S: < 20 min, M: < 1 h, L: bigger or trickier'),
         depends_on: z.array(z.number().int()).optional(),
         as: asArg,
       },
     },
-    wrap(({ title, description, priority, depends_on, as }) => board.createTask(who(as), { title, description, priority, depends_on }))
+    wrap(({ title, description, priority, size, depends_on, as }) => board.createTask(who(as), { title, description, priority, size, depends_on }))
   );
 
   server.registerTool(
     'claim_task',
     {
       title: 'Claim task',
-      description: 'Atomically claim an open task. Fails if someone else already has it or its dependencies are unfinished. Returns the task with the branch name to use.',
+      description: 'Atomically claim an open task. Fails (with the reason) if someone else has it, its dependencies are unfinished, it is reserved for another agent, you are at your plan\'s capacity, idle teammates need the remaining work, the plan is not approved yet, or the feature freeze is on (priority-1 tasks excepted). Returns the task with the branch name to use.',
       inputSchema: { id: z.number().int(), as: asArg },
     },
     wrap(({ id, as }) => board.claimTask(who(as), id))
@@ -206,24 +209,25 @@ export function buildMcpServer(board, baseAgent) {
     {
       title: 'Update task',
       description:
-        'Update your task: status (claimed, in_progress, blocked, review, done), a progress note, or branch. ' +
+        'Update your task: status (claimed, in_progress, blocked, review, done), a progress note, branch, or size. You can only change tasks you hold (the integrator may move review → done/in_progress). ' +
         'Use "review" when the branch is pushed and ready to merge; "blocked" with a note explaining why. Locks held for the task are released on done.',
       inputSchema: {
         id: z.number().int(),
         status: z.enum(['claimed', 'in_progress', 'blocked', 'review', 'done']).optional(),
         note: z.string().optional(),
         branch: z.string().optional(),
+        size: z.enum(['S', 'M', 'L']).optional(),
         as: asArg,
       },
     },
-    wrap(({ id, status, note, branch, as }) => board.updateTask(who(as), id, { status, note, branch }))
+    wrap(({ id, status, note, branch, size, as }) => board.updateTask(who(as), id, { status, note, branch, size }))
   );
 
   server.registerTool(
     'release_task',
     {
       title: 'Release task',
-      description: 'Give a task back to the open pool (you can\'t finish it, or it should be split). Releases its locks.',
+      description: 'Give a task back to the open pool (you can\'t finish it, it should be split, or you hit your plan\'s usage limit). Releases its locks. You may also release someone else\'s task if it is stale (no update for 15+ min) and its owner is offline.',
       inputSchema: { id: z.number().int(), note: z.string().optional(), as: asArg },
     },
     wrap(({ id, note, as }) => board.releaseTask(who(as), id, note))

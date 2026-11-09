@@ -25,8 +25,8 @@ const freePort = () => new Promise((resolve, reject) => {
 export async function startBoard() {
   const port = await freePort();
   const board = { port, base: `http://localhost:${port}`, token: TOKEN, dataDir: '', child: null };
-  const launch = async () => {
-    board.dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-test-'));
+  const launch = async (keepData = false) => {
+    if (!keepData) board.dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-test-'));
     board.child = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js')], {
       env: { ...process.env, PORT: String(port), BOARD_TOKEN: TOKEN, BOARD_DATA: board.dataDir, BOARD_NO_JOIN: '1' },
       stdio: 'ignore',
@@ -46,6 +46,8 @@ export async function startBoard() {
   };
   board.stop = kill;
   board.restart = async () => { await kill(); await launch(); };
+  // Same data folder, like a server restart or a `--watch` reload.
+  board.relaunch = async () => { await kill(); await launch(true); };
   await launch();
   process.once('exit', () => board.child?.kill());
   return board;

@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const STATUSES = ['open', 'claimed', 'in_progress', 'blocked', 'review', 'done'];
-const STALE_MS = 30 * 60 * 1000;
+const STALE_MS = 15 * 60 * 1000;
 const AGENT_ONLINE_MS = 10 * 60 * 1000;
 const HUMAN_ONLY = ['deadline', 'freeze_minutes', 'require_approval', 'plan_approved'];
 
@@ -17,8 +17,9 @@ export function timeInfo(s, now = Date.now()) {
   if (!deadline) return { deadline: 0, frozen: false };
   const freezeAt = deadline - (Number(s.freeze_minutes) || 0) * 60e3;
   const left = Math.max(0, deadline - now);
-  const h = Math.floor(left / 3600e3);
-  const m = Math.round((left % 3600e3) / 60e3);
+  const mins = Math.round(left / 60e3);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
   return { deadline, freezeAt, frozen: now >= freezeAt, deadlineLabel: clock(deadline), freezeLabel: clock(freezeAt), leftLabel: h ? `${h}h ${m}m` : `${m}m` };
 }
 
@@ -100,6 +101,12 @@ export class Board {
     const cols = this.db.prepare('PRAGMA table_info(presence_v2)').all().map((c) => c.name);
     if (!cols.includes('client')) this.db.exec('ALTER TABLE presence_v2 ADD COLUMN client TEXT');
     if (!cols.includes('started_at')) this.db.exec('ALTER TABLE presence_v2 ADD COLUMN started_at INTEGER');
+    // What the agent's subscription allows: plan label and how many tasks it may hold at once.
+    if (!cols.includes('plan')) this.db.exec('ALTER TABLE presence_v2 ADD COLUMN plan TEXT');
+    if (!cols.includes('slots')) this.db.exec('ALTER TABLE presence_v2 ADD COLUMN slots INTEGER');
+    const tcols = this.db.prepare('PRAGMA table_info(tasks)').all().map((c) => c.name);
+    if (!tcols.includes('size')) this.db.exec("ALTER TABLE tasks ADD COLUMN size TEXT NOT NULL DEFAULT 'M'");
+    if (!tcols.includes('reserved_for')) this.db.exec('ALTER TABLE tasks ADD COLUMN reserved_for TEXT');
   }
 
   // ---------- events ----------
@@ -124,10 +131,7 @@ export class Board {
     const args = [since];
     if (channel) { sql += ' AND channel = ?'; args.push(channel); }
     if (task_id) { sql += ' AND task_id = ?'; args.push(task_id); }
-    if (exclude_author) {
-      sql += ' AND author != ? AND author NOT LIKE ?';
-      args.push(exclude_author, exclude_author + '/%');
-    }
+    if (exclude_author) { sql += ' AND author != ?'; args.push(exclude_author); }
     sql += ' ORDER BY id ASC LIMIT ?';
     args.push(limit);
     return this.db.prepare(sql).all(...args).map(rowToEvent);
@@ -154,7 +158,7 @@ export class Board {
       const onEvent = (ev) => {
         if (ev.id <= (filter.since || 0)) return;
         if (filter.channel && ev.channel !== filter.channel) return;
-        if (filter.exclude_author && (ev.author === filter.exclude_author || ev.author.startsWith(filter.exclude_author + '/'))) return;
+        if (filter.exclude_author && ev.author === filter.exclude_author) return;
         // small debounce so bursts arrive together
         setTimeout(finish, 250);
       };
@@ -189,12 +193,18 @@ export class Board {
     return this.db.prepare(sql).all(...args).map(rowToTask);
   }
 
-  createTask(author, { title, description = '', priority = 2, depends_on = [] }) {
-    if (!title || !title.trim()) throw new Error('title is required');
+  createTask(author, { title, description = '', priority = 2, depends_on = [], size = 'M' }) {
+    title = String(title ?? '').trim();
+    if (!title) throw new Error('title is required');
+    if (title.length > 200) throw new Error('title is too long (max 200 characters)');
+    description = String(description ?? '').slice(0, 10000);
+    priority = checkPriority(priority);
+    size = checkSize(size);
+    const deps = this.checkDeps(depends_on);
     const now = Date.now();
     const r = this.db
-      .prepare('INSERT INTO tasks (title, description, priority, depends_on, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?)')
-      .run(title.trim(), description, priority, JSON.stringify(depends_on), author, now, now);
+      .prepare('INSERT INTO tasks (title, description, priority, depends_on, size, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)')
+      .run(title, description, priority, JSON.stringify(deps), size, author, now, now);
     const task = this.getTask(Number(r.lastInsertRowid));
     this.emit({ author, kind: 'task_created', channel: 'tasks', task_id: task.id, text: `#${task.id} ${task.title}` });
     return task;
@@ -203,8 +213,22 @@ export class Board {
   claimTask(author, id) {
     const task = this.getTask(id);
     if (!task) throw new Error(`task #${id} not found`);
-    const gate = this.claimGate();
+    const gate = this.claimGate(task);
     if (gate) throw new Error(gate);
+    if (task.reserved_for && !sameTeam(author, task.reserved_for)) {
+      throw new Error(`task #${id} is reserved for ${task.reserved_for}. Pick another task.`);
+    }
+    if (task.status === 'open') {
+      const cap = this.capacity(author);
+      if (cap.active >= cap.slots) {
+        throw new Error(`You already hold ${cap.active} active task(s) and your plan allows ${cap.slots} at once (${cap.plan || 'default'}). Finish or release one first.`);
+      }
+      const idle = this.idleAgents(author);
+      const free = this.claimableFor(null).filter((t) => !t.reserved_for).length;
+      if (cap.active >= 1 && idle.length && free <= idle.length) {
+        throw new Error(`Leave this for an idle teammate: ${idle.join(', ')} have no task and there are only ${free} unreserved task(s) to go around. Keep working on yours and wait_for_events.`);
+      }
+    }
     const blockers = task.depends_on.map((d) => this.getTask(d)).filter((d) => d && d.status !== 'done');
     if (blockers.length) {
       throw new Error(`task #${id} depends on unfinished task(s): ${blockers.map((b) => `#${b.id} (${b.status})`).join(', ')}`);
@@ -220,30 +244,45 @@ export class Board {
     return this.getTask(id);
   }
 
-  updateTask(author, id, { status, note, branch, title, description, priority, assignee }, { human = false } = {}) {
+  updateTask(author, id, { status, note, branch, title, description, priority, assignee, size, reserved_for }, { human = false } = {}) {
     const task = this.getTask(id);
     if (!task) throw new Error(`task #${id} not found`);
-    // The integrator merges other people's work, so it may move a task out of review (to done, or back to in_progress).
-    const integrator = this.getSettings().integrator;
-    const isIntegratorMove = integrator && sameTeam(author, integrator) && task.status === 'review' && ['done', 'in_progress'].includes(status);
-    if (!human && !isIntegratorMove && task.assignee && !sameTeam(author, task.assignee) && status && status !== task.status) {
-      throw new Error(`task #${id} is assigned to ${task.assignee}; post a message to them instead of changing its status.`);
+    if (status !== undefined && !STATUSES.includes(status)) throw new Error(`status must be one of ${STATUSES.join(', ')}`);
+    const changingStatus = status !== undefined && status !== task.status;
+    if (!human) {
+      if (assignee !== undefined || reserved_for !== undefined) throw new Error('Only humans can assign or reserve tasks (on the web board).');
+      const owner = task.assignee && sameTeam(author, task.assignee);
+      // The integrator merges other people's work, so it may move a task out of review (to done, or back to in_progress).
+      const integrator = this.getSettings().integrator;
+      const integratorMove = integrator && sameTeam(author, integrator) && task.status === 'review' && ['done', 'in_progress'].includes(status);
+      // A crashed agent's task: anyone may put it back to open once it's stale and its owner is offline.
+      const staleTakeover = status === 'open' && task.stale && !this.isOnline(task.assignee);
+      if (!task.assignee && (changingStatus || branch !== undefined)) {
+        throw new Error(`task #${id} isn't claimed by anyone. Claim it first (claim_task).`);
+      }
+      if (task.assignee && !owner && (changingStatus || branch !== undefined) && !integratorMove && !staleTakeover) {
+        throw new Error(task.stale
+          ? `task #${id} belongs to ${task.assignee}. It's stale but they're still online: post to @${task.assignee} first.`
+          : `task #${id} is assigned to ${task.assignee}; post a message to them instead of changing it.`);
+      }
     }
-    if (status && !STATUSES.includes(status)) throw new Error(`status must be one of ${STATUSES.join(', ')}`);
     const next = {
       status: status ?? task.status,
       branch: branch ?? task.branch,
-      title: title ?? task.title,
-      description: description ?? task.description,
-      priority: priority ?? task.priority,
-      assignee: assignee !== undefined ? assignee : task.assignee,
+      title: title !== undefined ? String(title).trim().slice(0, 200) || task.title : task.title,
+      description: description !== undefined ? String(description).slice(0, 10000) : task.description,
+      priority: priority !== undefined ? checkPriority(priority) : task.priority,
+      size: size !== undefined ? checkSize(size) : task.size,
+      assignee: assignee !== undefined ? assignee || null : task.assignee,
+      reserved_for: reserved_for !== undefined ? String(reserved_for || '').split('/')[0] || null : task.reserved_for,
     };
     if (next.status === 'open') next.assignee = null;
     this.db
-      .prepare('UPDATE tasks SET status=?, branch=?, title=?, description=?, priority=?, assignee=?, updated_at=? WHERE id=?')
-      .run(next.status, next.branch, next.title, next.description, next.priority, next.assignee, Date.now(), id);
+      .prepare('UPDATE tasks SET status=?, branch=?, title=?, description=?, priority=?, size=?, assignee=?, reserved_for=?, updated_at=? WHERE id=?')
+      .run(next.status, next.branch, next.title, next.description, next.priority, next.size, next.assignee, next.reserved_for, Date.now(), id);
     const parts = [];
     if (status && status !== task.status) parts.push(`${task.status} → ${status}`);
+    if (reserved_for !== undefined && next.reserved_for !== task.reserved_for) parts.push(next.reserved_for ? `reserved for @${next.reserved_for}` : 'reservation removed');
     if (note) parts.push(note);
     this.emit({
       author,
@@ -288,10 +327,12 @@ export class Board {
 
   lockFiles(author, { paths, ttl_s = 900, task_id = null, reason = '' }) {
     this.purgeLocks();
-    const norm = paths.map(normPath);
-    const conflicts = norm
-      .map((p) => this.db.prepare('SELECT * FROM locks WHERE path = ?').get(p))
-      .filter((l) => l && !sameTeam(author, l.owner));
+    const norm = [...new Set(paths.map(normPath).filter(Boolean))];
+    if (!norm.length) throw new Error('give at least one path');
+    // "src/db/" covers "src/db/schema.sql"; "Package.json" and "package.json" are the same file.
+    const all = this.db.prepare('SELECT * FROM locks').all();
+    const covers = (a, b) => { const x = a.toLowerCase(); const y = b.toLowerCase(); return x === y || y.startsWith(x.replace(/\/?$/, '/')) || x.startsWith(y.replace(/\/?$/, '/')); };
+    const conflicts = all.filter((l) => !sameTeam(author, l.owner) && norm.some((p) => covers(p, l.path)));
     if (conflicts.length) {
       return { ok: false, conflicts: conflicts.map((c) => ({ path: c.path, owner: c.owner, task_id: c.task_id, reason: c.reason, expires_in_s: Math.round((c.expires_at - Date.now()) / 1000) })) };
     }
@@ -328,6 +369,8 @@ export class Board {
 
   // ---------- human questions ----------
   ask(author, { question, task_id = null }) {
+    question = String(question ?? '').trim();
+    if (!question) throw new Error('question is required');
     const r = this.db
       .prepare('INSERT INTO questions (asker, question, task_id, created_at) VALUES (?,?,?,?)')
       .run(author, question, task_id, Date.now());
@@ -337,6 +380,8 @@ export class Board {
   }
 
   answer(author, id, answer) {
+    answer = String(answer ?? '').trim();
+    if (!answer) throw new Error('Type an answer first.');
     const q = this.db.prepare('SELECT * FROM questions WHERE id = ?').get(id);
     if (!q) throw new Error(`question ${id} not found`);
     this.db.prepare('UPDATE questions SET answer=?, answered_by=?, answered_at=? WHERE id=?').run(answer, author, Date.now(), id);
@@ -360,7 +405,7 @@ export class Board {
   getSettings() {
     const rows = this.db.prepare('SELECT key, value FROM settings').all();
     const s = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '' };
-    for (const r of rows) s[r.key] = r.value;
+    for (const r of rows) if (!r.key.startsWith('_')) s[r.key] = r.value;
     return s;
   }
 
@@ -420,6 +465,58 @@ export class Board {
     return r.changes > 0;
   }
 
+  // The agent's subscription, as declared by join (?plan=…&slots=N on its MCP URL).
+  setPlan(name, plan, slots) {
+    const root = String(name || '').split('/')[0];
+    const n = Math.max(1, Math.min(5, Math.round(Number(slots) || 0))) || null;
+    const p = String(plan || '').slice(0, 40) || null;
+    if (!root || (!n && !p)) return false;
+    const r = this.db.prepare("UPDATE presence_v2 SET plan = COALESCE(?, plan), slots = COALESCE(?, slots) WHERE name = ? AND kind = 'agent' AND (IFNULL(plan,'') != IFNULL(?, plan) OR IFNULL(slots,0) != IFNULL(?, slots))").run(p, n, root, p, n);
+    return r.changes > 0;
+  }
+
+  isOnline(name) {
+    const root = String(name || '').split('/')[0];
+    const r = this.db.prepare("SELECT last_seen FROM presence_v2 WHERE name = ? AND kind = 'agent'").get(root);
+    return !!r && Date.now() - r.last_seen < AGENT_ONLINE_MS;
+  }
+
+  // How many tasks this agent may hold at once (its plan) and how many it holds now.
+  capacity(name) {
+    const root = String(name || '').split('/')[0];
+    const p = this.db.prepare("SELECT plan, slots, client FROM presence_v2 WHERE name = ? AND kind = 'agent'").get(root) || {};
+    // Without a declared plan: Claude Code can run helpers in parallel, other tools work one task at a time.
+    const slots = p.slots || (p.client === 'Claude Code' ? 2 : 1);
+    const active = this.listTasks({ status: ['claimed', 'in_progress', 'blocked'] }).filter((t) => sameTeam(root, t.assignee)).length;
+    return { slots, active, plan: p.plan || null };
+  }
+
+  // Started, online agents (other than `except`) holding no task at all.
+  idleAgents(except) {
+    const busy = new Set(this.listTasks({ status: ['claimed', 'in_progress', 'blocked', 'review'] }).map((t) => String(t.assignee || '').split('/')[0]));
+    const me = String(except || '').split('/')[0];
+    return this.db.prepare("SELECT name, last_seen FROM presence_v2 WHERE kind = 'agent' AND started_at IS NOT NULL").all()
+      .filter((r) => r.name !== me && Date.now() - r.last_seen < AGENT_ONLINE_MS && !busy.has(r.name)).map((r) => r.name);
+  }
+
+  // Open tasks whose dependencies are done (missing dependencies count as done), not reserved for someone else.
+  claimableFor(agent) {
+    const tasks = this.listTasks();
+    const byId = new Map(tasks.map((t) => [t.id, t]));
+    return tasks.filter((t) => t.status === 'open'
+      && t.depends_on.every((d) => !byId.has(d) || byId.get(d).status === 'done')
+      && (!agent || !t.reserved_for || sameTeam(agent, t.reserved_for)));
+  }
+
+  // Validates depends_on: ids that exist, no duplicates. Accepts an array or "1, 2".
+  checkDeps(deps, selfId = null) {
+    const list = Array.isArray(deps) ? deps : String(deps ?? '').split(/[\s,]+/).filter(Boolean);
+    const ids = [...new Set(list.map((d) => Number(String(d).replace(/^#/, ''))))];
+    const bad = ids.filter((d) => !Number.isInteger(d) || d === selfId || !this.getTask(d));
+    if (bad.length) throw new Error(`depends_on has unknown task id(s): ${bad.join(', ')}`);
+    return ids;
+  }
+
   // Which AI tool an agent uses (from the MCP initialize handshake), e.g. "Claude Code", "Codex".
   setClient(name, client) {
     const root = String(name || '').split('/')[0];
@@ -436,6 +533,8 @@ export class Board {
       person: personOf(r.name),
       kind: r.kind,
       client: r.client || null,
+      plan: r.kind === 'agent' ? r.plan || null : undefined,
+      slots: r.kind === 'agent' ? r.slots || (r.client === 'Claude Code' ? 2 : 1) : undefined,
       last_seen: r.last_seen,
       online: r.kind === 'human' ? humansOnline.has(r.name) : Date.now() - r.last_seen < AGENT_ONLINE_MS,
       // An agent has really started (someone typed /board) once it reads the playbook or the board status.
@@ -454,7 +553,14 @@ export class Board {
     const mine = tasks.filter((t) => t.assignee && sameTeam(agent, t.assignee) && t.status !== 'done');
     const review = tasks.filter((t) => t.status === 'review');
     const doneIds = new Set(tasks.filter((t) => t.status === 'done').map((t) => t.id));
-    const claimable = tasks.filter((t) => t.status === 'open' && t.depends_on.every((d) => doneIds.has(d)));
+    const cap = this.capacity(agent);
+    const pref = cap.slots >= 2 ? { L: 0, M: 1, S: 2 } : { S: 0, M: 1, L: 2 };
+    // Reserved for me first, then priority, then the task sizes that suit my plan.
+    const claimable = this.claimableFor(agent).sort((a, b) => (!!b.reserved_for - !!a.reserved_for) || a.priority - b.priority || (pref[a.size] ?? 1) - (pref[b.size] ?? 1) || a.id - b.id);
+    const team = this.db.prepare("SELECT name, client, plan, slots, last_seen FROM presence_v2 WHERE kind = 'agent' AND started_at IS NOT NULL").all()
+      .filter((r) => Date.now() - r.last_seen < AGENT_ONLINE_MS);
+    const teamSlots = team.reduce((n, r) => n + (r.slots || (r.client === 'Claude Code' ? 2 : 1)), 0) || 1;
+    const stale = tasks.filter((t) => t.stale && !sameTeam(agent, t.assignee));
     const openQs = this.listQuestions({ open_only: true });
     const role = s.integrator === root ? 'integrator' : s.planner === root && tasks.length === 0 ? 'planner' : 'worker';
 
@@ -476,8 +582,11 @@ export class Board {
       if (!s.planner) steps.push('Nobody is planning yet. Call claim_role("planner"). If you get it, write the backlog (see below); if not, wait.');
       if (s.planner === root || !s.planner) {
         steps.push(
-          'As planner: read the repo and the goal, then create_task for every piece of work. Keep tasks small (one branch, under an hour), ' +
-          'write acceptance criteria in the description, set depends_on, and make foundations (scaffolding, schema, API contracts) priority 1. ' +
+          `As planner: read the repo and the goal. FIRST, for every open product decision (scope, behaviour, look), call ask_human: one clear question each. Don't decide those yourself; plan around the answers as they arrive. ` +
+          `Then create_task for every piece of work. The team right now: ${team.map((r) => `${r.name} (${r.client || 'agent'}${r.plan ? ', ' + r.plan : ''}, ${r.slots || (r.client === 'Claude Code' ? 2 : 1)} at a time)`).join('; ') || 'just you so far'}; ` +
+          `total capacity ${teamSlots} task(s) at once, and more laptops may join. Write at least ${Math.max(6, teamSlots * 2)} tasks so everyone has work. ` +
+          'Keep tasks small (one branch, under an hour), write acceptance criteria in the description, set size (S/M/L; L only for work that needs a stronger plan), ' +
+          'make foundations (scaffolding, schema, API contracts) priority 1, and use depends_on only where truly needed so several agents can start at once. ' +
           'Post a short summary in general when done, then work as a normal worker.'
         );
       } else {
@@ -490,27 +599,38 @@ export class Board {
           : 'The humans are reviewing the task list before work starts. Read it (list_tasks) and post in general if something is missing, then wait_for_events until it is approved.'
       );
     } else if (phase === 'all_done') {
-      steps.push('Every task is done. Post a status update in general and ask_human whether there is more to do. Suggest follow-up tasks with create_task if you see gaps.');
+      steps.push('Every task is done. Post a status update in general, then ask_human whether there is more to do, and wait_for_events for up to 10 minutes for the answer before you stop. Suggest follow-up tasks with create_task if you see gaps.');
     } else {
       if (role === 'integrator') {
         steps.push(
           review.length
-            ? `You own main. Merge first: ${review.map((t) => `#${t.id} (${t.branch})`).join(', ')}. For each: fetch the branch, review, merge into main, run build/tests, push, update_task done. If it breaks, set it back to in_progress with a note @mentioning the assignee.`
+            ? `You own main. Merge first: ${review.map((t) => `#${t.id} (${t.branch})`).join(', ')}. For each: fetch the branch, review, merge into main, RUN THE TESTS YOURSELF on the merged result, push, then update_task done. Never mark done on the author's word: if you can't run the tests, set the task to blocked with the reason. If it breaks, set it back to in_progress with a note @mentioning the assignee.`
             : 'You own main. Nothing is waiting in review right now, so work as a worker below and check back when something reaches review.'
         );
       } else if (!s.integrator && review.length) {
         steps.push(`${review.length} task(s) are waiting in review and nobody owns main. Call claim_role("integrator"). If you get it, merge them; if not, carry on.`);
       }
       if (mine.length) steps.push(`You have active tasks: ${mine.map((t) => `#${t.id} ${t.title} [${t.status}]`).join('; ')}. Keep them moving (or dispatch them to subagents) before claiming more.`);
+      const idle = this.idleAgents(agent);
+      const label = (t) => `#${t.id} P${t.priority} ${t.size} ${t.title}${t.reserved_for ? ' (reserved for you)' : ''}`;
       if (time.frozen) {
-        steps.push(`FEATURE FREEZE (since ${time.freezeLabel}, demo at ${time.deadlineLabel}): do not claim or start new tasks. Finish and push what you have, get it merged, fix bugs on main, and help the integrator. Unfinished tasks you can't land in time: release_task them with a note.`);
-      } else if (mine.length < 3) {
+        const bugfix = claimable.filter((t) => t.priority === 1);
+        steps.push(`FEATURE FREEZE (since ${time.freezeLabel}, demo at ${time.deadlineLabel}): don't start new features. Finish and push what you have, get it merged, fix bugs on main, and help the integrator. Unfinished tasks you can't land in time: release_task them with a note.${bugfix.length && cap.active < cap.slots ? ` Priority-1 (bug-fix) tasks may still be claimed: ${bugfix.slice(0, 5).map(label).join('; ')}.` : ''}`);
+      } else if (cap.active >= cap.slots) {
+        steps.push(`You're at your plan's capacity (${cap.active} of ${cap.slots} tasks at once${cap.plan ? ', ' + cap.plan : ''}). Finish one before claiming more.`);
+      } else if (cap.active >= 1 && idle.length && claimable.filter((t) => !t.reserved_for).length <= idle.length) {
+        steps.push(`${idle.join(', ')} have no task yet and there's only enough open work for them, so leave it for them. Keep going on yours, help on the help channel, or create_task for gaps; then wait_for_events.`);
+      } else {
         steps.push(
           claimable.length
-            ? `Claimable now (highest priority first): ${claimable.slice(0, 5).map((t) => `#${t.id} P${t.priority} ${t.title}`).join('; ')}. claim_task and do it (agents with background subagents: one per subagent, max 3 active; otherwise one at a time).`
+            ? `Claimable now (best for you first; you can hold ${cap.slots} at once, you hold ${cap.active}): ${claimable.slice(0, 5).map(label).join('; ')}. claim_task and do it (agents with background subagents: one per subagent; otherwise one at a time).`
             : 'No open tasks are claimable right now (all taken or waiting on dependencies). Help on the help channel, review others\' work, or create_task for gaps you notice; then wait_for_events.'
         );
       }
+      const orphaned = stale.filter((t) => !this.isOnline(t.assignee));
+      const slow = stale.filter((t) => this.isOnline(t.assignee));
+      if (orphaned.length && !time.frozen) steps.push(`Stuck tasks whose owner went offline: ${orphaned.map((t) => `#${t.id} ${t.title} (${t.assignee})`).join('; ')}. If you have room, release_task one with a note ("owner offline") and claim it.`);
+      if (slow.length) steps.push(`No progress for 15+ min on ${slow.map((t) => `#${t.id} (@${t.assignee})`).join(', ')}. If they need help, post to them; don't take their task.`);
     }
     if (time.deadline && !time.frozen && phase !== 'all_done') steps.push(`Demo at ${time.deadlineLabel} (${time.leftLabel} left); feature freeze at ${time.freezeLabel}. Prefer small tasks that can land before the freeze.`);
     if (openQs.length) steps.push(`${openQs.length} question(s) are waiting for humans. Don't re-ask them; answers arrive as "answer" events.`);
@@ -520,11 +640,11 @@ export class Board {
   }
 
   // Why claiming is not allowed right now, or '' if it is.
-  claimGate() {
+  claimGate(task = null) {
     const s = this.getSettings();
     if (s.require_approval && !s.plan_approved) return 'The humans have not approved the task list yet. Wait (wait_for_events); they approve it on the web board.';
     const t = timeInfo(s);
-    if (t.frozen) return `Feature freeze since ${t.freezeLabel} (demo at ${t.deadlineLabel}): don't start new tasks. Finish and merge what is in progress, or help the integrator.`;
+    if (t.frozen && !(task && task.priority === 1)) return `Feature freeze since ${t.freezeLabel} (demo at ${t.deadlineLabel}): don't start new tasks. Finish and merge what is in progress, or help the integrator. (Priority-1 bug-fix tasks can still be claimed.)`;
     return '';
   }
 
@@ -608,7 +728,19 @@ export function personOf(name) {
 }
 
 function normPath(p) {
-  return String(p).trim().replace(/\\/g, '/').replace(/^\.\//, '');
+  return String(p ?? '').trim().replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^(\.\/|\/)+/, '');
+}
+
+function checkPriority(p) {
+  const n = Number(p);
+  if (!Number.isInteger(n) || n < 1 || n > 3) throw new Error('priority must be 1 (high), 2 (normal) or 3 (low)');
+  return n;
+}
+
+function checkSize(v) {
+  const x = String(v ?? 'M').trim().toUpperCase();
+  if (!['S', 'M', 'L'].includes(x)) throw new Error('size must be S, M or L');
+  return x;
 }
 
 function slug(s) {

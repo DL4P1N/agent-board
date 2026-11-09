@@ -8,6 +8,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { Board, timeInfo } from './board.js';
+import { agentTokenFor } from './tokens.js';
 import { buildMcpServer } from './mcp.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -37,8 +38,19 @@ function safeEq(a, b) {
   const y = Buffer.from(String(b));
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 }
+// Two keys: the board token (humans, the web board, join) can do everything; the agent token
+// (derived from it, written into each AI tool's config by join) can use MCP and read the API, but
+// can't do human-only things like approving the plan, setting the deadline or deleting tasks.
+const AGENT_TOKEN = agentTokenFor(TOKEN);
 function auth(req, res, next) {
-  if (!safeEq(tokenFrom(req), TOKEN)) return res.status(401).json({ error: 'bad or missing token' });
+  const t = tokenFrom(req);
+  if (safeEq(t, TOKEN)) req.role = 'human';
+  else if (safeEq(t, AGENT_TOKEN)) req.role = 'agent';
+  else return res.status(401).json({ error: 'bad or missing token' });
+  next();
+}
+function humanOnly(req, res, next) {
+  if (req.method !== 'GET' && req.role !== 'human') return res.status(403).json({ error: 'This needs the board token (humans on the web board), not an agent token.' });
   next();
 }
 function agentFrom(req) {
@@ -53,7 +65,9 @@ app.post('/mcp', auth, async (req, res) => {
   const probe = req.query.probe === '1';
   const cameOnline = !probe && board.touch(agentFrom(req), 'agent');
   const clientChanged = !probe && req.body?.method === 'initialize' && board.setClient(agentFrom(req), clientLabel(req.body.params?.clientInfo));
-  if (cameOnline || clientChanged) board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
+  // The agent's subscription (join puts ?plan=…&slots=N in the URL): how many tasks it may hold at once.
+  const planChanged = !probe && (req.query.plan || req.query.slots) && board.setPlan(agentFrom(req), req.query.plan, req.query.slots);
+  if (cameOnline || clientChanged || planChanged) board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
   const server = buildMcpServer(board, agentFrom(req));
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   res.on('close', () => {
@@ -76,6 +90,7 @@ app.delete('/mcp', methodNotAllowed);
 // ---------- REST API ----------
 const api = express.Router();
 api.use(auth);
+api.use(humanOnly);
 // The web board sends X-Agent with the human's name; the Stop hook doesn't send it.
 api.use((req, _res, next) => {
   if (req.method !== 'GET' && req.get('x-agent')) board.touch(agentFrom(req), 'human');
@@ -123,11 +138,14 @@ api.get('/events', h(async (req) => {
 api.get('/cursor', h(() => ({ cursor: board.latestEventId() })));
 
 // Announce the feature freeze (30 min warning, then the freeze itself) so waiting agents wake up.
-const announced = new Set();
+// Remembered in the board's data, so a restart (or `--watch` reload) doesn't announce twice;
+// a different freeze time (to the nearest 5 min) is announced again.
+const flagKey = (k, t) => `_announced_${k}_${Math.round(t.freezeAt / 300e3)}`;
+const announced = { has: (k) => !!board.db.prepare('SELECT 1 FROM settings WHERE key = ?').get(k), add: (k) => board.db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, '1')").run(k) };
 setInterval(() => {
   const t = timeInfo(board.getSettings());
   if (!t.deadline) return;
-  const key = (k) => `${t.deadline}:${t.freezeAt}:${k}`;
+  const key = (k) => flagKey(k, t);
   const now = Date.now();
   if (!t.frozen && t.freezeAt - now <= 30 * 60e3 && !announced.has(key('warn'))) {
     announced.add(key('warn'));
@@ -180,6 +198,11 @@ api.get('/stream', (req, res) => {
 });
 
 app.use('/api', api);
+// Malformed JSON and other request errors: a JSON answer instead of Express's HTML page.
+app.use((err, _req, res, next) => {
+  if (res.headersSent) return next(err);
+  res.status(err.status || err.statusCode || 400).json({ error: err.type === 'entity.parse.failed' ? 'Request body is not valid JSON.' : String(err.message || err) });
+});
 app.get('/health', (_req, res) => res.json({ ok: true, app: 'claude-board', version: VERSION }));
 app.use(express.static(path.join(ROOT, 'public')));
 
@@ -226,7 +249,7 @@ function offerHostJoin() {
   if (fs.existsSync(declined)) return;
   let cfg = null;
   try { cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude-board.json'), 'utf8')); } catch {}
-  if (cfg?.token === TOKEN) {
+  if (cfg?.token === TOKEN || cfg?.token === AGENT_TOKEN) {
     console.log(` This laptop is connected as "${cfg.agent}". (Re-run setup any time: npm run join -- --url http://localhost:${PORT} --token ${TOKEN})\n`);
     return;
   }

@@ -11,6 +11,8 @@
 //   copilot-cli     Copilot CLI   → ~/.copilot/mcp-config.json + /board skill
 // Other options:
 //   --name NAME --repo PATH   skip the questions
+//   --plan PLAN  your subscription, e.g. max20, or per tool: claude=max20,codex=edu (sets how many tasks the agent may hold)
+//   --slots N    override how many tasks each agent may hold at once
 //   --wait N     Claude's Stop hook long-polls N seconds for teammate activity before letting Claude stop (default 0)
 //   --shared     also append team rules to the repo's CLAUDE.md (optional; one person commits it)
 import fs from 'node:fs';
@@ -20,10 +22,17 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import readline from 'node:readline/promises';
 import { runDoctor, CONFIG_PATH } from './doctor.mjs';
+import { agentTokenFor } from '../src/tokens.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEMPLATES = path.join(ROOT, 'templates');
 const MARKER = '<!-- claude-board -->';
+const PLANS = {
+  claude: [['pro', 'Claude Pro', 1], ['max5', 'Claude Max 5x', 2], ['max20', 'Claude Max 20x', 3], ['team', 'Claude Team / Enterprise / API', 3]],
+  codex: [['plus', 'ChatGPT Plus', 1], ['edu', 'ChatGPT Edu', 1], ['business', 'ChatGPT Business / Enterprise', 1], ['pro', 'ChatGPT Pro', 1]],
+  'copilot-vscode': [['free', 'Copilot Free', 1], ['pro', 'Copilot Pro', 1], ['proplus', 'Copilot Pro+', 1], ['business', 'Copilot Business / Enterprise', 1]],
+};
+PLANS['copilot-cli'] = PLANS['copilot-vscode'];
 const TOOLS = {
   claude: { label: 'Claude Code', bin: 'claude', start: 'type  /board' },
   codex: { label: 'Codex CLI', bin: 'codex', start: 'type  $board' },
@@ -64,7 +73,8 @@ const ask = async (q, def) => {
 };
 
 // Names already on this board that this laptop didn't set up before (so re-running join is fine).
-const previous = (() => { try { const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); return c.token === token ? c : null; } catch { return null; } })();
+const agentToken = agentTokenFor(token);
+const previous = (() => { try { const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); return c.token === token || c.token === agentToken ? c : null; } catch { return null; } })();
 const mine = new Set([previous?.agent, ...(previous?.agents || []).map((a) => a.agent)].filter(Boolean));
 const taken = (n) => (boardState?.presence || []).find((p) => p.kind === 'agent' && (p.person || p.name) === n && !mine.has(p.name));
 
@@ -94,6 +104,26 @@ const unknown = tools.filter((t) => !TOOLS[t]);
 if (unknown.length || !tools.length) fail(`Unknown tool(s): ${unknown.join(', ') || '(none)'}. Pick from: ${Object.keys(TOOLS).join(', ')}`);
 
 const multi = tools.length > 1;
+
+// Which plan each tool is on → how many tasks its agent may hold at once (the board enforces it).
+const planArg = String(args.plan || '');
+const planFor = {};
+for (const t of tools) {
+  const opts = PLANS[t];
+  const fromArg = planArg.includes('=') ? (planArg.split(',').find((x) => x.split('=')[0].trim() === t) || '').split('=')[1] : tools.length === 1 ? planArg : '';
+  const prevPlan = previous?.agents?.find((a) => a.tool === t)?.plan_id;
+  let id = String(fromArg || '').trim().toLowerCase();
+  if (!id && rl) {
+    console.log(`\nWhich plan is ${TOOLS[t].label} on? (sets how many tasks its agent works on at once)`);
+    for (const [pid, label, n] of opts) console.log(`  ${pid.padEnd(9)} ${label}  → ${n} task${n > 1 ? 's' : ''} at a time`);
+    id = String(await ask('Plan', prevPlan || (t === 'claude' ? 'max5' : opts[0][0]))).trim().toLowerCase();
+  }
+  const hit = opts.find(([pid]) => pid === id);
+  if (id && !hit) console.log(`  • unknown plan "${id}" for ${TOOLS[t].label}; using the default (${t === 'claude' ? 2 : 1} at a time)`);
+  planFor[t] = hit ? { plan_id: hit[0], plan: hit[1], slots: hit[2] } : {};
+  if (args.slots) planFor[t].slots = Math.max(1, Math.min(5, Number(args.slots) || 1));
+}
+
 // The team's project repo (if the host set it on the board): suggest an existing copy next to claude-board, or offer to clone it.
 const projectUrl = boardState?.settings?.repo || '';
 const projectName = projectUrl ? path.basename(projectUrl.replace(/\.git$/, '').replace(/[\\/]+$/, '')) : '';
@@ -114,8 +144,13 @@ if (!args.repo) {
   }
 }
 rl?.close();
-const repo = args.repo ? path.resolve(args.repo) : null;
+const expandHome = (p) => String(p).replace(/^~(?=$|[\\/])/, os.homedir());
+const repo = args.repo ? path.resolve(expandHome(args.repo)) : null;
 if (repo && !fs.existsSync(repo)) fail(`repo path not found: ${repo}`);
+if (repo && sh(`git -C ${q(repo)} rev-parse --is-inside-work-tree`, true).status !== 0) {
+  bad(`${repo} is not a git repository. Agents branch, commit and push with git: clone the team's repo (or run git init and add an origin remote) first.`);
+  if (multi) fail('Several tools on one laptop need a git repo (each gets its own worktree).');
+}
 if (multi && !repo) fail('Using more than one tool needs --repo: each tool gets its own git worktree so they never edit the same folder.');
 
 // One agent per tool. With several tools on this laptop, each gets its own board name
@@ -125,13 +160,20 @@ const plan = tools.map((t, i) => ({
   tool: t,
   agent: multi ? `${name}-${SHORT[t]}` : name,
   dir: !repo ? null : i === 0 ? repo : `${repo}-${SHORT[t]}`,
+  ...planFor[t],
 }));
 
 // Identity + token travel in the URL, so the same URL works in every tool (no custom headers needed).
-const urlFor = (agent) => `${url}/mcp?agent=${encodeURIComponent(agent)}&token=${encodeURIComponent(token)}`;
+// Agents get the agent token: enough for MCP and reading the board, not for human-only actions.
+const urlFor = (p) => `${url}/mcp?${new URLSearchParams({ agent: p.agent, token: agentToken, ...(p.plan ? { plan: p.plan } : {}), ...(p.slots ? { slots: String(p.slots) } : {}) })}`;
 // The Claude Stop hook reads `agent`; `npm run doctor` reads `agents`.
 const claudeAgent = plan.find((p) => p.tool === 'claude')?.agent || name;
-const saveConfig = (agents) => writeJson(CONFIG_PATH, { url, token, agent: claudeAgent, hook_wait: wait, agents: agents.map(({ tool, agent, dir }) => ({ tool, agent, dir })) });
+// Re-running join for some tools keeps the others this laptop set up earlier for the same board.
+const keep = (previous?.agents || []).filter((a) => !tools.includes(a.tool));
+const saveConfig = (agents) => writeJson(CONFIG_PATH, {
+  url, token: agentToken, agent: plan.find((p) => p.tool === 'claude')?.agent || previous?.agent || name, hook_wait: wait,
+  agents: [...keep, ...agents].map(({ tool, agent, dir, plan_id, plan: planLabel, slots }) => ({ tool, agent, dir, plan_id, plan: planLabel, slots })),
+});
 saveConfig(plan);
 
 const done = [];
@@ -139,7 +181,7 @@ for (const p of plan) {
   console.log(`\n${TOOLS[p.tool].label}${multi ? ` (as "${p.agent}")` : ''}:`);
   try {
     if (p.dir && p.dir !== repo) ensureWorktree(p.dir);
-    const ctx = { agent: p.agent, dir: p.dir, mcpUrl: urlFor(p.agent) };
+    const ctx = { agent: p.agent, dir: p.dir, mcpUrl: urlFor(p) };
     if (p.tool === 'claude') setupClaude(ctx);
     if (p.tool === 'codex') setupCodex(ctx);
     if (p.tool === 'copilot-vscode') setupCopilotVSCode(ctx);
@@ -203,7 +245,8 @@ function setupClaude({ mcpUrl, dir }) {
   settings.hooks.Stop.push({ hooks: [{ type: 'command', command: `node "${hookPath}"`, timeout: wait + 30 }] });
   // Don't ask before every board call in this repo.
   settings.permissions ??= {};
-  settings.permissions.allow = [...new Set([...(settings.permissions.allow || []), 'mcp__board'])];
+  // Background helper agents can't show permission prompts, so pre-approve what a task needs: the board, git, npm/node, gh.
+  settings.permissions.allow = [...new Set([...(settings.permissions.allow || []), 'mcp__board', 'Bash(git:*)', 'Bash(npm:*)', 'Bash(npx:*)', 'Bash(node:*)', 'Bash(gh:*)'])];
   writeJson(settingsPath, settings);
   keepOutOfGit(settingsPath, settingsCreated, dir);
   // Claude Code puts its helper agents' git worktrees in .claude/worktrees/; keep them out of `git status`.

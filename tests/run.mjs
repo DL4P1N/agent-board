@@ -10,7 +10,7 @@ import { ROOT } from './helpers.mjs';
 
 const filter = process.argv[2] || '';
 const suites = [
-  path.join(ROOT, 'tests', 'smoke.mjs'),
+  ...fs.readdirSync(path.join(ROOT, 'tests')).filter((f) => f.endsWith('.mjs') && !['helpers.mjs', 'run.mjs'].includes(f)).sort().map((f) => path.join(ROOT, 'tests', f)),
   ...fs.readdirSync(path.join(ROOT, 'tests', 'ui')).filter((f) => f.endsWith('.mjs')).sort().map((f) => path.join(ROOT, 'tests', 'ui', f)),
 ].filter((f) => path.basename(f).includes(filter));
 
