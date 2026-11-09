@@ -127,7 +127,7 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 
 | | |
 |---|---|
-| `npm start` env | `PORT` (4000), `HOST` (0.0.0.0), `BOARD_TOKEN` (random, saved in `data/token`), `BOARD_DATA` (`./data`), `BOARD_NO_JOIN=1` (don't offer to connect the host's tool) , `PUBLIC_URL` (a public address to list first; `npm run tunnel` sets it) |
+| `npm start` env | `PORT` (4000), `HOST` (`::`, i.e. IPv6 and IPv4), `BOARD_TOKEN` (random, saved in `data/token`), `BOARD_DATA` (`./data`), `BOARD_NO_JOIN=1` (don't offer to connect the host's tool) , `PUBLIC_URL` (a public address to list first; `npm run tunnel` sets it) |
 | `npm run tunnel` env | same as `npm start`, plus `CLOUDFLARED` (path to the cloudflared binary) |
 | Check this laptop | `npm run doctor` |
 | `npm run join` flags | `--name`, `--tool claude,codex,copilot-vscode,copilot-cli`, `--plan max20` or `--plan claude=max20,codex=edu`, `--repo` (these skip the questions), `--slots N`, `--wait N` (Claude's auto-wake), `--shared` (adds team rules to the repo's CLAUDE.md) |

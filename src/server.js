@@ -13,7 +13,9 @@ import { buildMcpServer } from './mcp.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 4000);
-const HOST = process.env.HOST || '0.0.0.0';
+// '::' listens on IPv6 and IPv4. Windows resolves `localhost` to ::1 first, and some MCP clients
+// (Claude Code) don't fall back to 127.0.0.1, so an IPv4-only board looks down to them.
+const HOST = process.env.HOST || '::';
 const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'));
 // A public https address for this board, e.g. the Cloudflare tunnel that `npm run tunnel` opens.
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
@@ -230,6 +232,8 @@ const httpServer = app.listen(PORT, HOST, () => {
 });
 
 httpServer.on('error', async (e) => {
+  // No IPv6 on this machine: IPv4 only.
+  if (!process.env.HOST && ['EAFNOSUPPORT', 'EADDRNOTAVAIL'].includes(e.code)) return httpServer.listen(PORT, '0.0.0.0');
   if (e.code !== 'EADDRINUSE') throw e;
   let other = null;
   try { other = await (await fetch(`http://localhost:${PORT}/health`, { signal: AbortSignal.timeout(2000) })).json(); } catch {}
