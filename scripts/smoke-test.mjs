@@ -49,10 +49,10 @@ const loser = r1.error ? a : b;
 console.log('claim winner:', (r1.error ? r2 : r1).body.assignee, 'branch:', (r1.error ? r2 : r1).body.branch);
 
 // locks: winner locks, loser conflicts, winner's teammate can renew
-assert.ok((await winner.call('lock_files', { paths: ['db/schema.sql'], task_id: t1.id })).body.ok);
-const conflict = (await loser.call('lock_files', { paths: ['db/schema.sql', 'x.js'] })).body;
+assert.ok((await winner.call('lock_files', { paths: [`db/schema-${tag}.sql`], task_id: t1.id })).body.ok);
+const conflict = (await loser.call('lock_files', { paths: [`db/schema-${tag}.sql`, 'x.js'] })).body;
 assert.equal(conflict.ok, false);
-assert.equal(conflict.conflicts[0].path, 'db/schema.sql');
+assert.equal(conflict.conflicts[0].path, `db/schema-${tag}.sql`);
 
 // other agent can't change winner's task status
 assert.ok((await loser.call('update_task', { id: t1.id, status: 'done' })).error);
@@ -73,7 +73,7 @@ void cursor0;
 // done releases locks and unblocks dependent
 await winner.call('update_task', { id: t1.id, status: 'done', note: 'merged' });
 const locks = (await a.call('list_locks')).body;
-assert.ok(!locks.some((l) => l.path === 'db/schema.sql'), 'locks released on done');
+assert.ok(!locks.some((l) => l.path === `db/schema-${tag}.sql`), 'locks released on done');
 assert.ok(!(await loser.call('claim_task', { id: t2.id })).error, 'dependent claimable after done');
 
 // ask_human

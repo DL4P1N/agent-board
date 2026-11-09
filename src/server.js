@@ -113,15 +113,41 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use(express.static(path.join(ROOT, 'public')));
 
 app.listen(PORT, HOST, () => {
-  const ips = Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => i.address);
+  const addrs = reachableAddresses();
+  const best = addrs[0]?.ip || 'localhost';
   console.log(`\nClaude Board running on port ${PORT}`);
-  console.log(`  Web board:  http://localhost:${PORT}/?token=${TOKEN}`);
-  for (const ip of ips) console.log(`  LAN:        http://${ip}:${PORT}   (MCP: http://${ip}:${PORT}/mcp)`);
-  console.log(`  Token:      ${TOKEN}`);
-  console.log(`  Data:       ${DATA_DIR}\n`);
-  console.log('Teammates join with:');
-  console.log(`  npm run join -- --url http://<this-ip>:${PORT} --token ${TOKEN} --name <their-name> --repo <path-to-hackathon-repo>\n`);
+  console.log(`  Token: ${TOKEN}`);
+  console.log(`  Data:  ${DATA_DIR}\n`);
+  console.log('Web board (open in a browser; share with teammates):');
+  console.log(`  http://${best}:${PORT}/?token=${TOKEN}\n`);
+  if (!addrs.length) {
+    console.log('No network address found: teammates cannot reach this machine. Connect to wifi or start Tailscale.\n');
+  }
+  console.log('Teammates: copy-paste ONE of these in their claude-board folder (it asks for name + repo path):');
+  for (const a of addrs) {
+    console.log(`  # ${a.label}`);
+    console.log(`  npm run join -- --url http://${a.ip}:${PORT} --token ${TOKEN}`);
+  }
+  console.log(`  # this machine`);
+  console.log(`  npm run join -- --url http://localhost:${PORT} --token ${TOKEN}\n`);
 });
+
+// Non-internal IPv4 addresses, most useful first: Tailscale, then private LAN, then anything else.
+function reachableAddresses() {
+  const out = [];
+  for (const [name, list] of Object.entries(os.networkInterfaces())) {
+    for (const i of list || []) {
+      if (i.family !== 'IPv4' || i.internal || i.address.startsWith('169.254.')) continue;
+      const tailscale = /tailscale/i.test(name) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(i.address);
+      const lan = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(i.address);
+      const virtual = /vEthernet|WSL|VirtualBox|VMware|Hyper-V|docker|br-/i.test(name);
+      const rank = tailscale ? 0 : virtual ? 3 : lan ? 1 : 2;
+      const label = tailscale ? `Tailscale (works across networks) — ${name}` : virtual ? `virtual adapter, probably NOT reachable — ${name}` : `same wifi/LAN — ${name}`;
+      out.push({ ip: i.address, label, rank });
+    }
+  }
+  return out.sort((a, b) => a.rank - b.rank);
+}
 
 function loadToken() {
   if (process.env.BOARD_TOKEN) return process.env.BOARD_TOKEN;

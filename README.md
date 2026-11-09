@@ -25,10 +25,11 @@ The output lists the web board URL, the LAN IP and the token. The token is saved
 - **On the same wifi:** use the LAN IP that `npm start` prints. On Windows, allow Node through the firewall when it asks.
 - **On different networks, or venue wifi that isolates clients:** install [Tailscale](https://tailscale.com) on every laptop and use the host's `100.x` IP. A tunnel such as `cloudflared tunnel --url http://localhost:4000` also works.
 
-**Each teammate (the host too):**
+**Each teammate (the host too):** `npm start` prints a ready-made join command for every network address the host has, with Tailscale addresses listed first. Copy one and paste it into your `claude-board` folder:
 ```
-npm run join -- --url http://<host-ip>:4000 --token <token> --name <yourname> --repo <path/to/hackathon-repo>
+npm run join -- --url http://192.168.1.23:4000 --token AbC123...
 ```
+The script asks for your name (it suggests one from your git config) and the path to the hackathon repo. To skip the questions, pass `--name <you> --repo <path>`.
 The join script does three things:
 1. Registers the `board` MCP server in your Claude Code, at user scope, with your name and the token.
 2. Writes `~/.claude-board.json`, which the Stop hook reads.

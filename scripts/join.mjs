@@ -11,15 +11,40 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import readline from 'node:readline/promises';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = parseArgs(process.argv.slice(2));
 const url = (args.url || '').replace(/\/$/, '');
 const token = args.token;
-const name = (args.name || '').replace(/[^\w.-]/g, '');
 const wait = Number(args.wait || 0);
-if (!url || !token || !name) {
-  console.error('usage: npm run join -- --url http://HOST:4000 --token TOKEN --name YOURNAME [--repo PATH] [--wait 0] [--shared] [--no-mcp]');
+if (!url || !token) {
+  console.error('usage: npm run join -- --url http://HOST:4000 --token TOKEN [--name YOURNAME] [--repo PATH] [--wait 0] [--shared] [--no-mcp]');
+  console.error('Copy the exact command printed by `npm start` on the host machine.');
+  process.exit(1);
+}
+
+// Ask for anything per-person that wasn't passed, so the host's printed command can be pasted as-is.
+const interactive = process.stdin.isTTY && !args.yes;
+const rl = interactive ? readline.createInterface({ input: process.stdin, output: process.stdout }) : null;
+const ask = async (q, def) => {
+  if (!rl) return def;
+  const a = (await rl.question(`${q}${def ? ` [${def}]` : ''}: `)).trim();
+  return a || def;
+};
+
+const name = String(args.name || (await ask('Your name on the board (short, no spaces)', defaultName())) || '').replace(/[^\w.-]/g, '');
+if (!name) {
+  console.error('A name is required (--name YOURNAME).');
+  process.exit(1);
+}
+if (!args.repo) {
+  const r = await ask('Path to the hackathon repo (installs the Stop hook there; blank to skip)', '');
+  if (r) args.repo = r.replace(/^["']|["']$/g, '');
+}
+rl?.close();
+if (args.repo && !fs.existsSync(path.resolve(args.repo))) {
+  console.error(`✗ repo path not found: ${path.resolve(args.repo)}`);
   process.exit(1);
 }
 
@@ -91,7 +116,17 @@ if (args.repo) {
   }
 }
 
+if (!args.repo) {
+  console.log('\n• No repo given, so the Stop hook was NOT installed. Re-run with --repo <path-to-hackathon-repo> to add it.');
+}
 console.log(`\nDone. Restart Claude Code in the repo, run /mcp to confirm "board" is connected, then type /board to start orchestrating as "${name}".`);
+console.log(`Web board: ${url}/?token=${token}`);
+
+function defaultName() {
+  const r = spawnSync('git config user.name', { shell: true, encoding: 'utf8' });
+  const raw = (r.stdout || '').trim().split(/\s+/)[0] || os.userInfo().username || '';
+  return raw.toLowerCase().replace(/[^\w.-]/g, '');
+}
 
 function parseArgs(argv) {
   const out = {};
