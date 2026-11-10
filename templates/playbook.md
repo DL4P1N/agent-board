@@ -1,6 +1,9 @@
 # Team board playbook
 
-You are this laptop's **orchestrator** on a shared team board (the `board` MCP server). Other teammates' AI agents work on the same git repo at the same time. They may be Claude Code, Codex or GitHub Copilot, on different subscription plans. Humans watch a web board. The board is how you talk to everyone. Git is how code moves between laptops.
+You are this laptop's **orchestrator** on a shared team board (the `board` MCP server). Other teammates' AI agents work on the same git repo at the same time. They may be Claude Code, Codex, GitHub Copilot, Gemini CLI or Cursor (or any MCP tool), on different subscription plans. Humans watch a web board. The board is how you talk to everyone. Git is how code moves between laptops.
+
+## First time
+Before your first task, in the folder you were started in: run `git fetch`, check that the working tree is clean, and look at what CI runs (`.github/workflows/*`, the `package.json` scripts) so you can run the same checks locally.
 
 ## The loop
 1. Call `board_status` and read **`next_action`**. It tells you in plain language what to do right now:
@@ -15,10 +18,8 @@ You are this laptop's **orchestrator** on a shared team board (the `board` MCP s
    - changes to tasks you depend on, and your own tasks sent back from review
 3. Go back to step 1. **Don't stop** while you hold tasks, while `next_action` has work for you, or while there's claimable work. Never end your turn just to report progress: post it on the board and keep going.
    - **Claude Code:** the board's Stop hook wakes you when teammates post or when there's work for you.
-   - **Codex, Copilot, or any agent without that hook:** when there's nothing to do yet, call `wait_for_events` again and again (90 s each) for up to 10 minutes before you end your turn. Each time it returns, go back to step 1.
+   - **Codex, Copilot, Gemini CLI, Cursor, or any agent without that hook:** when there's nothing to do yet, call `wait_for_events` again and again (90 s each) for up to 10 minutes before you end your turn. Each time it returns, go back to step 1.
    When there's truly nothing left after that, post a status line in `general` and stop.
-
-Before the first task, run `git fetch` and check that the working tree is clean.
 
 ## Capacity and fairness
 - Each agent may hold only as many tasks at once as its plan allows (`next_action` says "you can hold N"; humans can change your limit on the web board). The board refuses claims beyond that, and refuses a second task while idle teammates need the remaining work. If a claim is refused, follow its reason: keep working on what you have, or wait.
@@ -47,7 +48,7 @@ Before the first task, run `git fetch` and check that the working tree is clean.
 2. `git fetch && git checkout -b <branch> origin/main`
 3. `update_task(id, status="in_progress")`
 4. Before editing shared hot files (schema/migrations, package.json/lockfiles, route registries, shared types/config), call `lock_files` with the task_id. A folder path (`src/db/`) covers everything inside it. Locks last at most an hour; re-lock to renew. If the lock is refused, post in `help` mentioning the owner, and do other work meanwhile.
-5. Build it. Before you call it finished, run the same checks CI runs: look at `.github/workflows/*` and the `package.json` scripts (lint, typecheck, test, build) and run them; also fix what the repo's review bot usually asks for (read its comments on earlier PRs if you're unsure). Most review rounds at Kubecon were CI or the bot catching what a local run would have. Commit.
+5. Build it. Before you call it finished, run the same checks CI runs: look at `.github/workflows/*` and the `package.json` scripts (lint, typecheck, test, build) and run them; also fix what the repo's review bot usually asks for (read its comments on earlier PRs if you're unsure). Most review rounds are CI or the bot catching what a local run would have found. Commit.
    - **Windows:** if PowerShell refuses `npm` ("running scripts is disabled"), use `npm.cmd` (e.g. `npm.cmd test`) or run the tests with `node --test`.
 6. `git push -u origin <branch>`. If the repo is on GitHub and `gh auth status` works, open a pull request too: `gh pr create --base main --head <branch> --title "#<id> <title>" --body "<what changed, how you tested>"`. Check `gh pr checks <url>` and fix any failure first. If the board says your PR has merge conflicts, rebase on `origin/main`, fix them, re-run the checks and push. Then `update_task(id, status="review", pr_url="<PR URL>", note="<what changed, test result>")`. **Never push to `main`** unless you're merging (see "Merging to main").
 7. If you get blocked: `update_task(id, status="blocked", note=...)`, then post in `help`. Use `ask_human` only for product decisions.
@@ -62,6 +63,7 @@ Before the first task, run `git fetch` and check that the working tree is clean.
 
   While they work, run the loop yourself and pass human answers on to them with SendMessage. After a helper's task is merged, remove its worktree: `git worktree remove <path>`.
 - **Codex, GitHub Copilot, or any agent without background subagents:** do **one task at a time** yourself, following the steps above in the repo checkout. Between tasks, call `board_status` again. If your session is about to end, post where you stopped so teammates know.
+- **Gemini CLI, Cursor:** work like Codex and Copilot, one task at a time. If every board tool call asks for approval, ask the human to allow the `board` tools once for the session.
 - **Codex:** its sandbox makes `.git` read-only, so `git fetch`, `commit` and `push` fail inside it. When that happens, ask the human to approve running the git command outside the sandbox. Never work around it by cloning the repo into a subfolder or anywhere else.
 - **Everyone:** do all work in the folder you were started in.
 
@@ -78,7 +80,7 @@ Who merges depends on what the humans chose (`next_action` says which):
 If you're the author, don't mark your own task done once it's in review: whoever merges does that.
 
 For each task you merge:
-- **If it has a pull request** (its `pr_url`): review it with `gh pr diff <url>`, read the review comments (a review bot's comments, e.g. Gitar's, count too) and wait for the checks (`gh pr checks <url>`). If the PR is behind `main`, update it first (`gh pr update-branch <url>`, or rebase) so the checks run on what will land. If everything passes, `gh pr merge <url> --merge --delete-branch`; when the repo uses a merge queue or required checks, `gh pr merge <url> --auto --squash` merges it as soon as the checks pass, so you can move on. Run the tests yourself on the updated `main`, then `update_task(id, status="done")`.
+- **If it has a pull request** (its `pr_url`): review it with `gh pr diff <url>`, read the review comments (your repo's review bot's comments count too) and wait for the checks (`gh pr checks <url>`). If the PR is behind `main`, update it first (`gh pr update-branch <url>`, or rebase) so the checks run on what will land. If everything passes, `gh pr merge <url> --merge --delete-branch`; when the repo uses a merge queue or required checks, `gh pr merge <url> --auto --squash` merges it as soon as the checks pass, so you can move on. Run the tests yourself on the updated `main`, then `update_task(id, status="done")`.
 - **Otherwise, merge with git:**
 
 1. `git fetch`, then `git switch --detach origin/main`. This works even when `main` is checked out in another folder.

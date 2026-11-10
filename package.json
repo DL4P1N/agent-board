@@ -1,7 +1,7 @@
 {
   "name": "claude-board",
   "version": "1.0.0",
-  "description": "Shared task board + MCP server so a team's AI coding agents (Claude Code, Codex, GitHub Copilot) can work on one repo together",
+  "description": "Shared task board + MCP server so a team's AI coding agents (Claude Code, Codex, GitHub Copilot, Gemini CLI or Cursor, or any MCP tool) can work on one repo together",
   "main": "src/server.js",
   "scripts": {
     "preboards": "node scripts/ensure-deps.mjs",

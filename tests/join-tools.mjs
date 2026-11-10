@@ -98,4 +98,12 @@ check('broken Gemini settings.json is left alone with a clear message', fs.readF
 // Clean up the worktree registration before removing the temp folder.
 git('-C', repo, 'worktree', 'remove', '--force', cDir);
 try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
+// AG-10 / ONB-5: the playbook every tool reads names Gemini CLI and Cursor, has a "First time" step
+// before the loop, and no event-specific lore.
+const pb = fs.readFileSync(path.join(ROOT, 'templates', 'playbook.md'), 'utf8');
+check('playbook intro lists Gemini CLI and Cursor', /Claude Code, Codex, GitHub Copilot, Gemini CLI or Cursor/.test(pb.slice(0, pb.indexOf('## '))));
+check('playbook: "First time" setup comes before the loop', pb.indexOf('## First time') > 0 && pb.indexOf('## First time') < pb.indexOf('## The loop') && /git fetch/.test(pb.slice(pb.indexOf('## First time'), pb.indexOf('## The loop'))));
+check('playbook: a note for Gemini CLI and Cursor', /\*\*Gemini CLI, Cursor:\*\*/.test(pb));
+check('playbook: no event-specific lore', !/Kubecon|Gitar/i.test(pb));
+check('playbook: keeps the heading the /board shortcuts point to', pb.includes('Codex, GitHub Copilot, or any agent without background subagents'));
 await finish(R, { board });

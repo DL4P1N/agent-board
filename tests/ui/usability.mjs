@@ -82,7 +82,7 @@ try {
   const st1 = await rest('dana', '/state');
   check('A repo saved to settings', st1.settings.repo === 'https://github.com/team/vote-app', st1.settings.repo);
   const invite = await page.evaluate(() => inviteText());
-  check('A invite message has every step', ['git clone https://github.com/DL4P1N/claude-board', 'npm run join -- --url http://', '--token testtok', 'git clone https://github.com/team/vote-app', '/board', '$board', 'copilot --allow-tool board', 'Just watching? Open http://'].every((s) => invite.includes(s)), invite);
+  check('A invite message has every step', ['git clone https://github.com/DL4P1N/claude-board', 'npm run join -- --url http://', '--token testtok', 'git clone https://github.com/team/vote-app', '/board', '$board', 'copilot --allow-tool board --autopilot --max-autopilot-continues 50', 'Just watching? Open http://'].every((s) => invite.includes(s)), invite);
   await openStep(page, 'invite');
   await page.click('[data-act="copy-invite"]'); await sleep(200);
   check('A copy invite gives feedback', /Invite copied/.test(await txt(page, '#toasts')));
@@ -92,6 +92,17 @@ try {
   // Step 3: Copilot CLI gets two commands
   await openStep(page, 'start');
   check('A Copilot CLI: launch box + /board box', await page.evaluate(() => /copilot --allow-tool board/.test(document.querySelector('[data-fk="cp-start-copilot-cli-launch"]')?.previousElementSibling?.textContent || '') && !!document.querySelector('[data-fk="cp-start-copilot-cli"]')));
+  // ONB-6: one Copilot CLI command everywhere (step 3, invite, help), taken from the server's agent_tools.
+  const cpl = st1.setup.agent_tools.find((t) => t.id === 'copilot-cli')?.launch;
+  const cpBoxes = await page.evaluate(() => ({ step: document.querySelector('[data-fk="cp-start-copilot-cli-launch"]')?.previousElementSibling?.textContent || '', help: document.querySelector('#help-dlg').textContent.replace(/\s+/g, ' ') }));
+  check('ONB-6 Copilot CLI launch: full --autopilot command in step 3, invite and help', cpl === 'copilot --allow-tool board --autopilot --max-autopilot-continues 50' && cpBoxes.step.includes(cpl) && invite.includes(cpl) && cpBoxes.help.includes(cpl), JSON.stringify({ cpl, step: cpBoxes.step }));
+  // ONB-5 / DOC-6: every list of tools names Gemini CLI and Cursor too; the Questions entry doesn't rely on colour.
+  const tl = await page.evaluate(() => [document.querySelector('#gate .lede'), document.querySelector('#setup .intro'), document.querySelector('#help-dlg .gloss')].map((e) => e?.textContent || ''));
+  check('ONB-5 gate, Start here intro and help list Gemini CLI and Cursor', tl.every((t) => /Gemini CLI/.test(t) && /Cursor/.test(t)), tl.map((t) => t.slice(0, 80)).join(' | '));
+  check('DOC-6 help: Questions point at the "waiting for a human answer" panel, not a colour', /waiting for a human answer/.test(tl[2]) && !/orange/i.test(tl[2]));
+  // ONB-10: one time format: no seconds, no leading zero, weekday only when it isn't today.
+  const tf = await page.evaluate(() => { const d = new Date(); d.setHours(9, 5, 7, 0); const y = new Date(d); y.setDate(y.getDate() - 2); return { c: clock(+d), w: when(+d), wy: when(+y), f: fullTime(+d), a: ago(+y) }; });
+  check('ONB-10 clock: "9:05 AM"-style, no seconds or leading zero; other days get a weekday', /^9[:.]05/.test(tf.c) && !/07/.test(tf.c + tf.f) && tf.w === tf.c && /^\D+ 9[:.]05/.test(tf.wy) && tf.a === tf.wy, JSON.stringify(tf));
   check('A two-tools hint', /Two tools on one laptop\? Start each one in the folder join printed for it/.test(await txt(page, '#step-start')));
   await openStep(page, 'integrator');
   check('A integrator empty option wording', (await page.$eval('#integ-sel option', (o) => o.textContent)) === 'Let the first agent with finished work do it');
