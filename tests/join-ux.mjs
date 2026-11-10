@@ -144,7 +144,7 @@ const a1 = await converse(l5.env, ['--url', board.base, '--token', TOKEN, '--wai
   [/Path to your copy of the hackathon repo[^\n]*: /, ''],
 ]);
 check('name default is the git user name\'s first word ([zed])', /\[zed\]: /.test(a1.out), a1.out.slice(0, 200));
-check('clash found in the interactive flow too, with where it was seen', /"vera" is already on this board \((on the web board|on a task|in the feed)\)/.test(a1.out), a1.out.slice(0, 500));
+check('clash found in the interactive flow too, with where it was seen', /"vera" is already on this board \((on the web board|on a task|in the feed|reserved by another laptop[^)]*)\)/.test(a1.out), a1.out.slice(0, 500));
 check('the y/N question shows its default once', /Use "vera" anyway\? \(y\/N\): /.test(a1.out) && !/\(y\/N\) \[N\]/.test(a1.out));
 check('a tool typo asks again, suggesting the closest tool', /Did you mean copilot-cli\?/.test(a1.out) && (a1.out.match(/Tool\(s\), comma-separated/g) || []).length === 2, a1.out.slice(-1200));
 check('no plan question for Copilot CLI (every plan is 1 task)', !/Which plan is/.test(a1.out));

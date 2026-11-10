@@ -164,8 +164,8 @@ const nameApi = (n, method = 'GET', body) => fetch(`${url}/api/names/${encodeURI
 }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 const takenOnBoard = async (n) => {
   const j = boardState ? await nameApi(n) : null;
-  if (!j) return taken(n);
-  if (!j.taken) return null;
+  // The endpoint knows agents and reservations; tasks and posts by that name only show in the state.
+  if (!j || !j.taken) return taken(n);
   const h = (j.holders || [])[0] || {};
   return { where: h.connected === false ? 'reserved by another laptop; its agent hasn\'t started yet' : h.client || 'an agent' };
 };
