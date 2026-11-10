@@ -19,6 +19,9 @@ export const START = {
   other: 'start your tool there and tell it: "follow the board playbook (call get_playbook)"',
 };
 const LABEL = { claude: 'Claude Code', codex: 'Codex', 'copilot-vscode': 'Copilot in VS Code', 'copilot-cli': 'Copilot CLI', gemini: 'Gemini CLI', cursor: 'Cursor', other: 'Your MCP tool' };
+// Command-line tools: if the command isn't installed yet, the config is ready but the agent can't start.
+const BIN = { codex: ['codex', 'npm i -g @openai/codex'], 'copilot-cli': ['copilot', 'npm i -g @github/copilot'], gemini: ['gemini', 'npm i -g @google/gemini-cli'] };
+const onPath = (bin) => spawnSync(process.platform === 'win32' ? 'where' : 'which', [bin], { encoding: 'utf8', windowsHide: true }).status === 0;
 const geminiHome = () => process.env.GEMINI_CLI_HOME || path.join(os.homedir(), '.gemini');
 
 export async function runDoctor({ header = true } = {}) {
@@ -34,8 +37,14 @@ export async function runDoctor({ header = true } = {}) {
   }
   // Each agent remembers its own board (a laptop's tools can be on different boards); older configs
   // kept one board for all of them at the top level. URLs keep their path: /b/<board> on multi-board servers.
-  const agents = (cfg.agents?.length ? cfg.agents : [{ tool: 'claude', agent: cfg.agent, dir: null }])
+  // An empty list means join set nothing up: don't guess a tool (it used to fall back to Claude Code).
+  const agents = (Array.isArray(cfg.agents) ? cfg.agents : [{ tool: 'claude', agent: cfg.agent, dir: null }])
     .map((a) => ({ ...a, url: String(a.url || cfg.url || '').replace(/\/+$/, ''), token: a.token || cfg.token }));
+  if (!agents.length) {
+    bad('No AI tool is set up on this laptop yet.', 'Run npm run join again and pick your tool.');
+    return problems;
+  }
+  const notInstalled = []; // e.g. "gemini (npm i -g @google/gemini-cli)"
   const pushChecked = new Set();
   // On more than one board? Then each tool's line says which one.
   const severalBoards = new Set(agents.map((a) => a.url)).size > 1;
@@ -66,7 +75,7 @@ export async function runDoctor({ header = true } = {}) {
     }
     const st = await fetch(`${url}/api/state`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) }).catch(() => null);
     if (st?.status === 401) {
-      bad(`the board at ${url} rejected the token.`, 'The host started a fresh board (or rotated the token). Copy the join command from the web board again and re-run it.');
+      bad(`the board at ${url} rejected the token.`, 'The board\'s token changed (the host rotated it or started a new board). Ask the host for the new join command and run it.');
       return b;
     }
     if (st?.status === 409) {
@@ -111,8 +120,19 @@ export async function runDoctor({ header = true } = {}) {
     else if (!tools.includes('get_playbook')) { if (!outdated) bad('    the board server is outdated (no get_playbook tool)', 'Host: git pull in the claude-board folder; the board reloads by itself (or restart npm start).'); }
     else ok(`    board answers (${tools.length} tools)`);
 
+    if (BIN[a.tool] && !onPath(BIN[a.tool][0])) {
+      notInstalled.push(`${BIN[a.tool][0]} (${BIN[a.tool][1]})`);
+      console.log(`    • \`${BIN[a.tool][0]}\` isn't installed yet (${BIN[a.tool][1]}). The config is ready for when it is.`);
+    }
     const found = toolConfig(a);
-    if (found === null) console.log(a.tool === 'other' ? '    • add the board to your tool yourself: npm run join printed its address (or re-run join with --tool other)' : '    • (can\'t inspect this tool\'s config from here)');
+    if (a.tool === 'other') {
+      // Same address join printed: the config has everything needed to show it again.
+      console.log('    • add this MCP server to your tool (keep it private: it contains the agent token):');
+      console.log('        name: board');
+      console.log('        type: http (streamable HTTP)');
+      console.log(`        url:  ${mcpUrlFor(a, cfg)}`);
+    } else if (a.tool === 'copilot-vscode' && !a.dir) bad('    Copilot in VS Code is set up per repo, and no repo was given', 'Run npm run join again with --repo <path to your hackathon repo>.');
+    else if (found === null) console.log('    • (can\'t inspect this tool\'s config from here)');
     else if (!found) bad(`    ${LABEL[a.tool]} isn't connected to this board`, 'Run npm run join again and pick this tool.');
     // Names are case-insensitive on the board, so a config written as "Dana" still matches "dana".
     // `<board url>/mcp?`, not just the host: on a multi-board server /b/<a>/mcp and /b/<b>/mcp share the host.
@@ -143,7 +163,12 @@ export async function runDoctor({ header = true } = {}) {
   }
 
   if (!problems) {
-    console.log('\n  All good. To start:');
+    // "All good" only when everything was checked: not when a command is missing or "other" still needs the address added.
+    const next = [
+      notInstalled.length && `Ready once you install ${notInstalled.join(' and ')}.`,
+      agents.some((a) => a.tool === 'other') && 'Next: add the server shown above to your tool.',
+    ].filter(Boolean);
+    console.log(`\n  ${next.length ? next.join(' ') : 'All good.'} To start:`);
     for (const a of agents) console.log(`    ${(LABEL[a.tool] || a.tool).padEnd(20)} ${a.dir ? `in "${a.dir}": ` : 'in your hackathon repo: '}${START[a.tool]}`);
   }
   return problems;
@@ -178,6 +203,12 @@ function checkPush(dir, origin, ok, bad) {
   else if (/auth|denied|permission|403|401|could not read Username|terminal prompts disabled/i.test(msg)) bad('    git can\'t push to origin: not signed in, or no write access', gh ? 'Run  gh auth login  and then  gh auth setup-git ; if that doesn\'t help, ask the repo owner for write access.' : 'Sign in for this remote (push once by hand), or ask the repo owner for write access.');
   else if (/src refspec|does not match any/i.test(msg)) console.log('    • couldn\'t test pushing (no commit checked out yet)');
   else bad(`    git push (dry run) failed: ${msg.trim().split('\n').pop()}`, 'Check the network and the origin URL.');
+}
+
+// The MCP address join gives a tool (same parameters, same order), rebuilt from ~/.claude-board.json.
+function mcpUrlFor(a, cfg) {
+  const p = { agent: a.agent, token: a.token, ...(cfg.person ? { person: cfg.person } : {}), ...(cfg.laptop_id ? { laptop: cfg.laptop_id } : {}), ...(a.plan ? { plan: a.plan } : {}), ...(a.slots ? { slots: String(a.slots) } : {}) };
+  return `${a.url}/mcp?${new URLSearchParams(p)}`;
 }
 
 // The board URL as the tool has it configured, or '' if not configured, or null if we can't tell.

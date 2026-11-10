@@ -185,7 +185,9 @@ if (!args.repo) {
     : tools.includes('claude') ? 'installs the auto-wake hook there; blank to skip' : 'so join can tell you where to start your agent; blank to skip';
   const def = previous?.agents?.[0]?.dir || (sibling && fs.existsSync(sibling) ? sibling : '');
   if (projectUrl && !def && rl) console.log(`\nThe team's project is ${projectUrl}. Leave the next answer blank to clone it into ${sibling}.`);
-  const r = await ask(`Path to your copy of the hackathon repo (${why})`, def);
+  let r = await ask(`Path to your copy of the hackathon repo (${why})`, def);
+  // Required here (and blank won't clone it): ask again rather than fail later.
+  for (let i = 0; i < 3 && !r && rl && /^required/.test(why) && !(projectUrl && !fs.existsSync(sibling)); i++) r = await ask(`A repo path is ${why}. Path to your copy of the hackathon repo`, def);
   if (r) args.repo = r.replace(/^["']|["']$/g, '');
   else if (projectUrl && rl && !fs.existsSync(sibling)) {
     const c = sh(`git clone ${q(projectUrl)} ${q(sibling)}`);
@@ -258,7 +260,8 @@ for (const p of plan) {
 }
 
 // ---------- verify + summary ----------
-saveConfig(done);
+// Every tool picked stays in the config, even if its setup failed: doctor then checks (and explains) that tool.
+saveConfig(plan);
 const problems = await runDoctor();
 console.log(`
 ────────────────────────────────────────────────────────────
