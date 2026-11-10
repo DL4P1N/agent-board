@@ -408,11 +408,19 @@ export class Board {
     return { ...this.getTask(id), before_review: "Before moving it to review: run the repo's checks locally (lint, typecheck, tests, build — see package.json scripts and .github/workflows) and fix what fails, so it passes review the first time." };
   }
 
-  updateTask(author, id, { status, note, branch, title, description, priority, assignee, size, reserved_for, pr_url }, { human = false } = {}) {
+  updateTask(author, id, { status, note, branch, title, description, priority, assignee, size, reserved_for, pr_url, force }, { human = false } = {}) {
     const task = this.getTask(id);
     if (!task) throw new Error(`task #${id} not found`);
     if (status !== undefined && !STATUSES.includes(status)) throw new Error(`status must be one of ${STATUSES.join(', ')}`);
     const changingStatus = status !== undefined && status !== task.status;
+    // A human moving a card to claimed / in progress: it needs an owner, and its dependencies done
+    // (otherwise nobody holds it and no agent can claim it). force: true moves it anyway.
+    if (human && !force && changingStatus && ['claimed', 'in_progress'].includes(status)) {
+      const word = status.replace('_', ' ');
+      if (!(assignee !== undefined ? assignee : task.assignee)) throw new Error(`#${id} has nobody assigned. Pick who it's for before moving it to ${word}, or send force: true to move it anyway.`);
+      const waiting = ['claimed', 'in_progress'].includes(task.status) ? [] : task.depends_on.filter((d) => { const x = this.getTask(d); return x && x.status !== 'done'; });
+      if (waiting.length) throw new Error(`#${id} waits on ${waiting.map((d) => '#' + d).join(', ')}, not done yet. Send force: true to move it to ${word} anyway.`);
+    }
     const owner = !!task.assignee && sameTeam(author, task.assignee);
     const s = this.getSettings();
     // Whoever merges it: the integrator, or (integrator = whoever is free) the agent that took the review.
@@ -468,6 +476,7 @@ export class Board {
     if (assignee !== undefined) next.assignee = assignee ? normName(assignee) : null;
     // A human hands an open task to an agent: it's claimed for it (with a branch), and the agent is told.
     if (human && assignee && status === undefined && task.status === 'open') { next.status = 'claimed'; next.branch = task.branch || `task/${id}-${slug(task.title)}`; }
+    if (human && assignee && ['claimed', 'in_progress'].includes(next.status) && !next.branch) next.branch = `task/${id}-${slug(task.title)}`;
     if (next.status === 'open' || next.status === 'proposed') next.assignee = null;
     // The review claim ends when the task leaves review.
     const reviewer = next.status === 'review' ? task.reviewer : null;
