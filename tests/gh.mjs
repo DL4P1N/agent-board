@@ -248,7 +248,7 @@ try {
   const md = await retro.text();
   check('/api/retro is markdown', retro.ok && /text\/markdown/.test(retro.headers.get('content-type') || '') && /^# Retro/.test(md), md.slice(0, 80));
   check('retro: tasks done and claim → done time', /\*\*Tasks:\*\* 2 done of 2/.test(md) && /claim → done: median/.test(md), md.slice(0, 300));
-  check('retro: the bounce from review is counted', /## Sent back from review\s+1 task\(s\), 1 time\(s\) in all\.\s+- #\d+ Login form: 1×/.test(md), md.match(/## Sent back[\s\S]{0,160}/)?.[0]);
+  check('retro: the bounce from review is counted', /## Sent back from review\s+1 task, 1 time in all\.\s+- #\d+ Login form: 1×/.test(md), md.match(/## Sent back[\s\S]{0,160}/)?.[0]);
   check('retro: has the usual sections', ['## Slowest tasks', '## Blocked time', '## Handovers and stalls', '## Questions to humans', '## Timeline'].every((h) => md.includes(h)), md.match(/^## .*/gm)?.join(' | '));
   const rAgent = await fetch(`${board.base}/api/retro`, { headers: { Authorization: `Bearer ${AGENT_TOKEN}` } });
   check('retro also works with the agent token (read-only GET)', rAgent.ok);
