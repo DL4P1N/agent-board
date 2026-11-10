@@ -13,7 +13,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { spawn, spawnSync, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { Board, timeInfo, normName } from './board.js';
+import { Board, timeInfo, normName, callerLaptop } from './board.js';
 import { agentTokenFor, viewerTokenFor } from './tokens.js';
 import { Registry, boardToken, adminToken } from './boards.js';
 import QRCode from 'qrcode';
@@ -287,6 +287,8 @@ function createBoardRuntime(slug, dir) {
   function humanOnly(req, res, next) {
     // An agent may report its own usage limit (the Claude Stop hook does, with the agent token).
     if (req.method === 'POST' && req.role === 'agent' && /^\/agents\/[^/]+\/limit$/.test(req.path)) return next();
+    // join reserves its agent names (POST /names/:name) with whichever token it was given.
+    if (req.method === 'POST' && req.role === 'agent' && /^\/names\/[^/]+$/.test(req.path)) return next();
     if (req.method !== 'GET' && req.role !== 'human') return res.status(403).json({ error: 'This needs the board token (humans on the web board), not an agent token.' });
     next();
   }
@@ -311,6 +313,10 @@ function createBoardRuntime(slug, dir) {
     const laptop = String(req.query.laptop || '').replace(/[^\w-]/g, '').slice(0, 32)
       || `ip:${String(req.get('cf-connecting-ip') || req.socket.remoteAddress || '').slice(0, 64)}`;
     const laptopChanged = !probe && board.noteLaptop(agentFrom(req), laptop);
+    // One name, one laptop: the first laptop whose agent is online under a name owns it; the second one is
+    // told to stop and may not claim or change tasks (needs join's ?laptop=; network addresses vary).
+    const laptopId = laptop.startsWith('ip:') ? null : laptop;
+    if (!probe && laptopId) board.claimName(agentFrom(req), laptopId, req.query.person || null);
     if (cameOnline || clientChanged || planChanged || personChanged || laptopChanged) presence();
     const server = buildMcpServer(board, agentFrom(req));
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
@@ -319,8 +325,10 @@ function createBoardRuntime(slug, dir) {
       server.close();
     });
     try {
-      await server.connect(transport);
-      await transport.handleRequest(req, res, req.body);
+      await callerLaptop.run(laptopId, async () => {
+        await server.connect(transport);
+        await transport.handleRequest(req, res, req.body);
+      });
     } catch (e) {
       console.error('mcp error', e);
       if (!res.headersSent) res.status(500).json({ jsonrpc: '2.0', error: { code: -32603, message: 'internal error' }, id: null });
@@ -397,6 +405,16 @@ function createBoardRuntime(slug, dir) {
   api.get('/next', h((req) => {
     const g = board.nextAction(agentFrom(req));
     return { phase: g.phase, next_action: g.next_action, actionable: g.actionable, reason: g.reason };
+  }));
+
+  // Is an agent name taken by another laptop? join asks before any agent connects (GET), then reserves the
+  // names it sets up (POST {laptop, person?}). laptop: join's laptop id. Same answer shape for both.
+  const laptopParam = (v) => String(v || '').replace(/[^\w-]/g, '').slice(0, 32);
+  api.get('/names/:name', h((req) => board.checkName(req.params.name, laptopParam(req.query.laptop) || null)));
+  api.post('/names/:name', h((req, res) => {
+    const laptop = laptopParam(req.body?.laptop);
+    if (!laptop) { res.status(400); throw new Error('laptop is required (join\'s laptop id).'); }
+    return board.reserveName(req.params.name, laptop, req.body?.person || null);
   }));
 
   // An agent reports that it hit its usage limit ({until?, note?}). Humans may mark any agent; with the

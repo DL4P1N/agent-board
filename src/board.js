@@ -2,6 +2,7 @@
 // All writes are synchronous on a single thread, so each function is atomic.
 import { DatabaseSync } from 'node:sqlite';
 import { EventEmitter } from 'node:events';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -25,6 +26,9 @@ const PASSIVE_TOOLS = new Set(['post', 'wait_for_events', 'read_events', 'board_
 // Names are case-insensitive: "Dana" and "dana" are the same person.
 export const normName = (n) => String(n ?? '').trim().toLowerCase();
 const PR_RE = /https?:\/\/\S+?\/(?:pull|pulls|merge_requests)\/\d+/i;
+// The laptop id (join's ?laptop=) of the MCP request being handled, set by the server around each request.
+// Board calls outside a request (REST, tests) have none, so the name checks below don't apply to them.
+export const callerLaptop = new AsyncLocalStorage();
 
 const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 // Deadline / feature-freeze state from settings.
@@ -144,6 +148,9 @@ export class Board {
     // reviewer: the agent merging a task in review (integrator "whoever is free"). pr_url: its pull request.
     if (!tcols.includes('reviewer')) this.db.exec('ALTER TABLE tasks ADD COLUMN reviewer TEXT');
     if (!tcols.includes('pr_url')) this.db.exec('ALTER TABLE tasks ADD COLUMN pr_url TEXT');
+    // Which laptop owns each agent name: the first one whose agent connected (via 'agent') while no other
+    // laptop's agent is online under it, or the laptop that ran join with it (via 'join', a reservation).
+    this.db.exec('CREATE TABLE IF NOT EXISTS name_owners (name TEXT PRIMARY KEY, laptop TEXT NOT NULL, person TEXT, via TEXT NOT NULL, seen_at INTEGER NOT NULL)');
     this.lowercaseNames();
     this.backfillPrLinks();
   }
@@ -369,6 +376,7 @@ export class Board {
   }
 
   claimTask(author, id) {
+    this.assertOwnName(author);
     const task = this.getTask(id);
     if (!task) throw new Error(`task #${id} not found`);
     const gate = this.claimGate(task);
@@ -409,6 +417,7 @@ export class Board {
   }
 
   updateTask(author, id, { status, note, branch, title, description, priority, assignee, size, reserved_for, pr_url }, { human = false } = {}) {
+    if (!human) this.assertOwnName(author);
     const task = this.getTask(id);
     if (!task) throw new Error(`task #${id} not found`);
     if (status !== undefined && !STATUSES.includes(status)) throw new Error(`status must be one of ${STATUSES.join(', ')}`);
@@ -507,6 +516,7 @@ export class Board {
   // Integrator "whoever is free" (or the named integrator): take a task in review to merge it.
   // Atomic, so two agents never merge the same branch. Not your own work, one review at a time.
   claimReview(author, id) {
+    this.assertOwnName(author);
     const task = this.getTask(id);
     if (!task) throw new Error(`task #${id} not found`);
     if (task.status !== 'review') throw new Error(`task #${id} isn't in review (status ${task.status}).`);
@@ -697,6 +707,7 @@ export class Board {
   // Atomic: take a role if nobody has it (or you already do).
   claimRole(author, role) {
     if (!['planner', 'integrator'].includes(role)) throw new Error('role must be planner or integrator');
+    this.assertOwnName(author);
     const root = agentRootOf(author);
     const cur = this.getSettings()[role];
     if (role === 'integrator' && cur === ANYONE) throw new Error('Merging is shared on this board ("whoever is free"): take a review with claim_review(id) when you have room.');
@@ -832,6 +843,84 @@ export class Board {
       this.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all The name ${root} is being used from ${n} laptops at once. Two people probably joined with the same name: one of them should re-run join with a different name, so tasks and messages reach the right agent.` });
     }
     return !known || !!conflictAt !== !!row.conflict_at;
+  }
+
+  // ---------- one name, one laptop ----------
+  // An agent connected from `laptop`. It owns the name unless another laptop's agent is online under it;
+  // then it's the second laptop and gets that owner row back (it may not claim or change tasks).
+  claimName(name, laptop, person = null) {
+    const root = agentRootOf(normName(name));
+    if (!laptop) return null;
+    const row = this.db.prepare('SELECT * FROM name_owners WHERE name = ?').get(root);
+    const now = Date.now();
+    if (row && row.laptop !== laptop && row.via === 'agent' && now - row.seen_at < AGENT_ONLINE_MS) return row;
+    this.db.prepare("INSERT INTO name_owners (name, laptop, person, via, seen_at) VALUES (?,?,?,'agent',?) ON CONFLICT(name) DO UPDATE SET laptop = excluded.laptop, person = COALESCE(excluded.person, person), via = 'agent', seen_at = excluded.seen_at")
+      .run(root, laptop, person ? normName(person) : null, now);
+    return null;
+  }
+
+  // The owner row when the current MCP request comes from a laptop that doesn't own this name, else null.
+  nameClash(name) {
+    const laptop = callerLaptop.getStore();
+    if (!laptop) return null;
+    const row = this.db.prepare('SELECT * FROM name_owners WHERE name = ?').get(agentRootOf(normName(name)));
+    return row && row.laptop !== laptop && row.via === 'agent' && Date.now() - row.seen_at < AGENT_ONLINE_MS ? row : null;
+  }
+  assertOwnName(name) {
+    if (this.nameClash(name)) throw new Error(`Another laptop is already using the name ${agentRootOf(normName(name))}, so this one can't claim or change tasks under it. Ask your human to re-run join with a different name.`);
+  }
+  // board_status for the second laptop: only the warning, not the owner's tasks.
+  clashGuidance(name, g) {
+    if (!this.nameClash(name)) return g;
+    const root = agentRootOf(normName(name));
+    return { ...g, name_clash: true, actionable: false, reason: 'name used on another laptop',
+      next_action: `Another laptop is already using the name ${root}. Stop: don't claim, change or work on tasks. Ask your human to re-run join with a different name, then restart this tool and run /board again.` };
+  }
+
+  // join, before any agent has connected: hold `name` for this laptop, so a teammate who picks it next is warned.
+  // Not taken over while another laptop's agent is online under it.
+  reserveName(name, laptop, person = null) {
+    const root = agentRootOf(normName(name));
+    const row = this.db.prepare('SELECT * FROM name_owners WHERE name = ?').get(root);
+    const now = Date.now();
+    let reserved = false;
+    if (row && row.laptop === laptop) {
+      if (person) this.db.prepare('UPDATE name_owners SET person = ? WHERE name = ?').run(normName(person), root);
+      reserved = true;
+    } else if (!(row && row.via === 'agent' && now - row.seen_at < AGENT_ONLINE_MS)) {
+      this.db.prepare("INSERT INTO name_owners (name, laptop, person, via, seen_at) VALUES (?,?,?,'join',?) ON CONFLICT(name) DO UPDATE SET laptop = excluded.laptop, person = excluded.person, via = 'join', seen_at = excluded.seen_at")
+        .run(root, laptop, person ? normName(person) : null, now);
+      reserved = true;
+    }
+    return { ...this.checkName(name, laptop), reserved };
+  }
+
+  // Is `name` (an agent name, or the person name join asks for) in use from a laptop other than `laptop`?
+  // holders: who has it. connected: an agent has used it (false: only join reserved it). online: in the last 10 min.
+  checkName(name, laptop) {
+    const n = agentRootOf(normName(name));
+    const now = Date.now();
+    const agents = this.db.prepare("SELECT * FROM presence_v2 WHERE kind = 'agent'").all();
+    const owners = this.db.prepare('SELECT * FROM name_owners').all();
+    const holders = [];
+    for (const o of owners) {
+      if (o.laptop === laptop) continue;
+      const p = agents.find((r) => r.name === o.name);
+      const person = p?.person || o.person || this.personFor(o.name);
+      if (o.name !== n && person !== n) continue;
+      holders.push({ agent: o.name, person, client: p?.client || null, connected: !!p, online: !!p && now - p.last_seen < AGENT_ONLINE_MS, last_seen: p?.last_seen || o.seen_at });
+    }
+    // Agents from before laptop ids (no owner row): taken unless this laptop is among the ones it was used from.
+    for (const p of agents) {
+      if (owners.some((o) => o.name === p.name)) continue;
+      const person = this.personFor(p.name);
+      if (p.name !== n && person !== n) continue;
+      let seen = {};
+      try { seen = JSON.parse(p.laptops || '{}') || {}; } catch {}
+      if (laptop && seen[laptop]) continue;
+      holders.push({ agent: p.name, person, client: p.client || null, connected: true, online: now - p.last_seen < AGENT_ONLINE_MS, last_seen: p.last_seen });
+    }
+    return { name: n, taken: holders.length > 0, holders };
   }
 
   // Everyone the board knows as a person: humans on the web board, and people agents belong to.
@@ -1385,7 +1474,7 @@ export class Board {
     for (const t of tasks) counts[t.status]++;
     return {
       you: agent,
-      ...this.nextAction(agent),
+      ...this.clashGuidance(agent, this.nextAction(agent)),
       cursor: this.latestEventId(),
       task_counts: counts,
       your_tasks: tasks.filter((t) => t.assignee && sameTeam(agent, t.assignee) && t.status !== 'done'),
