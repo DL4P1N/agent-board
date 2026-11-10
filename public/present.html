@@ -16,9 +16,10 @@
     --accent: #3448d8; --accent-ink: #ffffff; --ok: #15803d; --warn: #b4410a; --warn-soft: #fff1e6; --bad: #b91c1c; --bad-soft: #fdecec;
     --pl: 28%; --ps: 60%;
     --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif;
-    --fs-label: clamp(.8125rem, .95vw, 1.125rem); --fs-body: clamp(1rem, 1.5vw, 1.5rem); --fs-stat: clamp(1.5rem, 2.6vw, 2.75rem);
-    --fs-goal: clamp(1.75rem, 3.6vw, 3.5rem); --fs-clock: clamp(2.75rem, 6.4vw, 6.5rem);
-    --gap: clamp(12px, 1.6vw, 24px); --pad: clamp(16px, 2vw, 32px); --edge: clamp(16px, 3vw, 48px);
+    /* Sizes follow the width and the height, so the page fits a 1366×768 projector as well as 1920×1080. */
+    --fs-label: clamp(.8125rem, min(.95vw, 1.7vh), 1.125rem); --fs-body: clamp(1rem, min(1.5vw, 2.5vh), 1.5rem); --fs-stat: clamp(1.5rem, min(2.6vw, 4.2vh), 2.75rem);
+    --fs-goal: clamp(1.5rem, min(3.6vw, 5.4vh), 3.5rem); --fs-clock: clamp(2.5rem, min(6.4vw, 10vh), 6.5rem);
+    --gap: clamp(12px, min(1.6vw, 2.2vh), 24px); --pad: clamp(16px, min(2vw, 3vh), 32px); --edge: clamp(16px, min(3vw, 4vh), 48px);
     --r-lg: 12px; --r-full: 999px; --e1: 0 1px 2px rgba(24, 24, 20, .06);
   }
   @media (prefers-color-scheme: dark) {
@@ -48,7 +49,8 @@
   .dot { width: .6em; height: .6em; border-radius: var(--r-full); background: var(--field-line); display: inline-block; flex: 0 0 auto; }
   .dot.live { background: var(--ok); }
   /* The goal leads: the largest words on the screen after the countdown. */
-  .goal { font-size: var(--fs-goal); font-weight: 600; line-height: 1.12; letter-spacing: -.022em; text-wrap: balance; max-width: 30ch; }
+  .goal { font-size: var(--fs-goal); font-weight: 600; line-height: 1.12; letter-spacing: -.022em; text-wrap: balance; max-width: 30ch;
+    overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
   .goal.unset { color: var(--muted); }
   .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--gap); }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--pad); min-width: 0; box-shadow: var(--e1); }
@@ -62,6 +64,7 @@
   .bar { display: flex; height: clamp(12px, 1.2vw, 20px); border-radius: var(--r-full); background: var(--chip); overflow: hidden; margin: 1em 0 .8em; }
   .bar > span { display: block; height: 100%; flex: 0 0 auto; }
   .s-done { background: var(--ok); } .s-review { background: var(--warn); } .s-blocked { background: var(--bad); } .s-doing { background: var(--accent); }
+  .s-claimed { background: color-mix(in srgb, var(--accent) 40%, var(--chip)); }
   .s-open { background: transparent; box-shadow: inset 0 0 0 2px var(--field-line); }
   .cols { display: flex; flex-wrap: wrap; gap: .4em 1.2em; color: var(--muted); }
   .cols > span { display: inline-flex; align-items: center; gap: .45em; white-space: nowrap; }
@@ -72,7 +75,8 @@
   ul.list .who { font-weight: 600; color: hsl(var(--h) var(--ps) var(--pl)); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
   ul.list .what { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
   ul.list .when { margin-left: auto; color: var(--muted); font-size: .8em; flex: 0 0 auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .empty { color: var(--muted); }
+  .empty, .more { color: var(--muted); }
+  ul.list .tag { color: var(--warn); font-weight: 600; white-space: nowrap; }
   .pills { display: flex; flex-wrap: wrap; gap: 8px; }
   .pill { border-radius: var(--r-full); padding: .25em .9em; background: var(--chip); color: var(--muted); font-weight: 500; white-space: nowrap; }
   .pill.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent); }
@@ -128,6 +132,8 @@ function personHues() {
 const hue = (name) => { const r = String(personOf(name)).toLowerCase(); return personHues().get(r) ?? HUES[nameHash(r) % HUES.length]; };
 const clock = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 function ago(ts) { const m = Math.round((Date.now() - ts) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : `${Math.floor(m / 60)}h ${m % 60}m ago`; }
+// The goal is often pasted from a doc: show it as plain words (no `code`, **bold**, [links](…) or # headings).
+const plain = (s) => String(s || '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/`+|\*\*|__/g, '').replace(/^\s*#+\s+/gm, '').replace(/\s+/g, ' ').trim();
 function dur(ms) { const t = Math.max(0, Math.round(ms / 1000)); const h = Math.floor(t / 3600); const m = Math.floor((t % 3600) / 60); const s = t % 60; return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}:${String(s).padStart(2, '0')}`; }
 
 async function load() {
@@ -158,6 +164,8 @@ function showMsg(html) { const a = $('app'); a._html = undefined; a.innerHTML = 
 function countdown() {
   const t = state?.time || {}; const now = Date.now();
   if (!t.deadline) return { big: 'Not set', sub: 'Set the demo time on the board: Start here, step 2.', cls: 'none' };
+  // An hour after the demo the event is over: say so, with the final numbers, instead of a red "Demo time".
+  if (now - t.deadline >= 60 * 60e3) { const ts = (state.tasks || []).filter((x) => x.status !== 'proposed'); return { big: 'Event finished', sub: `Demo was at ${clock(t.deadline)}. Final: ${ts.filter((x) => x.status === 'done').length} of ${ts.length} tasks done.`, cls: 'none' }; }
   if (t.past || now >= t.deadline) return { big: 'Demo time', sub: `Demo was at ${clock(t.deadline)}. Wrapping up.`, cls: 'warn' };
   if (t.freezeAt && now >= t.freezeAt) return { big: dur(t.deadline - now), sub: `Feature freeze · demo at ${clock(t.deadline)}`, cls: 'bad' };
   return { big: dur(t.deadline - now), sub: `until the demo (${clock(t.deadline)})${t.freezeAt && t.freezeAt < t.deadline ? ` · feature freeze at ${clock(t.freezeAt)}` : ''}`, cls: t.freezeAt && t.freezeAt - now < 30 * 60e3 ? 'warn' : '' };
@@ -169,31 +177,38 @@ function render() {
   const by = (s) => tasks.filter((t) => (Array.isArray(s) ? s : [s]).includes(t.status)).length;
   const done = by('done'); const total = tasks.length; const pct = total ? Math.round((done / total) * 100) : 0;
   const cd = countdown();
-  // Agents doing something, grouped by person.
-  const working = (state.presence || []).filter((p) => p.kind === 'agent' && p.online && p.busy && !p.limited && p.doing);
-  const groups = new Map();
-  for (const a of working) { const k = a.person || personOf(a.name); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(a); }
+  // Who is working on what, one row per person: every task their agents hold (online or not), then
+  // what their other agents say they're doing (a review, planning). Never tool-call names.
+  const agents = (state.presence || []).filter((p) => p.kind === 'agent');
+  const agentOf = (n) => agents.find((a) => a.name === agentRoot(n));
+  const groups = new Map(); // person -> { items: [], out: bool, h: hue }
+  const add = (name, text) => { const k = personOf(name); if (!groups.has(k)) groups.set(k, { items: [], out: false, h: hue(name) }); const g = groups.get(k); if (text) g.items.push(text); if (agentOf(name)?.limited) g.out = true; };
+  const holders = new Set();
+  for (const t of tasks) if (['claimed', 'in_progress', 'blocked'].includes(t.status) && t.assignee) { holders.add(agentRoot(t.assignee)); add(t.assignee, `#${t.id} ${t.title}${t.status === 'blocked' ? ' (blocked)' : ''}`); }
+  for (const a of agents) if (a.online && a.doing && !a.limited && !holders.has(a.name) && !/^working \(last board call/.test(a.doing)) add(a.name, a.doing);
+  const people = [...groups].filter(([, g]) => g.items.length).sort((a, b) => a[0].localeCompare(b[0]));
+  const NOW_MAX = 4;
   const taskTitle = (id) => (state.tasks || []).find((t) => t.id === id)?.title || '';
-  const merges = (state.events || []).filter((e) => e.kind === 'task_updated' && e.data?.status === 'done' && /→ done/.test(e.text || '')).slice(-6).reverse();
+  const merges = (state.events || []).filter((e) => e.kind === 'task_updated' && e.data?.status === 'done' && /→ done/.test(e.text || '')).slice(-4).reverse();
   const qOpen = (state.questions || []).filter((q) => !q.answer).length;
   const ci = state.main_ci;
   const ciPill = !ci ? '' : ci.status === 'fail' ? `<span class="pill bad">main is failing${ci.failing?.length ? `: ${esc(ci.failing.join(', '))}` : ''}</span>` : ci.status === 'pending' ? '<span class="pill">main: checks running…</span>' : '<span class="pill ok">✓ main green</span>';
-  const n = { done, review: by('review'), blocked: by('blocked'), doing: by(['claimed', 'in_progress']), open: by('open') };
+  const n = { done, review: by('review'), blocked: by('blocked'), doing: by('in_progress'), claimed: by('claimed'), open: by('open') };
   const seg = (k) => (n[k] ? `<span class="s-${k}" data-seg="${k}" style="width:${(n[k] / total) * 100}%"></span>` : '');
   const key = (k, label) => `<span><i class="s-${k}" aria-hidden="true"></i>${label} <b>${n[k]}</b></span>`;
   const html = `
     <header><span class="brand"><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" rx=".6" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" rx=".6" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" rx=".6" fill="var(--accent-ink)"/></svg>Claude Board</span><span class="live"><span class="dot ${live ? 'live' : ''}" aria-hidden="true"></span>${live ? 'Live' : lastErr ? esc(lastErr) : 'Connecting…'}</span><span class="sp"></span>
       ${ciPill || qOpen ? `<div class="pills">${ciPill}${qOpen ? `<span class="pill warn">${qOpen} question${qOpen > 1 ? 's' : ''} waiting for a human</span>` : ''}</div>` : ''}</header>
-    <h1 class="goal${state.settings?.goal ? '' : ' unset'}">${esc(state.settings?.goal || 'No goal set yet')}</h1>
+    <h1 class="goal${state.settings?.goal ? '' : ' unset'}" title="${esc(plain(state.settings?.goal))}">${esc(plain(state.settings?.goal) || 'No goal set yet')}</h1>
     <div class="row">
       <section class="card" aria-labelledby="h-time"><h2 id="h-time">Time</h2><div class="clock ${cd.cls}" id="clock">${esc(cd.big)}</div><div class="sub" id="clock-sub">${esc(cd.sub)}</div></section>
       <section class="card" aria-labelledby="h-prog"><h2 id="h-prog">Progress</h2><div class="prog">${done} of ${total} done</div>
-        <div class="bar" role="progressbar" aria-label="Tasks done" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}">${total ? ['done', 'review', 'blocked', 'doing'].map(seg).join('') : ''}</div>
-        <div class="cols">${key('open', 'Open')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}${key('done', 'Done')}</div></section>
+        <div class="bar" role="progressbar" aria-label="Tasks done" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}">${total ? ['done', 'review', 'blocked', 'doing', 'claimed'].map(seg).join('') : ''}</div>
+        <div class="cols">${key('open', 'Open')}${key('claimed', 'Claimed')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}${key('done', 'Done')}</div></section>
     </div>
     <div class="row">
       <section class="card" aria-labelledby="h-now"><h2 id="h-now">Now working on</h2>
-        ${groups.size ? `<ul class="list">${[...groups].map(([person, list]) => list.map((a) => `<li style="--h:${hue(a.name)}"><span class="who">${esc(person)}</span><span class="what" title="${esc(a.doing)}">${esc(a.doing)}</span></li>`).join('')).join('')}</ul>` : '<p class="empty">Nobody is working on a task right now.</p>'}</section>
+        ${people.length ? `<ul class="list">${people.slice(0, NOW_MAX).map(([person, g]) => `<li style="--h:${g.h}"><span class="who">${esc(person)}</span><span class="what" title="${esc(g.items.join('; '))}">${esc(g.items.join('; '))}</span>${g.out ? '<span class="when tag">out of usage</span>' : ''}</li>`).join('')}</ul>${people.length > NOW_MAX ? `<p class="more">and ${people.length - NOW_MAX} more</p>` : ''}` : '<p class="empty">Nobody is working on a task right now.</p>'}</section>
       <section class="card" aria-labelledby="h-merged"><h2 id="h-merged">Just merged</h2>
         ${merges.length ? `<ul class="list">${merges.map((e) => `<li style="--h:${hue(e.author)}"><span class="who">#${esc(e.task_id)}</span><span class="what">${esc(taskTitle(e.task_id) || String(e.text || '').replace(/^#\d+\s*/, ''))}</span><span class="when">${esc(ago(e.ts))}</span></li>`).join('')}</ul>` : '<p class="empty">Nothing merged yet. Finished tasks show up here.</p>'}</section>
     </div>`;
