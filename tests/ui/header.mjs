@@ -132,7 +132,9 @@ try {
   await page.evaluate(() => window.scrollTo(0, 0));
 
   // ---- WB-4: after the demo, with nobody on the board, the page says the event is over ----
-  await rest('dana', '/settings', 'PUT', { deadline: Date.now() - 9 * 3600e3 });
+  // The API refuses a past demo time: set one a second ahead and let it pass.
+  await rest('dana', '/settings', 'PUT', { deadline: Date.now() + 1000 });
+  await new Promise((r) => setTimeout(r, 1500));
   for (const n of ['ann', 'bea', 'cid', 'dup']) await ageAgent(n, 120);
   await reload();
   check('WB-4 "The event is over"', /^The event is over\. Download the summary and retro/.test(await txt('#now .na')) && await page.$eval('#now', (e) => e.classList.contains('k-done')), await txt('#now'));
