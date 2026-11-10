@@ -100,20 +100,21 @@ try {
   await bob('claim_task', { id: t4.id }); await bob('update_task', { id: t4.id, status: 'in_progress' });
   await bob('ask_human', { question: 'Should votes be anonymous?', task_id: t3.id, as: 'ui-worker' });
   await sleep(600);
-  check('do-now: answer question', /Answer 1 question/.test(await now()), await now());
+  // Ranked by how many agents each blocks (WB-3): picking who merges leads, the question follows under "Also".
+  check('do-now: pick integrator leads, answer question under Also', /^Pick who merges/.test(await page.$eval('#now .na', (e) => e.textContent)) && /Answer 1 question/.test(await page.$eval('#now .also', (e) => e.textContent)), await now());
   await shots('5-building', { mobile: true });
-  await page.click('#now [data-go]'); await sleep(300);
+  await page.click('#now .also [data-go="questions"]'); await sleep(300);
   check('do-now jumps to answer box', await page.evaluate(() => document.activeElement?.matches('.qcard textarea')));
   await page.keyboard.type('Yes, anonymous'); await page.keyboard.press('Enter');
-  await page.waitForFunction(() => /Pick who merges/.test(document.getElementById('now').innerText), { timeout: 5000 });
-  check('do-now: pick integrator', true);
+  await page.waitForFunction(() => !/Answer 1 question/.test(document.getElementById('now').innerText), { timeout: 5000 });
+  check('do-now: pick integrator', /Pick who merges/.test(await now()), await now());
   await sleep(800); await page.evaluate(() => window.scrollTo(0, 0)); await sleep(200);
   await page.click('#now [data-go]'); await sleep(400);
   check('integrator step opened, select focused', await page.evaluate(() => document.activeElement?.id === 'integ-sel'));
   await shots('6-pick-integrator', { light: false });
   await page.select('#integ-sel', 'alice');
-  await page.waitForFunction(() => /blocked/.test(document.getElementById('now').innerText), { timeout: 5000 });
-  check('integrator saved; do-now shows blocked', true, await now());
+  await page.waitForFunction(() => !/Pick who merges/.test(document.getElementById('now').innerText), { timeout: 5000 });
+  check('integrator saved; do-now shows blocked', /blocked/.test(await page.$eval('#now .na', (e) => e.textContent)), await now());
   check('person card has role pills', await page.evaluate(() => /merges to main/.test(document.getElementById('people').innerText) && /planner/.test(document.getElementById('people').innerText)));
   await bob('update_task', { id: t3.id, status: 'in_progress', as: 'ui-worker' }); await sleep(500);
   check('all good message', /All good/.test(await now()), await now());
