@@ -190,7 +190,8 @@ export function buildMcpServer(board, baseAgent) {
     {
       title: 'Create task',
       description: 'Add a task to the backlog. Keep tasks small (1 branch, < ~1 hour). priority: 1=high, 2=normal, 3=low (priority-1 tasks stay claimable during the feature freeze, so use it for bug fixes). size: S/M/L (agents on bigger plans get L tasks first). depends_on: ids of existing tasks that must be done first. ' +
-        'If you are not the planner and the planner is online, the task is a PROPOSAL: it waits (status proposed) until the planner approves it; carry on meanwhile. reserved_for (planner only): the agent that should do it.',
+        'If you are not the planner and the planner is online, the task is a PROPOSAL: it waits (status proposed) until the planner approves it; carry on meanwhile. reserved_for (planner only): the agent that should do it.' +
+        (board.statsLine() ? ' ' + board.statsLine() : ''),
       inputSchema: {
         title: z.string(),
         description: z.string().optional().describe('Acceptance criteria, relevant files, interfaces to respect'),
@@ -272,6 +273,19 @@ export function buildMcpServer(board, baseAgent) {
       },
     },
     wrap(({ id, approve, note, priority, size, reserved_for }) => board.decideProposal(baseAgent, id, { approve, note, priority, size, reserved_for }))
+  );
+
+  tool(
+    'report_usage_limit',
+    {
+      title: 'Report that you hit your usage limit',
+      description: 'Call this as soon as your subscription tells you you hit a usage or rate limit. The board marks you as out of usage (until the reset time, if you give it) and tells the team your tasks can be taken over. Then release_task each task you hold with a note, and stop. The mark clears when you call the board again later.',
+      inputSchema: {
+        until: z.string().optional().describe('When it resets, if shown: an ISO time, or a clock time today like "15:00" or "3pm"'),
+        note: z.string().optional().describe('e.g. "Max 5x weekly limit"'),
+      },
+    },
+    wrap(({ until, note }) => board.reportUsageLimit(baseAgent, { until, note }))
   );
 
   tool(

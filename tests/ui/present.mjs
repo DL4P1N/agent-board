@@ -1,0 +1,85 @@
+// Presenter view (public/present.html): the read-only big-screen page for the room or the demo.
+// Starts its own throwaway board. Run all suites with: npm test
+import path from 'node:path';
+import { startBoard, launchBrowser, shotsDir, finish, agent, rest, TOKEN } from '../helpers.mjs';
+
+const board = await startBoard();
+const R = [];
+const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const human = (p, method = 'GET', body) => rest(board, 'dana', p, method, body);
+
+await human('/settings', 'PUT', { goal: 'A voting app for hackathon projects <b>live</b>', deadline: Date.now() + 2 * 3600e3 + 5 * 60e3, freeze_minutes: 60 });
+const ana = await agent(board, 'ana-claude'); await ana('board_status');
+const t1 = await ana('create_task', { title: 'Vote API', size: 'S' });
+const t2 = await ana('create_task', { title: 'Leaderboard page' });
+await ana('create_task', { title: 'Submit form' });
+await ana('claim_task', { id: t1.id }); await ana('update_task', { id: t1.id, status: 'in_progress' });
+await ana('update_task', { id: t1.id, status: 'review', note: 'done' });
+await human(`/tasks/${t1.id}`, 'PATCH', { status: 'done' });
+await ana('claim_task', { id: t2.id }); await ana('update_task', { id: t2.id, status: 'in_progress' });
+await human('/messages', 'POST', { text: 'go team' });
+
+// The presenter link carries the read-only viewer token, never the board token.
+const st = await human('/state');
+const VIEW = st.setup?.viewer_token;
+check('the board gives humans a viewer token (separate from the board token)', !!VIEW && VIEW !== TOKEN, String(VIEW));
+const asViewer = (p, method = 'GET') => fetch(`${board.base}/api${p}`, { method, headers: { Authorization: `Bearer ${VIEW}`, 'Content-Type': 'application/json' } });
+const vs = await asViewer('/state');
+const vbody = vs.ok ? await vs.json() : null;
+check('the viewer token reads the board but gets no setup or tokens', vs.status === 200 && !vbody.setup && !JSON.stringify(vbody).includes(TOKEN), String(vs.status));
+check('the viewer token cannot change anything', [403, 401].includes((await asViewer('/messages', 'POST')).status));
+
+const browser = await launchBrowser({ headless: true, defaultViewport: { width: 1600, height: 900 } });
+const page = await browser.newPage();
+const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+const out = shotsDir('present');
+try {
+  await page.goto(`${board.base}/present.html?token=${encodeURIComponent(VIEW)}`);
+  await page.waitForFunction(() => /Leaderboard|Vote API|voting app/i.test(document.body.innerText), { timeout: 8000 });
+  const txt = await page.evaluate(() => document.body.innerText);
+  check('goal shown large, as text (no HTML injected)', await page.$eval('h1.goal', (h) => h.textContent.includes('<b>live</b>') && !h.querySelector('b')));
+  check('progress: 1 of 3 done, with a progress bar', /1 of 3 done/.test(txt) && await page.$eval('[role=progressbar]', (b) => b.getAttribute('aria-valuenow') === '1' && b.getAttribute('aria-valuemax') === '3'), txt.slice(0, 200));
+  check('column counts', /In progress\s*1/.test(txt) && /Open\s*1/.test(txt) && /Done\s*1/.test(txt));
+  check('countdown to the demo with the freeze time', /2h 0\dm|2h 05m|2h 04m/.test(await page.$eval('#clock', (c) => c.textContent)) && /feature freeze at/.test(txt), await page.$eval('#clock', (c) => c.textContent));
+  check('now working on: ana with her task', /ana/.test(await page.$eval('#h-now', (h) => h.parentElement.innerText)) && /Leaderboard page/.test(txt));
+  check('just merged lists #1', /#\s*1/.test(await page.$eval('#h-merged', (h) => h.parentElement.innerText)) && /Vote API/.test(await page.$eval('#h-merged', (h) => h.parentElement.innerText)));
+  check('token removed from the address bar', !/token=/.test(page.url()), page.url());
+  check('kept under its own key, never the board token key', await page.evaluate(() => !!localStorage.getItem('board-view-token') && !localStorage.getItem('board-token')));
+  check('no link to the full board', !(await page.$('a[href="/"]')));
+  await page.screenshot({ path: path.join(out, 'present.png') });
+  // Live update: another merge shows up without reloading.
+  await ana('update_task', { id: t2.id, status: 'review' }); await human(`/tasks/${t2.id}`, 'PATCH', { status: 'done' });
+  const updated = await page.waitForFunction(() => /2 of 3 done/.test(document.body.innerText), { timeout: 8000 }).then(() => true).catch(() => false);
+  check('updates live (2 of 3 done)', updated);
+  // Deadline passed.
+  await human('/settings', 'PUT', { deadline: Date.now() - 60e3, freeze_minutes: 0 });
+  const past = await page.waitForFunction(() => /Demo time/.test(document.getElementById('clock')?.textContent || ''), { timeout: 8000 }).then(() => true).catch(() => false);
+  check('after the deadline: "Demo time"', past);
+  // Phone width: no horizontal scroll.
+  await page.setViewport({ width: 390, height: 844 }); await sleep(300);
+  check('phone width: no horizontal overflow', await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await page.screenshot({ path: path.join(out, 'present-phone.png') });
+  // Without a token: a clear message, no errors.
+  const p2 = await browser.newPage(); const e2 = []; p2.on('pageerror', (e) => e2.push(e.message));
+  await p2.evaluateOnNewDocument(() => { try { localStorage.clear(); } catch {} });
+  await p2.goto(`${board.base}/present.html`); await sleep(400);
+  check('no token: explains how to open it', /Presenter view/.test(await p2.evaluate(() => document.body.innerText)) && !e2.length, e2.join('; '));
+  // The main board's "Presenter view" link uses the viewer token.
+  const mp = await browser.newPage();
+  await mp.goto(`${board.base}/?token=${TOKEN}&name=dana`);
+  await mp.waitForSelector('#app:not([hidden])', { timeout: 8000 });
+  await mp.waitForFunction(() => !document.getElementById('present-link').hidden, { timeout: 8000 }).catch(() => {});
+  const href = await mp.$eval('#present-link', (a) => a.getAttribute('href'));
+  check('the board Presenter view link carries the viewer token, not the board token', href.includes(encodeURIComponent(VIEW)) && !href.includes(TOKEN), href);
+  await mp.close();
+  // A rejected token: the page says the link expired.
+  const p3 = await browser.newPage(); const e3 = []; p3.on('pageerror', (e) => e3.push(e.message));
+  await p3.goto(`${board.base}/present.html?token=nope`);
+  const exp = await p3.waitForFunction(() => /presenter link has expired/.test(document.body.innerText), { timeout: 8000 }).then(() => true).catch(() => false);
+  check('a rejected token: "This presenter link has expired"', exp && !e3.length, e3.join('; '));
+  check('no page errors', !errors.length, errors.join('; '));
+} catch (e) {
+  R.push(`CRASH ${e.message}`);
+}
+await finish(R, { browser, board });

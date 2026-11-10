@@ -147,6 +147,22 @@ try {
   ghState({ prs: { [PR]: { state: 'OPEN', reviewDecision: 'APPROVED', author: { login: 'ana-gh' }, headRefOid: 'ccc3333333333333', statusCheckRollup: [{ name: 'lint', conclusion: 'SUCCESS' }], latestReviews: [], comments: [] } } });
   await until((s) => s.tasks.find((t) => t.id === T1.id)?.pr?.checks === 'pass');
 
+  // Merge conflicts / behind main (gh's mergeable + mergeStateStatus).
+  const conflictMsgs = (s) => s.events.filter((e) => /has merge conflicts with main/.test(e.text));
+  ghState({ prs: { [PR]: { state: 'OPEN', reviewDecision: 'APPROVED', author: { login: 'ana-gh' }, headRefOid: 'ddd4444444444444', mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY', statusCheckRollup: [{ name: 'lint', conclusion: 'SUCCESS' }], latestReviews: [], comments: [] } } });
+  const prOf = (s) => s.tasks.find((t) => t.id === T1.id)?.pr;
+  const cf = await until((s) => (prOf(s)?.conflict === true ? prOf(s) : null));
+  check('PR with merge conflicts: pr.conflict true, behind false', cf?.conflict === true && cf?.behind === false, JSON.stringify(cf));
+  await sleep(1500);
+  st = await state();
+  check('the author is told once about the conflicts (rebase on origin/main)', conflictMsgs(st).length === 1 && /rebase on origin\/main/.test(conflictMsgs(st)[0].text) && (conflictMsgs(st)[0].data?.mentions || []).includes('ana'), JSON.stringify(conflictMsgs(st).map((e) => e.text)));
+  const nc = await next('ana');
+  check('author\'s next_action: "Your PR needs work" with merge conflicts', /Your PR needs work/.test(nc.next_action) && /merge conflicts with main/.test(nc.next_action) && nc.actionable === true, nc.next_action.slice(0, 300));
+  ghState({ prs: { [PR]: { state: 'OPEN', reviewDecision: 'APPROVED', author: { login: 'ana-gh' }, headRefOid: 'eee5555555555555', mergeable: 'MERGEABLE', mergeStateStatus: 'BEHIND', statusCheckRollup: [{ name: 'lint', conclusion: 'SUCCESS' }], latestReviews: [], comments: [] } } });
+  const bh = await until((s) => (prOf(s)?.behind === true ? prOf(s) : null));
+  check('PR behind main: pr.behind true, no conflict, no new conflict message', bh?.behind === true && bh?.conflict === false && conflictMsgs(await state()).length === 1, JSON.stringify(bh));
+  check('…and behind alone isn\'t "needs work" for the author', !/Your PR needs work/.test((await next('ana')).next_action));
+
   // ================= 2. main's CI =================
   const now = Date.now();
   const run = (conclusion, sha, title, mins, workflowName = 'CI', status = 'completed') => ({ status, conclusion, headSha: sha, url: `https://github.com/o/r/actions/runs/${sha.slice(0, 4)}`, displayTitle: title, workflowName, createdAt: new Date(now - mins * 60e3).toISOString() });

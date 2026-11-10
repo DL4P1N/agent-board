@@ -9,6 +9,8 @@
 //   codex           Codex CLI     → MCP server (tools pre-approved) + $board skill
 //   copilot-vscode  Copilot in VS Code (Agent mode) → .vscode/mcp.json + /board prompt file (in the repo, git-ignored locally)
 //   copilot-cli     Copilot CLI   → ~/.copilot/mcp-config.json + /board skill
+//   gemini          Gemini CLI    → ~/.gemini/settings.json (trusted) + /board command (~/.gemini/commands/board.toml)
+//   cursor          Cursor        → ~/.cursor/mcp.json + /board command and rule in the repo (.cursor/, git-ignored locally)
 //   other           any other MCP-capable tool → prints the board's MCP URL to add yourself
 //                   ("other:omp" names the agent <you>-omp when you use several tools)
 // Other options:
@@ -42,6 +44,8 @@ const TOOLS = {
   codex: { label: 'Codex CLI', bin: 'codex', start: 'type  $board' },
   'copilot-vscode': { label: 'GitHub Copilot in VS Code', bin: 'code', start: 'open Copilot Chat in Agent mode and type  /board' },
   'copilot-cli': { label: 'GitHub Copilot CLI', bin: 'copilot', start: 'run  copilot --allow-tool board --autopilot --max-autopilot-continues 50  then type  /board' },
+  gemini: { label: 'Gemini CLI', bin: 'gemini', start: 'type  /board' },
+  cursor: { label: 'Cursor', bin: 'cursor', start: 'open the Agent chat and type  /board' },
   other: { label: 'Another MCP tool', bin: null, start: 'tell it: "follow the board playbook (call get_playbook)"' },
 };
 // Commands the playbook has agents run. Pre-approved so git and gh never stall on a permission prompt
@@ -66,7 +70,7 @@ const token = args.token;
 // How long an idle Claude keeps listening to the board before it stops (its Stop hook). 0 turns waiting off.
 const wait = args.wait === undefined || args.wait === true ? 120 : Math.max(0, Math.min(600, Number(args.wait) || 0));
 if (!url || !token) {
-  console.error('usage: npm run join -- --url http://HOST:4000 --token TOKEN [--name NAME] [--tool claude,codex,copilot-vscode,copilot-cli,other] [--repo PATH] [--wait 120] [--shared] [--no-git-allow]');
+  console.error('usage: npm run join -- --url http://HOST:4000 --token TOKEN [--name NAME] [--tool claude,codex,copilot-vscode,copilot-cli,gemini,cursor,other] [--repo PATH] [--wait 120] [--shared] [--no-git-allow]');
   console.error('Copy the exact command shown on the web board (Start here → step 1) or printed by `npm start` on the host.');
   process.exit(1);
 }
@@ -108,7 +112,7 @@ const taken = (n) => (boardState?.presence || []).find((p) => p.kind === 'agent'
 
 let name = '';
 for (let attempt = 0; attempt < 5 && !name; attempt++) {
-  const n = String(args.name || (await ask('Your name on the board (short, no spaces)', previous?.agent?.toLowerCase().replace(/-(claude|codex|copilot|copilotcli)$/, '') || defaultName())) || '').toLowerCase().replace(/[^\w.-]/g, '');
+  const n = String(args.name || (await ask('Your name on the board (short, no spaces)', previous?.agent?.toLowerCase().replace(/-(claude|codex|copilot|copilotcli|gemini|cursor)$/, '') || defaultName())) || '').toLowerCase().replace(/[^\w.-]/g, '');
   if (!n) fail('A name is required (--name NAME).');
   const t = taken(n);
   if (t && rl && !args.name) {
@@ -167,7 +171,8 @@ const sibling = projectName ? path.resolve(ROOT, '..', projectName) : '';
 if (!args.repo) {
   const why = multi
     ? 'required: each tool gets its own git worktree of it'
-    : tools.includes('copilot-vscode') ? 'required for Copilot in VS Code'
+      : tools.includes('copilot-vscode') ? 'required for Copilot in VS Code'
+    : tools.includes('cursor') ? 'installs the /board command there; blank to skip'
     : tools.includes('claude') ? 'installs the auto-wake hook there; blank to skip' : 'so join can tell you where to start your agent; blank to skip';
   const def = previous?.agents?.[0]?.dir || (sibling && fs.existsSync(sibling) ? sibling : '');
   if (projectUrl && !def && rl) console.log(`\nThe team's project is ${projectUrl}. Leave the next answer blank to clone it into ${sibling}.`);
@@ -191,7 +196,7 @@ if (multi && !repo) fail('Using more than one tool needs --repo: each tool gets 
 
 // One agent per tool. With several tools on this laptop, each gets its own board name
 // (dana-claude, dana-codex, …) and its own git worktree, so they never share a working folder.
-const SHORT = { claude: 'claude', codex: 'codex', 'copilot-vscode': 'copilot', 'copilot-cli': 'copilotcli', other: otherLabel };
+const SHORT = { claude: 'claude', codex: 'codex', 'copilot-vscode': 'copilot', 'copilot-cli': 'copilotcli', gemini: 'gemini', cursor: 'cursor', other: otherLabel };
 const plan = tools.map((t, i) => ({
   tool: t,
   agent: multi ? `${name}-${SHORT[t]}` : name,
@@ -225,6 +230,8 @@ for (const p of plan) {
     if (p.tool === 'codex') setupCodex(ctx);
     if (p.tool === 'copilot-vscode') setupCopilotVSCode(ctx);
     if (p.tool === 'copilot-cli') setupCopilotCli(ctx);
+    if (p.tool === 'gemini') setupGemini(ctx);
+    if (p.tool === 'cursor') setupCursor(ctx);
     if (p.tool === 'other') setupOther(ctx);
     done.push(p);
   } catch (e) {
@@ -287,12 +294,16 @@ function setupClaude({ mcpUrl, dir }) {
   settings.permissions ??= {};
   // Background helper agents can't show permission prompts, so pre-approve what a task needs: the board,
   // npm/node, and the git/gh commands the playbook uses (unless --no-git-allow). User entries are kept.
-  const ourGit = [...GIT_ALLOW.map((c) => `Bash(git ${c}:*)`), ...GH_ALLOW.map((c) => `Bash(gh ${c.join(' ')}:*)`)];
+  // On Windows Claude Code runs commands through its PowerShell tool, so every rule is also given in a
+  // PowerShell(...) form there (a rehearsal showed Bash(...) rules alone left git prompting).
+  // Only on Windows, where that tool exists; elsewhere Bash(...) alone.
+  const both = (cmd) => (process.platform === 'win32' ? [`Bash(${cmd})`, `PowerShell(${cmd})`] : [`Bash(${cmd})`]);
+  const ourGit = [...GIT_ALLOW.flatMap((c) => both(`git ${c}:*`)), ...GH_ALLOW.flatMap((c) => both(`gh ${c.join(' ')}:*`))];
   // Older versions' broad "Bash(git:*)"/"Bash(gh:*)" go; with --no-git-allow, so do the git/gh rules join adds.
   const drop = new Set([...LEGACY_ALLOW, ...(gitAllow ? [] : ourGit)]);
-  settings.permissions.allow = [...new Set([...(settings.permissions.allow || []).filter((r) => !drop.has(r)), 'mcp__board', 'Bash(npm:*)', 'Bash(npx:*)', 'Bash(node:*)', ...(gitAllow ? ourGit : [])])];
+  settings.permissions.allow = [...new Set([...(settings.permissions.allow || []).filter((r) => !drop.has(r)), 'mcp__board', ...both('npm:*'), ...both('npx:*'), ...both('node:*'), ...(gitAllow ? ourGit : [])])];
   // Deny wins over allow in Claude Code. It only catches the flag right after "push" (prefix rules).
-  settings.permissions.deny = [...new Set([...(settings.permissions.deny || []), ...FORCE_PUSH.map((f) => `Bash(git push ${f}:*)`)])];
+  settings.permissions.deny = [...new Set([...(settings.permissions.deny || []), ...FORCE_PUSH.flatMap((f) => both(`git push ${f}:*`))])];
   writeJson(settingsPath, settings);
   keepOutOfGit(settingsPath, settingsCreated, dir);
   // Claude Code puts its helper agents' git worktrees in .claude/worktrees/; keep them out of `git status`.
@@ -399,7 +410,76 @@ function setupCopilotCli({ mcpUrl }) {
   if (!onPath('copilot')) console.log('  • `copilot` is not installed yet. The config is ready for when it is.');
 }
 
+// What every tool's /board shortcut says: join through the playbook, one task at a time (no background subagents).
+function KICKOFF(tool) {
+  return `Join the team board: call the \`board\` MCP server's \`get_playbook\` tool and follow that playbook exactly. You are ${tool}, so use the "Codex, GitHub Copilot, or any agent without background subagents" notes in it: do one task at a time yourself.
+
+Keep looping (board_status → work → wait_for_events) until the playbook says there is nothing left. Don't stop after a single step.
+
+If the \`board\` MCP tools (get_playbook, board_status, …) are not available to you, do not improvise: no raw HTTP calls, no reading token files. Tell the human: "This tool isn't connected to the team board yet. Run \`npm run doctor\` in your claude-board folder; it says what to fix." Then stop.`;
+}
+
+// Gemini CLI: the board in ~/.gemini/settings.json (trusted, so its tools run without a prompt each time)
+// and a /board custom command in ~/.gemini/commands/board.toml.
+function setupGemini({ mcpUrl }) {
+  const home = process.env.GEMINI_CLI_HOME || path.join(os.homedir(), '.gemini');
+  const settingsPath = path.join(home, 'settings.json');
+  if (fs.existsSync(settingsPath) && readJson(settingsPath, null) === null) {
+    throw new Error(`${settingsPath} isn't valid JSON, so it was left alone. Fix it (or move it away) and re-run join.`);
+  }
+  backupOnce(settingsPath);
+  const cfg = readJson(settingsPath, {});
+  cfg.mcpServers ??= {};
+  cfg.mcpServers.board = { httpUrl: mcpUrl, trust: true };
+  writeJson(settingsPath, cfg);
+  ok(`connected Gemini CLI to the board (${settingsPath}; its tools trusted)`);
+  const prompt = `${KICKOFF('Gemini CLI')}\n\nNote from your human (may be empty): {{args}}`;
+  installOurText(`# ${MARKER}\ndescription = "Join the team board as this laptop's orchestrator. The board tells you what to do next."\nprompt = '''\n${prompt.replace(/'''/g, "''")}\n'''\n`,
+    path.join(home, 'commands', 'board.toml'), 'the /board command');
+  if (!onPath('gemini')) console.log('  • `gemini` is not installed yet (npm i -g @google/gemini-cli). The config is ready for when it is.');
+}
+
+// Cursor: the board in ~/.cursor/mcp.json, plus a /board command and a rule in the repo's .cursor/ folder
+// (kept out of git like the Copilot files).
+function setupCursor({ mcpUrl, dir }) {
+  const mcpPath = path.join(os.homedir(), '.cursor', 'mcp.json');
+  if (fs.existsSync(mcpPath) && readJson(mcpPath, null) === null) {
+    throw new Error(`${mcpPath} isn't valid JSON, so it was left alone. Fix it (or move it away) and re-run join.`);
+  }
+  backupOnce(mcpPath);
+  const cfg = readJson(mcpPath, {});
+  cfg.mcpServers ??= {};
+  cfg.mcpServers.board = { url: mcpUrl };
+  writeJson(mcpPath, cfg);
+  ok(`connected Cursor to the board (${mcpPath})`);
+  if (!dir) {
+    console.log('  • no repo given, so the /board command was skipped (re-run with --repo to add it). You can also just tell Cursor\'s agent: "follow the board playbook (call get_playbook)".');
+    return;
+  }
+  const cmdPath = path.join(dir, '.cursor', 'commands', 'board.md');
+  const cmdCreated = !fs.existsSync(cmdPath);
+  installOurText(`${MARKER}\n\n${KICKOFF('Cursor')}\n`, cmdPath, 'the /board command');
+  keepOutOfGit(cmdPath, cmdCreated, dir);
+  const rulePath = path.join(dir, '.cursor', 'rules', 'board.mdc');
+  const ruleCreated = !fs.existsSync(rulePath);
+  installOurText(`---\ndescription: Joining the team board (claude-board). Use when the user types /board or asks to join or work on the board.\nalwaysApply: false\n---\n${MARKER}\n\nWhen the user types "/board" or asks you to join or work on the team board:\n\n${KICKOFF('Cursor')}\n`,
+    rulePath, 'the board rule');
+  keepOutOfGit(rulePath, ruleCreated, dir);
+  console.log('  • In Cursor, enable the "board" MCP server (Settings → MCP) if it asks, and allow its tools.');
+}
+
 // ---------- helpers ----------
+// Write generated text unless the destination exists and isn't one of ours.
+function installOurText(text, dest, what) {
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  if (fs.existsSync(dest) && !fs.readFileSync(dest, 'utf8').includes(MARKER)) {
+    bad(`${dest} already exists and isn't ours, so it was left alone (${what} not installed)`);
+    return;
+  }
+  fs.writeFileSync(dest, text);
+  ok(`installed ${what} (${dest})`);
+}
+
 // Copy a template unless the destination exists and isn't one of ours.
 function installOurFile(src, dest, what) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });

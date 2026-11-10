@@ -14,9 +14,12 @@ export const START = {
   codex: 'open Codex there and type  $board',
   'copilot-vscode': 'open the folder in VS Code, Copilot Chat in Agent mode, type  /board',
   'copilot-cli': 'run  copilot --allow-tool board --autopilot --max-autopilot-continues 50  there, then type  /board',
+  gemini: 'open Gemini CLI there and type  /board',
+  cursor: 'open the folder in Cursor, Agent chat, type  /board',
   other: 'start your tool there and tell it: "follow the board playbook (call get_playbook)"',
 };
-const LABEL = { claude: 'Claude Code', codex: 'Codex', 'copilot-vscode': 'Copilot in VS Code', 'copilot-cli': 'Copilot CLI', other: 'Your MCP tool' };
+const LABEL = { claude: 'Claude Code', codex: 'Codex', 'copilot-vscode': 'Copilot in VS Code', 'copilot-cli': 'Copilot CLI', gemini: 'Gemini CLI', cursor: 'Cursor', other: 'Your MCP tool' };
+const geminiHome = () => process.env.GEMINI_CLI_HOME || path.join(os.homedir(), '.gemini');
 
 export async function runDoctor({ header = true } = {}) {
   let problems = 0;
@@ -156,6 +159,9 @@ function toolConfig({ tool, dir }) {
   if (tool === 'codex') return read(path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'config.toml')).match(/\[mcp_servers\.board\][^[]*/)?.[0] || '';
   if (tool === 'copilot-cli') return JSON.stringify(JSON.parse(read(path.join(process.env.COPILOT_HOME || path.join(os.homedir(), '.copilot'), 'mcp-config.json')) || '{}').mcpServers?.board || '') || '';
   if (tool === 'copilot-vscode') return dir ? JSON.stringify(JSON.parse(read(path.join(dir, '.vscode', 'mcp.json')) || '{}').servers?.board || '') : '';
+  const board = (p) => { try { return JSON.stringify(JSON.parse(read(p) || '{}').mcpServers?.board || '') || ''; } catch { return ''; } };
+  if (tool === 'gemini') return board(path.join(geminiHome(), 'settings.json'));
+  if (tool === 'cursor') return board(path.join(os.homedir(), '.cursor', 'mcp.json'));
   return null;
 }
 
@@ -164,6 +170,8 @@ function shortcutPath({ tool, dir }) {
   if (tool === 'codex') return path.join(os.homedir(), '.agents', 'skills', 'board', 'SKILL.md');
   if (tool === 'copilot-cli') return path.join(process.env.COPILOT_HOME || path.join(os.homedir(), '.copilot'), 'skills', 'board', 'SKILL.md');
   if (tool === 'copilot-vscode' && dir) return path.join(dir, '.github', 'prompts', 'board.prompt.md');
+  if (tool === 'gemini') return path.join(geminiHome(), 'commands', 'board.toml');
+  if (tool === 'cursor' && dir) return path.join(dir, '.cursor', 'commands', 'board.md');
   return null;
 }
 

@@ -255,7 +255,7 @@
     header .needs { order: 10; flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
     header .needs button { flex: 0 0 auto; }
     .hacts { flex: 1 1 auto; }
-    #link-btn .lt { display: none; }
+    #link-btn .lt, #present-link .lt { display: none; }
     main { padding: 12px; } .filter span { display: none; } .person .last { display: none; } .person .pwhen { display: none; } }
 
   /* newcomer guidance */
@@ -366,6 +366,18 @@
   .bnote.k-ci a { color: inherit; }
   .ci-pill { font-size: 11px; margin-left: 6px; }
   .qrs { display: flex; gap: 14px; flex-wrap: wrap; margin: 6px 0 4px; }
+  /* Notifications (webhook) and token rotation, in Start here step 1 */
+  .nf { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 6px; max-width: 640px; }
+  .nf input[type=url] { width: 100%; }
+  .nf fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px 6px; margin: 0; display: flex; flex-wrap: wrap; gap: 2px 14px; }
+  .nf legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
+  .nf fieldset label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; margin: 0; min-height: 28px; font-weight: 400; }
+  .nf fieldset label { white-space: nowrap; }
+  .nf fieldset input[type=checkbox] { width: auto; min-width: 0; margin: 0; flex: 0 0 auto; }
+  .rot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; }
+  a.plink { display: inline-flex; align-items: center; gap: 4px; text-decoration: none; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; font-size: 13px; min-height: 32px; box-sizing: border-box; }
+  a.plink:hover { border-color: var(--accent); }
+  a.plink[hidden] { display: none; }
   .qrs figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); max-width: 200px; text-align: center; }
   .qrs img { width: 180px; height: 180px; background: #fff; padding: 8px; border-radius: 8px; box-sizing: content-box; }
   .prfb { margin: 6px 0 2px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; }
@@ -426,6 +438,7 @@
     <div class="hacts">
       <label class="filter"><span>Show</span><select id="filter" aria-label="Show tasks for"></select></label>
       <button id="new-task-btn" title="New task (N)">+ New task</button>
+      <a id="present-link" class="plink" href="/present.html" hidden target="_blank" rel="noopener" title="Presenter view: a read-only big-screen page for the room or the demo (opens in a new tab)" aria-label="Presenter view (opens in a new tab)"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 11v2.5M5 13.5h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="lt"> Presenter view</span></a>
       <button id="link-btn" class="ghost" title="Copy this board's link (it includes the token) to send to a teammate" aria-label="Copy board link"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 9.5l3-3M7 4.5l1.2-1.2a2.8 2.8 0 014 4L11 8.5M9 11.5l-1.2 1.2a2.8 2.8 0 01-4-4L5 7.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="lt"> Copy link</span></button>
       <span class="hpair">
         <button id="notify-btn" class="ghost bell" type="button" aria-pressed="false" aria-label="Desktop notifications" title="Notify me when this tab is in the background"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.5V7a4 4 0 018 0v4.5l1.2 1.2H2.8zM6.5 13.5a1.6 1.6 0 003 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><path class="slash" d="M2.5 2.5l11 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
@@ -612,7 +625,7 @@ let me = (nameParam || store.get('board-name') || '').toLowerCase();
 const DEFAULT_SETTINGS = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '', planner_extra: '2' };
 const ANYONE = '*'; // settings.integrator: whoever is free merges
 let state = { tasks: [], locks: [], questions: [], events: [], settings: { ...DEFAULT_SETTINGS }, phase: 'needs_goal', presence: [], setup: null };
-let ui = { filter: store.get('board-filter') || '', tab: store.get('board-tab') || 'all', showAllDone: false, confirmLock: null, dragging: false, steps: {}, editGoal: false, editRepo: false, addrs: false, openPeople: new Set(), moveMenu: null, doneOpen: store.get('board-done') };
+let ui = { nf: { open: false, loaded: false, loading: false, url: '', kind: null, events: null, err: '' }, rotateArm: false, filter: store.get('board-filter') || '', tab: store.get('board-tab') || 'all', showAllDone: false, confirmLock: null, dragging: false, steps: {}, editGoal: false, editRepo: false, addrs: false, openPeople: new Set(), moveMenu: null, doneOpen: store.get('board-done') };
 let seenMention = Number(store.get('board-seen-mention') || 0);
 let editing = null; // snapshot of the task open in the dialog
 let keysOn = store.get('board-keys') !== 'off';
@@ -1097,6 +1110,8 @@ function checkNotify() {
 let prevQIds = null;
 function render() {
   $('me').textContent = me;
+  // Presenter view opens with the read-only viewer token, never the board token; hidden until the server gives one.
+  { const vt = state.setup?.viewer_token; const pl = $('present-link'); pl.hidden = !vt; if (vt) pl.href = '/present.html?token=' + encodeURIComponent(vt); }
   const qOpen = openQuestions();
   // Screen readers: one polite announcement when a new question arrives (not on every refresh).
   if (prevQIds) {
@@ -1278,7 +1293,72 @@ function stepInvite(si) {
     ${ui.qr ? `<div class="qrs" id="qr-codes">
       <figure><img src="${esc(qrSrc(best.web_url))}" alt="QR code for this board's link, ${esc(best.web_url)}" width="180" height="180"><figcaption>Board link: open it on a phone to watch</figcaption></figure>
       <figure><img src="${esc(qrSrc(best.command))}" alt="QR code for the join command" width="180" height="180"><figcaption>Join command: scan, then paste it in the claude-board folder</figcaption></figure></div>` : ''}
-    <div class="sub">Connected now</div>${chips(si)}`;
+    <div class="sub">Connected now</div>${chips(si)}
+    ${notifyBox()}${securityBox()}`;
+}
+
+// ---------- notifications to a team chat or phone (webhook) ----------
+// Keys as the server names them (src/server.js NOTIFY_EVENTS).
+const NOTIFY_EVENTS = [['questions', 'Questions for humans'], ['main', 'main is failing'], ['blocked', 'Blocked tasks'], ['conflict', 'Same name on two laptops'], ['freeze', 'Feature freeze'], ['limit', 'Usage limits']];
+const NOTIFY_KIND = { slack: 'Slack', discord: 'Discord', ntfy: 'ntfy (phone push)', generic: 'a plain webhook (JSON POST)', other: 'a plain webhook (JSON POST)' };
+// The server may send events as a list of keys or as {key: true}.
+const nfEvents = (ev) => new Set(Array.isArray(ev) ? ev : typeof ev === 'string' ? ev.split(',').filter(Boolean) : ev && typeof ev === 'object' ? Object.keys(ev).filter((k) => ev[k]) : NOTIFY_EVENTS.map(([k]) => k));
+async function loadNotify() {
+  if (ui.nf.loading) return; ui.nf.loading = true;
+  try {
+    const r = await api('/notify');
+    Object.assign(ui.nf, { loaded: true, url: r.url || '', kind: r.kind || null, events: nfEvents(r.events), err: '' });
+  } catch (e) { Object.assign(ui.nf, { loaded: true, err: e.message, events: ui.nf.events || nfEvents(null) }); }
+  ui.nf.loading = false; render();
+}
+function notifyBox() {
+  const n = ui.nf;
+  const tog = `<button type="button" class="link muted" data-act="nf-tog" data-fk="nf-tog" aria-expanded="${n.open}" aria-controls="nf-box" style="font-size:12px;margin-top:6px">${n.open ? '▾' : '▸'} Notifications when you're away${n.url ? ` <span class="pill ok">on · ${esc(NOTIFY_KIND[n.kind] || 'webhook')}</span>` : ''}</button>`;
+  if (!n.open) return tog;
+  if (!n.loaded) { if (!n.loading) setTimeout(loadNotify, 0); return `${tog}<p class="muted" id="nf-box">Loading…</p>`; }
+  const ev = n.events || nfEvents(null);
+  return `${tog}<form class="nf" id="nf-box" data-notifyform>
+    <p class="hint" style="margin:0">Gets questions to you when you're away from the laptop: the board posts to your team chat or phone.</p>
+    <label for="nf-url">Webhook URL: Slack, Discord, ntfy, or any URL that accepts a POST</label>
+    <input type="url" id="nf-url" data-keep="nf-url" autocomplete="off" spellcheck="false" placeholder="${esc(n.url ? `Saved: ${n.url} (leave empty to keep it)` : 'https://hooks.slack.com/services/… or https://ntfy.sh/your-topic')}" aria-describedby="nf-hint nf-err">
+    <p class="hint" id="nf-hint" style="margin:0">${n.url ? `Sending to ${esc(NOTIFY_KIND[n.kind] || 'a webhook')}. ` : ''}For a phone: install the ntfy app, subscribe to a hard-to-guess topic, and paste <code>https://ntfy.sh/&lt;topic&gt;</code> here.</p>
+    <fieldset><legend>Send</legend>${NOTIFY_EVENTS.map(([k, l]) => `<label><input type="checkbox" data-nev="${k}" data-fk="nev-${k}" ${ev.has(k) ? 'checked' : ''}> ${esc(l)}</label>`).join('')}</fieldset>
+    <div class="inl" style="margin:0"><button type="submit" data-fk="nf-save">Save</button>
+      <button type="button" class="ghost" data-act="nf-test" data-fk="nf-test" ${n.url ? '' : 'disabled title="Save a webhook URL first"'}>Send test</button>
+      ${n.url ? '<button type="button" class="ghost" data-act="nf-off" data-fk="nf-off">Stop sending</button>' : ''}</div>
+    <div class="err" id="nf-err" role="alert">${esc(n.err || '')}</div></form>`;
+}
+// ---------- rotate the board token (a link leaked) ----------
+function securityBox() {
+  return `<div class="sub">If a link leaked</div>
+    <p class="hint" style="margin:0">The board token is in every join command and board link. Rotating it locks out everyone who has the old one.</p>
+    ${ui.rotateArm ? `<div class="rot note" role="alert"><span><b>Everyone will have to re-run join</b> with the new command (and reopen the board). Agents connected now lose access until they do.</span>
+      <button type="button" class="danger" data-act="rotate-yes" data-fk="rot-yes">Rotate now</button><button type="button" class="ghost" data-act="rotate-no" data-fk="rot-no">Keep the token</button></div>`
+      : '<div class="rot"><button type="button" class="ghost" data-act="rotate" data-fk="rot">Rotate token…</button></div>'}`;
+}
+async function rotateToken() {
+  try {
+    const r = await api('/token/rotate', { method: 'POST', body: '{}' });
+    if (!r?.token) throw new Error('The server didn\'t return a new token.');
+    token = r.token; store.set('board-token', token);
+    if (r.setup) state.setup = r.setup;
+    ui.rotateArm = false; ui.steps.invite = true;
+    connect(); await load();
+    toast('Token rotated: send everyone the new join command.');
+    document.querySelector('[data-fk="s-invite"]')?.focus({ preventScroll: true });
+  } catch (e) { ui.rotateArm = false; render(); toast(`Couldn't rotate the token: ${e.message}`, true); }
+}
+// How long tasks took so far (per size) and how often reviews sent them back, from the server's stats.
+function statsLine() {
+  const s = state.stats; if (!s || typeof s !== 'object') return '';
+  const sizes = (s.minutes && typeof s.minutes === 'object' && s.minutes) || (s.sizes && typeof s.sizes === 'object' && s.sizes) || s;
+  const med = (v) => (typeof v === 'number' ? v : v && typeof v === 'object' ? v.median ?? v.median_min ?? v.minutes ?? null : null);
+  const parts = ['S', 'M', 'L'].map((k) => [k, med(sizes[k])]).filter(([, m]) => Number.isFinite(m)).map(([k, m]) => `${k} ≈ ${Math.round(m)} min`);
+  let br = s.bounce_rate ?? s.bounceRate;
+  if (Number.isFinite(br)) { if (br <= 1) br *= 100; parts.push(`${Math.round(br)}% came back from review at least once`); }
+  const rw = med(s.review_wait_min ?? s.review_wait ?? s.reviewWait);
+  if (Number.isFinite(rw)) parts.push(`reviews waited ≈ ${Math.round(rw)} min`);
+  return parts.length ? `<p class="hint" title="Median time from claim to done, per task size, on this board so far. The planner sees these too.">So far${Number.isFinite(s.done) ? ` (${s.done} done)` : ''}: ${esc(parts.join(' · '))}</p>` : '';
 }
 function stepGoal() {
   const S = state.settings;
@@ -1367,7 +1447,7 @@ function stepBacklog() {
   const S = state.settings; const n = state.tasks.length;
   const add = '<div class="inl"><span class="muted">You can always add tasks yourself:</span><button type="button" class="ghost" data-act="new-task" data-fk="s-new" style="font-size:12px;padding:3px 10px">+ New task</button></div>' + plannerBox() + approvalBox();
   if (n && approvalWait()) return `<p>${plural(n, 'task')} on the board${S.planner ? `, written by the planner, ${nameTag(S.planner)}` : ''}. Check them below: open a card to edit it, or add what's missing. Agents start claiming once you approve.</p>${add}`;
-  if (n) return `<p>${plural(n, 'task')} on the board${S.planner ? `, written by the planner, ${nameTag(S.planner)}` : ''}. Agents claim them on their own, highest priority first.</p>${add}`;
+  if (n) return `<p>${plural(n, 'task')} on the board${S.planner ? `, written by the planner, ${nameTag(S.planner)}` : ''}. Agents claim them on their own, highest priority first.</p>${statsLine()}${add}`;
   if (!S.goal) return `<p>Write the goal first (step 2). Then the first agent that starts on the board (step 3) becomes the <b>planner</b> and writes the task list from it automatically.</p>${add}`;
   if (S.planner) { const c = clientOf(S.planner); return `<p>${nameTag(S.planner)}'s agent${c ? ` (${esc(c)})` : ''} is the <b>planner</b> and is writing the task list now<span class="dots"></span> Cards appear on the board below as it goes.</p>${add}`; }
   return `<p>The first agent that starts on the board (step 3) becomes the <b>planner</b> and writes the task list from the goal automatically.</p>${add}`;
@@ -1466,7 +1546,7 @@ const conflictText = (a) => `${a.name} is connected from ${a.conflict?.laptops |
 // Where an agent's person comes from, for tooltips.
 const personSourceText = (a) => ({ human: 'set here on the web board', join: 'from join', guess: 'guessed from the name' }[a.personSource] || 'guessed from the name');
 function toolChipState(a, st, lbl) {
-  if (st === 'limited') return `<span class="pill warn" title="${esc(a.name)} hit its usage limit${a.limited.note ? `: ${esc(a.limited.note)}` : ''}. Other agents may take over its tasks.">${esc(lbl)} · ${esc(limitText(a))}</span>`;
+  if (st === 'limited') return `<span class="pill warn" title="${esc(a.name)} hit its usage limit${a.limited.by === 'agent' ? ' (reported by the agent)' : ''}${a.limited.note ? `: ${esc(a.limited.note)}` : ''}. Other agents may take over its tasks.">${esc(lbl)} · ${esc(limitText(a))}</span>`;
   if (st === 'online') {
     const full = a.active >= a.slots;
     return `<span class="pill ${full ? 'full' : 'ok'}" title="${esc(capTip(a))} Running on the board.">${esc(a.plan || lbl)} · <span class="cap">${capText(a)}</span><span class="capw"> tasks</span></span>`;
@@ -1480,7 +1560,7 @@ function agentControls(a) {
   const opts = [['', `plan default (${a.base})`], ...Array.from({ length: 10 }, (_, i) => [String(i + 1), String(i + 1)])];
   const slots = `<label for="sl-${k}">Task limit</label><select id="sl-${k}" data-slots="${k}" data-fk="sl-${k}" title="How many tasks ${k} may hold at once">${opts.map(([v, l]) => `<option value="${v}" ${String(a.override || '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   let lim;
-  if (isLimited(a)) lim = `<span class="pill warn" title="${esc(a.limited.note || 'Marked on this page')}">${esc(limitText(a))}</span>${a.limited.note ? `<span class="muted">${esc(short(a.limited.note, 60))}</span>` : ''}<button type="button" class="ghost" data-unlimit="${k}" data-fk="ul-${k}" title="It has usage again: count it as available">It's back</button>`;
+  if (isLimited(a)) lim = `<span class="pill warn" title="${esc(a.limited.note || (a.limited.by === 'agent' ? 'Reported by the agent' : 'Marked on this page'))}">${esc(limitText(a))}${a.limited.by === 'agent' ? ' · reported by the agent' : ''}</span>${a.limited.note ? `<span class="muted">${esc(short(a.limited.note, 60))}</span>` : ''}<button type="button" class="ghost" data-unlimit="${k}" data-fk="ul-${k}" title="It has usage again: count it as available">It's back</button>`;
   else lim = `<button type="button" class="ghost" data-limit="${k}" data-fk="lm-${k}" aria-expanded="${ui.limitForm === a.name}" title="Its subscription hit a usage limit: stop counting it as available, let others take over its tasks">Hit usage limit…</button>`;
   const form = ui.limitForm === a.name && !isLimited(a) ? `<form class="lim-f" data-limform="${k}">
       <div><label for="lu-${k}">Back at (optional)</label><input type="time" id="lu-${k}" data-keep="lu-${k}" aria-describedby="lh-${k}"></div>
@@ -1584,15 +1664,17 @@ function prInfo(t) {
   const p = t.pr || {};
   const r = prInfoBase(url, p);
   r.failing = Array.isArray(p.failing) ? p.failing : [];
-  r.tip = `Open the pull request${r.text ? ` (${r.text})` : ''}${r.failing.length ? `. Failing: ${r.failing.join(', ')}` : ''}`;
+  r.tip = `Open the pull request${r.text ? ` (${r.text})` : ''}${r.failing.length ? `. Failing: ${r.failing.join(', ')}` : ''}${p.conflict ? '. It conflicts with main: the author has to merge main into the branch and resolve it' : p.behind ? '. main has moved on since: update the branch before merging' : ''}`;
   return r;
 }
 function prInfoBase(url, p) {
   if (p.state === 'MERGED') return { url, text: 'merged', cls: 'ok' };
   if (p.state === 'CLOSED') return { url, text: 'closed', cls: 'bad' };
+  if (p.conflict) return { url, text: 'merge conflict', cls: 'bad' };
   if (p.review === 'CHANGES_REQUESTED') return { url, text: 'changes requested', cls: 'bad' };
   if (p.checks === 'fail') return { url, text: 'checks ✗', cls: 'bad' };
   if (p.checks === 'pending') return { url, text: 'checks …', cls: 'warn' };
+  if (p.behind) return { url, text: 'behind main', cls: 'warn' };
   if (p.review === 'APPROVED') return { url, text: p.checks === 'pass' ? 'approved · checks ✓' : 'approved', cls: 'ok' };
   if (p.checks === 'pass') return { url, text: 'checks ✓', cls: 'ok' };
   return { url, text: '', cls: '' };
@@ -1600,9 +1682,10 @@ function prInfoBase(url, p) {
 // Failing checks and the latest review comments on a task's pull request (from the host's gh), for the task dialog.
 function prFeedback(t) {
   const p = t.pr || {}; const failing = Array.isArray(p.failing) ? p.failing : []; const fb = Array.isArray(p.feedback) ? p.feedback : [];
-  if (!failing.length && !fb.length) return '';
+  const extra = p.conflict ? '<div><b>Merge conflict:</b> the branch conflicts with main. The author merges main into it and resolves the conflict.</div>' : p.behind ? '<div><b>Behind main:</b> main has new commits; update the branch before merging.</div>' : '';
+  if (!failing.length && !fb.length) return extra ? `<div class="prfb" style="flex-basis:100%">${extra}</div>` : '';
   const kindText = (f) => f.kind === 'review' ? (f.state === 'CHANGES_REQUESTED' ? 'requested changes' : f.state === 'APPROVED' ? 'approved' : 'reviewed') : 'commented';
-  return `<div class="prfb" style="flex-basis:100%">${failing.length ? `<div><b>Failing checks:</b> ${esc(failing.join(', '))}</div>` : ''}${fb.length ? `<div><b>Latest review feedback</b></div><ul>${fb.slice(0, 5).map((f) => `<li><b>${esc(f.author || 'someone')}</b> <span class="muted">${esc(kindText(f))}</span>${f.body ? `: ${fmt(String(f.body), true)}` : ''}</li>`).join('')}</ul>` : ''}</div>`;
+  return `<div class="prfb" style="flex-basis:100%">${extra}${failing.length ? `<div><b>Failing checks:</b> ${esc(failing.join(', '))}</div>` : ''}${fb.length ? `<div><b>Latest review feedback</b></div><ul>${fb.slice(0, 5).map((f) => `<li><b>${esc(f.author || 'someone')}</b> <span class="muted">${esc(kindText(f))}</span>${f.body ? `: ${fmt(String(f.body), true)}` : ''}</li>`).join('')}</ul>` : ''}</div>`;
 }
 // When a human last pinged this task's owner from a card ("#12 has had no update…"), within 10 minutes.
 function pingedAt(t) {
@@ -1958,6 +2041,23 @@ document.addEventListener('submit', async (ev) => {
     } catch (e) { toast(e.message, true); btn.disabled = false; }
     return;
   }
+  const nfForm = ev.target.closest('[data-notifyform]');
+  if (nfForm) {
+    ev.preventDefault();
+    const inp = $('nf-url'); const url = inp.value.trim();
+    if (url && !/^https?:\/\//i.test(url)) { ui.nf.err = 'Paste the full webhook address, starting with https://'; render(); return $('nf-url')?.focus(); }
+    if (!url && !ui.nf.url) { ui.nf.err = 'Paste a webhook URL first.'; render(); return $('nf-url')?.focus(); }
+    const events = [...(ui.nf.events || nfEvents(null))];
+    const btn = nfForm.querySelector('button[type=submit]'); btn.disabled = true;
+    try {
+      const r = await api('/notify', { method: 'PUT', body: JSON.stringify(url ? { url, events } : { events }) });
+      Object.assign(ui.nf, { url: r?.url ?? (url || ui.nf.url), kind: r?.kind ?? ui.nf.kind, events: r?.events ? nfEvents(r.events) : new Set(events), err: '' });
+      inp.value = '';
+      toast(`Saved. ${NOTIFY_KIND[ui.nf.kind] ? `Sending to ${NOTIFY_KIND[ui.nf.kind]}.` : ''} Press Send test to check it.`); render();
+      document.querySelector('[data-fk="nf-test"]')?.focus({ preventScroll: true });
+    } catch (e) { ui.nf.err = e.message; btn.disabled = false; render(); $('nf-url')?.focus(); }
+    return;
+  }
   const rf = ev.target.closest('[data-repoform]');
   if (rf) {
     ev.preventDefault();
@@ -1998,6 +2098,7 @@ document.addEventListener('submit', async (ev) => {
 
 document.addEventListener('change', async (ev) => {
   if (ev.target.id === 'keys-on') { keysOn = ev.target.checked; store.set('board-keys', keysOn ? 'on' : 'off'); return applyKeys(); }
+  if (ev.target.dataset?.nev) { ui.nf.events = ui.nf.events || nfEvents(null); ev.target.checked ? ui.nf.events.add(ev.target.dataset.nev) : ui.nf.events.delete(ev.target.dataset.nev); return; }
   if (ev.target.id === 'appr-on') {
     const on = ev.target.checked;
     try {
@@ -2060,6 +2161,16 @@ function doAct(a, el) {
   if (a === 'export-copy') return exportFile('copy', el);
   if (a === 'export-json') return exportFile('json', el);
   if (a === 'export-retro') return exportFile('retro', el);
+  if (a === 'nf-tog') { ui.nf.open = !ui.nf.open; render(); return document.querySelector('[data-fk="nf-tog"]')?.focus({ preventScroll: true }); }
+  if (a === 'nf-test') {
+    return api('/notify/test', { method: 'POST', body: '{}' }).then((r) => toast(r?.ok === false || r?.error ? `Test failed: ${r.error || `the webhook answered ${r.status}`}` : 'Test sent. Check your chat or phone.', r?.ok === false || !!r?.error)).catch((e) => toast(`Test failed: ${e.message}`, true));
+  }
+  if (a === 'nf-off') {
+    return api('/notify', { method: 'PUT', body: JSON.stringify({ url: '' }) }).then((r) => { Object.assign(ui.nf, { url: r?.url || '', kind: r?.kind || null, err: '' }); toast('Notifications to the webhook stopped.'); render(); document.querySelector('[data-fk="nf-save"]')?.focus({ preventScroll: true }); }).catch((e) => { ui.nf.err = e.message; render(); });
+  }
+  if (a === 'rotate') { ui.rotateArm = true; render(); return document.querySelector('[data-fk="rot-no"]')?.focus({ preventScroll: true }); }
+  if (a === 'rotate-no') { ui.rotateArm = false; render(); return document.querySelector('[data-fk="rot"]')?.focus({ preventScroll: true }); }
+  if (a === 'rotate-yes') return rotateToken();
   if (a === 'qr') { ui.qr = !ui.qr; render(); return document.querySelector('[data-fk="qr-tog"]')?.focus({ preventScroll: true }); }
   if (a === 'clock') return goStep('goal', 'dl');
   if (a === 'dl-edit') { ui.editDeadline = true; render(); return $('dl-in')?.focus(); }

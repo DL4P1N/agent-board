@@ -4,11 +4,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import net from 'node:net';
+import dns from 'node:dns/promises';
 import { spawn, spawnSync, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { Board, timeInfo, normName } from './board.js';
-import { agentTokenFor } from './tokens.js';
+import { agentTokenFor, viewerTokenFor } from './tokens.js';
 import QRCode from 'qrcode';
 import { buildMcpServer } from './mcp.js';
 
@@ -22,7 +24,8 @@ const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'))
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
 
 const board = new Board(DATA_DIR);
-const TOKEN = loadToken();
+// `let`: humans can rotate the token from the web board (POST /api/token/rotate).
+let TOKEN = loadToken();
 // Which claude-board code this server runs (git commit), so join/doctor can spot an outdated board.
 const VERSION = (() => {
   const r = spawnSync('git', ['-C', ROOT, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' });
@@ -46,15 +49,25 @@ function safeEq(a, b) {
 // Two keys: the board token (humans, the web board, join) can do everything; the agent token
 // (derived from it, written into each AI tool's config by join) can use MCP and read the API, but
 // can't do human-only things like approving the plan, setting the deadline or deleting tasks.
-const AGENT_TOKEN = agentTokenFor(TOKEN);
+let AGENT_TOKEN = agentTokenFor(TOKEN);
+// A third, read-only key for the presenter view: GET /api/state (nothing secret) and the live stream only.
+let VIEW_TOKEN = viewerTokenFor(TOKEN);
 function auth(req, res, next) {
   const t = tokenFrom(req);
   if (safeEq(t, TOKEN)) req.role = 'human';
   else if (safeEq(t, AGENT_TOKEN)) req.role = 'agent';
+  else if (safeEq(t, VIEW_TOKEN)) req.role = 'viewer';
   else return res.status(401).json({ error: 'bad or missing token' });
   next();
 }
+function viewerLimits(req, res, next) {
+  if (req.role !== 'viewer') return next();
+  if (req.method === 'GET' && (req.path === '/state' || req.path === '/stream')) return next();
+  return res.status(403).json({ error: 'This is the read-only viewer token (presenter view).' });
+}
 function humanOnly(req, res, next) {
+  // An agent may report its own usage limit (the Claude Stop hook does, with the agent token).
+  if (req.method === 'POST' && req.role === 'agent' && /^\/agents\/[^/]+\/limit$/.test(req.path)) return next();
   if (req.method !== 'GET' && req.role !== 'human') return res.status(403).json({ error: 'This needs the board token (humans on the web board), not an agent token.' });
   next();
 }
@@ -66,6 +79,7 @@ function agentFrom(req) {
 
 // ---------- MCP (stateless streamable HTTP) ----------
 app.post('/mcp', auth, async (req, res) => {
+  if (req.role === 'viewer') return res.status(403).json({ jsonrpc: '2.0', error: { code: -32001, message: 'The viewer token is read-only.' }, id: null });
   // A Claude that just came online: nudge web boards to refresh (SSE {kind:'presence'}).
   // ?probe=1: a connection check (join/doctor), not a running agent, so it doesn't count as presence.
   const probe = req.query.probe === '1';
@@ -102,14 +116,17 @@ app.delete('/mcp', methodNotAllowed);
 // ---------- REST API ----------
 const api = express.Router();
 api.use(auth);
+api.use(viewerLimits);
 api.use(humanOnly);
-// The web board sends X-Agent with the human's name; the Stop hook doesn't send it.
+// The web board sends X-Agent with the human's name. Agents (the Stop hook) send X-Agent too, with the
+// agent token: those must not show up as a human.
 api.use((req, _res, next) => {
-  if (req.method !== 'GET' && req.get('x-agent')) board.touch(agentFrom(req), 'human');
+  if (req.role === 'human' && req.method !== 'GET' && req.get('x-agent')) board.touch(agentFrom(req), 'human');
   next();
 });
 const h = (fn) => async (req, res) => {
-  try { res.json(await fn(req, res)); } catch (e) { res.status(400).json({ error: String(e?.message || e) }); }
+  // A handler may set its own error status (e.g. 403) before throwing; otherwise 400.
+  try { res.json(await fn(req, res)); } catch (e) { res.status(res.statusCode >= 400 ? res.statusCode : 400).json({ error: String(e?.message || e) }); }
 };
 
 // Humans with the web board open (by name -> open SSE connection count).
@@ -118,6 +135,9 @@ const onlineHumans = () => new Set([...humansOnline].filter(([, n]) => n > 0).ma
 
 api.get('/state', h((req) => {
   const g = board.nextAction(agentFrom(req));
+  // Only humans get `setup`: it holds the board token (join commands, web links). Agents and the
+  // presenter view must never be able to read it, or every human-only route is one GET away.
+  const human = req.role === 'human';
   return {
     tasks: board.listTasks(),
     locks: board.listLocks(),
@@ -129,9 +149,11 @@ api.get('/state', h((req) => {
     // Deadline / feature freeze: {deadline, freezeAt, frozen} (ms), so the page can count down.
     time: timeInfo(board.getSettings()),
     presence: board.presence(onlineHumans()),
-    setup: setupInfo(),
+    ...(human ? { setup: { ...setupInfo(), viewer_token: VIEW_TOKEN } } : {}),
     // CI on the project's main branch (GitHub Actions via gh), or null.
     main_ci: board.mainCi || null,
+    // How long tasks take on this board so far (null until 3 are done): for the planner and the retro.
+    stats: board.taskStats(),
   };
 }));
 
@@ -139,6 +161,17 @@ api.get('/state', h((req) => {
 api.get('/next', h((req) => {
   const g = board.nextAction(agentFrom(req));
   return { phase: g.phase, next_action: g.next_action, actionable: g.actionable, reason: g.reason };
+}));
+
+// An agent reports that it hit its usage limit ({until?, note?}). Humans may mark any agent; with the
+// agent token, only the name in X-Agent — the Claude Stop hook calls this when it sees the limit. This is
+// trust-based: every agent shares the agent token and X-Agent is self-declared, like all agent identity.
+api.post('/agents/:name/limit', h((req, res) => {
+  const name = normName(req.params.name).split('/')[0];
+  if (req.role !== 'human' && agentFrom(req).split('/')[0] !== name) { res.status(403); throw new Error('An agent can only report its own usage limit.'); }
+  const r = board.reportUsageLimit(name, req.body || {}, { by: req.role === 'human' ? 'human' : 'agent' });
+  board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
+  return r;
 }));
 
 // Humans on the web board: an agent's task limit ({slots: n | null}) or its usage-limit mark ({limited, until, note}).
@@ -184,6 +217,188 @@ setInterval(() => {
     board.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all FEATURE FREEZE. Demo at ${t.deadlineLabel}. Don't claim new tasks. Finish, push and merge what you have; release anything that can't land in time.` });
   }
 }, 20e3).unref();
+
+// ---------- notifications to humans away from the laptop (Slack / Discord / ntfy / any webhook) ----------
+// At Kubecon a question waited 31 minutes for a human. Settings `_notify_url` / `_notify_events` are
+// underscore keys, so agents never see them (getSettings hides them).
+const NOTIFY_EVENTS = ['questions', 'main', 'blocked', 'conflict', 'freeze', 'limit'];
+const rawSetting = (k) => board.db.prepare('SELECT value FROM settings WHERE key = ?').get(k)?.value ?? null;
+const putSetting = (k, v) => board.db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(k, v);
+function notifyKind(url) {
+  if (!url) return null;
+  let u; try { u = new URL(url); } catch { return null; }
+  // ?kind=slack|discord|ntfy|generic forces a format (self-hosted relays, tests).
+  const forced = u.searchParams.get('kind');
+  if (['slack', 'discord', 'ntfy', 'generic'].includes(forced)) return forced;
+  if (/(^|\.)hooks\.slack\.com$/i.test(u.hostname)) return 'slack';
+  if (/(^|\.)(discord|discordapp)\.com$/i.test(u.hostname) && /\/api\/webhooks\//.test(u.pathname)) return 'discord';
+  if (/ntfy/i.test(u.hostname) || u.searchParams.get('ntfy') === '1') return 'ntfy';
+  return 'generic';
+}
+// "https://hooks.slack.com/…/abcd": enough to recognise it, not enough to use it.
+function maskUrl(url) {
+  if (!url) return null;
+  try { const u = new URL(url); const tail = (u.pathname + u.search).replace(/\/+$/, '').slice(-4); return `${u.protocol}//${u.host}/…${tail ? '/' + tail : ''}`; } catch { return null; }
+}
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]', '::1'];
+function checkNotifyUrl(url) {
+  let u; try { u = new URL(url); } catch { throw new Error('That isn\'t a valid URL. Paste the webhook URL from Slack, Discord or ntfy.'); }
+  const local = LOCAL_HOSTS.includes(u.hostname);
+  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && local)) throw new Error('The webhook URL must start with https:// (http only for localhost).');
+  if (!local && isPrivateAddress(u.hostname.replace(/^\[|\]$/g, ''))) throw new Error('The webhook URL points at a private network address. Use the public webhook URL from Slack, Discord or ntfy.');
+  return u.toString();
+}
+// Private, loopback, link-local and similar addresses: a webhook must not be a way into the host's
+// network (cloud metadata, other services). Exception: localhost itself (testing, a local relay).
+function isPrivateAddress(ip) {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+  }
+  if (net.isIPv6(ip)) {
+    const x = ip.toLowerCase();
+    if (x === '::1' || x === '::') return true;
+    const v4 = x.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/); if (v4) return isPrivateAddress(v4[1]);
+    return /^(fc|fd|fe8|fe9|fea|feb|ff)/.test(x);
+  }
+  return false;
+}
+// Before every delivery: the name must not resolve to a private address (DNS can change after it was saved).
+async function checkNotifyTarget(url) {
+  const u = new URL(checkNotifyUrl(url));
+  if (LOCAL_HOSTS.includes(u.hostname) || net.isIP(u.hostname.replace(/^\[|\]$/g, ''))) return;
+  const addrs = await dns.lookup(u.hostname, { all: true });
+  if (addrs.some((a) => isPrivateAddress(a.address))) throw new Error(`${u.hostname} resolves to a private network address; not sending.`);
+}
+// Slack: escape &, <, > so agent text can't produce <!channel>/<!here> pings or links.
+const slackEscape = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const notifyEvents = () => (rawSetting('_notify_events') ?? NOTIFY_EVENTS.join(',')).split(',').map((s) => s.trim()).filter((s) => NOTIFY_EVENTS.includes(s));
+const boardLinkNoToken = () => (boardAddresses()[0]?.base || `http://localhost:${PORT}`);
+let notifyFailLogged = 0;
+async function deliver(text, kind = 'info', url = rawSetting('_notify_url')) {
+  if (!url) return { ok: false, status: 0, error: 'No webhook set.' };
+  const k = notifyKind(url); const link = boardLinkNoToken();
+  const full = `${text}\n${link}`;
+  let init;
+  // Text written by agents goes into these messages: no channel-wide pings from it.
+  if (k === 'slack') init = { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: slackEscape(full) }) };
+  else if (k === 'discord') init = { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: full.slice(0, 1900), allowed_mentions: { parse: [] } }) };
+  else if (k === 'ntfy') init = { headers: { 'Content-Type': 'text/plain; charset=utf-8', Title: 'Claude Board', Tags: kind === 'test' ? 'bell' : kind, Click: link }, body: text };
+  else init = { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, kind, board: 'claude-board', url: link }) };
+  try {
+    await checkNotifyTarget(url);
+    // No redirects: a public URL answering 307 to an internal address must not reach it.
+    const r = await fetch(url, { method: 'POST', ...init, redirect: 'manual', signal: AbortSignal.timeout(5000) });
+    if (r.status >= 300 && r.status < 400) throw Object.assign(new Error(`HTTP ${r.status}: the webhook redirects, which isn't allowed`), { status: r.status });
+    if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
+    return { ok: true, status: r.status };
+  } catch (e) {
+    if (Date.now() - notifyFailLogged > 60e3) { notifyFailLogged = Date.now(); console.error(`notify: webhook failed (${e.message})`); }
+    return { ok: false, status: e.status || 0, error: String(e.message || e) };
+  }
+}
+// Identical texts within a minute are sent once, and at most NOTIFY_CAP messages go out per 10 minutes.
+const NOTIFY_CAP = 20;
+const recentNotes = new Map();
+let sentTimes = []; let capLogged = 0;
+function notify(kind, text) {
+  if (!rawSetting('_notify_url') || !notifyEvents().includes(kind)) return;
+  const now = Date.now();
+  for (const [k, t] of recentNotes) if (now - t > 60e3) recentNotes.delete(k);
+  if (recentNotes.has(text)) return;
+  sentTimes = sentTimes.filter((t) => now - t < 10 * 60e3);
+  if (sentTimes.length >= NOTIFY_CAP) {
+    if (now - capLogged > 60e3) { capLogged = now; console.error(`notify: more than ${NOTIFY_CAP} messages in 10 minutes; dropping the rest for now`); }
+    return;
+  }
+  recentNotes.set(text, now); sentTimes.push(now);
+  deliver(text, kind).catch(() => {});
+}
+// Which board events are worth a phone buzz.
+board.bus.on('event', (e) => {
+  if (!e || !e.id) return;
+  const t = String(e.text || '');
+  if (e.kind === 'question') return notify('questions', `${e.author} asks: ${t}`);
+  if (e.kind === 'task_updated' && e.data?.status === 'blocked' && /→ blocked/.test(t)) {
+    const note = t.replace(/^#\d+\s*/, '').replace(/^\w+ → blocked(\s+—\s+)?/, '').trim();
+    return notify('blocked', `#${e.task_id} blocked${note ? `: ${note}` : ''} (${e.author})`);
+  }
+  if (e.kind !== 'message') return;
+  if (e.author === 'board' && /^@all main is failing/.test(t)) return notify('main', t.replace(/^@all\s+/, ''));
+  if (e.author === 'board' && /is being used from \d+ laptops/.test(t)) return notify('conflict', t.replace(/^@all\s+/, ''));
+  if (e.author === 'board' && /^@all (FEATURE FREEZE|Feature freeze in 30 minutes)/.test(t)) return notify('freeze', t.replace(/^@all\s+/, ''));
+  // Only the board's own announcement: an agent writing "hit its usage limit" in chat isn't one.
+  if (e.data?.notice === 'limit') return notify('limit', t.replace(/^@all\s+/, ''));
+});
+// Humans only, even for reading: the URL is a secret that lets anyone post to your channel.
+const humanToken = (req, res, next) => (req.role === 'human' ? next() : res.status(403).json({ error: 'This needs the board token (humans on the web board), not an agent token.' }));
+const notifyInfo = () => { const url = rawSetting('_notify_url'); return { url: maskUrl(url), kind: notifyKind(url), events: notifyEvents() }; };
+api.get('/notify', humanToken, h(() => notifyInfo()));
+api.put('/notify', humanToken, h(async (req) => {
+  const b = req.body || {};
+  if (b.url !== undefined) {
+    const url = String(b.url || '').trim();
+    if (url) await checkNotifyTarget(url);
+    putSetting('_notify_url', url ? checkNotifyUrl(url) : '');
+  }
+  if (b.events !== undefined) {
+    const list = (Array.isArray(b.events) ? b.events : String(b.events).split(',')).map((s) => String(s).trim()).filter((s) => NOTIFY_EVENTS.includes(s));
+    putSetting('_notify_events', [...new Set(list)].join(','));
+  }
+  return notifyInfo();
+}));
+api.post('/notify/test', humanToken, h(async () => {
+  if (!rawSetting('_notify_url')) return { ok: false, status: 0, error: 'Set a webhook URL first.' };
+  return deliver('Test from Claude Board: notifications reach this channel.', 'test');
+}));
+
+// ---------- token rotation (a link with the token leaked) ----------
+api.post('/token/rotate', humanToken, h((req, res) => {
+  if (process.env.BOARD_TOKEN) { res.status(400); return { error: 'The token comes from BOARD_TOKEN; change it there and restart the board.' }; }
+  const t = crypto.randomBytes(12).toString('base64url');
+  fs.writeFileSync(path.join(DATA_DIR, 'token'), t);
+  TOKEN = t; AGENT_TOKEN = agentTokenFor(t); VIEW_TOKEN = viewerTokenFor(t);
+  board.emit({ author: 'board', kind: 'message', channel: 'general', text: '@all The board token was rotated: everyone re-runs the join command from the web board.' });
+  // Live streams were authorised with the old token: close them all (open pages reconnect with the new one).
+  setTimeout(() => { for (const s of openStreams) { try { s.end(); } catch {} } openStreams.clear(); }, 50);
+  return { token: t, setup: { ...setupInfo(), viewer_token: VIEW_TOKEN } };
+}));
+
+// ---------- automatic backups (the host laptop can crash or sleep) ----------
+// `VACUUM INTO` a consistent copy every 10 minutes (BOARD_BACKUP_MINUTES; 0 = off), keep the newest 24,
+// skip when nothing happened since the last one. Restore with `npm run restore`.
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+const BACKUP_MS = process.env.BOARD_BACKUP_SECONDS ? Number(process.env.BOARD_BACKUP_SECONDS) * 1000 : (process.env.BOARD_BACKUP_MINUTES !== undefined ? Number(process.env.BOARD_BACKUP_MINUTES) : 10) * 60e3;
+// What the board holds (events, tasks, settings), without presence, which changes all the time. Kept
+// in backups/.last, so a restart doesn't make a new backup when nothing changed.
+function boardFingerprint() {
+  const t = board.db.prepare('SELECT COUNT(*) AS n, COALESCE(MAX(updated_at), 0) AS u FROM tasks').get();
+  const settings = board.db.prepare('SELECT key, value FROM settings ORDER BY key').all().map((r) => `${r.key}=${r.value}`).join('\n');
+  const q = board.db.prepare('SELECT COUNT(*) AS n, COALESCE(MAX(answered_at), 0) AS a FROM questions').get();
+  return crypto.createHash('sha256').update(`${board.latestEventId()}|${t.n}|${t.u}|${q.n}|${q.a}|${settings}`).digest('hex').slice(0, 32);
+}
+function backup() {
+  const fp = boardFingerprint();
+  const lastFile = path.join(BACKUP_DIR, '.last');
+  let last = ''; try { last = fs.readFileSync(lastFile, 'utf8').trim(); } catch {}
+  if (fp === last) return null;
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  // UTC time in the name (same board-YYYYMMDD-HHMMSS shape restore expects): sorting stays right
+  // across daylight-saving changes.
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '').replace('T', '-'); // 20261110-153000
+  const file = path.join(BACKUP_DIR, `board-${stamp}.db`);
+  if (fs.existsSync(file)) return null;
+  board.db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
+  fs.writeFileSync(lastFile, fp);
+  const all = fs.readdirSync(BACKUP_DIR).filter((f) => /^board-\d{8}-\d{6}\.db$/.test(f)).sort();
+  for (const f of all.slice(0, Math.max(0, all.length - 24))) { try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch {} }
+  return file;
+}
+if (BACKUP_MS > 0 && Number.isFinite(BACKUP_MS)) {
+  const run = () => { try { backup(); } catch (e) { console.error(`backup failed: ${e.message}`); } };
+  setTimeout(run, Math.min(30e3, BACKUP_MS)).unref();
+  setInterval(run, Math.max(1000, BACKUP_MS)).unref();
+}
 
 // Pull request status for tasks in review, via the host's `gh` (if it's installed and signed in).
 // Shown on review cards; the author is told once when checks fail or changes are requested, with
@@ -233,13 +448,17 @@ function prSummary(j) {
   const feedback = [...reviews, ...comments].sort((a, b) => b.at - a.at)
     .filter((f) => { const k = f.author + '|' + f.body; if (seen.has(k)) return false; seen.add(k); return true; })
     .slice(0, 5).map(({ at, ...f }) => f);
-  return { state: String(j?.state || '').toUpperCase() || null, review: j?.reviewDecision || null, checks, failing, feedback, head: String(j?.headRefOid || '').slice(0, 40) || null };
+  // Merge conflicts with the base branch, or just behind it (GitHub's mergeable / mergeStateStatus).
+  const mergeable = String(j?.mergeable || '').toUpperCase(); const mstate = String(j?.mergeStateStatus || '').toUpperCase();
+  const conflict = mergeable === 'CONFLICTING' || mstate === 'DIRTY';
+  const behind = !conflict && mstate === 'BEHIND';
+  return { state: String(j?.state || '').toUpperCase() || null, review: j?.reviewDecision || null, checks, failing, feedback, conflict, behind, head: String(j?.headRefOid || '').slice(0, 40) || null };
 }
 async function pollPrs() {
   const urls = [...new Set(board.listTasks({ status: 'review' }).map((t) => t.pr_url).filter(Boolean))];
   let changed = false;
   for (const url of urls) {
-    const j = await gh(['pr', 'view', url, '--json', 'state,reviewDecision,statusCheckRollup,comments,latestReviews,author,headRefOid']);
+    const j = await gh(['pr', 'view', url, '--json', 'state,reviewDecision,statusCheckRollup,comments,latestReviews,author,headRefOid,mergeable,mergeStateStatus']);
     if (!j) continue;
     const next = { url, ...prSummary(j) };
     const prev = board.prStatus.get(url);
@@ -249,6 +468,14 @@ async function pollPrs() {
     // Once per PR commit (head) and outcome, remembered in the board's data: a restart doesn't repeat it,
     // but the same failure after a new push is told again.
     const told = `_pr_told_${url}_${next.head || ''}_${next.checks}_${next.review}`;
+    // Merge conflicts: told once per PR commit too.
+    const toldConflict = `_pr_conflict_${url}_${next.head || ''}`;
+    if (next.conflict && !announced.has(toldConflict)) {
+      announced.add(toldConflict);
+      for (const t of board.listTasks({ status: 'review' }).filter((x) => x.pr_url === url && x.assignee)) {
+        board.emit({ author: 'board', kind: 'message', channel: 'review', task_id: t.id, text: `@${t.assignee.split('/')[0]} #${t.id} has merge conflicts with main: rebase on origin/main, fix the conflicts, run the checks and push (${url}).` });
+      }
+    }
     if (bad && !announced.has(told)) {
       announced.add(told);
       const said = next.feedback.slice(0, 3).map((f) => `\n- ${defang(f.author)}${f.kind === 'review' ? ' (changes requested)' : ''}: ${f.body}`).join('');
@@ -356,15 +583,18 @@ api.delete('/tasks/:id', h((req) => board.deleteTask(agentFrom(req), Number(req.
 api.post('/questions/:id/answer', h((req) => board.answer(agentFrom(req), Number(req.params.id), req.body.answer)));
 api.post('/locks/release', h((req) => board.unlockFiles(agentFrom(req), { paths: req.body.paths, force: true })));
 
-// Live updates for the web UI.
+// Live updates for the web UI. Open streams are tracked so a token rotation can close them.
+const openStreams = new Set();
 api.get('/stream', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
   res.flushHeaders();
+  openStreams.add(res);
   const send = (ev) => res.write(`data: ${JSON.stringify(ev)}\n\n`);
   const ping = setInterval(() => res.write(': ping\n\n'), 20000);
   board.bus.on('event', send);
   // ?name=<human> marks that person as watching the board.
-  const human = normName(req.query.name).replace(/[^\w.-]/g, '').slice(0, 64);
+  // Only the human token marks someone as watching (the viewer token is a projector, not a person).
+  const human = req.role === 'human' ? normName(req.query.name).replace(/[^\w.-]/g, '').slice(0, 64) : '';
   const presenceChanged = () => board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
   if (human) {
     humansOnline.set(human, (humansOnline.get(human) || 0) + 1);
@@ -372,6 +602,7 @@ api.get('/stream', (req, res) => {
     presenceChanged();
   }
   req.on('close', () => {
+    openStreams.delete(res);
     clearInterval(ping);
     board.bus.off('event', send);
     if (human) {
@@ -392,6 +623,12 @@ app.get('/health', (_req, res) => res.json({ ok: true, app: 'claude-board', vers
 app.use(express.static(path.join(ROOT, 'public')));
 
 const httpServer = app.listen(PORT, HOST, () => {
+  // A running board marks its data folder, so `npm run restore` won't replace the database under it.
+  const pidFile = path.join(DATA_DIR, 'board.pid');
+  try { fs.writeFileSync(pidFile, JSON.stringify({ pid: process.pid, port: PORT, started: new Date().toISOString() })); } catch {}
+  const dropPid = () => { try { if (JSON.parse(fs.readFileSync(pidFile, 'utf8')).pid === process.pid) fs.unlinkSync(pidFile); } catch {} };
+  process.once('exit', dropPid);
+  for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => { dropPid(); process.exit(0); });
   const addrs = boardAddresses();
   const best = addrs[0]?.base || `http://localhost:${PORT}`;
   const line = '─'.repeat(64);
@@ -466,6 +703,8 @@ function clientLabel(info) {
   if (!n) return null;
   if (n.includes('claude')) return 'Claude Code';
   if (n.includes('codex')) return 'Codex';
+  if (n.includes('gemini')) return 'Gemini CLI';
+  if (n.includes('cursor')) return 'Cursor';
   if (n.includes('visual studio code') || n.includes('vscode')) return 'Copilot (VS Code)';
   if (n.includes('copilot')) return 'Copilot CLI';
   return String(info.name).slice(0, 40);
@@ -477,6 +716,8 @@ const AGENT_TOOLS = [
   { id: 'codex', name: 'Codex (ChatGPT)', start: '$board', where: 'Type it in the Codex CLI, opened in the hackathon repo.' },
   { id: 'copilot-vscode', name: 'GitHub Copilot in VS Code', start: '/board', where: 'Open the hackathon repo in VS Code, switch Copilot Chat to Agent mode, then type it.' },
   { id: 'copilot-cli', name: 'GitHub Copilot CLI', start: '/board', where: 'Start it with  copilot --allow-tool board --autopilot --max-autopilot-continues 50  in the hackathon repo, then type it. (--autopilot keeps it working without you typing "continue".)' },
+  { id: 'gemini', name: 'Gemini CLI', start: '/board', where: 'Type it in Gemini CLI, opened in the hackathon repo.' },
+  { id: 'cursor', name: 'Cursor', start: '/board', where: 'In Cursor\'s Agent chat, opened in the hackathon repo.' },
 ];
 
 // Copy-paste join commands + web links, for the web board's "invite teammates" step.
