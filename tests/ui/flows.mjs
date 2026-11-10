@@ -146,6 +146,66 @@ await page.waitForFunction((id) => document.querySelector(`#col-done .card[data-
 const st = await rest('dana', '/state', 'GET');
 check('drag to Done persists on server', st.tasks.find((t) => t.id === Number(newId)).status === 'done');
 
+// WB-13: dragging to In progress asks who it's for; a card with unfinished dependencies warns first
+const findT = (title) => st.tasks.find((t) => t.title === title);
+const readmeId = findT('Demo README with screenshots').id; const apiId = findT('REST API for submissions').id;
+const schemaId = findT('Database schema for users, teams and submissions').id;
+check('WB-15 Open cards don\'t repeat "unassigned"', await page.$$eval('#col-open .card', (cs) => cs.length > 0 && cs.every((c) => !/unassigned/.test(c.innerText))));
+check('WB-15 priority chips read P1 / P3', await page.evaluate((id) => document.querySelector(`.card[data-id="${id}"] .cm`).innerText.includes('P3'), readmeId));
+await page.evaluate((id) => {
+  const card = document.querySelector(`.card[data-id="${id}"]`); const col = document.getElementById('col-in_progress');
+  const dt = new DataTransfer();
+  card.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+  col.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+  col.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+  card.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }));
+}, readmeId);
+await page.waitForSelector(`.card[data-id="${readmeId}"] .mvask [data-ask-to="bob"]`, { timeout: 5000 });
+check('WB-13 drag to In progress without an owner asks who it is for (task not moved yet)', (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === readmeId).status === 'open');
+await page.click(`.card[data-id="${readmeId}"] [data-ask-to="bob"]`);
+await page.waitForFunction((id) => document.querySelector(`#col-in_progress .card[data-id="${id}"]`), { timeout: 5000 }, readmeId);
+const rd = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === readmeId);
+check('WB-13 picking an agent moves it with that owner', rd.status === 'in_progress' && rd.assignee === 'bob', `${rd.status} ${rd.assignee}`);
+await domClick(`[data-move="${apiId}"]`);
+await domClick(`[data-move-to="in_progress"][data-move-id="${apiId}"]`);
+await page.waitForFunction(() => [...document.querySelectorAll('#toasts .toast')].some((t) => /waits on/.test(t.innerText)), { timeout: 5000 });
+const wt = await page.$$eval('#toasts .toast', (ts) => ts.map((t) => t.innerText).find((x) => /waits on/.test(x)));
+check('WB-13 a move past unfinished dependencies is refused with "Move anyway"', new RegExp(`waits on #${schemaId}`).test(wt) && /Move anyway/.test(wt), wt);
+await page.evaluate(() => [...document.querySelectorAll('#toasts button')].find((b) => b.textContent === 'Move anyway').click());
+await page.waitForSelector(`.card[data-id="${apiId}"] .mvask`, { timeout: 5000 });
+await page.keyboard.press('Escape'); await sleep(200);
+check('WB-13 Escape cancels the owner question; the task stays Open', !(await page.$(`.card[data-id="${apiId}"] .mvask`)) && (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === apiId).status === 'open');
+
+// WB-19: column names read "Open, 3 tasks" (no stray space before the comma)
+check('WB-19 column region names', await page.evaluate(() => { const c = document.getElementById('col-open'); const n = c.getAttribute('aria-labelledby').split(' ').map((i) => document.getElementById(i).textContent).join(' '); return /^Open, \d+ tasks?$/.test(n) ? true : n; }) === true);
+// WB-16: the PR pill is a Tab stop
+const ciId = findT('CI pipeline with tests on PRs').id;
+await rest('dana', `/tasks/${ciId}`, 'PATCH', { pr_url: 'https://github.com/o/r/pull/5' });
+await page.waitForSelector(`.card[data-id="${ciId}"] a.pill`, { timeout: 5000 });
+check('WB-16 PR pill on a card is keyboard focusable', await page.$eval(`.card[data-id="${ciId}"] a.pill`, (a) => a.tabIndex === 0));
+// WB-17: long titles clamp to 3 lines, full title in the tooltip
+const longTitle = 'A very long task title that keeps going '.repeat(5).trim();
+const lt = await rest('dana', '/tasks', 'POST', { title: longTitle });
+await page.waitForSelector(`.card[data-id="${lt.id}"]`, { timeout: 5000 });
+const ltm = await page.$eval(`.card[data-id="${lt.id}"] .ct`, (e) => ({ h: e.getBoundingClientRect().height, lh: parseFloat(getComputedStyle(e).lineHeight), tip: e.title }));
+check('WB-17 long title clamped to 3 lines with a tooltip', ltm.h <= ltm.lh * 3 + 2 && ltm.tip === longTitle.slice(0, 200), JSON.stringify(ltm));
+// WB-26: toasts sit at the bottom right
+await page.evaluate(() => toast('position check'));
+const tr = await page.evaluate(() => { const t = [...document.querySelectorAll('#toasts .toast')].at(-1).getBoundingClientRect(); return { l: t.left, r: t.right, w: window.innerWidth }; });
+check('WB-26 toasts are on the right, away from the Open column', tr.l > tr.w / 2, JSON.stringify(tr));
+// WB-14: a long column shows 12 cards, then "Show N more"
+for (let i = 0; i < 20; i++) await rest('dana', '/tasks', 'POST', { title: `Filler task ${i}` });
+await page.waitForSelector('[data-show-col="open"]', { timeout: 5000 });
+const capN = await page.$$eval('#col-open .card', (c) => c.length);
+const allOpen = (await rest('dana', '/state', 'GET')).tasks.filter((t) => t.status === 'open' || t.status === 'proposed').length;
+const moreTxt = await page.$eval('[data-show-col="open"]', (b) => b.textContent);
+check('WB-14 Open column is capped with "Show N more"', capN < allOpen && capN >= 12 && moreTxt === `Show ${allOpen - capN} more`, `${capN}/${allOpen} "${moreTxt}"`);
+await page.click('[data-show-col="open"]'); await sleep(200);
+check('WB-14 "Show more" shows every card', (await page.$$eval('#col-open .card', (c) => c.length)) === allOpen && (await page.$eval('[data-show-col="open"]', (b) => b.textContent)) === 'Show fewer');
+await page.click('[data-show-col="open"]'); await sleep(200);
+// Toasts now sit bottom right, over the side column: clear the Undo toasts so the clicks below hit their buttons.
+await page.evaluate(() => document.getElementById('toasts').replaceChildren());
+
 // locks: release with inline confirm
 const lockCount = await page.$$eval('#locks .lock', (l) => l.length);
 await page.$eval('[data-unlock="package.json"]', (b) => b.scrollIntoView({ block: 'center' })); await sleep(300); const hit = await page.evaluate(() => { const b = document.querySelector('[data-unlock="package.json"]').getBoundingClientRect(); const el = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return el.outerHTML.slice(0, 120); }); console.log('debug: element at release button = ' + hit);

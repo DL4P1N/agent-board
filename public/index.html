@@ -395,7 +395,7 @@
   .card.dragging { opacity: .4; }
   .card.stale { background: var(--stale); border-top-color: var(--warn-line); border-right-color: var(--warn-line); border-bottom-color: var(--warn-line); }
   .card.proposed { border-style: dashed; border-left-style: solid; }
-  .card .ct { font-size: var(--fs-sm); font-weight: 600; line-height: 1.35; }
+  .card .ct { font-size: var(--fs-sm); font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
   .card .ct .id { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
   .card .bn { font-size: var(--fs-meta); color: var(--bad); margin-top: var(--s2); white-space: pre-wrap; }
   .card .cm { color: var(--muted); font-size: var(--fs-meta); margin-top: var(--s3); display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); align-items: center; font-variant-numeric: tabular-nums; }
@@ -504,7 +504,7 @@
   @media (max-width: 440px) { .gate { margin: var(--s7) var(--s6); padding: var(--s6); } }
 
   /* ---------- toasts ---------- */
-  #toasts { position: fixed; bottom: var(--s6); left: var(--s6); right: var(--s6); display: flex; flex-direction: column; align-items: flex-start; gap: var(--s3); z-index: 50; pointer-events: none; }
+  #toasts { position: fixed; bottom: var(--s6); left: var(--s6); right: var(--s6); display: flex; flex-direction: column; align-items: flex-end; gap: var(--s3); z-index: 50; pointer-events: none; }
   .toast { background: var(--toast); color: var(--toast-ink); padding: var(--s4) var(--s5); border-radius: var(--r-md); font-size: var(--fs-sm); max-width: 420px; box-shadow: var(--e2); pointer-events: none; overflow-wrap: anywhere; display: flex; align-items: center; gap: 10px;
     transition: opacity var(--t-base) var(--ease), transform var(--t-slow) var(--ease); }
   @starting-style { .toast { opacity: 0; transform: translateY(8px); } }
@@ -627,7 +627,7 @@
         <div class="bnote" id="board-note" tabindex="-1" hidden></div>
         <div class="board-empty" id="board-empty" role="status" hidden></div>
         <div class="board" id="board" tabindex="-1"></div>
-        <p class="hint">Drag a card to another column, or use its <b>Move…</b> button, to change its status. Open a card (click / Enter) to edit it.</p>
+        <p class="hint">Drag a card to another column, or use its <b>Move…</b> button, to change its status. Open a card (click / Enter) to edit it. Cards flag priority (P1, P3) and size (S, L) only when it isn't the usual P2 and M.</p>
       </section>
       <div class="side">
         <section class="panel" aria-labelledby="f-h">
@@ -771,6 +771,7 @@ const HOLDING = ['claimed', 'in_progress']; // what counts against an agent's sl
 const SIZE_TIP = { S: 'Size S: small, under 30 minutes. One-task-at-a-time agents take these first', M: 'Size M: about an hour', L: 'Size L: large. Agents on bigger plans take these first' };
 const HUES = [215, 150, 275, 325, 185, 95, 250, 45, 300, 165]; // person colours, kept away from the red/orange used for warnings
 const DONE_SHOWN = 6;
+const COL_SHOWN = 12; // other columns: cards shown before "Show N more" (only when 4+ more would be hidden)
 const $ = (id) => document.getElementById(id);
 // One server can host several boards: /b/<slug>/ (its API under /b/<slug>/api). The default board is at the root.
 const BASE = (location.pathname.match(/^\/b\/[^/]+/) || [''])[0];
@@ -1976,28 +1977,29 @@ function card(t) {
   const prio = t.priority === 1 ? 'P1, high priority' : t.priority >= 3 ? 'low priority' : 'normal priority';
   const aria = `#${t.id} ${t.title}. ${LABEL[t.status]}${prop ? ` by ${t.created_by}, waiting for approval` : ''}, ${t.assignee ? 'assigned to ' + t.assignee : 'unassigned'}, ${prio}${waiting.length ? `, waits on ${waiting.map((d) => '#' + d.id).join(' and ')}` : ''}${size !== 'M' ? `, size ${size}` : ''}${rsv ? `, reserved for ${t.reserved_for}` : ''}${pr ? `, pull request${pr.text ? ': ' + pr.text : ''}` : ''}${merging ? `, being merged by ${t.reviewer}` : ''}${stale ? `, stale: no update for 15+ minutes${off ? ', owner offline: agents may take it over' : ''}` : ''}${outU ? ', owner out of usage: agents may take it over' : ''}${q ? ', question waiting' : ''}${note ? `, blocked: ${note}` : ''}. Press Enter to open`;
   const menu = ui.moveMenu === t.id ? `<div class="mvmenu" role="group" aria-label="Move #${t.id} to"><span class="ml">Move to:</span>${STATUSES.filter((s) => s !== t.status).map((s) => `<button type="button" class="ghost" data-move-to="${s}" data-move-id="${t.id}" data-fk="mt-${t.id}-${s}">${LABEL[s]}</button>`).join('')}</div>` : '';
+  const ask = ui.moveAsk?.id === t.id ? `<div class="mvmenu mvask" role="group" aria-label="Who is #${t.id} for?"><span class="ml">${LABEL[ui.moveAsk.to]} needs an owner. Who is it for?</span>${askAgents(t).map((a) => `<button type="button" class="ghost" data-ask-to="${esc(a)}" data-ask-id="${t.id}" data-fk="ask-${t.id}-${esc(a)}">${esc(a)}</button>`).join('')}<button type="button" class="ghost" data-ask-cancel="${t.id}" data-fk="askc-${t.id}">Cancel</button></div>` : '';
   const rej = ui.rejecting === t.id;
   const propActs = prop ? (rej
     ? `<form class="rj" data-rjform="${t.id}"><label class="vh" for="rj-${t.id}">Why reject #${t.id}? (optional)</label><input id="rj-${t.id}" data-keep="rj-${t.id}" placeholder="Why? (optional, sent to ${esc(t.created_by)})" maxlength="300"><button type="submit" class="danger" data-fk="rjy-${t.id}">Reject</button><button type="button" class="ghost" data-reject-no="${t.id}" data-fk="rjn-${t.id}">Cancel</button></form>`
     : `<button type="button" data-approve="${t.id}" data-fk="ap-${t.id}" title="Make it a normal open task agents can claim">Approve</button><button type="button" class="ghost" data-reject="${t.id}" data-fk="rj-b-${t.id}" title="Remove it; ${esc(t.created_by)} is told why">Reject…</button>`) : '';
   return `<article class="card ${t.assignee ? 'has-owner' : ''} ${stale ? 'stale' : ''} ${prop ? 'proposed' : ''}" ${t.assignee ? hs(t.assignee) : ''} data-id="${t.id}" data-fk="card-${t.id}" tabindex="0" draggable="true" aria-label="${esc(aria)}">
-    <div class="ct"><span class="id">#${t.id}</span> ${esc(t.title)}</div>
+    <div class="ct" title="${esc(t.title)}"><span class="id">#${t.id}</span> ${esc(t.title)}</div>
     ${note ? `<div class="bn" title="Latest note when it got blocked">“${esc(short(note, 140))}”</div>` : ''}
-    <div class="cm">${t.priority === 1 ? '<span class="pill bad" title="Priority 1: do first (often something other tasks build on)">P1</span>' : t.priority >= 3 ? '<span class="pill" title="Low priority: nice to have">low</span>' : ''}
+    <div class="cm">${t.priority === 1 ? '<span class="pill bad" title="Priority 1: do first (often something other tasks build on)">P1</span>' : t.priority >= 3 ? '<span class="pill" title="Priority 3: low, nice to have">P3</span>' : ''}
       ${size !== 'M' ? `<span class="pill size ${size}" title="${SIZE_TIP[size]}"><span class="vh">size </span>${size}</span>` : ''}
       ${prop ? `<span class="pill warn" title="Proposed by ${esc(t.created_by)}: nobody can claim it until the planner or a human approves it">proposed by ${esc(t.created_by)}</span>` : ''}
       ${rsv ? (() => { const away = ownerOffline({ assignee: t.reserved_for }) || agentLimited(t.reserved_for);
         return away ? `<span class="pill rsv" title="Reserved for ${esc(t.reserved_for)}, who isn't around (offline or out of usage), so any agent may take it">reserved for ${esc(t.reserved_for)} · away, open to anyone</span>`
           : `<span class="pill rsv" title="Reserved: only ${esc(t.reserved_for)} can claim it, and it's listed first for them">reserved for ${esc(t.reserved_for)}</span>`; })() : ''}
-      ${pr ? `<a class="pill ${pr.cls}" href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer" tabindex="-1" title="${esc(pr.tip)}">PR${pr.text ? ' · ' + esc(pr.text) : ''}</a>` : ''}
+      ${pr ? `<a class="pill ${pr.cls}" href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer" title="${esc(pr.tip)}">PR${pr.text ? ' · ' + esc(pr.text) : ''}</a>` : ''}
       ${merging ? `<span class="pill role" title="${esc(t.reviewer)} is reviewing and merging it">merging: ${esc(t.reviewer)}</span>` : ''}
-      ${t.assignee ? `<span class="pc" ${hs(t.assignee)} title="Assigned to ${esc(t.assignee)}">${esc(t.assignee)}</span>` : t.status !== 'done' && !prop ? '<span title="No agent has picked this up yet">unassigned</span>' : ''}
+      ${t.assignee ? `<span class="pc" ${hs(t.assignee)} title="Assigned to ${esc(t.assignee)}">${esc(t.assignee)}</span>` : t.status !== 'done' && t.status !== 'open' && !prop ? '<span class="pill warn" title="Nobody holds this task: open it to pick who it is for, or move it back to Open">unassigned</span>' : ''}
       ${waiting.length ? `<span class="pill warn" title="Depends on other tasks: can't be picked up until these are done">waits on ${waiting.map((d) => '#' + d.id).join(' ')}</span>` : deps.length ? `<span title="Dependencies done">after ${deps.map((d) => '#' + d.id).join(' ')} ✓</span>` : ''}
       ${stale ? `<span class="pill warn" title="Stale: no update for 15+ minutes. The agent may be stuck: ping it, or release the task back to Open.${off ? ' Its owner is offline, so other agents may take it over.' : ''}">stale</span>` : ''}
       <span title="Last update ${esc(fullTime(t.updated_at))}">${ago(t.updated_at)}</span>
       <button type="button" class="mv" data-move="${t.id}" data-fk="mv-${t.id}" aria-expanded="${ui.moveMenu === t.id}" aria-label="Move #${t.id} to another column" title="Change status">Move…</button></div>
     ${q || stale || outU || prop ? `<div class="ca">${propActs}${q ? `<button type="button" class="qb" data-go-q="${q.id}" data-fk="cq-${t.id}" title="${esc(short(q.question, 120))}">question waiting</button>` : ''}${outU ? '<span class="own off">owner out of usage — agents may take it over</span>' : stale && t.assignee ? `<span class="own${off ? ' off' : ''}">${off ? `owner offline — agents may take it over` : `${esc(agentRoot(t.assignee))} is still online: ping it first`}</span>` : ''}${stale || outU ? `<button type="button" class="ghost" data-release="${t.id}" data-fk="rel-${t.id}">Release to Open</button>${t.assignee && !outU ? (pingedAt(t) ? `<span class="muted t-meta" title="You can ping again 10 minutes after the last ping">pinged ${ago(pingedAt(t))}</span>` : `<button type="button" class="ghost" data-ping="${t.id}" data-fk="ping-${t.id}" title="Post a message asking ${esc(t.assignee)} whether it's still on it">Ping @${esc(agentRoot(t.assignee))}</button>`) : ''}` : ''}</div>` : ''}
-    ${menu}</article>`;
+    ${menu}${ask}</article>`;
 }
 function doneOpen() {
   if (ui.doneOpen === 'open') return true;
@@ -2022,9 +2024,16 @@ function renderBoard() {
       items = items.sort((a, b) => b.updated_at - a.updated_at);
       if (!ui.showAllDone && items.length > DONE_SHOWN) { more = `<button class="ghost more" data-show-done data-fk="more-done">Show ${items.length - DONE_SHOWN} older</button>`; items = items.slice(0, DONE_SHOWN); }
       else if (ui.showAllDone && items.length > DONE_SHOWN) more = `<button class="ghost more" data-show-done data-fk="more-done">Show fewer</button>`;
+    } else if (items.length > COL_SHOWN + 3) {
+      // Long columns: the first COL_SHOWN, plus any card that needs a human (proposed, stale, question, open menu).
+      const all = (ui.showCols ||= new Set()).has(s);
+      const keep = (t, i) => all || i < COL_SHOWN || t.status === 'proposed' || isStale(t) || ui.moveMenu === t.id || ui.moveAsk?.id === t.id || openQuestions().some((q) => q.task_id === t.id);
+      const shown = items.filter(keep);
+      more = `<button class="ghost more" data-show-col="${s}" data-fk="more-${s}">${all ? 'Show fewer' : `Show ${items.length - shown.length} more`}</button>`;
+      items = shown;
     }
     const empty = !state.tasks.length ? '' : filterRoot() && !total ? `None for ${esc(filterRoot())}` : COL_EMPTY[s];
-    return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}" role="region" aria-labelledby="colh-${s} colc-${s}" aria-describedby="cold-${s}"><h3 title="${HINT[s]}"><span id="colh-${s}">${LABEL[s]}</span><span><span id="colc-${s}"><span class="vh">, </span>${total}<span class="vh"> tasks</span></span>${s === 'done' ? '<button type="button" class="dclose" data-act="done-toggle" data-fk="done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse">«</button>' : ''}</span></h3><p class="cd" id="cold-${s}">${COL_DESC[s]}</p>
+    return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}" role="region" aria-labelledby="colh-${s} colc-${s}" aria-describedby="cold-${s}"><h3 title="${HINT[s]}"><span id="colh-${s}">${LABEL[s]}<span class="vh">,</span></span><span><span id="colc-${s}">${total}<span class="vh"> ${total === 1 ? 'task' : 'tasks'}</span></span>${s === 'done' ? '<button type="button" class="dclose" data-act="done-toggle" data-fk="done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse">«</button>' : ''}</span></h3><p class="cd" id="cold-${s}">${COL_DESC[s]}</p>
       ${items.length ? `<ul class="cards">${items.map((t) => `<li>${card(t)}</li>`).join('')}</ul>` : empty ? `<div class="empty">${empty}</div>` : ''}${more}</div>`;
   }).join('');
   const el = $('board');
@@ -2172,12 +2181,15 @@ document.addEventListener('click', (ev) => {
   if (ev.target.closest('.card input, .card label')) return; // typing a reject reason doesn't open the card
   const el = ev.target.closest('button, .card, [data-open-task], [data-ptoggle]');
   if (ui.moveMenu && !ev.target.closest('.mvmenu, [data-move]')) { ui.moveMenu = null; render(); }
+  if (ui.moveAsk && !ev.target.closest('.mvask, [data-move-to]')) { ui.moveAsk = null; render(); }
   if (!el) return;
   const d = el.dataset;
   if (el.classList.contains('card')) return openTask(Number(d.id));
   if (d.ptoggle) { const n = d.ptoggle; ui.openPeople.has(n) ? ui.openPeople.delete(n) : ui.openPeople.add(n); render(); reveal($('pd-' + n)); return document.querySelector(`[data-fk="ptog-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }
   if (d.move) { const id = Number(d.move); ui.moveMenu = ui.moveMenu === id ? null : id; render(); reveal(document.querySelector(`.card[data-id="${id}"] .mvmenu`)); return (ui.moveMenu ? document.querySelector(`.card[data-id="${id}"] .mvmenu button`) : document.querySelector(`[data-fk="mv-${id}"]`))?.focus({ preventScroll: true }); }
-  if (d.moveTo) { const id = Number(d.moveId); const t = taskById(id); ui.moveMenu = null; if (t && t.status !== d.moveTo) moveTask(t, d.moveTo); render(); return focusCard(id); }
+  if (d.moveTo) { const id = Number(d.moveId); const t = taskById(id); ui.moveMenu = null; if (t && t.status !== d.moveTo) moveTask(t, d.moveTo); render(); return ui.moveAsk?.id === id ? document.querySelector(`.card[data-id="${id}"] .mvask button`)?.focus({ preventScroll: true }) : focusCard(id); }
+  if (d.askTo) { const id = Number(d.askId); const t = taskById(id); const { to, force } = ui.moveAsk || {}; ui.moveAsk = null; if (t && to) moveTask(t, to, { force, assignee: d.askTo }); render(); return focusCard(id); }
+  if (d.askCancel) { const id = Number(d.askCancel); ui.moveAsk = null; render(); return focusCard(id); }
   if (d.release) { const t = taskById(Number(d.release)); if (t) { moveTask(t, 'open'); render(); } return; }
   if (d.approve) { const id = Number(d.approve); act(api(`/tasks/${id}/decide`, { method: 'POST', body: JSON.stringify({ approve: true }) }), `Approved #${id}: agents can claim it now`).then(() => focusCard(id)).catch(() => {}); return; }
   if (d.reject) { ui.rejecting = Number(d.reject); render(); return $('rj-' + d.reject)?.focus(); }
@@ -2205,6 +2217,7 @@ document.addEventListener('click', (ev) => {
   if ('filter' in d && el.id !== 'filter') { setFilter(filterRoot() === d.filter && d.filter ? '' : d.filter); return; }
   if (d.tab) { ui.tab = d.tab; store.set('board-tab', ui.tab); if (ui.tab === 'me') markMentionsSeen(); $('feed')._html = undefined; return render(); }
   if ('showDone' in d) { ui.showAllDone = !ui.showAllDone; return render(); }
+  if (d.showCol) { const c = (ui.showCols ||= new Set()); c.has(d.showCol) ? c.delete(d.showCol) : c.add(d.showCol); return render(); }
   if (d.unlock) { ui.confirmLock = d.unlock; render(); return document.querySelector(`[data-fk="un-${CSS.escape(d.unlock)}"]`)?.focus(); }
   if ('unlockNo' in d) { ui.confirmLock = null; return render(); }
   if (d.unlockYes) { const p = d.unlockYes; ui.confirmLock = null; act(api('/locks/release', { method: 'POST', body: JSON.stringify({ paths: [p] }) }), `Released lock on ${p}`).catch(() => {}); return render(); }
@@ -2235,6 +2248,7 @@ document.addEventListener('click', (ev) => {
 });
 document.addEventListener('keydown', (ev) => {
   const card = ev.target.closest?.('.card');
+  if (ev.key === 'Escape' && ui.moveAsk && card) { const id = ui.moveAsk.id; ui.moveAsk = null; render(); return focusCard(id); }
   if (ev.key === 'Escape' && ui.moveMenu && card) { const id = ui.moveMenu; ui.moveMenu = null; render(); return document.querySelector(`[data-fk="mv-${id}"]`)?.focus(); }
   if (card && ev.target === card && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); return openTask(Number(card.dataset.id)); }
   const typing = ev.target.closest?.('input, textarea, select, dialog');
@@ -2538,17 +2552,33 @@ document.addEventListener('drop', (ev) => {
   if (t && t.status !== to) moveTask(t, to);
 });
 // Change a task's status (drag, Move… menu, Release). The toast offers Undo.
-function moveTask(t, to) {
+// Claimed / In progress need an owner (asked on the card) and finished dependencies ("Move anyway").
+function moveTask(t, to, { force = false, assignee } = {}) {
   const from = t.status; const prevAssignee = t.assignee; const id = t.id;
-  t.status = to; t.updated_at = Date.now(); t.stale = false; if (to === 'open') t.assignee = null; // optimistic
-  api(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ status: to }) })
+  if (HOLDING.includes(to) && !HOLDING.includes(from) && !force) {
+    const waiting = t.depends_on.filter((d) => { const x = taskById(d); return x && x.status !== 'done'; });
+    if (waiting.length) return toast(`#${id} waits on ${waiting.map((d) => '#' + d).join(', ')}, which ${waiting.length > 1 ? "aren't" : "isn't"} done yet.`, true, { label: 'Move anyway', run: () => setTimeout(() => moveTask(taskById(id) || t, to, { force: true })) }); // after this click's handlers
+  }
+  if (HOLDING.includes(to) && !assignee && !t.assignee) {
+    if (!askAgents(t).length) return toast(`#${id} needs someone to work on it before it can be ${LABEL[to]}. No agent has joined yet.`, true);
+    ui.moveAsk = { id, to, force }; render();
+    return document.querySelector(`.card[data-id="${id}"] .mvask button`)?.focus({ preventScroll: true });
+  }
+  t.status = to; t.updated_at = Date.now(); t.stale = false; if (to === 'open') t.assignee = null; if (assignee) t.assignee = assignee; // optimistic
+  api(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ status: to, ...(assignee ? { assignee } : {}), ...(force ? { force: true } : {}) }) })
     .then(() => {
-      toast(`#${id} moved to ${LABEL[to]}${to === 'open' && from !== 'open' && prevAssignee ? ' (unassigned)' : ''}`, false, { label: 'Undo', run: () => {
-        act(api(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(from === 'open' ? { status: from } : { status: from, assignee: prevAssignee }) }), `#${id} is back in ${LABEL[from]}`).catch(() => {});
+      toast(`#${id} moved to ${LABEL[to]}${assignee ? ` for ${assignee}` : ''}${to === 'open' && from !== 'open' && prevAssignee ? ' (unassigned)' : ''}`, false, { label: 'Undo', run: () => {
+        act(api(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(from === 'open' ? { status: from } : { status: from, assignee: prevAssignee, force: true }) }), `#${id} is back in ${LABEL[from]}`).catch(() => {});
       } });
       scheduleReload();
     })
     .catch((e) => { toast(e.message, true); scheduleReload(); });
+}
+// Who a moved card can be for: started or online agents, the reserved one first.
+function askAgents(t) {
+  const r = t.reserved_for ? agentRoot(t.reserved_for) : '';
+  return [...agentInfo().values()].filter((a) => a.started || a.online).map((a) => a.name)
+    .sort((a, b) => (agentRoot(b) === r) - (agentRoot(a) === r) || a.localeCompare(b));
 }
 
 // ---------- task dialog ----------
