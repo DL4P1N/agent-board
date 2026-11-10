@@ -30,6 +30,10 @@ const PR_RE = /https?:\/\/\S+?\/(?:pull|pulls|merge_requests)\/\d+/i;
 // Board calls outside a request (REST, tests) have none, so the name checks below don't apply to them.
 export const callerLaptop = new AsyncLocalStorage();
 
+// "1 task", "2 tasks": for guidance and refusal texts.
+const countOf = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
+// An agent's task limit as the web board shows it, with the planner's extra slots said separately.
+const slotText = (cap) => cap.extra ? `${cap.base} at once (+${cap.extra} extra as planner while others are busy)` : `${cap.slots} at once`;
 const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 // Deadline / feature-freeze state from settings.
 export function timeInfo(s, now = Date.now()) {
@@ -385,19 +389,22 @@ export class Board {
     if (task.reserved_for && !sameTeam(author, task.reserved_for) && this.isAvailable(task.reserved_for)) {
       throw new Error(`task #${id} is reserved for ${task.reserved_for}. Pick another task.`);
     }
+    // Unfinished dependencies are named in every refusal: they're usually the reason that matters.
+    const waits = task.depends_on.map((d) => this.getTask(d)).filter((d) => d && d.status !== 'done');
+    const alsoWaits = waits.length ? ` Also, #${id} waits on ${waits.map((b) => `#${b.id} (${b.status})`).join(', ')}.` : '';
     if (task.status === 'open') {
       const cap = this.capacity(author);
       if (cap.active >= cap.slots) {
-        throw new Error(`You already hold ${cap.active} active task(s) and may hold ${cap.slots} at once (${cap.plan || 'default'}${cap.override ? ', set on the web board' : ''}). Finish or release one first.`);
+        throw new Error(`You already hold ${countOf(cap.active, 'active task')} and may hold ${slotText(cap)} (${cap.plan || 'no plan given'}${cap.override ? ', set on the web board' : ''}). Finish or release one first.${alsoWaits}`);
       }
       // Extra planner slots (nobody else free) are for small and medium work only.
       if (cap.extra && cap.active >= cap.base && task.size === 'L') {
-        throw new Error(`You're using the planner's extra slots (nobody else is free); those are for S/M tasks only. #${id} is size L: leave it for an agent with room.`);
+        throw new Error(`You're using the planner's extra slots (nobody else is free); those are for S/M tasks only. #${id} is size L: leave it for an agent with room.${alsoWaits}`);
       }
       const idle = this.idleAgents(author);
       const free = this.claimableFor(null).filter((t) => !t.reserved_for).length;
       if (cap.active >= 1 && idle.length && free <= idle.length) {
-        throw new Error(`Leave this for an idle teammate: ${idle.join(', ')} have no task and there are only ${free} unreserved task(s) to go around. Keep working on yours and wait_for_events.`);
+        throw new Error(`Leave this for an idle teammate: ${idle.join(', ')} have no task and there are only ${countOf(free, 'unreserved task')} to go around. Keep working on yours and wait_for_events.${alsoWaits}`);
       }
     }
     const blockers = task.depends_on.map((d) => this.getTask(d)).filter((d) => d && d.status !== 'done');
@@ -1150,20 +1157,34 @@ export class Board {
 
     const steps = [];
     if (awayNote) steps.push(awayNote);
-    if (this.isLimited(root)) steps.push('A human marked you as out of usage on the web board. If you can work again, carry on: this call clears the mark.');
+    if (this.isLimited(root)) {
+      const lim = this.agentRow(root);
+      if (lim.limited_by === 'agent') {
+        // The agent said so itself: nothing else applies until it can work again.
+        const held = tasks.filter((t) => ['claimed', 'in_progress', 'blocked'].includes(t.status) && sameTeam(agent, t.assignee));
+        steps.push(`You reported a usage limit${lim.limited_until ? ` until ${clock(lim.limited_until)}` : ''}. ${held.length ? `Release your tasks (${held.map((t) => '#' + t.id).join(', ')}) with release_task and a note, then stop.` : 'Stop for now.'} When you can work again, call the board and the mark clears.`);
+        return {
+          phase, your_role: role, goal: s.goal, repo: s.repo, deadline: time.deadline ? new Date(time.deadline).toISOString() : null, feature_freeze: time.frozen,
+          roles: { planner: s.planner, integrator: anyone ? 'whoever is free' : s.integrator },
+          next_action: steps.join('\n'), actionable: false, reason: '',
+        };
+      }
+      steps.push('A human marked you as out of usage on the web board. If you can still work, carry on: the mark clears by itself as you keep calling the board.');
+    }
     if (phase === 'needs_goal') {
       steps.push(
         'The team has not set a project goal yet. Ask the human you are chatting with: "What are we building, and what should the demo show?" ' +
         'Then call set_goal with 1–3 sentences. (Humans can also type it on the web board. If set_goal says a goal already exists, just continue.)'
       );
     } else if (phase === 'needs_plan') {
-      if (!s.planner) { steps.push('Nobody is planning yet. Call claim_role("planner"). If you get it, write the backlog (see below); if not, wait.'); act('nobody is planning'); }
-      if (isPlanner || !s.planner) {
-        if (isPlanner) act('you are the planner and there are no tasks yet');
+      // Only the planner gets the planner's brief; everyone else just tries for the role.
+      if (!s.planner) { steps.push('Nobody is planning yet. Call claim_role("planner"). If you get it, call board_status for the planner\'s brief; if not, wait_for_events until tasks appear.'); act('nobody is planning'); }
+      else if (isPlanner) {
+        act('you are the planner and there are no tasks yet');
         steps.push(
           `As planner: read the repo and the goal. FIRST, for every open product decision (scope, behaviour, look), call ask_human: one clear question each. Don't decide those yourself; plan around the answers as they arrive. ` +
           `Then create_task for every piece of work. The team right now: ${team.map((r) => `${r.name} (${r.client || 'agent'}${r.plan ? ', ' + r.plan : ''}, ${baseSlots(r)} at a time)`).join('; ') || 'just you so far'}; ` +
-          `total capacity ${teamSlots} task(s) at once, and more laptops may join. Write at least ${Math.max(6, teamSlots * 2)} tasks so everyone has work. ` +
+          `total capacity ${countOf(teamSlots, 'task')} at once, and more laptops may join. Write at least ${Math.max(6, teamSlots * 2)} tasks so everyone has work. ` +
           'Keep tasks small (one branch, under an hour), write acceptance criteria in the description, set size (S/M/L; L only for work that needs a stronger plan), ' +
           'make foundations (scaffolding, schema, API contracts) priority 1, and use depends_on only where truly needed so several agents can start at once. ' +
           'You may reserve a task for a specific agent with reserved_for (e.g. L tasks for agents with more slots); do it sparingly so nobody waits. ' +
@@ -1227,12 +1248,17 @@ export class Board {
           steps.push(`Reviews waiting (merging is shared: whoever is free; do these before new tasks): ${reviewable.slice(0, 5).map((t) => `#${t.id} ${t.title} by ${t.assignee}${t.pr_url ? ' ' + t.pr_url : ''}`).join('; ')}. Call claim_review(id), then merge it as the playbook's integrator section says.`);
           act('reviews waiting');
         }
-      } else if (!s.integrator && review.length) {
-        steps.push(`${review.length} task(s) are waiting in review and nobody owns main. Call claim_role("integrator"). If you get it, merge them; if not, carry on.`);
+      } else if (!s.integrator && review.length && (review.some((t) => !sameTeam(agent, t.assignee)) || !others.length)) {
+        // Not to the author when the only reviews are its own (it can't merge its own work while others are around).
+        steps.push(`${countOf(review.length, 'task is', 'tasks are')} waiting in review and nobody owns main. Call claim_role("integrator"). If you get it, merge them; if not, carry on.`);
         act('reviews waiting and no integrator');
       }
 
-      if (mine.length) steps.push(`You have active tasks: ${mine.map((t) => `#${t.id} ${t.title} [${t.status}]`).join('; ')}. Keep them moving (or dispatch them to subagents) before claiming more.`);
+      // Blocked tasks don't hold a slot (see capacity), so they never stop the agent claiming more.
+      const working = mine.filter((t) => t.status !== 'blocked');
+      const waiting = mine.filter((t) => t.status === 'blocked');
+      if (working.length) steps.push(`You have active tasks: ${working.map((t) => `#${t.id} ${t.title} [${t.status}]`).join('; ')}. Keep them moving (or dispatch them to subagents)${cap.active >= cap.slots ? ' before claiming more' : ''}.`);
+      if (waiting.length) steps.push(`Waiting on something (blocked, doesn't use a slot): ${waiting.map((t) => `#${t.id} ${t.title}`).join('; ')}.${!time.frozen && !time.past && cap.active < cap.slots ? ' Meanwhile you can claim other work.' : ''}`);
       const idle = this.idleAgents(agent);
       if (time.past) {
         steps.push(`The demo time (${time.deadlineLabel}) has passed. Wrap up: push and merge what's finished, release what isn't with a note, and post a short status in general.`);
@@ -1241,14 +1267,15 @@ export class Board {
         steps.push(`FEATURE FREEZE (since ${time.freezeLabel}, demo at ${time.deadlineLabel}): don't start new features. Finish and push what you have, get it merged, fix bugs on main, and help with reviews. Unfinished tasks you can't land in time: release_task them with a note.${bugfix.length && cap.active < cap.slots ? ` Priority-1 (bug-fix) tasks may still be claimed: ${bugfix.slice(0, 5).map(label).join('; ')}.` : ''}`);
         if (bugfix.length && cap.active < cap.slots) act('priority-1 tasks claimable');
       } else if (cap.active >= cap.slots) {
-        steps.push(`You're at your capacity (${cap.active} of ${cap.slots} tasks at once${cap.plan ? ', ' + cap.plan : ''}${cap.override ? ', limit set on the web board' : ''}). Finish one before claiming more.`);
+        steps.push(`You're at your capacity (${cap.active} of ${slotText(cap)}${cap.plan ? ', ' + cap.plan : ''}${cap.override ? ', limit set on the web board' : ''}). Finish one before claiming more.`);
       } else if (cap.active >= 1 && idle.length && claimable.filter((t) => !t.reserved_for).length <= idle.length) {
         steps.push(`${idle.join(', ')} have no task yet and there's only enough open work for them, so leave it for them. Keep going on yours, help on the help channel, or create_task for gaps; then wait_for_events.`);
       } else if (claimable.length) {
         const usable = cap.extra && cap.active >= cap.base ? claimable.filter((t) => t.size !== 'L') : claimable;
-        if (cap.extra && cap.active >= cap.base) steps.push(`Nobody else is free and work is ready, so as planner you may run up to ${cap.extra} extra helper(s) on S/M tasks (you hold ${cap.active}, normal limit ${cap.base}). Stop taking extra work as soon as another agent frees up.`);
+        if (cap.extra && cap.active >= cap.base) steps.push(`Nobody else is free and work is ready, so as planner you may run up to ${countOf(cap.extra, 'extra helper')} on S/M tasks (you hold ${cap.active}, normal limit ${cap.base}). Stop taking extra work as soon as another agent frees up.`);
         if (usable.length) {
-          steps.push(`Claimable now (best for you first; you can hold ${cap.slots} at once, you hold ${cap.active}): ${usable.slice(0, 5).map(label).join('; ')}. claim_task and do it (agents with background subagents: one per subagent; otherwise one at a time).`);
+          // Same number as the web board (its base slots), with the planner's extra said separately.
+          steps.push(`Claimable now (best for you first; you can hold ${slotText(cap)}, you hold ${cap.active}): ${usable.slice(0, 5).map(label).join('; ')}. claim_task and do it (agents with background subagents: one per subagent; otherwise one at a time).`);
           act('claimable tasks');
         }
       } else {
@@ -1263,7 +1290,7 @@ export class Board {
       if (slow.length) steps.push(`No progress for 15+ min on ${slow.map((t) => `#${t.id} (@${t.assignee})`).join(', ')}. If they need help, post to them; don't take their task.`);
     }
     if (time.deadline && !time.frozen && phase !== 'all_done') steps.push(`Demo at ${time.deadlineLabel} (${time.leftLabel} left); feature freeze at ${time.freezeLabel}. Prefer small tasks that can land before the freeze.`);
-    if (openQs.length) steps.push(`${openQs.length} question(s) are waiting for humans. Don't re-ask them; answers arrive as "answer" events.`);
+    if (openQs.length) steps.push(`${countOf(openQs.length, 'question is', 'questions are')} waiting for humans. Don't re-ask them; answers arrive as "answer" events.`);
     if (!s.integrator && phase === 'building' && role !== 'integrator' && !review.length) steps.push('Note: nobody owns main yet. The first agent with work in review should claim_role("integrator").');
     if (this.claimGate() && phase === 'building' && why.every((r) => r === 'claimable tasks')) actionable = false;
 

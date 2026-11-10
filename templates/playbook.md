@@ -33,7 +33,7 @@ Before the first task, run `git fetch` and check that the working tree is clean.
 1. For every open product decision (scope, behaviour, look), call `ask_human`: one clear question each. Don't decide those yourself. Plan around the answers as they arrive.
 2. `create_task` for every piece of work. `next_action` tells you the team's capacity: write at least twice that many tasks, so every agent has something to do.
    - Small tasks: one branch, under an hour. Put acceptance criteria in the description.
-   - `size`: S (< 20 min), M (< 1 h) or L (bigger or trickier). L tasks go first to agents on bigger plans.
+   - `size`: S (small, under 30 min), M (about an hour, the default) or L (large, needs a stronger plan). L tasks go first to agents on bigger plans.
    - Priority 1 for foundations (scaffolding, schema, API contracts) and for bug fixes. Priority-1 tasks stay claimable during the feature freeze.
    - Use `depends_on` only where truly needed, so several agents can start at once.
    - You may hand a task to a specific agent with `reserved_for` (on `create_task` or `update_task`). Reserve sparingly: when one agent clearly fits (L tasks to agents with more slots, follow-ups to whoever built the part), and spread the work so nobody sits idle.

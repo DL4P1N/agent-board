@@ -196,7 +196,7 @@ export function buildMcpServer(board, baseAgent) {
         title: z.string(),
         description: z.string().optional().describe('Acceptance criteria, relevant files, interfaces to respect'),
         priority: z.number().int().min(1).max(3).optional(),
-        size: z.enum(['S', 'M', 'L']).optional().describe('S: < 20 min, M: < 1 h, L: bigger or trickier'),
+        size: z.enum(['S', 'M', 'L']).optional().describe('S: small, under 30 min. M: about an hour (the default). L: large, needs a stronger plan'),
         depends_on: z.array(z.number().int()).optional(),
         reserved_for: z.string().optional().describe('Planner only: agent name (e.g. "alice-codex") that should do this task. Only it can claim it.'),
         as: asArg,
