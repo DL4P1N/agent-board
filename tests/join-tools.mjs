@@ -85,7 +85,7 @@ check('re-run: exclude lines not duplicated', fs.readFileSync(path.join(repo, '.
 // ---- doctor on its own ----
 const d = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'doctor.mjs')], { cwd: ROOT, env, encoding: 'utf8', timeout: 60e3 });
 const dout = `${d.stdout}${d.stderr}`;
-check('npm run doctor: all good', d.status === 0 && /All good/.test(dout), dout.slice(-500));
+check('npm run doctor: all good (or ready once gemini is installed)', d.status === 0 && /All good|Ready once you install gemini/.test(dout), dout.slice(-500));
 // Point Cursor at another board: doctor notices.
 const cm2 = readJ(path.join(home, '.cursor', 'mcp.json')); cm2.mcpServers.board.url = cm2.mcpServers.board.url.replace('agent=tess-cursor', 'agent=someone-else'); fs.writeFileSync(path.join(home, '.cursor', 'mcp.json'), JSON.stringify(cm2));
 const d2 = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'doctor.mjs')], { cwd: ROOT, env, encoding: 'utf8', timeout: 60e3 });

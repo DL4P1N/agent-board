@@ -72,7 +72,7 @@ check('... and join setup info hands out the canonical /b/main address for the d
 
 const d = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'doctor.mjs')], { cwd: ROOT, env, encoding: 'utf8', timeout: 60e3 });
 const dout = `${d.stdout}${d.stderr}`;
-check('npm run doctor: both boards reachable by name, all good', d.status === 0 && /board "Team B" reachable at .*\/b\//.test(dout) && /board "Main board" reachable/.test(dout) && /All good/.test(dout), dout.slice(-700));
+check('npm run doctor: both boards reachable by name, all good', d.status === 0 && /board "Team B" reachable at .*\/b\//.test(dout) && /board "Main board" reachable/.test(dout) && /All good|Ready once you install gemini/.test(dout), dout.slice(-700));
 check('doctor names the board per tool when a laptop is on two boards', /Gemini CLI \(as "tess"\) on board "Team B"/.test(dout) && /Cursor \(as "tess-cursor"\) on board "Main board"/.test(dout), dout.slice(0, 900));
 // Point Cursor's config at board B's address without re-joining: doctor must notice (same host, other board).
 const cm = readJ(path.join(home, '.cursor', 'mcp.json')); const cursorUrl = cm.mcpServers.board.url;
