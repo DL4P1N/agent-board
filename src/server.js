@@ -420,9 +420,11 @@ function createBoardRuntime(slug, dir) {
   // Humans edit goal/roles from the web board.
   api.put('/settings', h((req) => board.setSettings(agentFrom(req), req.body || {}, { human: true })));
 
-  // Used by the Stop hook. wait>0 long-polls.
+  // Used by the Stop hook. wait>0 long-polls. before=<id>: the 200 events before that id (the web feed's "load earlier").
   api.get('/events', h(async (req) => {
     const since = Number(req.query.since || 0);
+    const before = Math.max(0, Number(req.query.before) || 0) || undefined;
+    if (before) return { events: board.events({ before, limit: 200 }) };
     const exclude_author = req.query.exclude || undefined;
     const wait = Math.min(Number(req.query.wait || 0), 600);
     const filter = { since, exclude_author, limit: 200 };

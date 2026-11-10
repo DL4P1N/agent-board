@@ -420,8 +420,8 @@
   .tabs button[aria-pressed="true"] { background: var(--raised); color: var(--ink); box-shadow: var(--e1), 0 0 0 1px var(--line); }
   .tabs .n { background: var(--warn); color: var(--on-fill); border-radius: var(--r-full); padding: 0 5px; margin-left: var(--s2); font-size: var(--fs-micro); font-weight: 600; font-variant-numeric: tabular-nums; }
   .feedwrap { position: relative; }
-  .feed { position: relative; height: min(56vh, 560px); overflow-y: auto; overflow-anchor: none; display: flex; flex-direction: column; gap: var(--s1); padding-right: var(--s1); scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
-  @media (max-width: 1100px) { .feed { height: 50vh; } }
+  .feed { position: relative; max-height: min(56vh, 560px); overflow-y: auto; overflow-anchor: none; display: flex; flex-direction: column; gap: var(--s1); padding-right: var(--s1); scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  @media (max-width: 1100px) { .feed { max-height: 50vh; } }
   .ev { font-size: var(--fs-sm); padding: var(--s2) var(--s3); border-radius: var(--r-sm); overflow-wrap: anywhere; border-left: 2px solid transparent; }
   .ev .eh { display: flex; gap: var(--s3); align-items: baseline; flex-wrap: wrap; }
   .ev time { color: var(--muted); font-size: var(--fs-micro); margin-left: auto; white-space: nowrap; }
@@ -437,12 +437,18 @@
   .ev.mention { background: var(--mention); border-left-color: var(--mention-line); }
   .ev.mention-lite { border-left-color: var(--mention-line); }
   .ev.question { background: var(--warn-soft); border-left-color: var(--warn); }
+  .ev.long:not(.open) .eb { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
+  .ev .evmore, .older button { font-size: var(--fs-micro); }
+  .older { text-align: center; padding: var(--s1) 0; }
   .ev .at { color: var(--accent); font-weight: 600; }
   .ev .at.me { background: var(--mention); border-radius: 3px; padding: 0 var(--s1); }
   .tref { color: var(--accent); font-variant-numeric: tabular-nums; }
   .jump { position: absolute; bottom: var(--s4); left: 50%; translate: -50% 0; font-size: var(--fs-meta); padding: 0 var(--s5); min-height: var(--ctl-sm); border-radius: var(--r-full); box-shadow: var(--e2); }
   .composer { position: relative; display: flex; gap: var(--s3); margin-top: var(--s4); align-items: flex-end; }
+  .composer { flex-wrap: wrap; }
   .composer select { width: auto; flex: 0 0 auto; }
+  .composer #msg { order: -1; flex: 1 0 100%; }
+  .composer #send { margin-left: auto; }
   #msg { resize: none; overflow-y: hidden; line-height: 1.45; max-height: calc(8 * 1.45em + 14px); }
   .ac { position: absolute; left: 0; right: 0; bottom: 100%; margin: 0 0 var(--s2); padding: var(--s2); list-style: none; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--e2); z-index: 20; max-height: 260px; overflow-y: auto; }
   .ac li { display: flex; gap: var(--s4); align-items: center; padding: var(--s2) var(--s4); border-radius: var(--r-sm); cursor: pointer; font-size: var(--fs-sm); min-height: 28px; }
@@ -1061,6 +1067,8 @@ async function load() {
     const s = await api('/state');
     s.settings = { ...DEFAULT_SETTINGS, ...(s.settings || {}) };
     s.presence = s.presence || []; s.phase = s.phase || (s.tasks.length ? 'building' : 'needs_goal');
+    if (older.keep && s.events?.length) s.events = [...state.events.filter((e) => e.id < s.events[0].id), ...s.events];
+    checkOverwrites(s);
     state = s; setConn(esOpen ? 'live' : 'connecting'); render();
   }
   catch (e) { if (e.message !== 'Token rejected') setConn('down', e.message); }
@@ -1530,6 +1538,7 @@ function inviteText() {
   L.push(`${n++}. In the claude-board folder, connect your laptop (it asks your name, AI tool and project folder):`, `   ${join}`);
   if (S.repo) L.push(`${n++}. Get the project repo (if you don't have it yet):`, `   git clone ${S.repo}`);
   L.push(`${n++}. Then open your AI tool in the project repo and type /board`, '   (Codex: $board · Copilot CLI: start it with  copilot --allow-tool board  then type /board)');
+  L.push('   (Gemini CLI: /board · Cursor: /board in the Agent chat)');
   L.push('', `Just watching? Open ${boardLink()}`);
   return L.join('\n');
 }
@@ -1548,10 +1557,9 @@ function stepInvite(si) {
     ${rest.length ? `<button type="button" class="link muted t-meta mt-1" data-act="addrs" data-fk="addrs" aria-expanded="${ui.addrs}">${ui.addrs ? '▾' : '▸'} Other addresses (if that one doesn't connect)</button>
       ${ui.addrs ? rest.map((a, i) => `<div class="sub" title="${esc(a.label)}">${esc(addrText(a))}</div>${cmdBox(a.command, 'alt' + i, 'join command: ' + addrText(a))}`).join('') : ''}` : ''}
     <div class="sub">Just want to watch? Send them this page's link</div>${cmdBox(best.web_url, 'web', 'board link')}
-    <button type="button" class="link muted t-meta mt-1" data-act="qr" data-fk="qr-tog" aria-expanded="${!!ui.qr}" aria-controls="qr-codes">${ui.qr ? '▾ Hide QR codes' : '▸ Show QR codes (scan with a phone)'}</button>
+    <button type="button" class="link muted t-meta mt-1" data-act="qr" data-fk="qr-tog" aria-expanded="${!!ui.qr}" aria-controls="qr-codes">${ui.qr ? '▾ Hide QR code' : '▸ Show QR code (scan with a phone)'}</button>
     ${ui.qr ? `<div class="qrs" id="qr-codes">
-      <figure><img src="${esc(qrSrc(best.web_url))}" alt="QR code for this board's link, ${esc(best.web_url)}" width="180" height="180"><figcaption>Board link: open it on a phone to watch</figcaption></figure>
-      <figure><img src="${esc(qrSrc(best.command))}" alt="QR code for the join command" width="180" height="180"><figcaption>Join command: scan, then paste it in the claude-board folder</figcaption></figure></div>` : ''}
+      <figure><img src="${esc(qrSrc(best.web_url))}" alt="QR code for this board's link, ${esc(best.web_url)}" width="180" height="180"><figcaption>Board link: open it on a phone to watch. To connect a laptop, copy the join command above or send the invite message.</figcaption></figure></div>` : ''}
     <div class="sub">Connected now</div>${chips(si)}
     ${notifyBox()}${securityBox()}`;
 }
@@ -1578,13 +1586,16 @@ function notifyBox() {
   const ev = n.events || nfEvents(null);
   return `${tog}<form class="nf" id="nf-box" data-notifyform>
     <p class="hint m0">Gets questions to you when you're away from the laptop: the board posts to your team chat or phone.</p>
-    <label for="nf-url">Webhook URL: Slack, Discord, ntfy, or any URL that accepts a POST</label>
-    <input type="url" id="nf-url" data-keep="nf-url" autocomplete="off" spellcheck="false" placeholder="${esc(n.url ? `Saved: ${n.url} (leave empty to keep it)` : 'https://hooks.slack.com/services/… or https://ntfy.sh/your-topic')}" aria-describedby="nf-hint nf-err">
-    <p class="hint m0" id="nf-hint">${n.url ? `Sending to ${esc(NOTIFY_KIND[n.kind] || 'a webhook')}. ` : ''}For a phone: install the ntfy app, subscribe to a hard-to-guess topic, and paste <code>https://ntfy.sh/&lt;topic&gt;</code> here.</p>
+    ${n.url && !n.change ? `<div class="sub">Webhook</div>
+    <p class="m0" id="nf-saved">Sending to ${esc(NOTIFY_KIND[n.kind] || 'a webhook')}: <code>${esc(n.url)}</code></p>
+    <div class="inl m0"><button type="button" class="ghost" data-act="nf-change" data-fk="nf-change">Change</button><button type="button" class="ghost" data-act="nf-off" data-fk="nf-off">Remove</button></div>`
+    : `<label for="nf-url">${n.url ? 'New webhook URL' : 'Webhook URL: Slack, Discord, ntfy, or any URL that accepts a POST'}</label>
+    <input type="url" id="nf-url" data-keep="nf-url" autocomplete="off" spellcheck="false" placeholder="https://hooks.slack.com/services/… or https://ntfy.sh/your-topic" aria-describedby="nf-hint nf-err">
+    <p class="hint m0" id="nf-hint">${n.url ? 'Replaces the saved one when you press Save. ' : ''}For a phone: install the ntfy app, subscribe to a hard-to-guess topic, and paste <code>https://ntfy.sh/&lt;topic&gt;</code> here.</p>`}
     <fieldset><legend>Send</legend>${NOTIFY_EVENTS.map(([k, l]) => `<label><input type="checkbox" data-nev="${k}" data-fk="nev-${k}" ${ev.has(k) ? 'checked' : ''}> ${esc(l)}</label>`).join('')}</fieldset>
     <div class="inl m0"><button type="submit" data-fk="nf-save">Save</button>
       <button type="button" class="ghost" data-act="nf-test" data-fk="nf-test" ${n.url ? '' : 'disabled title="Save a webhook URL first"'}>Send test</button>
-      ${n.url ? '<button type="button" class="ghost" data-act="nf-off" data-fk="nf-off">Stop sending</button>' : ''}</div>
+      ${n.url && n.change ? '<button type="button" class="ghost" data-act="nf-keep" data-fk="nf-keep">Keep the saved one</button>' : ''}</div>
     <div class="err" id="nf-err" role="alert">${esc(n.err || '')}</div></form>`;
 }
 // ---------- rotate the board token (a link leaked) ----------
@@ -2031,18 +2042,26 @@ function renderBoard() {
 }
 let boardDrawn = false;
 
-const isChat = (e) => e.kind === 'message' || e.kind === 'question' || e.kind === 'answer';
+// A change made with a board control (e.g. marking an agent out of usage) is posted as a message so agents
+// read it, but it isn't something the person wrote: show it as a status line, in words for people.
+const isAction = (e) => e.kind === 'message' && !!e.data?.action;
+const isChat = (e) => (e.kind === 'message' && !isAction(e)) || e.kind === 'question' || e.kind === 'answer';
+const actionText = (e) => String(e.text).replace(/^@all\s+/, '').replace(/ \(set on the web board\)/g, '').replace(/: release_task and claim\./g, '.').replace(/task\(s\)/g, 'tasks');
+// Long posts are clamped to 4 lines with "Show more"; which ones are open survives re-renders.
+const expandedEv = new Set();
+const isLong = (t) => String(t || '').split('\n').length > 5 || String(t || '').length > 500;
 function evHtml(e, prev) {
   if (!isChat(e)) {
     // Consecutive status lines from the same author are grouped: the name shows once.
     const cont = prev && !isChat(prev) && prev.author === e.author && e.ts - prev.ts < 10 * 60e3;
-    return `<div class="ev sys${cont ? ' cont' : ''}" data-eid="${e.id}"><div class="eh"><span class="eb">${cont ? `<span class="vh">${esc(e.author)} </span>` : who(e.author, true) + ' '}${fmt(e.kind === 'settings' ? settingsText(e) : e.text, true)}</span>${timeEl(e.ts)}</div></div>`;
+    return `<div class="ev sys${cont ? ' cont' : ''}${isAction(e) ? ' act' : ''}${isAction(e) && mentionsMe(e) ? ' mention' : ''}" data-eid="${e.id}"><div class="eh"><span class="eb">${cont ? `<span class="vh">${esc(e.author)} </span>` : who(e.author, true) + (isAction(e) ? ' · ' : ' ')}${fmt(e.kind === 'settings' ? settingsText(e) : isAction(e) ? actionText(e) : e.text, true)}</span>${timeEl(e.ts)}</div></div>`;
   }
   const mention = mentionsMe(e); const lite = !mention && mentionsLite(e);
   const tag = e.kind === 'question' ? '<span class="pill warn">asked the humans</span>' : e.kind === 'answer' ? '<span class="pill">answered</span>' : '';
   const open = e.kind === 'question' && state.questions.some((q) => q.id === e.data?.question_id && !q.answer);
-  return `<div class="ev chat ${mention ? 'mention' : lite ? 'mention-lite' : ''} ${open ? 'question' : ''}" data-eid="${e.id}"><div class="eh">${who(e.author, true)}${tag}${e.channel !== 'general' ? `<span class="ch">#${esc(e.channel)}</span>` : ''}${timeEl(e.ts)}</div>
-    <div class="eb">${fmt(e.text, true)}</div></div>`;
+  const long = isLong(e.text); const shown = long && expandedEv.has(e.id);
+  return `<div class="ev chat ${mention ? 'mention' : lite ? 'mention-lite' : ''} ${open ? 'question' : ''}${long ? ' long' : ''}${shown ? ' open' : ''}" data-eid="${e.id}"><div class="eh">${who(e.author, true)}${tag}${e.channel !== 'general' ? `<span class="ch">#${esc(e.channel)}</span>` : ''}${timeEl(e.ts)}</div>
+    <div class="eb">${fmt(e.text, true)}</div>${long ? `<button type="button" class="link muted evmore" data-more="${e.id}" aria-expanded="${shown}">${shown ? 'Show less' : 'Show more'}</button>` : ''}</div>`;
 }
 // "planner → alice; integrator → nobody" in plain words.
 function settingsText(e) {
@@ -2072,9 +2091,11 @@ function renderFeed(unreadCount) {
   // Reading older messages? Remember the first visible line so new/expired events don't move it.
   let anchor = null;
   if (!atBottom && before !== undefined) {
-    for (const n of feed.children) if (n.offsetTop + n.offsetHeight > feed.scrollTop) { anchor = { id: n.dataset.eid, off: n.offsetTop - feed.scrollTop }; break; }
+    for (const n of feed.children) if (n.dataset.eid && n.offsetTop + n.offsetHeight > feed.scrollTop) { anchor = { id: n.dataset.eid, off: n.offsetTop - feed.scrollTop }; break; }
   }
-  const html = evs.length ? evs.map((e, i) => evHtml(e, evs[i - 1])).join('') : `<div class="muted empty-note">${ui.tab === 'me' ? 'No mentions of you yet.' : 'No activity yet. Messages from agents and teammates show up here.'}</div>`;
+  const more = older.more ?? (state.events.length >= 200 && state.events[0]?.id > 1);
+  const html = (more ? `<div class="older"><button type="button" class="link muted" data-older ${older.loading ? 'disabled' : ''}>${older.loading ? 'Loading…' : 'Load earlier activity'}</button></div>` : '')
+    + (evs.length ? evs.map((e, i) => evHtml(e, evs[i - 1])).join('') : `<div class="muted empty-note">${ui.tab === 'me' ? 'No mentions of you yet.' : 'No activity yet. Messages from agents and teammates show up here.'}</div>`);
   // New lines fade in (not on first load or a tab switch, and not a whole burst at once).
   const seen = before !== undefined && before !== html && canMove() ? new Set([...feed.children].map((n) => n.dataset.eid)) : null;
   patch(feed, html);
@@ -2083,10 +2104,33 @@ function renderFeed(unreadCount) {
   else if (before !== feed._html) {
     const n = anchor?.id && feed.querySelector(`[data-eid="${CSS.escape(anchor.id)}"]`);
     if (n) feed.scrollTop = n.offsetTop - anchor.off;
-    $('jump').hidden = false;
+    if (!older.quiet) $('jump').hidden = false;
   }
+  older.quiet = false;
   if (before !== feed._html) observeMentions();
 }
+// The feed starts with the last 200 events; "Load earlier activity" pages back 200 at a time. Once a
+// page is loaded, live reloads keep what's already here (see load()).
+const older = { more: null, loading: false, keep: false, quiet: false };
+async function loadOlder() {
+  const first = state.events[0]; if (!first || older.loading) return;
+  older.loading = true; older.quiet = true; render();
+  try {
+    const r = await api(`/events?before=${first.id}`); const got = r?.events || [];
+    const have = new Set(state.events.map((e) => e.id));
+    state.events = [...got.filter((e) => !have.has(e.id)), ...state.events];
+    older.keep = true; older.more = got.length >= 200 && got[0].id > 1;
+  } catch (e) { toast(`Couldn't load earlier activity: ${e.message}`, true); }
+  older.loading = false; older.quiet = true; render();
+}
+document.addEventListener('click', (ev) => {
+  if (ev.target.closest('[data-older]')) return loadOlder();
+  const b = ev.target.closest('[data-more]'); if (!b) return;
+  const id = Number(b.dataset.more);
+  if (expandedEv.has(id)) expandedEv.delete(id); else expandedEv.add(id);
+  render();
+  document.querySelector(`#${b.closest('#td-history') ? 'td-history' : 'feed'} [data-more="${id}"]`)?.focus({ preventScroll: true });
+});
 $('feed').addEventListener('scroll', () => { const f = $('feed'); if (f.scrollHeight - f.scrollTop - f.clientHeight < 40) $('jump').hidden = true; });
 $('jump').onclick = () => { $('feed').scrollTop = $('feed').scrollHeight; $('jump').hidden = true; };
 
@@ -2312,15 +2356,15 @@ document.addEventListener('submit', async (ev) => {
   const nfForm = ev.target.closest('[data-notifyform]');
   if (nfForm) {
     ev.preventDefault();
-    const inp = $('nf-url'); const url = inp.value.trim();
+    const inp = $('nf-url'); const url = inp ? inp.value.trim() : '';
     if (url && !/^https?:\/\//i.test(url)) { ui.nf.err = 'Paste the full webhook address, starting with https://'; render(); return $('nf-url')?.focus(); }
     if (!url && !ui.nf.url) { ui.nf.err = 'Paste a webhook URL first.'; render(); return $('nf-url')?.focus(); }
     const events = [...(ui.nf.events || nfEvents(null))];
     const btn = nfForm.querySelector('button[type=submit]'); btn.disabled = true;
     try {
       const r = await api('/notify', { method: 'PUT', body: JSON.stringify(url ? { url, events } : { events }) });
-      Object.assign(ui.nf, { url: r?.url ?? (url || ui.nf.url), kind: r?.kind ?? ui.nf.kind, events: r?.events ? nfEvents(r.events) : new Set(events), err: '' });
-      inp.value = '';
+      Object.assign(ui.nf, { url: r?.url ?? (url || ui.nf.url), kind: r?.kind ?? ui.nf.kind, events: r?.events ? nfEvents(r.events) : new Set(events), err: '', change: false });
+      if (inp) inp.value = '';
       toast(`Saved. ${NOTIFY_KIND[ui.nf.kind] ? `Sending to ${NOTIFY_KIND[ui.nf.kind]}.` : ''} Press Send test to check it.`); render();
       document.querySelector('[data-fk="nf-test"]')?.focus({ preventScroll: true });
     } catch (e) { ui.nf.err = e.message; btn.disabled = false; render(); $('nf-url')?.focus(); }
@@ -2434,8 +2478,9 @@ function doAct(a, el) {
     return api('/notify/test', { method: 'POST', body: '{}' }).then((r) => toast(r?.ok === false || r?.error ? `Test failed: ${r.error || `the webhook answered ${r.status}`}` : 'Test sent. Check your chat or phone.', r?.ok === false || !!r?.error)).catch((e) => toast(`Test failed: ${e.message}`, true));
   }
   if (a === 'nf-off') {
-    return api('/notify', { method: 'PUT', body: JSON.stringify({ url: '' }) }).then((r) => { Object.assign(ui.nf, { url: r?.url || '', kind: r?.kind || null, err: '' }); toast('Notifications to the webhook stopped.'); render(); document.querySelector('[data-fk="nf-save"]')?.focus({ preventScroll: true }); }).catch((e) => { ui.nf.err = e.message; render(); });
+    return api('/notify', { method: 'PUT', body: JSON.stringify({ url: '' }) }).then((r) => { Object.assign(ui.nf, { url: r?.url || '', kind: r?.kind || null, err: '', change: false }); toast('Webhook removed. Notifications stopped.'); render(); document.querySelector('[data-fk="nf-save"]')?.focus({ preventScroll: true }); }).catch((e) => { ui.nf.err = e.message; render(); });
   }
+  if (a === 'nf-change' || a === 'nf-keep') { ui.nf.change = a === 'nf-change'; ui.nf.err = ''; render(); return document.querySelector(a === 'nf-change' ? '#nf-url' : '[data-fk="nf-change"]')?.focus({ preventScroll: true }); }
   if (a === 'rotate') { ui.rotateArm = true; render(); return document.querySelector('[data-fk="rot-no"]')?.focus({ preventScroll: true }); }
   if (a === 'rotate-no') { ui.rotateArm = false; render(); return document.querySelector('[data-fk="rot"]')?.focus({ preventScroll: true }); }
   if (a === 'rotate-yes') return rotateToken();
@@ -2708,7 +2753,8 @@ $('task-form').addEventListener('submit', async (ev) => {
       if (assignee !== o.assignee) body.assignee = assignee || '';
       if ($('td-status').value !== o.status) body.status = $('td-status').value;
       if (Object.keys(body).length) {
-        await api(`/tasks/${o.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+        const saved = await api(`/tasks/${o.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+        noteSave(o.id, body, saved);
         toast(`Saved #${o.id}`); scheduleReload();
       }
     } else {
@@ -2728,6 +2774,25 @@ $('task-form').addEventListener('submit', async (ev) => {
   finally { btn.disabled = false; }
 });
 $('new-task-btn').onclick = () => openTask(null);
+// Someone else saves over what I just saved (two people editing one task): tell me, once. Only the text
+// fields: status and assignee change all the time as agents work. Watched for 10 minutes after my save.
+const OVERWRITE_FIELDS = ['title', 'description', 'priority', 'size', 'reserved_for'];
+const mySaves = new Map();
+function noteSave(id, body, saved) {
+  const vals = {}; for (const f of OVERWRITE_FIELDS) if (f in body) vals[f] = (saved && f in saved ? saved[f] : body[f]) ?? null;
+  if (Object.keys(vals).length) mySaves.set(id, { vals, at: Date.now() });
+}
+function checkOverwrites(s) {
+  for (const [id, sv] of mySaves) {
+    const t = s.tasks.find((x) => x.id === id);
+    if (!t || Date.now() - sv.at > 10 * 60e3) { mySaves.delete(id); continue; }
+    const changed = Object.keys(sv.vals).filter((f) => (t[f] ?? null) !== sv.vals[f] && !(f === 'reserved_for' && !t[f] && !sv.vals[f]));
+    if (!changed.length) continue;
+    mySaves.delete(id);
+    const by = [...(s.events || [])].reverse().find((e) => e.task_id === id && e.kind === 'task_updated' && e.ts >= sv.at && e.author !== me)?.author;
+    toast(`#${id} was changed by ${by || 'someone else'} after you saved it (${changed.map((f) => FNAME[f] || f).join(', ')}).`, false, { label: 'Open', run: () => openTask(id) });
+  }
+}
 
 // ---------- chat ----------
 $('composer').addEventListener('submit', async (ev) => {
@@ -2776,9 +2841,11 @@ function updateAc() {
   const mt = m.value.slice(0, pos).match(/(^|[\s(,;])@([\w.\-/]*)$/);
   if (!mt) return closeAc();
   const q = mt[2].toLowerCase(); ac.start = pos - mt[2].length - 1;
-  const kindRank = { agent: 0, helper: 1, person: 2, broadcast: 3 };
-  ac.items = acNames().filter((it) => it.name.includes(q))
-    .sort((a, b) => (b.name.startsWith(q) - a.name.startsWith(q)) || (b.online - a.online) || (kindRank[a.kind] - kindRank[b.kind]) || a.name.localeCompare(b.name))
+  // Whole-name prefix first, then a word inside the name ("@db" finds alice/db-worker); people before agents.
+  const kindRank = { person: 0, agent: 1, helper: 2, broadcast: 3 };
+  const word = (n) => n.split(/[-./_]/).some((w) => w.startsWith(q));
+  ac.items = acNames().filter((it) => it.name.startsWith(q) || word(it.name))
+    .sort((a, b) => (b.name.startsWith(q) - a.name.startsWith(q)) || (kindRank[a.kind] - kindRank[b.kind]) || (b.online - a.online) || a.name.localeCompare(b.name))
     .slice(0, 8);
   if (!ac.items.length) return closeAc();
   ac.idx = Math.min(ac.idx, ac.items.length - 1); if (!ac.open) ac.idx = 0;
@@ -2790,12 +2857,15 @@ function pickAc(i) {
   const ins = '@' + it.name + ' ';
   m.value = m.value.slice(0, ac.start) + ins + m.value.slice(pos).replace(/^\s+/, '');
   const c = ac.start + ins.length; m.focus(); m.setSelectionRange(c, c);
-  closeAc(); growMsg();
+  closeAc(); growMsg(); ac.spaceAt = c;
 }
 $('msg').addEventListener('input', () => { growMsg(); updateAc(); });
 $('msg').addEventListener('click', updateAc);
 $('msg').addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== $('msg')) closeAc(); }, 120));
 $('msg').addEventListener('keydown', (ev) => {
+  // A picked name already ends in a space: a space typed right after it isn't doubled.
+  const sp = ac.spaceAt; ac.spaceAt = -1;
+  if (ev.key === ' ' && sp >= 0 && $('msg').selectionStart === sp && $('msg').selectionEnd === sp && $('msg').value[sp - 1] === ' ') return ev.preventDefault();
   if (ac.open) {
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); ac.idx = (ac.idx + (ev.key === 'ArrowDown' ? 1 : -1) + ac.items.length) % ac.items.length; return renderAc(); }
     if ((ev.key === 'Enter' && !ev.shiftKey) || ev.key === 'Tab') { if (ev.isComposing) return; ev.preventDefault(); return pickAc(ac.idx); }

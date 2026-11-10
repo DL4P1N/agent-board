@@ -230,15 +230,18 @@ export class Board {
     return Number(this.db.prepare('SELECT COALESCE(MAX(id),0) AS m FROM events').get().m);
   }
 
-  events({ since = 0, channel, task_id, exclude_author, limit = 100 } = {}) {
+  // before: the `limit` events just before that id (older pages of the feed), still oldest first.
+  events({ since = 0, before, channel, task_id, exclude_author, limit = 100 } = {}) {
     let sql = 'SELECT * FROM events WHERE id > ?';
     const args = [since];
+    if (before) { sql += ' AND id < ?'; args.push(before); }
     if (channel) { sql += ' AND channel = ?'; args.push(channel); }
     if (task_id) { sql += ' AND task_id = ?'; args.push(task_id); }
     if (exclude_author) { sql += ' AND author != ?'; args.push(exclude_author); }
-    sql += ' ORDER BY id ASC LIMIT ?';
+    sql += before ? ' ORDER BY id DESC LIMIT ?' : ' ORDER BY id ASC LIMIT ?';
     args.push(limit);
-    return this.db.prepare(sql).all(...args).map(rowToEvent);
+    const rows = this.db.prepare(sql).all(...args).map(rowToEvent);
+    return before ? rows.reverse() : rows;
   }
 
   recentEvents(limit = 50) {
@@ -784,7 +787,8 @@ export class Board {
     }
     // data.notice marks the board's own announcement (agents can't set data when they post), so the
     // webhook only fires for a real usage-limit mark, not for anyone writing those words in chat.
-    if (msgs.length) this.emit({ author, kind: 'message', channel: 'general', text: msgs.join('. '), data: limited ? { notice: 'limit' } : null });
+    // data.action: a change made on the board (not something the author wrote), so the web board shows it as a status line.
+    if (msgs.length) this.emit({ author, kind: 'message', channel: 'general', text: msgs.join('. '), data: { action: 'agent', ...(limited ? { notice: 'limit' } : {}) } });
     return this.presence().find((p) => p.kind === 'agent' && p.name === root);
   }
 
