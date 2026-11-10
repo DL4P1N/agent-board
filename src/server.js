@@ -65,6 +65,7 @@ function tokenFrom(req) {
   if (h.toLowerCase().startsWith('bearer ')) return h.slice(7).trim();
   return req.get('x-board-token') || req.query.token || '';
 }
+const TOKEN_ROTATED = "The board's token was changed. Ask the host for the new link, then re-run the join command from the web board.";
 function safeEq(a, b) {
   const x = Buffer.from(String(a));
   const y = Buffer.from(String(b));
@@ -270,12 +271,19 @@ function createBoardRuntime(slug, dir) {
   const every = (fn, ms) => { const t = setInterval(fn, ms); t.unref?.(); timers.push(t); return t; };
   const later = (fn, ms) => { const t = setTimeout(fn, ms); t.unref?.(); timers.push(t); return t; };
   const presence = () => board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
+  // Tokens retired by a rotation (hashed, kept in the board's folder), so an old link or agent config
+  // gets "the token was changed" instead of a bare "bad token". reason: 'token_rotated' is for the web page.
+  const retiredFile = path.join(dir, 'retired-tokens');
+  const tokenHash = (t) => crypto.createHash('sha256').update(String(t)).digest('base64url');
+  let retired = [];
+  try { retired = JSON.parse(fs.readFileSync(retiredFile, 'utf8')).filter((x) => typeof x === 'string'); } catch {}
 
   function auth(req, res, next) {
     const t = tokenFrom(req);
     if (safeEq(t, TOKEN)) req.role = 'human';
     else if (safeEq(t, AGENT_TOKEN)) req.role = 'agent';
     else if (safeEq(t, VIEW_TOKEN)) req.role = 'viewer';
+    else if (t && retired.includes(tokenHash(t))) return res.status(401).json({ error: TOKEN_ROTATED, reason: 'token_rotated' });
     else return res.status(401).json({ error: 'bad or missing token' });
     next();
   }
@@ -440,7 +448,8 @@ function createBoardRuntime(slug, dir) {
   // a different freeze time (to the nearest 5 min) is announced again.
   const flagKey = (k, t) => `_announced_${k}_${Math.round(t.freezeAt / 300e3)}`;
   const announced = { has: (k) => !!board.db.prepare('SELECT 1 FROM settings WHERE key = ?').get(k), add: (k) => board.db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, '1')").run(k) };
-  every(() => {
+  const announceTime = () => {
+    if (board.closed) return;
     const t = timeInfo(board.getSettings());
     if (!t.deadline) return;
     const key = (k) => flagKey(k, t);
@@ -454,7 +463,24 @@ function createBoardRuntime(slug, dir) {
       announced.add(key('freeze'));
       board.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all FEATURE FREEZE. Demo at ${t.deadlineLabel}. Don't claim new tasks. Finish, push and merge what you have; release anything that can't land in time.` });
     }
-  }, 20e3);
+    // The demo time itself: wake waiting agents so they wrap up (not when the board starts long after it).
+    const demoKey = `_announced_demo_${Math.round(t.deadline / 300e3)}`;
+    if (t.past && now - t.deadline < 5 * 60e3 && !announced.has(demoKey)) {
+      announced.add(demoKey);
+      board.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all Demo time (${t.deadlineLabel}). Wrap up: push and merge what's finished, release what isn't with a note, and post a short status in general.` });
+    }
+  };
+  every(announceTime, 20e3);
+  // Also check right at the warning, the freeze and the demo time, so nobody waits for the next tick.
+  board.bus.on('event', (e) => {
+    if (e?.kind !== 'settings') return;
+    const t = timeInfo(board.getSettings());
+    if (!t.deadline) return;
+    for (const at of [t.freezeAt - 30 * 60e3, t.freezeAt, t.deadline]) {
+      const ms = at - Date.now() + 50;
+      if (ms > 0 && ms < 2 ** 31 - 1) later(announceTime, ms);
+    }
+  });
 
   // ---------- notifications to humans away from the laptop (Slack / Discord / ntfy / any webhook) ----------
   // At Kubecon a question waited 31 minutes for a human. Settings `_notify_url` / `_notify_events` are
@@ -515,7 +541,7 @@ function createBoardRuntime(slug, dir) {
     if (e.kind !== 'message') return;
     if (e.author === 'board' && /^@all main is failing/.test(t)) return notify('main', t.replace(/^@all\s+/, ''));
     if (e.author === 'board' && /is being used from \d+ laptops/.test(t)) return notify('conflict', t.replace(/^@all\s+/, ''));
-    if (e.author === 'board' && /^@all (FEATURE FREEZE|Feature freeze in 30 minutes)/.test(t)) return notify('freeze', t.replace(/^@all\s+/, ''));
+    if (e.author === 'board' && /^@all (FEATURE FREEZE|Feature freeze in 30 minutes|Demo time)/.test(t)) return notify('freeze', t.replace(/^@all\s+/, ''));
     // Only the board's own announcement: an agent writing "hit its usage limit" in chat isn't one.
     if (e.data?.notice === 'limit') return notify('limit', t.replace(/^@all\s+/, ''));
   });
@@ -548,6 +574,8 @@ function createBoardRuntime(slug, dir) {
     if (envToken) { res.status(400); return { error: 'The token comes from BOARD_TOKEN; change it there and restart the board.' }; }
     const t = crypto.randomBytes(12).toString('base64url');
     fs.writeFileSync(path.join(dir, 'token'), t);
+    retired = [...retired, ...[TOKEN, AGENT_TOKEN, VIEW_TOKEN].map(tokenHash)].slice(-60);
+    try { fs.writeFileSync(retiredFile, JSON.stringify(retired)); } catch {}
     TOKEN = t; AGENT_TOKEN = agentTokenFor(t); VIEW_TOKEN = viewerTokenFor(t);
     board.emit({ author: 'board', kind: 'message', channel: 'general', text: '@all The board token was rotated: everyone re-runs the join command from the web board.' });
     // Live streams were authorised with the old token: close them all (open pages reconnect with the new one).
@@ -976,6 +1004,9 @@ const httpServer = app.listen(PORT, HOST, () => {
     console.log('    Then, in the claude-board folder (it asks the rest):');
     console.log(`      npm run join -- --url ${best}/b/${rt.slug} --token ${rt.token}`);
     for (const a of addrs.slice(1)) console.log(`      (or ${a.base}/b/${rt.slug} if that doesn't connect: ${a.label})`);
+    console.log('\n The token in these links is the board\'s password: share it only with your team.');
+    if (!PUBLIC_URL) console.log(' Teammates on another network? Stop this (Ctrl+C) and run  npm run tunnel  instead.');
+    console.log(' A teammate can\'t connect? They run  npm run doctor  in their claude-board folder.');
   } else {
     console.log('\n No board is live. Create one or restore one on the boards page below.');
   }
@@ -1014,17 +1045,30 @@ function offerHostJoin() {
   if (!rt || !process.stdin.isTTY || process.env.BOARD_NO_JOIN) return;
   const TOKEN = rt.token;
   const declined = path.join(rt.dir, '.host-join-declined');
-  if (fs.existsSync(declined)) return;
+  const joinCmd = `npm run join -- --url http://localhost:${PORT}/b/${rt.slug} --token ${TOKEN}`;
+  if (fs.existsSync(declined)) {
+    console.log(` To connect this laptop's AI tool, run any time:  ${joinCmd}\n`);
+    return;
+  }
   let cfg = null;
   try { cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude-board.json'), 'utf8')); } catch {}
-  if (cfg?.token === TOKEN || cfg?.token === rt.agentToken) {
+  const ours = (t) => t === TOKEN || t === rt.agentToken;
+  if (ours(cfg?.token)) {
     console.log(` This laptop is connected as "${cfg.agent}". (Re-run setup any time: npm run join -- --url http://localhost:${PORT}/b/${rt.slug} --token ${TOKEN})\n`);
     return;
   }
-  process.stdout.write(' Connect this laptop\'s AI tool to the board now? [Y/n] ');
+  // Already connected to another board: Enter keeps that (switching is a deliberate "y").
+  const otherBoard = !!cfg?.token && !(cfg.agents || []).some((a) => ours(a?.token));
+  process.stdout.write(otherBoard
+    ? ` This laptop is connected to another board${cfg.agent ? ` as "${cfg.agent}"` : ''}. Connect its AI tool to this board? [y/N] `
+    : ' Connect this laptop\'s AI tool to the board now? [Y/n] ');
   process.stdin.setEncoding('utf8');
   process.stdin.once('data', (answer) => {
     process.stdin.pause();
+    if (otherBoard && !/^\s*y/i.test(answer)) {
+      console.log(` Kept the other board. To connect to this one later:\n   ${joinCmd}\n`);
+      return;
+    }
     if (/^\s*n/i.test(answer)) {
       fs.writeFileSync(declined, '');
       console.log(` Skipped. To connect later, run in another terminal:\n   npm run join -- --url http://localhost:${PORT}/b/${rt.slug} --token ${TOKEN}\n`);

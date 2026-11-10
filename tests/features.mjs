@@ -530,7 +530,8 @@ check('integrator away: claim_review succeeds', !err(k10r) && k10r.reviewer === 
 await human('/settings', 'PUT', { integrator: '' });
 
 // the demo time has passed (freeze "0 min before" = at the deadline)
-await human('/settings', 'PUT', { deadline: Date.now() - 60e3, freeze_minutes: 0 });
+await human('/settings', 'PUT', { deadline: Date.now() + 1000, freeze_minutes: 0 }); // a past time is refused: let it pass
+await new Promise((r) => setTimeout(r, 1200));
 st = await state();
 check('time.past after the deadline', st.time.past === true && st.time.frozen === true, JSON.stringify(st.time));
 const k1past = await k1('board_status');

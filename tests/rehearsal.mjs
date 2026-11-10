@@ -243,7 +243,8 @@ await must('eve-omp is back and takes the P1 bug', eve('claim_task', { id: bug.i
 await invariants('feature freeze');
 
 // ================= the deadline passes: wrap up =================
-await human('/settings', 'PUT', { deadline: Date.now() - 60e3, freeze_minutes: 0 });
+await human('/settings', 'PUT', { deadline: Date.now() + 1000, freeze_minutes: 0 }); // a past time is refused: let it pass
+await new Promise((r) => setTimeout(r, 1200));
 n = await next('cy-codex');
 check('after the deadline agents are told to wrap up', /has passed/.test(n.next_action), n.next_action);
 // Finish what can land, release the rest, the planner cancels what won't happen.
