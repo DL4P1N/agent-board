@@ -90,7 +90,8 @@ try {
   const past = await page.waitForFunction(() => /Demo time/.test(document.getElementById('clock')?.textContent || ''), { timeout: 8000 }).then(() => true).catch(() => false);
   check('after the deadline: "Demo time"', past);
   // An hour or more after the demo: "Event finished" with the final numbers.
-  await human('/settings', 'PUT', { deadline: Date.now() - 2 * 3600e3 });
+  // The API refuses past demo times, so move the page's clock forward instead.
+  await page.evaluate(() => { const real = Date.now; Date.now = () => real() + 2 * 3600e3; });
   const fin = await page.waitForFunction(() => /Event finished/.test(document.getElementById('clock')?.textContent || ''), { timeout: 8000 }).then(() => true).catch(() => false);
   check('long after the demo: "Event finished" with the final numbers', fin && /Final: 6 of 8 tasks done/.test(await page.$eval('#clock-sub', (s) => s.textContent)), await page.$eval('#clock-sub', (s) => s.textContent));
   // Phone width: no horizontal scroll.
