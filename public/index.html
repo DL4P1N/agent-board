@@ -567,7 +567,7 @@
 </section>
 <form id="gate" class="gate" hidden novalidate>
   <h1><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" rx=".6" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" rx=".6" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" rx=".6" fill="var(--accent-ink)"/></svg>Claude Board</h1>
-  <p class="lede">Your hackathon team's shared task board. Every teammate's AI coding agent (Claude Code, Codex or GitHub Copilot) takes tasks from here; on this page you watch progress, answer the agents' questions and steer.</p>
+  <p class="lede">Your hackathon team's shared task board. Every teammate's AI coding agent (Claude Code, Codex, GitHub Copilot, Gemini CLI or Cursor (or any MCP tool)) takes tasks from here; on this page you watch progress, answer the agents' questions and steer.</p>
   <label for="g-token">Board token</label>
   <input id="g-token" autocomplete="off" spellcheck="false" required>
   <p class="hint">The password for this board. It's in the link the host shared (<code>…?token=…</code>), or printed by <code>npm start</code> on the host laptop.</p>
@@ -705,11 +705,11 @@
     <dt>Claude Board</dt>
     <dd>A shared to-do list for a hackathon team that builds with AI coding agents. Each teammate's agent takes tasks from here, works on them in its own git branch, and reports back. Humans watch, answer questions and steer from this page.</dd>
     <dt>Agent (and which tool)</dt>
-    <dd>The AI coding tool on a teammate's laptop, connected to this board. A team can mix tools: <b>Claude Code</b>, <b>Codex (ChatGPT)</b>, <b>GitHub Copilot in VS Code</b> or <b>GitHub Copilot CLI</b>. The small label next to a name (e.g. <span class="pill tool">Codex</span>) shows which one; it appears once that agent has connected.</dd>
+    <dd>The AI coding tool on a teammate's laptop, connected to this board. A team can mix tools: <b>Claude Code</b>, <b>Codex (ChatGPT)</b>, <b>GitHub Copilot in VS Code</b>, <b>GitHub Copilot CLI</b>, <b>Gemini CLI</b> or <b>Cursor</b> (or any MCP tool). The small label next to a name (e.g. <span class="pill tool">Codex</span>) shows which one; it appears once that agent has connected.</dd>
     <dt>Main agent (orchestrator)</dt>
     <dd>The agent session on a laptop where someone typed the start command (e.g. <code>/board</code> in Claude Code; Start here, step 3 lists each tool). It claims tasks and reports back, and shows up under the laptop owner's name, e.g. <code>alice</code>. Any of the supported tools can be the orchestrator. Claude Code can run several helper agents in parallel; the others work through one task at a time.</dd>
     <dt>Connected · not started</dt>
-    <dd>The laptop's AI tool can reach the board, but nobody has started it on the board yet. Type <code>/board</code> in it (<code>$board</code> in Codex; for Copilot CLI start it with <code>copilot --allow-tool board</code> first). It turns into "online" once it reads the board.</dd>
+    <dd>The laptop's AI tool can reach the board, but nobody has started it on the board yet. Type <code>/board</code> in it (<code>$board</code> in Codex; for Copilot CLI start it with <code>copilot --allow-tool board --autopilot --max-autopilot-continues 50</code> first). It turns into "online" once it reads the board.</dd>
     <dt>Helper agent (subagent)</dt>
     <dd>A worker the main agent starts for one task, shown as <code>owner/helper</code>, e.g. <code>alice/ui-worker</code>. Today only Claude Code starts helpers.</dd>
     <dt>Planner</dt>
@@ -735,11 +735,11 @@
     <dt>File lock</dt>
     <dd>"I'm editing this shared file, don't touch it." Agents set these on busy files (like <code>package.json</code>) and they expire on their own. Release one only if its owner is gone.</dd>
     <dt>Questions</dt>
-    <dd>When an agent needs a human decision it asks here and waits. Answer in the orange box at the top; the agent continues as soon as you reply.</dd>
+    <dd>When an agent needs a human decision it asks here and waits. Answer in the <b>waiting for a human answer</b> panel at the top of the board; the agent continues as soon as you reply.</dd>
     <dt>Talking to agents</dt>
     <dd>Agents read the chat in Activity. Write <code>@alice</code> to address alice's agent, <code>@alice/ui-worker</code> for one helper, or <code>@all</code> for everyone. <code>#12</code> links to task 12.</dd>
     <dt>Demo time &amp; feature freeze</dt>
-    <dd>Set when the demo starts in Start here, step 2. The header counts down to it. At the <b>feature freeze</b> (by default 60 minutes before) agents stop claiming new tasks and finish, push and merge what they have, so <code>main</code> works for the demo. Priority-1 tasks (bug fixes) can still be claimed during the freeze. The board posts a reminder 30 minutes before the freeze and at the freeze.</dd>
+    <dd>Set when the demo starts in Start here, step 2. The header counts down to it. At the <b>feature freeze</b> (60 min before, by default) agents stop claiming new tasks and finish, push and merge what they have, so <code>main</code> works for the demo. Priority-1 tasks (bug fixes) can still be claimed during the freeze. The board posts a reminder 30 minutes before the freeze and at the freeze.</dd>
     <dt>Plan approval</dt>
     <dd>Optional (Start here, step 4). When it's on, agents wait after the planner writes the task list until a human checks it and presses <b>Approve plan &amp; start</b>. You can edit and add tasks before approving.</dd>
     <dt>Desktop notifications</dt>
@@ -855,10 +855,13 @@ function ago(ts) {
   if (s < 45) return 'just now';
   if (s < 3600) return `${Math.round(s / 60)}m ago`;
   if (s < 86400) return `${Math.round(s / 3600)}h ago`;
-  return new Date(ts).toLocaleDateString();
+  return s < 6 * 86400 ? when(ts) : new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
-const clock = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-const timeEl = (ts) => `<time datetime="${new Date(ts).toISOString()}" title="${esc(new Date(ts).toLocaleString())}">${Date.now() - ts < 3600e3 ? ago(ts) : clock(ts)}</time>`;
+// One time format everywhere: "4:00 PM" (or "16:00", by locale) today, "Tue 4:00 PM" on another day; full date only in tooltips.
+const clock = (ts) => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const when = (ts) => new Date(ts).toDateString() === new Date().toDateString() ? clock(ts) : `${new Date(ts).toLocaleDateString([], { weekday: 'short' })} ${clock(ts)}`;
+const fullTime = (ts) => new Date(ts).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const timeEl = (ts) => `<time datetime="${new Date(ts).toISOString()}" title="${esc(fullTime(ts))}">${Date.now() - ts < 3600e3 ? ago(ts) : clock(ts)}</time>`;
 const isStale = (t) => ['claimed', 'in_progress'].includes(t.status) && (typeof t.stale === 'boolean' ? t.stale : Date.now() - t.updated_at > STALE_MS);
 // The agent (laptop session) behind a task's owner is offline: other agents may take a stale task over.
 const ownerOffline = (t) => { const n = agentRoot(t.assignee); if (!n) return false; const p = (state.presence || []).find((x) => x.kind === 'agent' && x.name === n); return !p || !p.online; };
@@ -1127,6 +1130,8 @@ function teamCapacity() {
 }
 const agentState = (a) => (isLimited(a) ? 'limited' : !a.online ? 'offline' : a.started ? 'online' : 'waiting');
 // What to type to start the board in a given tool.
+// Copilot CLI's launch command, from the server's AGENT_TOOLS (one source for step 3 and the invite).
+const copilotLaunch = () => state.setup?.agent_tools?.find((t) => t.id === 'copilot-cli')?.launch || 'copilot --allow-tool board --autopilot --max-autopilot-continues 50';
 const startCmd = (client) => (/codex/i.test(client || '') ? '$board' : client ? '/board' : '/board ($board in Codex)');
 const notStartedText = (a) => `connected · not started — type ${startCmd(a.client)}`;
 
@@ -1235,8 +1240,6 @@ function dur(ms) {
   if (h >= 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
   return h ? `${h}h ${m % 60}m` : `${m}m`;
 }
-// "14:00", or "Tue 14:00" when it isn't today.
-const when = (ts) => new Date(ts).toDateString() === new Date().toDateString() ? clock(ts) : `${new Date(ts).toLocaleDateString([], { weekday: 'short' })} ${clock(ts)}`;
 const approvalWait = () => state.phase === 'awaiting_approval';
 const CLOCK_ICO = '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.8V8l2.2 1.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
 let prevFrozen = null;
@@ -1485,7 +1488,7 @@ function renderSetup(si) {
   const body = { invite: stepInvite, goal: stepGoal, start: stepStart, backlog: stepBacklog, integrator: stepIntegrator };
   patch(el, `<div class="sh"><h2>Start here</h2><span class="muted">${si.doneCount} of 5 done · steps tick off by themselves</span><span class="sp"></span>
       <button type="button" class="ghost sm" data-act="setup-close" data-fk="s-close" aria-expanded="true">Hide setup</button></div>
-    <p class="intro">This board coordinates your team's AI coding agents: Claude Code, Codex or GitHub Copilot, mixed however you like. They split the goal into small tasks, claim them, build each one in its own git branch, and ask you here when they need a decision.</p>
+    <p class="intro">This board coordinates your team's AI coding agents: Claude Code, Codex, GitHub Copilot, Gemini CLI or Cursor (or any MCP tool), mixed however you like. They split the goal into small tasks, claim them, build each one in its own git branch, and ask you here when they need a decision.</p>
     <ol class="steps">${si.steps.map((s, i) => {
       const open = stepOpen(s.key, si.cur);
       const tick = s.done && !s.ongoing;
@@ -1529,7 +1532,7 @@ function inviteText() {
   L.push(`${n++}. First time only, get the board tool:`, `   ${su.clone_command || 'git clone https://github.com/DL4P1N/claude-board && cd claude-board'}`, '   (already have the claude-board folder? run git pull in it)');
   L.push(`${n++}. In the claude-board folder, connect your laptop (it asks your name, AI tool and project folder):`, `   ${join}`);
   if (S.repo) L.push(`${n++}. Get the project repo (if you don't have it yet):`, `   git clone ${S.repo}`);
-  L.push(`${n++}. Then open your AI tool in the project repo and type /board`, '   (Codex: $board · Copilot CLI: start it with  copilot --allow-tool board  then type /board)');
+  L.push(`${n++}. Then open your AI tool in the project repo and type /board`, `   (Codex: $board · Copilot CLI: start it with  ${copilotLaunch()}  then type /board)`);
   L.push('', `Just watching? Open ${boardLink()}`);
   return L.join('\n');
 }
@@ -1665,7 +1668,7 @@ function stepStart(si) {
   return `<p>On each laptop, open your AI tool in the hackathon project folder and start the board. Find your tool below:</p>
     <ul class="tools">${tools.map((t) => {
       // Copilot CLI needs launching with the board tool allowed first: two commands.
-      const launch = String(t.where || '').match(/copilot\s+--allow-tool\s+\S+/)?.[0];
+      const launch = t.launch;
       const cmds = launch
         ? `<div class="cmds"><div class="sub">1. Launch it with the board allowed:</div>${cmdBox(launch, 'start-' + t.id + '-launch', 'launch command for ' + t.name)}<div class="sub">2. Then type:</div>${cmdBox(t.start, 'start-' + t.id, 'start command for ' + t.name)}</div>`
         : cmdBox(t.start, 'start-' + t.id, `start command for ${t.name}`);
@@ -1783,7 +1786,7 @@ function renderQuestions(qOpen) {
     const old = Date.now() - q.created_at > 5 * 60e3;
     return `<article class="qcard" id="q-${q.id}" aria-label="Question from ${esc(q.asker)}">
       <div class="qh">${who(q.asker, true)}${t ? `<span class="muted">on</span> <button type="button" class="link tref" data-open-task="${t.id}">#${t.id} ${esc(short(t.title, 40))}</button>` : ''}
-        <span class="${old ? 'pill warn' : 'muted'}" title="${esc(new Date(q.created_at).toLocaleString())}">asked ${ago(q.created_at)}</span></div>
+        <span class="${old ? 'pill warn' : 'muted'}" title="${esc(fullTime(q.created_at))}">asked ${ago(q.created_at)}</span></div>
       <div class="qt">${fmt(q.question, true)}</div>
       <form data-qform="${q.id}" data-asker="${esc(q.asker)}">
         <label class="vh" for="qa-${q.id}">Answer to ${esc(q.asker)}</label>
@@ -1991,7 +1994,7 @@ function card(t) {
       ${t.assignee ? `<span class="pc" ${hs(t.assignee)} title="Assigned to ${esc(t.assignee)}">${esc(t.assignee)}</span>` : t.status !== 'done' && !prop ? '<span title="No agent has picked this up yet">unassigned</span>' : ''}
       ${waiting.length ? `<span class="pill warn" title="Depends on other tasks: can't be picked up until these are done">waits on ${waiting.map((d) => '#' + d.id).join(' ')}</span>` : deps.length ? `<span title="Dependencies done">after ${deps.map((d) => '#' + d.id).join(' ')} ✓</span>` : ''}
       ${stale ? `<span class="pill warn" title="Stale: no update for 15+ minutes. The agent may be stuck: ping it, or release the task back to Open.${off ? ' Its owner is offline, so other agents may take it over.' : ''}">stale</span>` : ''}
-      <span title="Last update ${esc(new Date(t.updated_at).toLocaleString())}">${ago(t.updated_at)}</span>
+      <span title="Last update ${esc(fullTime(t.updated_at))}">${ago(t.updated_at)}</span>
       <button type="button" class="mv" data-move="${t.id}" data-fk="mv-${t.id}" aria-expanded="${ui.moveMenu === t.id}" aria-label="Move #${t.id} to another column" title="Change status">Move…</button></div>
     ${q || stale || outU || prop ? `<div class="ca">${propActs}${q ? `<button type="button" class="qb" data-go-q="${q.id}" data-fk="cq-${t.id}" title="${esc(short(q.question, 120))}">question waiting</button>` : ''}${outU ? '<span class="own off">owner out of usage — agents may take it over</span>' : stale && t.assignee ? `<span class="own${off ? ' off' : ''}">${off ? `owner offline — agents may take it over` : `${esc(agentRoot(t.assignee))} is still online: ping it first`}</span>` : ''}${stale || outU ? `<button type="button" class="ghost" data-release="${t.id}" data-fk="rel-${t.id}">Release to Open</button>${t.assignee && !outU ? (pingedAt(t) ? `<span class="muted t-meta" title="You can ping again 10 minutes after the last ping">pinged ${ago(pingedAt(t))}</span>` : `<button type="button" class="ghost" data-ping="${t.id}" data-fk="ping-${t.id}" title="Post a message asking ${esc(t.assignee)} whether it's still on it">Ping @${esc(agentRoot(t.assignee))}</button>`) : ''}` : ''}</div>` : ''}
     ${menu}</article>`;

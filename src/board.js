@@ -26,7 +26,9 @@ const PASSIVE_TOOLS = new Set(['post', 'wait_for_events', 'read_events', 'board_
 export const normName = (n) => String(n ?? '').trim().toLowerCase();
 const PR_RE = /https?:\/\/\S+?\/(?:pull|pulls|merge_requests)\/\d+/i;
 
-const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+// Same time format as the web board: "4:00 PM", with the weekday when it isn't today. No seconds.
+const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const stamp = (ms) => (new Date(ms).toDateString() === new Date().toDateString() ? clock(ms) : `${new Date(ms).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} ${clock(ms)}`);
 // Deadline / feature-freeze state from settings.
 export function timeInfo(s, now = Date.now()) {
   const deadline = Number(s.deadline) || 0;
@@ -42,7 +44,7 @@ export function timeInfo(s, now = Date.now()) {
 function describeSetting(key, val, cur) {
   if (key === 'goal') return `set the goal: ${val || '(cleared)'}`;
   if (key === 'repo') return `set the project repo: ${val || '(cleared)'}`;
-  if (key === 'deadline') return val ? `set the demo deadline to ${new Date(Number(val)).toLocaleString()}` : 'cleared the deadline';
+  if (key === 'deadline') return val ? `set the demo deadline to ${stamp(Number(val))}` : 'cleared the deadline';
   if (key === 'freeze_minutes') return `feature freeze starts ${val} min before the deadline`;
   if (key === 'require_approval') return val ? 'turned on plan approval: agents wait for a human OK before starting tasks' : 'turned off plan approval';
   if (key === 'plan_approved') return val ? 'approved the task list: agents can start' : 'withdrew approval of the task list';
@@ -1206,7 +1208,7 @@ export class Board {
     const questions = this.db.prepare('SELECT * FROM questions').all();
     const min = (ms) => { const m = Math.round(ms / 60e3); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; };
     const median = (xs) => { if (!xs.length) return 0; const a = [...xs].sort((x, y) => x - y); const i = Math.floor(a.length / 2); return a.length % 2 ? a[i] : (a[i - 1] + a[i]) / 2; };
-    const at = (ms) => (ms ? new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—');
+    const at = (ms) => (ms ? clock(ms) : '—');
     const byTask = new Map();
     for (const e of events) if (e.task_id) { if (!byTask.has(e.task_id)) byTask.set(e.task_id, []); byTask.get(e.task_id).push(e); }
     const title = (id) => tasks.find((t) => t.id === id)?.title || events.find((e) => e.task_id === id && e.kind === 'task_created')?.text?.replace(/^(proposed )?#\d+\s*/, '').split(' — ')[0] || '';
@@ -1346,7 +1348,7 @@ export class Board {
       byPerson.get(who).push(t);
     }
     const first = this.db.prepare('SELECT MIN(ts) AS a, MAX(ts) AS b FROM events').get();
-    const fmt = (ms) => (ms ? new Date(ms).toLocaleString() : '');
+    const fmt = (ms) => (ms ? stamp(ms) : '');
     const L = [];
     L.push('# Team board summary', '');
     if (s.goal) L.push(`**Goal:** ${s.goal}`, '');
