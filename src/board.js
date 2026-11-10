@@ -56,6 +56,9 @@ export class Board {
     fs.mkdirSync(dataDir, { recursive: true });
     this.db = new DatabaseSync(path.join(dataDir, 'board.db'));
     this.bus = new EventEmitter();
+    // Pending long-polls (wait_for_events, /api/events?wait=): settled with [] when the board closes.
+    this.waiters = new Set();
+    this.closed = false;
     // Pull request status by URL ({state, review, checks}), filled in by the server's gh poller.
     this.prStatus = new Map();
     // CI on the project's main branch ({status: 'pass'|'fail'|'pending', failing, url, sha, title, at}), from the server's gh poller.
@@ -244,6 +247,7 @@ export class Board {
 
   // Long-poll: resolve as soon as matching events exist, or after timeoutMs.
   async waitForEvents(filter, timeoutMs, signal) {
+    if (this.closed) return [];
     const now = this.events(filter);
     if (now.length) return now;
     return new Promise((resolve) => {
@@ -254,8 +258,14 @@ export class Board {
         clearTimeout(timer);
         this.bus.off('event', onEvent);
         signal?.removeEventListener?.('abort', finish);
-        resolve(this.events(filter));
+        this.waiters.delete(finish);
+        // The board may have been closed (archived) while this was waiting: answer empty, never throw
+        // from a timer (that would take the whole server down).
+        let out = [];
+        if (!this.closed) { try { out = this.events(filter); } catch { out = []; } }
+        resolve(out);
       };
+      this.waiters.add(finish);
       const onEvent = (ev) => {
         if (ev.id <= (filter.since || 0)) return;
         if (filter.channel && ev.channel !== filter.channel) return;
@@ -267,6 +277,15 @@ export class Board {
       this.bus.on('event', onEvent);
       signal?.addEventListener?.('abort', finish);
     });
+  }
+
+  // Stop for good (the board was archived): settle every pending long-poll with [], then close the file.
+  close() {
+    if (this.closed) return;
+    this.closed = true;
+    for (const finish of [...this.waiters]) { try { finish(); } catch {} }
+    this.waiters.clear();
+    try { this.db.close(); } catch {}
   }
 
   // ---------- messages ----------

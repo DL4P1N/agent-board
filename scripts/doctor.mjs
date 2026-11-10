@@ -32,38 +32,69 @@ export async function runDoctor({ header = true } = {}) {
     bad('This laptop hasn\'t joined a board yet.', 'Copy the join command from the web board (Start here → step 1) and run it in your claude-board folder.');
     return problems;
   }
-  const { url, token } = cfg;
-  const agents = cfg.agents?.length ? cfg.agents : [{ tool: 'claude', agent: cfg.agent, dir: null }];
+  // Each agent remembers its own board (a laptop's tools can be on different boards); older configs
+  // kept one board for all of them at the top level. URLs keep their path: /b/<board> on multi-board servers.
+  const agents = (cfg.agents?.length ? cfg.agents : [{ tool: 'claude', agent: cfg.agent, dir: null }])
+    .map((a) => ({ ...a, url: String(a.url || cfg.url || '').replace(/\/+$/, ''), token: a.token || cfg.token }));
   const pushChecked = new Set();
-
-  // 1. Reachable + same code version
-  let health;
-  try {
-    health = await (await fetch(`${url}/health`, { signal: AbortSignal.timeout(4000) })).json();
-    ok(`board reachable at ${url}`);
-  } catch (e) {
-    bad(`can't reach the board at ${url} (${e.cause?.code || e.message})`,
-      'Is the host\'s `npm start` window still open? Same wifi (or both on Tailscale)? On the host, allow Node through the firewall.');
-    return problems;
-  }
+  // On more than one board? Then each tool's line says which one.
+  const severalBoards = new Set(agents.map((a) => a.url)).size > 1;
+  const boards = new Map(); // url|token → { ok, outdated, name }
   const mine = spawnSync('git', ['-C', ROOT, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).stdout?.trim();
-  const outdated = !health.version;
-  if (outdated) {
-    bad('the board server runs an old version of claude-board.', 'Host: git pull in the claude-board folder, then close the npm start window (Ctrl+C) and run npm start again.');
-  } else if (mine && health.version !== 'unknown' && health.version !== mine) {
-    console.log(`  • the board runs claude-board ${health.version}; this folder has ${mine}. If either side is behind, run git pull there (the board reloads by itself).`);
+
+  // 1–2. Each board once: reachable, same code version, token accepted, and its name.
+  async function checkBoard(url, token) {
+    const key = `${url}|${token}`;
+    if (boards.has(key)) return boards.get(key);
+    const b = { ok: false, outdated: false, name: null };
+    boards.set(key, b);
+    let health;
+    try {
+      // /health is answered once for the whole server, at its root (not under /b/<board>).
+      const r = await fetch(`${url.replace(/\/b\/[^/]+$/, '')}/health`, { signal: AbortSignal.timeout(4000) });
+      health = await r.json();
+    } catch (e) {
+      bad(`can't reach the board at ${url} (${e.cause?.code || e.message})`,
+        'Is the host\'s `npm start` window still open? Same wifi (or both on Tailscale)? On the host, allow Node through the firewall.');
+      return b;
+    }
+    b.outdated = !health.version;
+    if (b.outdated) {
+      bad('the board server runs an old version of claude-board.', 'Host: git pull in the claude-board folder, then close the npm start window (Ctrl+C) and run npm start again.');
+    } else if (mine && health.version !== 'unknown' && health.version !== mine) {
+      console.log(`  • the board runs claude-board ${health.version}; this folder has ${mine}. If either side is behind, run git pull there (the board reloads by itself).`);
+    }
+    const st = await fetch(`${url}/api/state`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) }).catch(() => null);
+    if (st?.status === 401) {
+      bad(`the board at ${url} rejected the token.`, 'The host started a fresh board (or rotated the token). Copy the join command from the web board again and re-run it.');
+      return b;
+    }
+    if (st?.status === 409) {
+      const m = await st.json().catch(() => ({}));
+      bad(`Your tools point at the plain board address, but that board is now at ${url}${m.moved_to || '/b/<name>'}.`, `Re-run join with the new command from the web board (--url ${url}${m.moved_to || '/b/<name>'}).`);
+      return b;
+    }
+    if (st?.status === 410) {
+      bad(`the board at ${url} is archived.`, 'Ask the host which board to use now, and run its join command.');
+      return b;
+    }
+    if (st?.status === 404) {
+      bad(`there's no board at ${url}.`, 'Check the address with the host (boards live at /b/<name>), and run the join command again.');
+      return b;
+    }
+    try { const s = st?.ok ? await st.json() : null; b.name = s?.board?.name || s?.board?.slug || null; } catch {}
+    ok(`board${b.name ? ` "${b.name}"` : ''} reachable at ${url}`);
+    b.ok = true;
+    return b;
   }
 
-  // 2. Token
-  const auth = await fetch(`${url}/api/cursor`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
-  if (auth?.status === 401) {
-    bad('the board rejected the token.', 'The host started a fresh board. Copy the join command from the web board again and re-run it.');
-    return problems;
-  }
-
-  // 3. Each agent: the board answers as that agent, and the tool's config points at this board
+  // 3. Each agent: its board answers as that agent, and the tool's config points at that board
   for (const a of agents) {
-    console.log(`  ${LABEL[a.tool] || a.tool} (as "${a.agent}")${a.dir ? ` in ${a.dir}` : ''}`);
+    const { url, token } = a;
+    const board = await checkBoard(url, token);
+    if (!board.ok) continue;
+    const outdated = board.outdated;
+    console.log(`  ${LABEL[a.tool] || a.tool} (as "${a.agent}")${board.name && severalBoards ? ` on board "${board.name}"` : ''}${a.dir ? ` in ${a.dir}` : ''}`);
     // probe=1: checking must not make this agent look online/started on the board.
     const mcpUrl = `${url}/mcp?agent=${encodeURIComponent(a.agent)}&token=${encodeURIComponent(token)}&probe=1`;
     let tools = [];
@@ -84,10 +115,11 @@ export async function runDoctor({ header = true } = {}) {
     if (found === null) console.log(a.tool === 'other' ? '    • add the board to your tool yourself: npm run join printed its address (or re-run join with --tool other)' : '    • (can\'t inspect this tool\'s config from here)');
     else if (!found) bad(`    ${LABEL[a.tool]} isn't connected to this board`, 'Run npm run join again and pick this tool.');
     // Names are case-insensitive on the board, so a config written as "Dana" still matches "dana".
-    else if (!found.toLowerCase().includes(`agent=${encodeURIComponent(a.agent)}`.toLowerCase()) || !found.includes(url.replace(/^https?:\/\//, ''))) {
+    // `<board url>/mcp?`, not just the host: on a multi-board server /b/<a>/mcp and /b/<b>/mcp share the host.
+    else if (!found.toLowerCase().includes(`agent=${encodeURIComponent(a.agent)}`.toLowerCase()) || !found.includes(`${url.replace(/^https?:\/\//, '')}/mcp?`)) {
       bad(`    ${LABEL[a.tool]} points at a different board or name`, 'Run npm run join again.');
     } else {
-      ok(`    ${LABEL[a.tool]} is connected`);
+      ok(`    ${LABEL[a.tool]} is connected${board.name ? ` to board "${board.name}"` : ''}`);
       // Older joins didn't say whose agent it is: still works, but may show up as a separate person.
       if (!/[?&]person=/.test(found) || !/[?&]laptop=/.test(found)) console.log('    • re-run join to group this laptop\'s agents under your name');
     }

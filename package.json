@@ -4,6 +4,8 @@
   "description": "Shared task board + MCP server so a team's AI coding agents (Claude Code, Codex, GitHub Copilot) can work on one repo together",
   "main": "src/server.js",
   "scripts": {
+    "preboards": "node scripts/ensure-deps.mjs",
+    "boards": "node scripts/boards.mjs",
     "prestart": "node scripts/ensure-deps.mjs",
     "start": "node --watch-path=src --watch-preserve-output src/server.js",
     "pretunnel": "node scripts/ensure-deps.mjs",

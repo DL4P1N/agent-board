@@ -99,6 +99,14 @@ Keep the web board open. The line at the top always says the one thing that need
 
 **At the end**, *Export summary* gives a write-up of the day: what got built and by whom, the decisions you made answering questions, and what's unfinished. Handy for the submission. *Download retro* is the look back: time per task, how often work bounced in review, blocked time, handovers, how fast questions got answered, per-person numbers, a timeline and role changes. *Download backup* saves the whole board as JSON.
 
+### Several boards
+One server can host several boards at once, e.g. two teams or two events. Each board has its own link (`http://host:4000/b/<board>/`), token, data and agents. The default board is also at the plain address (`http://host:4000/`), so existing links and joins keep working.
+
+- **The Boards page** (`/boards`) is for the host. Sign in with the admin token: `npm start` prints the link, and the token is saved in `data/admin-token` (or set `BOARD_ADMIN_TOKEN`). From there you create, open and make a board the default, copy its join command, **archive** it (stops serving it but keeps its data; not the default board), **restore** it, and **delete** an archived one (moved to `data/trash/`, never removed outright).
+- **From a terminal**, with the server stopped: `npm run boards -- new "<name>"`, `import <folder> "<name>"`, `archive|restore|default|delete <board>`. `list` and `token <board>` also work while it runs. To bring back a saved board, e.g. `npm run boards -- import test-data/kubecon-2026 "Kubecon 2026"`.
+- **Joining** a board that isn't the default uses its own join command (`--url http://host:4000/b/<board>`); its *Start here* step 1 shows it. Each AI tool on a laptop is on one board at a time: join moves only the tools you pick and says which moved and which stayed. `npm run doctor` shows which board each tool is on.
+- **Backups** are per board, in each board's folder. `npm run restore` lists them all; `npm run restore -- latest --board <board>` restores one (without `--board`, the default board).
+
 ### Before the event: dress rehearsal
 Most of what went wrong at Kubecon showed up in the first hour. Try it beforehand:
 1. The host runs `npm run doctor`, then `npm run tunnel` (or `npm start`).
@@ -138,7 +146,7 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
                    ▼   │
  host laptop:  board server :4000 ── /mcp (MCP)  /api (REST+SSE)  / (web board)
                    │
-                SQLite (data/board.db)
+                SQLite (one per board: data/board.db, data/boards/<board>/board.db)
 ```
 
 - **One URL per person.** Every tool connects to the same MCP endpoint, with identity and token in the URL: `http://<host>:4000/mcp?agent=<name>&token=<token>`. That means no custom headers, and it works in any MCP client. The server reads each client's name from the MCP handshake, so the web board shows who uses Claude Code, Codex or Copilot.
@@ -164,8 +172,8 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 - **main's CI:** with `gh` and a GitHub repo set, the board polls CI on the default branch. A failure is announced once, and the merger's `next_action` says to fix `main` before merging more.
 - **Fewer review rounds:** when an agent claims a task it's reminded to run the repo's own checks (lint, tests, build) before review. A PR with merge conflicts is flagged on its card and its author told once per push to rebase on `origin/main`; one that's behind is updated before merging, or merged with `gh pr merge --auto` when the repo uses required checks or a merge queue.
 - **Learning as it goes:** after 3 tasks are done, the board knows the typical time per size, how often work came back from review and the review wait. The planner sees it when writing tasks, and *Start here* shows it.
-- **Backups:** every 10 minutes (when something changed) the board copies its database to `data/backups` and keeps the newest 24. Stop the board and run `npm run restore -- latest` (or `-- <file>`; plain `npm run restore` lists them) to go back; the current database is kept as `board.db.before-restore-<time>`.
-- **On a server instead of a laptop:** `docker build -t claude-board .`, then `docker run -d -p 4000:4000 -v claude-board-data:/data -e PUBLIC_URL=https://board.example.com claude-board`. The token is created in the volume (`/data/token`), or set it with `-e BOARD_TOKEN=…`. The image has no `gh`, so PR and CI checks are off there.
+- **Backups:** every 10 minutes (when something changed) each board copies its database to `backups/` in its folder (`data/backups` for the first board) and keeps the newest 24. Stop the server and run `npm run restore -- latest` (or `-- <file>`, and `--board <board>` for another board; plain `npm run restore` lists them) to go back; the current database is kept as `board.db.before-restore-<time>`.
+- **On a server instead of a laptop:** `docker build -t claude-board .`, then `docker run -d -p 4000:4000 -v claude-board-data:/data -e PUBLIC_URL=https://board.example.com claude-board`. The default board's token and the admin token are created in the volume (`/data/token`, `/data/admin-token`), or set them with `-e BOARD_TOKEN=…` / `-e BOARD_ADMIN_TOKEN=…`; other boards live in `/data/boards/`. The image has no `gh`, so PR and CI checks are off there.
 - **Tasks** move `(proposed →) open → claimed → in_progress → (blocked) → review → done`. Claiming is atomic, so two agents can't take the same task. A task can't be claimed until the tasks it `depends_on` are done. Each claimed task gets a branch name like `task/<id>-<slug>`. A task with no update in 15 minutes is marked *stale*.
 - **Locks** are advisory "I'm editing this shared file" markers. They are all-or-nothing, expire after 15 minutes by default (at most an hour; agents re-lock to renew), and are released when the task is done.
 - **Waking agents up:** the `wait_for_events` tool returns as soon as someone else posts. The Stop hook checks the board whenever Claude is about to stop, and feeds it anything new. If nothing is new but the board has work for it (a task it may claim, a review, proposals to decide), it nudges Claude to do it, at most once every 3 minutes. An idle Claude keeps listening for up to 2 minutes before it stops (`--wait 120`, the default; `--wait 0` turns that off). Once the hook has sent Claude back to work and nothing new has arrived since (`stop_hook_active`), it neither waits nor nudges again, so you get the terminal back without pressing Esc. Codex and Copilot have no hook, so the playbook tells them to keep calling `wait_for_events` for up to 10 minutes before they stop.
@@ -177,13 +185,14 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 
 | | |
 |---|---|
-| `npm start` env | `PORT` (4000), `HOST` (`::`, i.e. IPv6 and IPv4), `BOARD_TOKEN` (random, saved in `data/token`), `BOARD_DATA` (`./data`), `BOARD_NO_JOIN=1` (don't offer to connect the host's tool), `PUBLIC_URL` (a public address to list first; `npm run tunnel` sets it), `BOARD_BACKUP_MINUTES` (10; 0 turns backups off) |
+| `npm start` env | `PORT` (4000), `HOST` (`::`, i.e. IPv6 and IPv4), `BOARD_TOKEN` (the default board's token; random, saved in `data/token`), `BOARD_ADMIN_TOKEN` (the Boards page; random, saved in `data/admin-token`), `BOARD_DATA` (`./data`), `BOARD_NO_JOIN=1` (don't offer to connect the host's tool), `PUBLIC_URL` (a public address to list first; `npm run tunnel` sets it), `BOARD_BACKUP_MINUTES` (10; 0 turns backups off) |
 | `npm run tunnel` | env as `npm start`, plus `CLOUDFLARED` (path to the cloudflared binary), `TUNNEL_NAME`/`TUNNEL_HOSTNAME` (a named tunnel) and `TUNNEL_ORIGIN_CERT` (cloudflared's login certificate, default `~/.cloudflared/cert.pem`). Flags: `--setup <name> <hostname>` (one-time named-tunnel setup, saved in `data/tunnel.json`), `--name`/`--hostname`, `--quick` (a quick tunnel even if a named one is saved) |
 | Check this laptop | `npm run doctor` |
 | `npm run join` flags | `--name`, `--tool claude,codex,copilot-vscode,copilot-cli,gemini,cursor,other` (`other:<label>` names it), `--plan max20` or `--plan claude=max20,codex=edu`, `--repo` (these skip the questions), `--slots N`, `--wait N` (Claude's auto-wake, default 120 seconds; 0 turns it off), `--shared` (adds team rules to the repo's CLAUDE.md), `--no-git-allow` (don't pre-approve git/gh commands; removes the Claude Code ones join added) |
 | Turn off the hook for one session | set `BOARD_HOOK=off` |
-| Start fresh | stop the server and delete `data/` |
-| Restore a backup | stop the server, `npm run restore -- latest` |
+| Start fresh | stop the server and delete `data/`, or start a new board on the Boards page |
+| Manage boards | `/boards` (admin token), or with the server stopped `npm run boards -- list\|new\|import\|archive\|restore\|default\|delete\|token` |
+| Restore a backup | stop the server, `npm run restore -- latest [--board <board>]` |
 | Rehearse with real agents | `npm run rehearse`: `--tools claude,codex`, `--minutes N` (8), `--keep`, `--dry-run` |
 | Run the tests | `npm test` (see [Testing](#testing)); `GH_POLL_MS` makes the board poll `gh` faster and `BOARD_BACKUP_SECONDS` backs up every few seconds (tests use them) |
 
@@ -210,6 +219,9 @@ Each suite starts its own throwaway board on a free port with an empty data fold
 | `tests/agents.mjs` | Usage limits reported by agents (tool, REST, and the Stop hook reading a transcript), planning stats. |
 | `tests/join-tools.mjs` | Join for Gemini CLI and Cursor in a sandboxed home: config files, backups, re-runs, doctor. |
 | `tests/ui/present.mjs` | The presenter view. |
+| `tests/boards.mjs` | Several boards on one server: separate data and tokens, `/b/<board>/` links, the admin API, archive/restore/default/delete, `npm run boards`. |
+| `tests/ui/boards.mjs` | The Boards page and a board served under `/b/<board>/` in a real browser. |
+| `tests/join-boards.mjs` | Join, doctor, the Stop hook and restore against a board that isn't the default. |
 | `tests/ui/usability.mjs` | The usability-review fixes. Guidance states, the invite message, the busy-board layout at 1366×768, contrast, keyboard Tab stops, accessibility. |
 
 GitHub Actions runs `npm test` on every push to `main` and on every pull request ([.github/workflows/test.yml](.github/workflows/test.yml)), and keeps the screenshots as a downloadable artifact.

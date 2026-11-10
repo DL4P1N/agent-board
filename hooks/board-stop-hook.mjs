@@ -17,6 +17,7 @@
 //
 // Exits by returning (process.exitCode), never process.exit(): exiting while fetch sockets close
 // crashes Node on Windows, and Claude Code ignores a hook that exits abnormally.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -42,7 +43,8 @@ async function main() {
   const wait = continuing ? 0 : Number(process.env.BOARD_HOOK_WAIT ?? cfg.hook_wait ?? 0);
 
   // One cursor per board + agent, so a different (or freshly wiped) board doesn't inherit an old position.
-  const boardKey = Buffer.from(url).toString('base64url').slice(-16);
+  // A hash of the whole URL, path included: two boards on one host (/b/<a>, /b/<b>) never share a cursor.
+  const boardKey = crypto.createHash('sha256').update(url).digest('hex').slice(0, 16);
   const cursorFile = path.join(os.tmpdir(), `claude-board-cursor-${agent.replace(/[^\w.-]/g, '_')}-${boardKey}`);
   const get = async (p) => {
     const r = await fetch(url + p, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout((wait + 15) * 1000) });

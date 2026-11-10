@@ -90,15 +90,18 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Several boards can share a server: /b/<slug>/ has its own API under /b/<slug>/api. The default board is at the root.
+const BASE = (location.pathname.match(/^\/b\/[^/]+/) || [''])[0];
+const SLUG = BASE ? decodeURIComponent(BASE.slice(3)) : '';
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 const qs = new URLSearchParams(location.search);
 // A read-only viewer token (from the board's "Presenter view" link), kept apart from the main
 // board's token so a projector laptop never holds the full board token.
-const VIEW_KEY = 'board-view-token';
+const VIEW_KEY = 'board-view-token' + (BASE ? '@' + BASE : '');
 let token = qs.get('token') || store.get(VIEW_KEY) || '';
 if (qs.get('token')) { store.set(VIEW_KEY, token); history.replaceState(null, '', location.pathname); }
 const EXPIRED = "This presenter link has expired: open a new one from the board's header (<b>Presenter view</b>).";
-let expired = false;
+let expired = false; let unavailable = 0;
 let state = null; let live = false; let lastErr = '';
 
 // Person colours, the same as the main board.
@@ -130,11 +133,24 @@ function dur(ms) { const t = Math.max(0, Math.round(ms / 1000)); const h = Math.
 async function load() {
   if (!token) return showMsg('Open this from the board: <b>Presenter view</b> in its header.');
   try {
-    const r = await fetch('/api/state', { headers: { Authorization: 'Bearer ' + token } });
+    const r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } });
     if (r.status === 401 || r.status === 403) { expired = true; es?.close(); try { localStorage.removeItem(VIEW_KEY); } catch {} return showMsg(EXPIRED); }
+    // Archived (410), moved to its own address (409) or failed to open (503): say so, keep checking
+    // (the 5 s poll), and come back by itself when the board is available again.
+    if (r.status === 410 || r.status === 409 || r.status === 503) {
+      const body = await r.json().catch(() => ({}));
+      unavailable = r.status; es?.close(); live = false;
+      if (r.status === 410) return showMsg('This board is archived. The presenter view comes back by itself when the host restores it.');
+      if (r.status === 503) return showMsg(`This board couldn't open: ${esc(body.error || 'unknown error')}. Checking again by itself.`);
+      const to = String(body.moved_to || '').replace(/\/+$/, '');
+      const url = new URL(to + '/present.html', location.origin); url.searchParams.set('token', token);
+      return showMsg(`This board moved to its own address. <a href="${esc(url.href)}">Open the presenter view there</a>.`);
+    }
     if (!r.ok) throw new Error(r.statusText);
     state = await r.json(); lastErr = '';
+    if (unavailable) { unavailable = 0; $('app')._html = undefined; }
     render();
+    if (!es || es.readyState === 2) connect(); // the stream closed for good (archived, restarted): open it again
   } catch (e) { lastErr = 'Can\'t reach the board server; retrying…'; if (state) render(); else showMsg(esc(lastErr)); }
 }
 function showMsg(html) { const a = $('app'); a._html = undefined; a.innerHTML = `<p class="msg">${html}</p>`; }
@@ -148,7 +164,7 @@ function countdown() {
 }
 
 function render() {
-  if (!state || expired) return;
+  if (!state || expired || unavailable) return;
   const tasks = (state.tasks || []).filter((t) => t.status !== 'proposed');
   const by = (s) => tasks.filter((t) => (Array.isArray(s) ? s : [s]).includes(t.status)).length;
   const done = by('done'); const total = tasks.length; const pct = total ? Math.round((done / total) * 100) : 0;
@@ -191,22 +207,23 @@ function render() {
       if (from !== x.style.width && x.animate) x.animate([{ width: from }, { width: x.style.width }], { duration: 600, easing: 'cubic-bezier(.2, .7, .2, 1)' });
     });
   }
-  document.title = total ? `${done}/${total} done · Board presenter` : 'Board presenter';
+  const name = SLUG ? `${SLUG} · ` : '';
+  document.title = total ? `${done}/${total} done · ${name}Board presenter` : `${name}Board presenter`;
 }
 // Tick the countdown every second without re-rendering everything.
 setInterval(() => { if (!state) return; const c = $('clock'); if (!c) return; const cd = countdown(); c.textContent = cd.big; c.className = 'clock ' + cd.cls; const s = $('clock-sub'); if (s) s.textContent = cd.sub; }, 1000);
 
 let es; let reloadT;
 function connect() {
-  if (!token || expired || typeof EventSource === 'undefined') return;
+  if (!token || expired || unavailable || typeof EventSource === 'undefined') return;
   es?.close();
-  es = new EventSource('/api/stream?token=' + encodeURIComponent(token));
+  es = new EventSource(BASE + '/api/stream?token=' + encodeURIComponent(token));
   es.onopen = () => { live = true; render(); };
   es.onmessage = () => { clearTimeout(reloadT); reloadT = setTimeout(load, 300); };
   // A rotated or revoked token: the stream fails; check once whether the link has expired.
   es.onerror = () => { live = false; render(); clearTimeout(reloadT); reloadT = setTimeout(load, 1500); };
 }
-load().then(connect);
+load();
 setInterval(load, 5000);
 </script>
 </body>

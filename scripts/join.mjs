@@ -80,9 +80,11 @@ let boardState = null;
 try {
   const r = await fetch(`${url}/api/state`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) });
   if (r.status === 401) fail('The board rejected the token. Copy the join command from the web board again (the host may have started a fresh board).');
+  // 409: this is the plain address, and the board behind the token moved to its own /b/<name> address.
+  if (r.status === 409) { const m = await r.json().catch(() => ({})); fail(`This join command uses the plain board address, but that board is now at ${url}${m.moved_to || '/b/<name>'}. Copy the new join command from the web board (or use --url ${url}${m.moved_to || '/b/<name>'}).`); }
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   boardState = await r.json();
-  ok(`board reachable at ${url}${boardState.settings?.goal ? ` (goal: ${boardState.settings.goal.slice(0, 60)}${boardState.settings.goal.length > 60 ? '…' : ''})` : ''}`);
+  ok(`board${boardState.board?.name ? ` "${boardState.board.name}"` : ''} reachable at ${url}${boardState.settings?.goal ? ` (goal: ${boardState.settings.goal.slice(0, 60)}${boardState.settings.goal.length > 60 ? '…' : ''})` : ''}`);
 } catch (e) {
   bad(`cannot reach board at ${url}: ${e.message}`);
   console.error('  Same wifi? Firewall allowing the port? Using the Tailscale IP? Continuing anyway; run npm run doctor later.');
@@ -99,7 +101,14 @@ const ask = async (q, def) => {
 
 // Names already on this board that this laptop didn't set up before (so re-running join is fine).
 const agentToken = agentTokenFor(token);
-const previous = (() => { try { const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); return c.token === token || c.token === agentToken ? c : null; } catch { return null; } })();
+// This board's name (multi-board servers say it; older ones don't): shown when a tool switches boards.
+const boardName = boardState?.board?.name || boardState?.board?.slug || url;
+// What this laptop set up before, on any board. Each agent entry remembers its own board (url + token);
+// older configs kept one board for all of them at the top level.
+const prior = (() => { try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch { return null; } })();
+const priorAgents = (prior?.agents || []).map((a) => ({ ...a, url: a.url || prior.url, token: a.token || prior.token, board: a.board || prior.board || a.url || prior.url }));
+const sameBoard = (a) => a.url === url && (a.token === token || a.token === agentToken);
+const previous = prior && (prior.token === token || prior.token === agentToken) && (!prior.url || prior.url === url) ? prior : null;
 // This laptop's id: made once and kept across boards. The board uses it to spot one agent name
 // used from two laptops at once. Not a secret, just a label.
 const laptopId = (() => {
@@ -107,12 +116,12 @@ const laptopId = (() => {
   return crypto.randomBytes(6).toString('hex');
 })();
 // Names are case-insensitive on the board (it stores them lowercase).
-const mine = new Set([previous?.agent, ...(previous?.agents || []).map((a) => a.agent)].filter(Boolean).map((n) => n.toLowerCase()));
+const mine = new Set([previous?.agent, ...priorAgents.filter(sameBoard).map((a) => a.agent)].filter(Boolean).map((n) => n.toLowerCase()));
 const taken = (n) => (boardState?.presence || []).find((p) => p.kind === 'agent' && String(p.person || p.name).toLowerCase() === n && !mine.has(String(p.name).toLowerCase()));
 
 let name = '';
 for (let attempt = 0; attempt < 5 && !name; attempt++) {
-  const n = String(args.name || (await ask('Your name on the board (short, no spaces)', previous?.agent?.toLowerCase().replace(/-(claude|codex|copilot|copilotcli|gemini|cursor)$/, '') || defaultName())) || '').toLowerCase().replace(/[^\w.-]/g, '');
+  const n = String(args.name || (await ask('Your name on the board (short, no spaces)', previous?.agent?.toLowerCase().replace(/-(claude|codex|copilot|copilotcli|gemini|cursor)$/, '') || prior?.person || defaultName())) || '').toLowerCase().replace(/[^\w.-]/g, '');
   if (!n) fail('A name is required (--name NAME).');
   const t = taken(n);
   if (t && rl && !args.name) {
@@ -212,12 +221,21 @@ const urlFor = (p) => `${url}/mcp?${new URLSearchParams({ agent: p.agent, token:
 const webLink = `${url}/?token=${encodeURIComponent(token)}&name=${encodeURIComponent(name)}`;
 // The Claude Stop hook reads `agent`; `npm run doctor` reads `agents`.
 const claudeAgent = plan.find((p) => p.tool === 'claude')?.agent || name;
-// Re-running join for some tools keeps the others this laptop set up earlier for the same board.
-const keep = (previous?.agents || []).filter((a) => !tools.includes(a.tool));
-const saveConfig = (agents) => writeJson(CONFIG_PATH, {
-  url, token: agentToken, agent: plan.find((p) => p.tool === 'claude')?.agent || previous?.agent?.toLowerCase() || name, person: name, laptop_id: laptopId, hook_wait: wait,
-  agents: [...keep, ...agents].map(({ tool, agent, dir, plan_id, plan: planLabel, slots }) => ({ tool, agent, dir, plan_id, plan: planLabel, slots })),
-});
+// Each tool connects to one board at a time (one MCP server named "board"). Joining a board replaces
+// the previous board for the tools picked now; the laptop's other tools stay on the board they had.
+const keep = priorAgents.filter((a) => !tools.includes(a.tool));
+for (const a of priorAgents.filter((x) => tools.includes(x.tool) && !sameBoard(x))) {
+  console.log(`  • This laptop's ${TOOLS[a.tool]?.label || a.tool} now points at board "${boardName}"; it no longer gets "${a.board}".`);
+}
+for (const a of keep.filter((x) => !sameBoard(x))) console.log(`  • ${TOOLS[a.tool]?.label || a.tool} stays on board "${a.board}" (join again with --tool ${a.tool} to move it here too).`);
+const entry = ({ tool, agent, dir, plan_id, plan: planLabel, slots }) => ({ tool, agent, dir, plan_id, plan: planLabel, slots, url, token: agentToken, board: boardName });
+const saveConfig = (agents) => {
+  const all = [...keep.map(({ tool, agent, dir, plan_id, plan: planLabel, slots, url: u, token: t, board: b }) => ({ tool, agent, dir, plan_id, plan: planLabel, slots, url: u, token: t, board: b })), ...agents.map(entry)];
+  // The top level is what the Claude Stop hook reads: the board Claude Code is on (else this one).
+  const claude = all.find((a) => a.tool === 'claude');
+  const top = claude ? { url: claude.url, token: claude.token, agent: claude.agent, board: claude.board } : { url, token: agentToken, agent: name, board: boardName };
+  writeJson(CONFIG_PATH, { ...top, person: name, laptop_id: laptopId, hook_wait: wait, agents: all });
+};
 saveConfig(plan);
 
 const done = [];

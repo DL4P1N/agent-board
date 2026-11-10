@@ -189,6 +189,7 @@
   .hacts { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; justify-content: flex-end; }
   .hpair { display: inline-flex; gap: var(--s4); align-items: center; flex-wrap: nowrap; }
   a.plink { display: inline-flex; align-items: center; gap: var(--s3); text-decoration: none; color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding: 0 var(--s5); font-size: var(--fs-sm); font-weight: 500; min-height: var(--ctl); transition: background-color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
+  .bname { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); background: var(--chip); border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding: 1px var(--s3); max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   a.plink:hover { background: var(--chip); border-color: var(--field-line); }
   button.bell[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
   button.bell .slash { display: none; }
@@ -497,6 +498,9 @@
   .gate label { margin-top: var(--s6); }
   .gate input { min-height: 2.25rem; font-size: var(--fs-body); }
   .gate button { margin-top: var(--s6); width: 100%; min-height: 2.25rem; font-size: var(--fs-body); font-weight: 600; }
+  .gate a.btn { display: flex; align-items: center; justify-content: center; margin-top: var(--s6); min-height: 2.25rem; border-radius: var(--r-md, 8px); background: var(--accent); color: var(--accent-ink); font-weight: 600; text-decoration: none; }
+  .gate a.btn:hover { filter: brightness(1.08); }
+  .gate #moved-link { overflow-wrap: anywhere; }
   @media (max-width: 440px) { .gate { margin: var(--s7) var(--s6); padding: var(--s6); } }
 
   /* ---------- toasts ---------- */
@@ -547,6 +551,20 @@
 </style>
 </head>
 <body>
+<section id="archived" class="gate" hidden aria-labelledby="arch-h">
+  <h1 id="arch-h">This board is archived</h1>
+  <p class="lede">The host archived <b id="arch-name"></b>. Its tasks and history are kept, but the board is read-only and offline until the host restores it on the Boards page. This page comes back by itself when it's restored.</p>
+</section>
+<section id="moved" class="gate" hidden aria-labelledby="moved-h">
+  <h1 id="moved-h">This board moved</h1>
+  <p class="lede">The host made another board the default, so this board now has its own address: <a id="moved-link" href="#" rel="noopener"></a>. Agents joined with the old address should re-run their join command from the board.</p>
+  <p><a id="moved-open" class="btn" href="#">Open it at its new address</a></p>
+</section>
+<section id="failed" class="gate" hidden aria-labelledby="failed-h">
+  <h1 id="failed-h">This board couldn't open</h1>
+  <p class="lede">The server couldn't open this board's data: <span id="failed-msg"></span></p>
+  <p class="lede">Tell the host: they can restore a backup (<code>npm run restore -- --board &lt;board&gt;</code>) or archive it on the Boards page. This page checks again by itself.</p>
+</section>
 <form id="gate" class="gate" hidden novalidate>
   <h1><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" rx=".6" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" rx=".6" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" rx=".6" fill="var(--accent-ink)"/></svg>Claude Board</h1>
   <p class="lede">Your hackathon team's shared task board. Every teammate's AI coding agent (Claude Code, Codex or GitHub Copilot) takes tasks from here; on this page you watch progress, answer the agents' questions and steer.</p>
@@ -566,6 +584,7 @@
   <a class="skip" href="#msg" data-skip="chat">Skip to chat</a>
   <header>
     <h1><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" rx=".6" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" rx=".6" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" rx=".6" fill="var(--accent-ink)"/></svg>Claude Board</h1>
+    <span class="bname" id="bname" hidden></span>
     <span class="tagline">your team's AI coding agents, on one task board</span>
     <span id="conn" class="conn" role="status">Connecting…</span>
     <button type="button" id="clock" class="clock" data-act="clock" hidden></button>
@@ -574,7 +593,8 @@
     <div class="hacts">
       <label class="filter"><span>Show</span><select id="filter" aria-label="Show tasks for"></select></label>
       <button id="new-task-btn" title="New task (N)">+ New task</button>
-      <a id="present-link" class="plink" href="/present.html" hidden target="_blank" rel="noopener" title="Presenter view: a read-only big-screen page for the room or the demo (opens in a new tab)" aria-label="Presenter view (opens in a new tab)"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 11v2.5M5 13.5h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="lt"> Presenter view</span></a>
+      <a id="boards-link" class="plink" href="/boards" hidden title="All boards on this server: create, open, archive (host only)">Boards</a>
+      <a id="present-link" class="plink" href="present.html" hidden target="_blank" rel="noopener" title="Presenter view: a read-only big-screen page for the room or the demo (opens in a new tab)" aria-label="Presenter view (opens in a new tab)"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 11v2.5M5 13.5h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="lt"> Presenter view</span></a>
       <button id="link-btn" class="ghost" title="Copy this board's link (it includes the token) to send to a teammate" aria-label="Copy board link"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 9.5l3-3M7 4.5l1.2-1.2a2.8 2.8 0 014 4L11 8.5M9 11.5l-1.2 1.2a2.8 2.8 0 01-4-4L5 7.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="lt"> Copy link</span></button>
       <span class="hpair">
         <button id="notify-btn" class="ghost icon bell" type="button" aria-pressed="false" aria-label="Desktop notifications" title="Notify me when this tab is in the background"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.5V7a4 4 0 018 0v4.5l1.2 1.2H2.8zM6.5 13.5a1.6 1.6 0 003 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><path class="slash" d="M2.5 2.5l11 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
@@ -752,7 +772,12 @@ const SIZE_TIP = { S: 'Size S: small, under 30 minutes. One-task-at-a-time agent
 const HUES = [215, 150, 275, 325, 185, 95, 250, 45, 300, 165]; // person colours, kept away from the red/orange used for warnings
 const DONE_SHOWN = 6;
 const $ = (id) => document.getElementById(id);
-const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+// One server can host several boards: /b/<slug>/ (its API under /b/<slug>/api). The default board is at the root.
+const BASE = (location.pathname.match(/^\/b\/[^/]+/) || [''])[0];
+const SLUG = BASE ? decodeURIComponent(BASE.slice(3)) : '';
+// Each board keeps its own saved token, name and view choices; the root board keeps the original keys.
+const nsKey = (k) => (BASE && k.startsWith('board-') && k !== 'board-admin-token' ? `${k}@${BASE}` : k);
+const store = { get: (k) => { try { return localStorage.getItem(nsKey(k)); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(nsKey(k), v); } catch {} } };
 const qs = new URLSearchParams(location.search);
 let token = qs.get('token') || store.get('board-token') || '';
 // names are case-insensitive. ?name=<person> (join prints the board link with it) signs in as that person.
@@ -937,12 +962,22 @@ async function api(path, opts = {}) {
   let r;
   if (opts.method === 'PATCH' && /^\/tasks\/\d+$/.test(path)) { try { const b = JSON.parse(opts.body); if (b.status) selfMoves.set(Number(path.split('/')[2]), { status: b.status, ts: Date.now() }); } catch {} }
   try {
-    r = await fetch('/api' + path, { ...opts, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, 'X-Agent': me, ...(opts.headers || {}) } });
+    // no-store: a 410 (archived) is cacheable by default, so a restored board would still look archived.
+    r = await fetch(BASE + '/api' + path, { cache: 'no-store', ...opts, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, 'X-Agent': me, ...(opts.headers || {}) } });
   } catch { throw new Error('Cannot reach the board server. Is it still running?'); }
   const body = await r.json().catch(() => ({}));
+  if (unavailableStatus(r.status, body)) throw new Error('Token rejected');
   if (r.status === 401) { showGate('That token was rejected. Check it with the host.'); throw new Error('Token rejected'); }
   if (!r.ok) throw new Error(body.error || r.statusText || 'Request failed');
   return body;
+}
+// The board itself isn't available: archived (410), moved to its own address (409), or its data
+// couldn't be opened (503). Shows the matching page and returns true.
+function unavailableStatus(status, body = {}) {
+  if (status === 410) { showUnavailable('archived'); return true; }
+  if (status === 409 && body.moved_to) { showUnavailable('moved', body.moved_to); return true; }
+  if (status === 503) { showUnavailable('failed', body.error || 'unknown error'); return true; }
+  return false;
 }
 async function act(promise, okMsg) {
   try { const r = await promise; if (okMsg) toast(okMsg); scheduleReload(); return r; }
@@ -950,7 +985,43 @@ async function act(promise, okMsg) {
 }
 
 // ---------- gate ----------
+// The board isn't available (archived, moved, failed to open): say so instead of retrying the live
+// stream, and check quietly every few seconds so the page comes back by itself (restored, default
+// switched back, data fixed) without a reload.
+let unavailable = null; let recoverTimer = null;
+const UNAVAILABLE = ['archived', 'moved', 'failed'];
+function showUnavailable(kind, info = '') {
+  es?.close(); esOpen = false; unavailable = kind;
+  $('app').hidden = true; $('gate').hidden = true;
+  for (const id of UNAVAILABLE) $(id).hidden = id !== kind;
+  const name = state?.board?.name || SLUG || 'this board';
+  if (kind === 'archived') { $('arch-name').textContent = name; document.title = `Archived · ${SLUG ? name + ' · ' : ''}Claude Board`; }
+  if (kind === 'moved') {
+    const to = String(info).replace(/\/+$/, '');
+    const url = new URL(to + '/', location.origin); url.searchParams.set('token', token); if (me) url.searchParams.set('name', me);
+    $('moved-link').textContent = new URL(to + '/', location.origin).href; $('moved-link').href = url.href; $('moved-open').href = url.href;
+    document.title = 'Board moved · Claude Board';
+  }
+  if (kind === 'failed') { $('failed-msg').textContent = String(info).replace(/^(This|The default) board failed to open:\s*/i, ''); document.title = `Couldn't open · ${SLUG ? name + ' · ' : ''}Claude Board`; }
+  clearInterval(recoverTimer); recoverTimer = setInterval(tryRecover, 4000);
+}
+const showArchived = () => showUnavailable('archived');
+async function tryRecover() {
+  if (!unavailable || !token) return;
+  let r; try { r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); } catch { return; }
+  const body = await r.clone().json().catch(() => ({}));
+  if (r.ok) {
+    clearInterval(recoverTimer); recoverTimer = null; unavailable = null;
+    for (const id of UNAVAILABLE) $(id).hidden = true;
+    $('app').hidden = false; await load(); if (!unavailable) connect();
+    return toast('The board is back.');
+  }
+  if (r.status === 401) { clearInterval(recoverTimer); unavailable = null; for (const id of UNAVAILABLE) $(id).hidden = true; return showGate('That token was rejected. Check it with the host.'); }
+  const kind = r.status === 410 ? 'archived' : r.status === 409 ? 'moved' : r.status === 503 ? 'failed' : null;
+  if (kind && kind !== unavailable) unavailableStatus(r.status, body);
+}
 function showGate(err = '') {
+  clearInterval(recoverTimer); unavailable = null; for (const id of UNAVAILABLE) $(id).hidden = true;
   $('app').hidden = true; $('gate').hidden = false;
   $('g-token').value = token; $('g-name').value = me; $('g-err').textContent = err;
   (token ? $('g-name') : $('g-token')).focus();
@@ -962,7 +1033,7 @@ async function gateNames() {
   const t = $('g-token').value.trim() || token;
   if (!names.length && t) {
     try {
-      const r = await fetch('/api/state', { headers: { Authorization: 'Bearer ' + t } });
+      const r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + t } });
       if (r.ok) { const st = await r.json(); names = [...new Set((st.presence || []).map((p) => String(p.person || p.name || '').toLowerCase()).filter((n) => n && n !== 'board' && n !== 'anonymous'))].sort(); }
     } catch {}
   }
@@ -975,8 +1046,9 @@ $('gate').addEventListener('submit', async (ev) => {
   const t = $('g-token').value.trim(); const n = $('g-name').value.trim().toLowerCase().replace(/[^\w.\-]/g, '');
   if (!t) { $('g-err').textContent = 'Enter the board token.'; return $('g-token').focus(); }
   if (!n) { $('g-err').textContent = 'Enter your name (letters, numbers, . - _).'; return $('g-name').focus(); }
-  const r = await fetch('/api/state', { headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
+  const r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
   if (!r) { $('g-err').textContent = 'Cannot reach the board server. Is it still running?'; return; }
+  if (r.status === 410 || r.status === 409 || r.status === 503) { token = t; me = n; const body = await r.json().catch(() => ({})); return unavailableStatus(r.status, body); }
   if (r.status === 401) { $('g-err').textContent = 'That token was rejected.'; return $('g-token').focus(); }
   token = t; me = n; store.set('board-token', token); store.set('board-name', me);
   start();
@@ -1199,8 +1271,9 @@ function tickTime() {
 // ---------- export: write-up + backup ----------
 async function fetchExport(kind) {
   let r;
-  try { r = await fetch('/api/' + (kind === 'json' ? 'export' : kind === 'retro' ? 'retro' : 'summary'), { headers: { Authorization: 'Bearer ' + token } }); }
+  try { r = await fetch(BASE + '/api/' + (kind === 'json' ? 'export' : kind === 'retro' ? 'retro' : 'summary'), { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); }
   catch { throw new Error('Cannot reach the board server. Is it still running?'); }
+  if (unavailableStatus(r.status, await r.clone().json().catch(() => ({})))) throw new Error('Token rejected');
   if (r.status === 401) { showGate('That token was rejected. Check it with the host.'); throw new Error('Token rejected'); }
   if (!r.ok) throw new Error(`Could not get the ${kind === 'json' ? 'backup' : kind === 'retro' ? 'retro' : 'summary'} (${r.status})`);
   return r.text();
@@ -1296,7 +1369,7 @@ let prevQIds = null;
 function render() {
   $('me').textContent = me;
   // Presenter view opens with the read-only viewer token, never the board token; hidden until the server gives one.
-  { const vt = state.setup?.viewer_token; const pl = $('present-link'); pl.hidden = !vt; if (vt) pl.href = '/present.html?token=' + encodeURIComponent(vt); }
+  { const vt = state.setup?.viewer_token; const pl = $('present-link'); pl.hidden = !vt; if (vt) pl.href = BASE + '/present.html?token=' + encodeURIComponent(vt); }
   const qOpen = openQuestions();
   // Screen readers: one polite announcement when a new question arrives (not on every refresh).
   if (prevQIds) {
@@ -1306,7 +1379,8 @@ function render() {
   prevQIds = new Set(qOpen.map((q) => q.id));
   const unread = unreadMentions();
   if (ui.tab === 'me' && unread.length) { markMentionsSeen(); return render(); }
-  document.title = (qOpen.length + unread.length ? `(${qOpen.length + unread.length}) ` : '') + 'Claude Board';
+  document.title = (qOpen.length + unread.length ? `(${qOpen.length + unread.length}) ` : '') + (SLUG ? `${state.board?.name || SLUG} · ` : '') + 'Claude Board';
+  if (SLUG && state.board?.name) { const b = $('bname'); if (b.textContent !== state.board.name) { b.textContent = state.board.name; b.title = `Board "${state.board.name}" (/b/${SLUG}/) on this server`; } }
   renderNeeds(qOpen, unread);
   renderClock(); renderBell();
   const si = setupInfo();
@@ -1444,7 +1518,7 @@ const addrText = (a) => a.ip === 'localhost' ? 'Only works on this laptop' : /^s
 function boardLink() {
   const best = state.setup?.join_commands?.[0];
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
-  return local && best && best.ip !== 'localhost' ? best.web_url : `${location.origin}/?token=${encodeURIComponent(token)}`;
+  return local && best && best.ip !== 'localhost' ? best.web_url : `${location.origin}${BASE}/?token=${encodeURIComponent(token)}`;
 }
 // One ready-to-paste message for the team chat.
 function inviteText() {
@@ -1460,7 +1534,7 @@ function inviteText() {
   return L.join('\n');
 }
 // A QR code image for some text, drawn by the board server (works offline: no outside service).
-const qrSrc = (text) => `/api/qr.svg?token=${encodeURIComponent(token)}&text=${encodeURIComponent(text)}`;
+const qrSrc = (text) => `${BASE}/api/qr.svg?token=${encodeURIComponent(token)}&text=${encodeURIComponent(text)}`;
 function stepInvite(si) {
   const su = state.setup;
   if (!su || !su.join_commands?.length) return '<p>Ask the host for the join command printed by <code>npm start</code>.</p>' + chips(si);
@@ -2746,10 +2820,17 @@ function setConn(kind, msg) {
 }
 function connect() {
   es?.close();
-  es = new EventSource('/api/stream?token=' + encodeURIComponent(token) + '&name=' + encodeURIComponent(me));
+  es = new EventSource(BASE + '/api/stream?token=' + encodeURIComponent(token) + '&name=' + encodeURIComponent(me));
   es.onopen = () => { esOpen = true; setConn('live'); if (hadError) { hadError = false; load(); } };
   es.onmessage = scheduleReload;
-  es.onerror = () => { esOpen = false; hadError = true; setConn('down', 'Disconnected, retrying…'); };
+  // A network blip: the browser retries by itself. An HTTP error (board archived, moved, token
+  // rotated) closes the stream for good: find out why with a normal request, then reconnect if it's fine.
+  es.onerror = () => { esOpen = false; hadError = true; setConn('down', 'Disconnected, retrying…'); if (es.readyState === EventSource.CLOSED) setTimeout(recheck, 800); };
+}
+async function recheck() {
+  if (unavailable || $('app').hidden) return;
+  await load();
+  if (!unavailable && !$('app').hidden && (!es || es.readyState === EventSource.CLOSED)) connect();
 }
 
 // Done auto-collapses when six columns don't fit: re-check when the window size changes.
@@ -2761,9 +2842,18 @@ async function start() {
   if (qs.get('token') || qs.get('name')) history.replaceState(null, '', location.pathname);
   store.set('board-token', token);
   $('gate').hidden = true; $('app').hidden = false;
+  // Which board this is (several can share a server), and the host's way back to the list of boards.
+  if (SLUG) { const b = $('bname'); b.hidden = false; b.textContent = SLUG; b.title = `Board "${SLUG}" on this server`; }
+  // Only a non-secret "this browser is the host's" flag (set by the Boards page); the admin token itself never leaves that page.
+  $('boards-link').hidden = !(() => { try { return localStorage.getItem('board-is-host') === '1'; } catch { return false; } })();
   applyKeys();
-  await load(); connect();
-  if (!started) { started = true; setInterval(() => (esOpen ? load() : render()), 20000); setInterval(tickTime, 30000); } // keep timers fresh; agents coming online don't emit events
+  await load(); if (!unavailable && !$('app').hidden) connect();
+  if (!started) {
+    started = true;
+    // Keep timers fresh (agents coming online don't emit events), and notice a live stream that closed for good.
+    setInterval(() => { if (unavailable || $('app').hidden) return; if (es && es.readyState === EventSource.CLOSED) return recheck(); return esOpen ? load() : render(); }, 20000);
+    setInterval(tickTime, 30000);
+  }
 }
 start();
 </script>

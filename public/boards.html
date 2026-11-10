@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Boards · Claude Board</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%233d5afe'/><rect x='3' y='4' width='3' height='8' fill='white'/><rect x='7' y='4' width='3' height='5' fill='white'/><rect x='11' y='4' width='2' height='6' fill='white'/></svg>">
+<style>
+  /* Same tokens as the board (index.html): change them there first, then here. */
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f5f2; --sunken: #ecebe6; --panel: #ffffff; --chip: #eeede8;
+    --ink: #1d1d1b; --muted: #66665f; --line: #e2e1db; --line-strong: #c6c5bc; --field-line: #8a897f;
+    --accent: #3448d8; --accent-hover: #2a3bbd; --accent-ink: #ffffff; --accent-soft: #e8ebff;
+    --ok: #15803d; --ok-soft: #e8f5ec; --warn: #b4410a; --warn-soft: #fff1e6;
+    --bad: #b91c1c; --bad-hover: #9f1818; --bad-soft: #fdecec; --on-fill: #ffffff;
+    --toast: #262624; --toast-ink: #f5f5f2;
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+    --fs-micro: .6875rem; --fs-meta: .75rem; --fs-sm: .8125rem; --fs-body: .875rem; --fs-lead: 1rem; --fs-title: 1.125rem;
+    --lh: 1.45;
+    --s2: 4px; --s3: 6px; --s4: 8px; --s5: 12px; --s6: 16px; --s7: 24px; --s8: 32px;
+    --r-xs: 4px; --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-full: 999px;
+    --ctl: 2rem; --ctl-sm: 1.625rem;
+    --e1: 0 1px 2px rgba(24, 24, 20, .06); --e2: 0 6px 20px rgba(24, 24, 20, .14), 0 1px 3px rgba(24, 24, 20, .08);
+    --t-fast: 100ms; --t-base: 160ms; --ease: cubic-bezier(.2, .7, .2, 1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413; --sunken: #191918; --panel: #1d1d1b; --chip: #262624;
+      --ink: #ecebe6; --muted: #a09f98; --line: #31312d; --line-strong: #4b4a44; --field-line: #75746c;
+      --accent: #8f9dff; --accent-hover: #a5b0ff; --accent-ink: #111111; --accent-soft: #252a4a;
+      --ok: #4ade80; --ok-soft: #16281c; --warn: #fb9a5b; --warn-soft: #33241a;
+      --bad: #f87171; --bad-hover: #fa8a8a; --bad-soft: #3a1d1d; --on-fill: #1a0f0a;
+      --toast: #ecebe6; --toast-ink: #1d1d1b;
+      --e1: none; --e2: 0 8px 24px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .04);
+    }
+  }
+  @media (hover: none) and (pointer: coarse) { :root { --ctl: 2.5rem; --ctl-sm: 2rem; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: var(--fs-body)/var(--lh) var(--font); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  [hidden] { display: none !important; }
+  h1, h2, h3, p { margin: 0; }
+  a { color: var(--accent); text-underline-offset: 2px; }
+  code { font: var(--fs-meta) var(--mono); background: var(--chip); padding: 1px var(--s2); border-radius: var(--r-xs); overflow-wrap: anywhere; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .num, time { font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  input, button { font: inherit; color: inherit; }
+  input { background: var(--bg); border: 1px solid var(--field-line); border-radius: var(--r-sm); padding: 5px var(--s4); width: 100%; min-width: 0; min-height: var(--ctl); font-size: var(--fs-sm); }
+  input:focus-visible { outline-offset: 0; border-color: var(--accent); }
+  [aria-invalid="true"] { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
+  label { font-size: var(--fs-meta); font-weight: 600; color: var(--muted); display: block; margin: 0 0 var(--s2); }
+  button { background: var(--accent); color: var(--accent-ink); border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 var(--s5); min-height: var(--ctl); font-size: var(--fs-sm); font-weight: 500; cursor: pointer; white-space: nowrap;
+    transition: background-color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease); }
+  button:hover { background: var(--accent-hover); }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .55; cursor: default; transform: none; }
+  button.ghost { background: transparent; color: var(--ink); border-color: var(--line-strong); }
+  button.ghost:hover { background: var(--chip); border-color: var(--field-line); }
+  button.danger { background: var(--bad); color: var(--on-fill); }
+  button.danger:hover { background: var(--bad-hover); }
+  button.sm { min-height: var(--ctl-sm); padding: 0 10px; font-size: var(--fs-meta); }
+  .err { color: var(--bad); font-size: var(--fs-sm); margin-top: var(--s3); }
+  .err:empty { display: none; }
+  .hint { font-size: var(--fs-meta); color: var(--muted); margin-top: var(--s2); }
+
+  .wrap { max-width: 960px; margin: 0 auto; padding: var(--s7) var(--s6) var(--s8); }
+  header { display: flex; align-items: center; gap: var(--s5); flex-wrap: wrap; margin-bottom: var(--s7); }
+  header h1 { font-size: var(--fs-title); font-weight: 600; display: flex; align-items: center; gap: var(--s4); }
+  .mark { width: 20px; height: 20px; }
+  header .sp { flex: 1; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--s6); box-shadow: var(--e1); }
+  .sec-h { display: flex; align-items: baseline; gap: var(--s4); margin: var(--s7) 0 var(--s5); }
+  .sec-h h2 { font-size: var(--fs-lead); font-weight: 600; }
+
+  /* New board */
+  .nb { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--s5); align-items: end; }
+  @media (max-width: 640px) { .nb { grid-template-columns: 1fr; } }
+  .created { margin-top: var(--s5); border-top: 1px solid var(--line); padding-top: var(--s5); }
+  .cmd { display: flex; gap: var(--s4); align-items: center; background: var(--sunken); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--s3) var(--s3) var(--s3) var(--s5); margin: var(--s2) 0 var(--s4); }
+  .cmd code { background: none; padding: 0; flex: 1; font-size: var(--fs-meta); }
+
+  /* Board list */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s5); list-style: none; margin: 0; padding: 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s5) var(--s6); display: flex; flex-direction: column; gap: var(--s4); box-shadow: var(--e1); min-width: 0; }
+  .card.archived { background: var(--sunken); box-shadow: none; }
+  .ch { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--s4); min-width: 0; }
+  .ch h3 { font-size: var(--fs-lead); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100%; }
+  .ch .slug { white-space: nowrap; }
+  .ch .slug { font: var(--fs-meta) var(--mono); color: var(--muted); }
+  .pill { display: inline-block; font-size: var(--fs-micro); font-weight: 500; line-height: 18px; padding: 0 6px; border-radius: var(--r-full); background: var(--chip); color: var(--muted); white-space: nowrap; }
+  .pill.live { background: var(--ok-soft); color: var(--ok); }
+  .pill.bad { background: var(--bad-soft, #fdecec); color: var(--bad, #b91c1c); }
+  .failerr { font-size: var(--fs-meta); color: var(--bad, #b91c1c); margin-top: var(--s3, 8px); overflow-wrap: anywhere; }
+  .pill.def { background: var(--accent-soft); color: var(--accent); }
+  .facts { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); font-size: var(--fs-meta); color: var(--muted); }
+  .facts b { color: var(--ink); font-weight: 600; }
+  .bar { height: 4px; background: var(--chip); border-radius: var(--r-full); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--ok); border-radius: var(--r-full); transition: width var(--t-base) var(--ease); }
+  .acts { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: auto; }
+  .confirm { background: var(--bad-soft); color: var(--bad); border-radius: var(--r-sm); padding: var(--s4); font-size: var(--fs-sm); display: flex; flex-direction: column; gap: var(--s4); }
+  .confirm .acts { margin: 0; }
+  .empty { color: var(--muted); padding: var(--s7) var(--s6); text-align: center; border: 1px dashed var(--line-strong); border-radius: var(--r-md); }
+
+  /* Sign-in */
+  .gate { max-width: 420px; margin: 12vh auto 0; }
+  .gate p { color: var(--muted); font-size: var(--fs-sm); margin: var(--s3) 0 var(--s5); }
+  .gate form { display: flex; gap: var(--s4); }
+
+  #toasts { position: fixed; bottom: var(--s6); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: var(--s3); z-index: 10; width: max-content; max-width: calc(100vw - 32px); }
+  .toast { background: var(--toast); color: var(--toast-ink); padding: var(--s4) var(--s5); border-radius: var(--r-md); box-shadow: var(--e2); font-size: var(--fs-sm); }
+  .toast.bad { background: var(--bad); color: var(--on-fill); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" rx=".6" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" rx=".6" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6" rx=".6" fill="var(--accent-ink)"/></svg>Boards</h1>
+    <span class="muted" style="font-size:var(--fs-sm)">Every board on this server. Each has its own token, people and tasks.</span>
+    <span class="sp"></span>
+    <button type="button" class="ghost sm" id="signout" hidden>Forget admin token</button>
+  </header>
+
+  <section id="gate" class="gate panel" hidden aria-labelledby="gate-h">
+    <h2 id="gate-h" style="font-size:var(--fs-lead)">Sign in as the host</h2>
+    <p>Paste the admin token. <code>npm start</code> prints it, and it's saved in <code>data/admin-token</code> on the host laptop.</p>
+    <form id="gate-form">
+      <label class="vh" for="gate-in">Admin token</label>
+      <input id="gate-in" autocomplete="off" spellcheck="false" aria-describedby="gate-err" required>
+      <button type="submit">Sign in</button>
+    </form>
+    <div class="err" id="gate-err" role="alert"></div>
+  </section>
+
+  <main id="app" hidden>
+    <section class="panel" aria-labelledby="nb-h">
+      <h2 id="nb-h" style="font-size:var(--fs-lead);margin-bottom:var(--s5)">New board</h2>
+      <form id="nb-form" class="nb" novalidate>
+        <div><label for="nb-name">Name</label><input id="nb-name" maxlength="60" placeholder="e.g. Spring hackathon" aria-describedby="nb-err nb-hint" required></div>
+        <div><label for="nb-slug">Address (optional)</label><input id="nb-slug" maxlength="40" placeholder="spring-hackathon" spellcheck="false" aria-describedby="nb-err nb-hint"></div>
+        <button type="submit" id="nb-go">Create board</button>
+      </form>
+      <p class="hint" id="nb-hint">The address becomes the board's link: <code id="nb-preview">/b/…/</code>. Lowercase letters, numbers and dashes.</p>
+      <div class="err" id="nb-err" role="alert"></div>
+      <div class="created" id="created" hidden aria-live="polite"></div>
+    </section>
+
+    <div class="sec-h"><h2 id="list-h">Live</h2><span class="muted num" id="live-count"></span></div>
+    <ul class="grid" id="live" aria-labelledby="list-h"></ul>
+
+    <div id="arch-wrap" hidden>
+      <div class="sec-h"><h2 id="arch-h">Archived</h2><span class="muted num" id="arch-count"></span></div>
+      <p class="hint" style="margin:-6px 0 var(--s5)">Read-only and offline: their links stop working until you restore them.</p>
+      <ul class="grid" id="arch" aria-labelledby="arch-h"></ul>
+    </div>
+  </main>
+</div>
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// The admin token unlocks every board, so it lives only in this tab's sessionStorage (gone when the
+// tab closes) and is only ever read here. Board pages just get a non-secret flag to show a Boards link.
+const KEY = 'board-admin-token';
+const HOST_FLAG = 'board-is-host';
+const store = {
+  get: () => { try { return sessionStorage.getItem(KEY) || ''; } catch { return ''; } },
+  set: (v) => { try { v ? sessionStorage.setItem(KEY, v) : sessionStorage.removeItem(KEY); } catch {} },
+};
+const hostFlag = (on) => { try { on ? localStorage.setItem(HOST_FLAG, '1') : localStorage.removeItem(HOST_FLAG); } catch {} };
+// Older versions kept the admin token in localStorage: move it out.
+try { const old = localStorage.getItem(KEY); if (old) { if (!store.get()) store.set(old); localStorage.removeItem(KEY); } } catch {}
+const qs = new URLSearchParams(location.search);
+let admin = qs.get('admin') || store.get();
+if (qs.get('admin')) { store.set(admin); history.replaceState(null, '', location.pathname); }
+let boards = [];
+const ui = { confirm: null, created: null }; // confirm: { slug, action }
+
+function toast(msg, bad = false) {
+  const d = document.createElement('div'); d.className = 'toast' + (bad ? ' bad' : ''); d.textContent = msg;
+  if (bad) d.setAttribute('role', 'alert');
+  $('toasts').append(d); while ($('toasts').children.length > 3) $('toasts').firstChild.remove();
+  setTimeout(() => d.remove(), bad ? 7000 : 3500);
+}
+async function api(path, opts = {}) {
+  let r;
+  try { r = await fetch('/api/admin' + path, { cache: 'no-store', ...opts, headers: { 'Content-Type': 'application/json', 'X-Admin-Token': admin } }); }
+  catch { throw new Error('Cannot reach the board server. Is it still running?'); }
+  const body = await r.json().catch(() => ({}));
+  if (r.status === 401 || r.status === 403) { store.set(''); hostFlag(false); showGate('That admin token was rejected. Check what npm start printed on the host.'); throw new Error('rejected'); }
+  if (!r.ok) throw new Error(body.error || r.statusText || 'Request failed');
+  return body;
+}
+function showGate(err = '') {
+  $('app').hidden = true; $('signout').hidden = true; $('gate').hidden = false;
+  $('gate-err').textContent = err; $('gate-in').value = '';
+  if (err) $('gate-in').setAttribute('aria-invalid', 'true'); else $('gate-in').removeAttribute('aria-invalid');
+  $('gate-in').focus();
+}
+$('gate-form').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  const t = $('gate-in').value.trim(); if (!t) { $('gate-err').textContent = 'Paste the admin token first.'; return; }
+  admin = t; store.set(t); start();
+});
+$('signout').onclick = () => { store.set(''); hostFlag(false); admin = ''; showGate(); };
+
+const ago = (ts) => {
+  if (!ts) return 'no activity yet';
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (s < 60) return 'just now'; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
+};
+const slugOk = (s) => /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/.test(s);
+const toSlug = (s) => String(s).toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+
+function card(b) {
+  const c = ui.confirm && ui.confirm.slug === b.slug ? ui.confirm.action : null;
+  const pct = b.tasks ? Math.round((b.done / b.tasks) * 100) : 0;
+  const k = esc(b.slug);
+  let acts;
+  if (c === 'archive') acts = `<div class="confirm" role="group" aria-label="Confirm archiving ${esc(b.name)}"><span>Archive <b>${esc(b.name)}</b>? Its link and join command stop working until you restore it. Nothing is deleted.</span><div class="acts"><button type="button" class="danger sm" data-act="archive-yes" data-slug="${k}">Archive</button><button type="button" class="ghost sm" data-act="cancel" data-slug="${k}" id="keep-${k}">Keep it live</button></div></div>`;
+  else if (c === 'delete') acts = `<div class="confirm" role="group" aria-label="Confirm deleting ${esc(b.name)}"><span>Delete <b>${esc(b.name)}</b>? Its data is moved to the server's trash folder (<code>data/trash</code>), so the host can still recover it by hand.</span><div class="acts"><button type="button" class="danger sm" data-act="delete-yes" data-slug="${k}">Delete</button><button type="button" class="ghost sm" data-act="cancel" data-slug="${k}" id="keep-${k}">Keep it</button></div></div>`;
+  else if (b.status === 'archived') acts = `<div class="acts"><button type="button" class="sm" data-act="restore" data-slug="${k}">Restore</button><button type="button" class="ghost sm" data-act="delete" data-slug="${k}">Delete…</button></div>`;
+  // Its data couldn't be opened: nothing to open or copy; the host can archive it (then delete or fix and restore).
+  else if (b.status === 'failed') acts = `<p class="failerr" role="note"><b>Couldn't open this board:</b> ${esc(b.error || 'unknown error')}. Fix its data (e.g. <code>npm run restore -- latest --board ${k}</code> with the server stopped), or archive it.</p><div class="acts">${b.default ? '' : `<button type="button" class="ghost sm" data-act="archive" data-slug="${k}">Archive…</button>`}</div>${b.default ? '<p class="hint">This is the default board, so it can\'t be archived. Make another board the default first.</p>' : ''}`;
+  else acts = `<div class="acts"><button type="button" class="sm" data-act="open" data-slug="${k}" aria-label="Open ${esc(b.name)} (new tab)">Open</button><button type="button" class="ghost sm" data-act="copy-join" data-slug="${k}">Copy join command</button><button type="button" class="ghost sm" data-act="copy-link" data-slug="${k}">Copy link</button>${b.default ? '' : `<button type="button" class="ghost sm" data-act="default" data-slug="${k}" title="Also serve this board at the server's root address">Make default</button>`}${b.default ? '' : `<button type="button" class="ghost sm" data-act="archive" data-slug="${k}">Archive…</button>`}</div>${b.default ? '<p class="hint">This is the default board, so it can\'t be archived. To archive it, make another board the default first.</p>' : ''}`;
+  return `<li class="card ${b.status === 'archived' ? 'archived' : ''}" data-board="${k}">
+    <div class="ch"><h3 title="${esc(b.name)}">${esc(b.name)}</h3><span class="slug">/b/${k}/</span></div>
+    <div>${b.status === 'archived' ? `<span class="pill">archived${b.archived_at ? ' ' + esc(ago(b.archived_at)) : ''}</span>` : b.status === 'failed' ? '<span class="pill bad">failed to open</span>' : '<span class="pill live">live</span>'} ${b.default ? '<span class="pill def" title="Also served at the server\'s root address">default</span>' : ''}</div>
+    <div class="facts"><span><b class="num">${b.done || 0}</b> of <b class="num">${b.tasks || 0}</b> tasks done</span>${b.status === 'live' ? `<span><b class="num">${b.agents_online || 0}</b> agent${b.agents_online === 1 ? '' : 's'} online</span>` : ''}<span>${esc(ago(b.last_activity))}</span></div>
+    <div class="bar" role="img" aria-label="${pct}% of tasks done"><i style="width:${pct}%"></i></div>
+    ${acts}</li>`;
+}
+function render() {
+  const live = boards.filter((b) => b.status !== 'archived').sort((a, b) => (b.default - a.default) || (b.last_activity || 0) - (a.last_activity || 0));
+  const arch = boards.filter((b) => b.status === 'archived').sort((a, b) => (b.archived_at || 0) - (a.archived_at || 0));
+  $('live').innerHTML = live.length ? live.map(card).join('') : '<li class="empty">No live boards. Create one above, or restore an archived one.</li>';
+  $('live-count').textContent = live.length ? String(live.length) : '';
+  $('arch-wrap').hidden = !arch.length;
+  $('arch').innerHTML = arch.map(card).join(''); $('arch-count').textContent = String(arch.length);
+}
+async function load() {
+  try { boards = await api('/boards'); hostFlag(true); render(); }
+  catch (e) { if (e.message !== 'rejected') toast(e.message, true); }
+}
+async function copy(text, okMsg) {
+  let ok = false;
+  try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); ok = true; } } catch {}
+  if (!ok) { const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'; document.body.append(ta); ta.select(); try { ok = document.execCommand('copy'); } catch {} ta.remove(); }
+  toast(ok ? okMsg : 'Could not copy automatically: select the text and copy it by hand.', !ok);
+}
+const focusCard = (slug, sel) => document.querySelector(`[data-board="${CSS.escape(slug)}"] ${sel}`)?.focus();
+
+document.addEventListener('click', async (ev) => {
+  const el = ev.target.closest('[data-act]'); if (!el) return;
+  const { act, slug } = el.dataset; const b = boards.find((x) => x.slug === slug);
+  try {
+    if (act === 'open') {
+      const w = window.open('about:blank', '_blank'); // opened now, so popup blockers allow it
+      let r;
+      try { r = await api(`/boards/${encodeURIComponent(slug)}/open`); }
+      catch (e) { w?.close(); throw e; } // e.g. 503: the board failed to open; 409/410 after a change elsewhere
+      const url = new URL(r.url, location.origin); url.searchParams.set('token', r.token);
+      if (w) { w.opener = null; w.location = url.href; } else location.href = url.href;
+    } else if (act === 'copy-join' || act === 'copy-link') {
+      const r = await api(`/boards/${encodeURIComponent(slug)}/open`);
+      if (act === 'copy-link') { const url = new URL(r.url, location.origin); url.searchParams.set('token', r.token); return copy(url.href, `Link to ${b?.name || slug} copied. It includes the board token.`); }
+      return copy(r.join_command || `npm run join -- --url ${new URL(r.url, location.origin).href.replace(/\/$/, '')} --token ${r.token}`, 'Join command copied. Teammates run it in their claude-board folder.');
+    } else if (act === 'default') {
+      await api(`/boards/${encodeURIComponent(slug)}/default`, { method: 'POST' }); toast(`${b?.name || slug} is now the default board (also at the server's root address).`); await load(); focusCard(slug, '[data-act="open"]');
+    } else if (act === 'archive') {
+      ui.confirm = { slug, action: 'archive' }; render(); $('keep-' + slug)?.focus();
+    } else if (act === 'delete') { ui.confirm = { slug, action: 'delete' }; render(); $('keep-' + slug)?.focus(); }
+    else if (act === 'cancel') { ui.confirm = null; render(); focusCard(slug, '[data-act]'); }
+    else if (act === 'archive-yes') {
+      ui.confirm = null; await api(`/boards/${encodeURIComponent(slug)}/archive`, { method: 'POST' }); toast(`${b?.name || slug} archived.`); await load(); focusCard(slug, '[data-act="restore"]');
+    } else if (act === 'restore') {
+      await api(`/boards/${encodeURIComponent(slug)}/restore`, { method: 'POST' }); toast(`${b?.name || slug} is live again. Its link and join command work as before.`); await load(); focusCard(slug, '[data-act="open"]');
+    } else if (act === 'delete-yes') {
+      ui.confirm = null; await api(`/boards/${encodeURIComponent(slug)}`, { method: 'DELETE' }); toast(`${b?.name || slug} deleted (moved to the trash folder).`); await load(); $('nb-name').focus();
+    } else if (act === 'created-copy') copy(el.dataset.text, el.dataset.ok);
+  } catch (e) { if (e.message !== 'rejected') { toast(e.message, true); ui.confirm = null; render(); } }
+});
+
+$('nb-name').addEventListener('input', () => { $('nb-name').removeAttribute('aria-invalid'); $('nb-err').textContent = ''; preview(); });
+$('nb-slug').addEventListener('input', () => { $('nb-slug').removeAttribute('aria-invalid'); $('nb-err').textContent = ''; preview(); });
+function preview() { const s = $('nb-slug').value.trim() || toSlug($('nb-name').value); $('nb-preview').textContent = `/b/${s || '…'}/`; }
+$('nb-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const name = $('nb-name').value.trim(); const slugIn = $('nb-slug').value.trim();
+  const fail = (el, msg) => { $(el).setAttribute('aria-invalid', 'true'); $('nb-err').textContent = msg; $(el).focus(); };
+  if (!name) return fail('nb-name', 'Give the board a name.');
+  const slug = slugIn || toSlug(name);
+  if (!slugOk(slug)) return fail(slugIn ? 'nb-slug' : 'nb-name', slugIn ? 'The address can only use lowercase letters, numbers and dashes (not at the start or end), up to 40 characters.' : 'Couldn\'t make an address from that name: type one in Address.');
+  if (boards.some((b) => b.slug === slug)) return fail(slugIn ? 'nb-slug' : 'nb-name', `There's already a board at /b/${slug}/. Pick another address.`);
+  $('nb-go').disabled = true;
+  try {
+    const r = await api('/boards', { method: 'POST', body: JSON.stringify({ name, slug }) });
+    const url = new URL(r.url, location.origin); url.searchParams.set('token', r.token);
+    const join = r.join_command || `npm run join -- --url ${new URL(r.url, location.origin).href.replace(/\/$/, '')} --token ${r.token}`;
+    $('created').hidden = false;
+    $('created').innerHTML = `<p style="margin-bottom:var(--s4)"><b>${esc(r.name)}</b> is ready. Send your team the join command; open the board to set its goal.</p>
+      <label>Board link</label><div class="cmd"><code>${esc(url.href)}</code><button type="button" class="ghost sm" data-act="created-copy" data-text="${esc(url.href)}" data-ok="Board link copied.">Copy</button></div>
+      <label>Join command</label><div class="cmd"><code>${esc(join)}</code><button type="button" class="ghost sm" data-act="created-copy" data-text="${esc(join)}" data-ok="Join command copied.">Copy</button></div>
+      <button type="button" class="sm" data-act="open" data-slug="${esc(r.slug)}" id="created-open">Open ${esc(r.name)}</button>`;
+    $('nb-name').value = ''; $('nb-slug').value = ''; preview();
+    await load(); $('created-open').focus();
+  } catch (e) { if (e.message !== 'rejected') $('nb-err').textContent = e.message; }
+  finally { $('nb-go').disabled = false; }
+});
+
+async function start() {
+  if (!admin) return showGate();
+  $('gate').hidden = true; $('app').hidden = false; $('signout').hidden = false;
+  await load();
+}
+start();
+setInterval(() => { if (!$('app').hidden && !ui.confirm && document.visibilityState === 'visible') load(); }, 15000);
+</script>
+</body>
+</html>

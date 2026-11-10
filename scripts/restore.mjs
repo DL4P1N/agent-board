@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Restore the board from an automatic backup (the board makes one every 10 minutes in data/backups).
-//   npm run restore                 list the backups, newest last
-//   npm run restore -- latest       restore the newest one
-//   npm run restore -- <file>       restore that one (a name from the list, or a path)
-// The board must be stopped first. The current board.db is kept as board.db.before-restore-<time>.
+// Restore a board from an automatic backup (each board makes one every 10 minutes in its backups/ folder).
+//   npm run restore                              list every board's backups, newest last
+//   npm run restore -- latest                    restore the default board's newest backup
+//   npm run restore -- <file>                    restore that one (a name from the list, or a path)
+//   npm run restore -- latest --board <name>     the same for another board (see npm run boards -- list)
+// The board server must be stopped first. The current board.db is kept as board.db.before-restore-<time>.
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -11,29 +12,55 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'));
-const BACKUPS = path.join(DATA_DIR, 'backups');
 const PORT = Number(process.env.PORT || 4000);
 
-const list = () => (fs.existsSync(BACKUPS) ? fs.readdirSync(BACKUPS).filter((f) => /^board-\d{8}-\d{6}\.db$/.test(f)).sort() : []);
+// The boards on this server (data/boards.json); a data folder from before there were several boards
+// is the one board "main", in the data folder itself. Read only: restoring never rewrites the registry.
+let registry = null;
+try { registry = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'boards.json'), 'utf8')); } catch {}
+const boardsList = registry?.boards?.length ? registry.boards : [{ slug: 'main', name: 'Main board', dir: '.' }];
+const defaultSlug = registry?.default || boardsList[0].slug;
+
+const argv = process.argv.slice(2);
+const bi = argv.indexOf('--board');
+const boardArg = bi >= 0 ? String(argv[bi + 1] || '').toLowerCase() : '';
+if (bi >= 0 && !boardArg) { console.error('✗ --board needs a board name, e.g. --board kubecon-2026'); process.exit(1); }
+const positional = bi < 0 ? argv : argv.filter((_, i) => i !== bi && i !== bi + 1);
+
+const backupsOf = (b) => path.join(path.resolve(DATA_DIR, b.dir || '.'), 'backups');
+const listIn = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /^board-\d{8}-\d{6}\.db$/.test(f)).sort() : []);
 const when = (f) => { const m = f.match(/^board-(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)(\d\d)\.db$/); return m ? `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}` : f; };
 const fail = (msg) => { console.error(`✗ ${msg}`); process.exit(1); };
 
-const arg = process.argv[2];
-const all = list();
+const arg = positional[0];
 if (!arg) {
-  if (!all.length) { console.log(`No backups yet in ${BACKUPS}. The board makes one every 10 minutes while it runs.`); process.exit(0); }
-  console.log(`Backups in ${BACKUPS} (newest last):`);
-  for (const f of all) console.log(`  ${f}   ${when(f)}   ${Math.round(fs.statSync(path.join(BACKUPS, f)).size / 1024)} KB`);
-  console.log('\nRestore one (stop the board first):  npm run restore -- latest   or   npm run restore -- <file>');
+  // Every board's backups (or just the one asked for with --board).
+  const shown = boardArg ? boardsList.filter((b) => b.slug === boardArg) : boardsList;
+  if (boardArg && !shown.length) fail(`No board called "${boardArg}". Boards: ${boardsList.map((b) => b.slug).join(', ')}.`);
+  for (const b of shown) {
+    const dir = backupsOf(b); const files = listIn(dir);
+    const label = `${b.slug}${b.slug === defaultSlug ? ' (default)' : ''}${b.status === 'archived' ? ' (archived)' : ''}`;
+    if (!files.length) { console.log(`Board ${label}. No backups yet in ${dir}. A board makes one every 10 minutes while it runs.`); continue; }
+    console.log(`Board ${label}. Backups in ${dir} (newest last):`);
+    for (const f of files) console.log(`  ${f}   ${when(f)}   ${Math.round(fs.statSync(path.join(dir, f)).size / 1024)} KB`);
+  }
+  console.log(`\nRestore one (stop the board server first):  npm run restore -- latest${boardsList.length > 1 ? ' --board <name>' : ''}   or   npm run restore -- <file>${boardsList.length > 1 ? ' --board <name>' : ''}`);
+  if (boardsList.length > 1) console.log(`Without --board it restores the default board ("${defaultSlug}").`);
   process.exit(0);
 }
 
+const board = boardsList.find((b) => b.slug === (boardArg || defaultSlug));
+if (!board) fail(`No board called "${boardArg}". Boards: ${boardsList.map((b) => b.slug).join(', ')}.`);
+const BOARD_DIR = path.resolve(DATA_DIR, board.dir || '.');
+const BACKUPS = backupsOf(board);
+const all = listIn(BACKUPS);
+
 const src = arg === 'latest' ? (all.length ? path.join(BACKUPS, all.at(-1)) : null)
   : fs.existsSync(arg) ? path.resolve(arg) : fs.existsSync(path.join(BACKUPS, arg)) ? path.join(BACKUPS, arg) : null;
-if (!src) fail(arg === 'latest' ? 'There are no backups yet.' : `No backup called ${arg}. Run npm run restore to list them.`);
+if (!src) fail(arg === 'latest' ? `Board "${board.slug}" has no backups yet.` : `No backup called ${arg} for board "${board.slug}". Run npm run restore to list them.`);
 
 // A running board would keep writing to the old database (and overwrite the restore).
-// The board writes data/board.pid while it runs: that works whatever port it's on.
+// The server writes board.pid in the data folder while it runs (one for all boards): that works whatever port it's on.
 const pidFile = path.join(DATA_DIR, 'board.pid');
 if (fs.existsSync(pidFile)) {
   let info = null;
@@ -59,9 +86,10 @@ try {
 } catch (e) { fail(`Can't read ${path.basename(src)}: ${e.message}`); }
 
 // Copy first, then swap: a failure part-way never leaves the board without a database.
-const db = path.join(DATA_DIR, 'board.db');
+fs.mkdirSync(BOARD_DIR, { recursive: true });
+const db = path.join(BOARD_DIR, 'board.db');
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-const tmp = path.join(DATA_DIR, `board.db.restoring-${stamp}`);
+const tmp = path.join(BOARD_DIR, `board.db.restoring-${stamp}`);
 fs.copyFileSync(src, tmp);
 let kept = null;
 try {
@@ -76,6 +104,6 @@ try {
   if (kept && !fs.existsSync(db)) { try { fs.renameSync(kept, db); } catch {} }
   fail(`Restore failed: ${e.message}. The backup copy is at ${tmp}.`);
 }
-console.log(`✓ Restored the board from ${path.basename(src)} (${when(path.basename(src))}).`);
+console.log(`✓ Restored board "${board.slug}" from ${path.basename(src)} (${when(path.basename(src))}).`);
 if (kept) console.log(`  The previous board is kept as ${path.basename(kept)}.`);
 console.log('  Start the board again: npm start (or npm run tunnel). Agents reconnect by themselves.');

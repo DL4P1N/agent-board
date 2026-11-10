@@ -54,7 +54,7 @@ const shapes = async (kind) => {
   return { t, g };
 };
 let s = await shapes('slack');
-check('Slack: {text} with the board link', s.t.body.ok && /Test from Claude Board/.test(json(s.g)?.text) && /\nhttps?:\/\/\S+:\d+$/.test(json(s.g)?.text), JSON.stringify(s));
+check('Slack: {text} with the board link', s.t.body.ok && /Test from Claude Board/.test(json(s.g)?.text) && /\nhttps?:\/\/\S+:\d+\/b\/main$/.test(json(s.g)?.text), JSON.stringify(s));
 check('Slack: no token in the link', !String(s.g?.body).includes(board.token));
 r = await call('/notify');
 check('GET shows the kind and a masked URL', r.body.kind === 'slack' && /^http:\/\/localhost:\d+\/…/.test(r.body.url) && !r.body.url.includes('secretpart'), JSON.stringify(r.body));

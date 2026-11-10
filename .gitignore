@@ -1,3 +1,4 @@
 node_modules/
 data/
 tests/ui/shots/
+test-data/

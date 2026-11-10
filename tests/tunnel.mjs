@@ -18,8 +18,9 @@ const board = await startBoard({ env: { PUBLIC_URL: `${PUB}/` } });
 const setup = (await rest(board, 'dana', '/state')).setup;
 const [first, ...others] = setup.join_commands;
 check('tunnel address comes first', first.ip === 'fake-test-tunnel.trycloudflare.com' && /^Cloudflare tunnel/.test(first.label), JSON.stringify(first));
-check('join command uses the https tunnel URL (trailing slash dropped)', first.command === `npm run join -- --url ${PUB} --token ${TOKEN}`, first.command);
-check('web link uses the tunnel URL', first.web_url === `${PUB}/?token=${TOKEN}`, first.web_url);
+// Links carry the board's canonical address (/b/main for the default board).
+check('join command uses the https tunnel URL (trailing slash dropped)', first.command === `npm run join -- --url ${PUB}/b/main --token ${TOKEN}`, first.command);
+check('web link uses the tunnel URL', first.web_url === `${PUB}/b/main/?token=${TOKEN}`, first.web_url);
 check('network addresses still listed after it, localhost last', others.length >= 1 && others.at(-1).ip === 'localhost' && others.every((a) => a.command.startsWith('npm run join -- --url http://')), others.map((a) => a.ip).join(','));
 await board.stop();
 
@@ -66,9 +67,9 @@ function runTunnel(env, extra = []) {
   const port = await freePort();
   const argsFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cf-args-')), 'args.json');
   const r = runTunnel({ CLOUDFLARED: FAKE, FAKE_CF_ARGS: argsFile, PORT: String(port) });
-  const up = await r.waitFor(new RegExp(`npm run join -- --url ${PUB.replace(/\./g, '\\.')} --token ${TOKEN}`));
+  const up = await r.waitFor(new RegExp(`npm run join -- --url ${PUB.replace(/\./g, '\\.')}/b/main --token ${TOKEN}`));
   check('banner shows the tunnel join command', up, r.out().slice(-600));
-  check('banner shows the tunnel web link', r.out().includes(`${PUB}/?token=${TOKEN}`));
+  check('banner shows the tunnel web link', r.out().includes(`${PUB}/b/main/?token=${TOKEN}`));
   const args = JSON.parse(fs.readFileSync(argsFile, 'utf8'));
   check('cloudflared asked for a quick tunnel to the board port', args.join(' ') === `tunnel --no-autoupdate --url http://localhost:${port}`, args.join(' '));
   let st = null;
@@ -91,7 +92,7 @@ const startNamed = async (env, extra = [], label = 'named') => {
 {
   const { r, port, up, args } = await startNamed({ TUNNEL_NAME: 'myboard', TUNNEL_HOSTNAME: HOST });
   check('named tunnel (env): cloudflared runs the named tunnel to the board port', up && args.join(' ') === `tunnel --no-autoupdate run --url http://localhost:${port} myboard`, args.join(' ') || r.out().slice(-400));
-  check('named tunnel: banner uses the fixed https address', r.out().includes(`npm run join -- --url https://${HOST} --token ${TOKEN}`) && /fixed address/.test(r.out()), r.out().slice(-600));
+  check('named tunnel: banner uses the fixed https address', r.out().includes(`npm run join -- --url https://${HOST}/b/main --token ${TOKEN}`) && /fixed address/.test(r.out()), r.out().slice(-600));
   let st = null;
   try { st = await (await fetch(`http://localhost:${port}/api/state`, { headers: { Authorization: `Bearer ${TOKEN}` } })).json(); } catch {}
   check('named tunnel: the board advertises the fixed address', st?.setup?.join_commands?.[0]?.ip === HOST, JSON.stringify(st?.setup?.join_commands?.[0] || null));
