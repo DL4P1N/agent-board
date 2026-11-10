@@ -18,6 +18,8 @@ const SETTING_KEYS = ['goal', 'repo', 'integrator', 'planner', 'deadline', 'free
 const DEFAULT_SETTINGS = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '', planner_extra: '2' };
 // settings.integrator = ANYONE: any free agent may take a task in review and merge it.
 export const ANYONE = '*';
+// @mentions that reach everyone.
+const BROADCAST = ['all', 'everyone', 'humans', 'here'];
 // Board calls that only wait, read or chat: they keep an agent online but don't make it "busy".
 const PASSIVE_TOOLS = new Set(['post', 'wait_for_events', 'read_events', 'board_status', 'get_playbook', 'list_tasks', 'get_task', 'list_locks', 'set_activity']);
 // Names are case-insensitive: "Dana" and "dana" are the same person.
@@ -34,7 +36,7 @@ export function timeInfo(s, now = Date.now()) {
   const mins = Math.round(left / 60e3);
   const h = Math.floor(mins / 60);
   const m = mins % 60;
-  return { deadline, freezeAt, frozen: now >= freezeAt, deadlineLabel: clock(deadline), freezeLabel: clock(freezeAt), leftLabel: h ? `${h}h ${m}m` : `${m}m` };
+  return { deadline, freezeAt, frozen: now >= freezeAt, past: now >= deadline, deadlineLabel: clock(deadline), freezeLabel: clock(freezeAt), leftLabel: h ? `${h}h ${m}m` : `${m}m` };
 }
 
 function describeSetting(key, val, cur) {
@@ -124,7 +126,9 @@ export class Board {
     if (!cols.includes('plan')) this.db.exec('ALTER TABLE presence_v2 ADD COLUMN plan TEXT');
     if (!cols.includes('slots')) this.db.exec('ALTER TABLE presence_v2 ADD COLUMN slots INTEGER');
     // Set by humans on the web board: task limit override, usage-limit mark. Activity: what it's doing.
-    for (const [c, type] of [['slots_override', 'INTEGER'], ['limited_at', 'INTEGER'], ['limited_until', 'INTEGER'], ['limited_note', 'TEXT'], ['last_active', 'INTEGER'], ['last_tool', 'TEXT'], ['activity', 'TEXT'], ['activity_at', 'INTEGER']]) {
+    for (const [c, type] of [['slots_override', 'INTEGER'], ['limited_at', 'INTEGER'], ['limited_until', 'INTEGER'], ['limited_note', 'TEXT'], ['last_active', 'INTEGER'], ['last_tool', 'TEXT'], ['activity', 'TEXT'], ['activity_at', 'INTEGER'],
+      // Who the agent belongs to (person_by: 'join' or 'human'), and the laptops using its name lately.
+      ['person', 'TEXT'], ['person_by', 'TEXT'], ['laptops', 'TEXT'], ['conflict_at', 'INTEGER']]) {
       if (!cols.includes(c)) this.db.exec(`ALTER TABLE presence_v2 ADD COLUMN ${c} ${type}`);
     }
     const tcols = this.db.prepare('PRAGMA table_info(tasks)').all().map((c) => c.name);
@@ -134,6 +138,21 @@ export class Board {
     if (!tcols.includes('reviewer')) this.db.exec('ALTER TABLE tasks ADD COLUMN reviewer TEXT');
     if (!tcols.includes('pr_url')) this.db.exec('ALTER TABLE tasks ADD COLUMN pr_url TEXT');
     this.lowercaseNames();
+    this.backfillPrLinks();
+  }
+
+  // Once: tasks from before PR links existed get the PR URL their owner posted about them.
+  backfillPrLinks() {
+    if (this.db.prepare("SELECT 1 FROM settings WHERE key = '_pr_backfill'").get()) return;
+    const tasks = this.db.prepare("SELECT id, assignee FROM tasks WHERE pr_url IS NULL AND status IN ('review', 'done')").all();
+    const evs = this.db.prepare('SELECT author, text FROM events WHERE task_id = ? ORDER BY id DESC');
+    for (const t of tasks) {
+      const list = evs.all(t.id).filter((e) => PR_RE.test(e.text));
+      const mine = list.find((e) => t.assignee && sameTeam(e.author, t.assignee)) || list[0];
+      const url = mine && String(mine.text).match(PR_RE)?.[0];
+      if (url) this.db.prepare('UPDATE tasks SET pr_url = ? WHERE id = ?').run(url, t.id);
+    }
+    this.db.prepare("INSERT INTO settings (key, value) VALUES ('_pr_backfill', '1')").run();
   }
 
   // Once per board: names used to be case-sensitive, so "Dana" and "dana" were two people.
@@ -174,7 +193,13 @@ export class Board {
 
   // ---------- events ----------
   emit({ author, kind, channel = 'general', task_id = null, text = '', data = null }) {
-    const mentions = [...String(text).matchAll(/@([\w.\-/]+)/g)].map((m) => normName(m[1]).replace(/[.\-/]+$/, ''));
+    // "@name" at the start or after a non-word character (not "hit@3"), not a number or version
+    // ("@10", "@2.0.2"), and "@scope/pkg" only when "scope" is a known agent (a helper, e.g.
+    // "@alice/ui-worker"), so npm scopes like "@fastify/rate-limit" aren't mentions.
+    const known = this.mentionable();
+    const mentions = [...new Set([...String(text).matchAll(/(?:^|[^\w@])@([A-Za-z0-9_][\w.\-/]*)/g)]
+      .map((m) => normName(m[1]).replace(/[.\-/]+$/, ''))
+      .filter((n) => !/^\d/.test(n) && (!n.includes('/') || known.has(agentRootOf(n)))))];
     if (mentions.length) data = { ...(data || {}), mentions };
     const ts = Date.now();
     const r = this.db
@@ -183,6 +208,15 @@ export class Board {
     const ev = { id: Number(r.lastInsertRowid), ts, author, kind, channel, task_id, text, data };
     this.bus.emit('event', ev);
     return ev;
+  }
+
+  // Names an @mention can reach: agents, people, humans (helpers count via their agent).
+  mentionable() {
+    const rows = this.db.prepare('SELECT name, kind, person FROM presence_v2').all();
+    const set = this.knownPeople(rows);
+    for (const r of rows) set.add(r.name);
+    for (const t of this.db.prepare('SELECT DISTINCT assignee FROM tasks WHERE assignee IS NOT NULL').all()) set.add(agentRootOf(t.assignee));
+    return set;
   }
 
   latestEventId() {
@@ -317,7 +351,7 @@ export class Board {
     const gate = this.claimGate(task);
     if (gate) throw new Error(gate);
     if (task.status === 'proposed') throw new Error(`task #${id} is only proposed: the planner hasn't approved it yet. Pick another task.`);
-    if (task.reserved_for && !sameTeam(author, task.reserved_for)) {
+    if (task.reserved_for && !sameTeam(author, task.reserved_for) && this.isAvailable(task.reserved_for)) {
       throw new Error(`task #${id} is reserved for ${task.reserved_for}. Pick another task.`);
     }
     if (task.status === 'open') {
@@ -403,6 +437,8 @@ export class Board {
       reserved_for: reserved_for !== undefined ? normName(reserved_for).split('/')[0] || null : task.reserved_for,
     };
     if (assignee !== undefined) next.assignee = assignee ? normName(assignee) : null;
+    // A human hands an open task to an agent: it's claimed for it (with a branch), and the agent is told.
+    if (human && assignee && status === undefined && task.status === 'open') { next.status = 'claimed'; next.branch = task.branch || `task/${id}-${slug(task.title)}`; }
     if (next.status === 'open' || next.status === 'proposed') next.assignee = null;
     // The review claim ends when the task leaves review.
     const reviewer = next.status === 'review' ? task.reviewer : null;
@@ -413,6 +449,7 @@ export class Board {
     if (status && status !== task.status) parts.push(`${task.status} → ${status}`);
     if (reserved_for !== undefined && next.reserved_for !== task.reserved_for) parts.push(next.reserved_for ? `reserved for @${next.reserved_for}` : 'reservation removed');
     if (pr && pr !== task.pr_url && !String(note || '').includes(pr)) parts.push(`PR ${pr}`);
+    if (assignee !== undefined && next.assignee !== task.assignee) parts.push(next.assignee ? `assigned to @${agentRootOf(next.assignee)}${next.status === 'claimed' && task.status === 'open' ? ` — it's yours now (branch ${next.branch})` : ''}` : 'unassigned');
     // Sent back from review for fixes: make sure the author hears about it.
     if (task.status === 'review' && status === 'in_progress' && task.assignee && !sameTeam(author, task.assignee) && !String(note || '').includes('@' + agentRootOf(task.assignee))) parts.push(`@${agentRootOf(task.assignee)} please fix and move it back to review`);
     if (note) parts.push(note);
@@ -446,7 +483,7 @@ export class Board {
     if (task.status !== 'review') throw new Error(`task #${id} isn't in review (status ${task.status}).`);
     const s = this.getSettings();
     if (!s.integrator) throw new Error('Nobody merges to main yet: call claim_role("integrator") to take the job (or ask a human to pick "whoever is free" on the web board).');
-    if (s.integrator !== ANYONE && !sameTeam(author, s.integrator)) throw new Error(`${s.integrator} is the integrator and merges reviewed work. Carry on with your own tasks.`);
+    if (s.integrator !== ANYONE && !sameTeam(author, s.integrator) && this.isAvailable(s.integrator)) throw new Error(`${s.integrator} is the integrator and merges reviewed work. Carry on with your own tasks.`);
     if (s.integrator === ANYONE && !this.mayReview(author)) throw new Error('You have no free slot. Leave the review to an agent with room, and finish your own tasks first.');
     if (task.reviewer && sameTeam(author, task.reviewer)) return { ...task, already: true };
     if (task.reviewer && this.isAvailable(task.reviewer)) throw new Error(`${task.reviewer} is already reviewing #${id}. Pick another review or task.`);
@@ -491,6 +528,8 @@ export class Board {
   }
 
   lockFiles(author, { paths, ttl_s = 900, task_id = null, reason = '' }) {
+    // At most an hour: long locks caused stand-offs. Re-lock to renew.
+    ttl_s = Math.max(30, Math.min(3600, Math.round(Number(ttl_s) || 900)));
     this.purgeLocks();
     const norm = [...new Set(paths.map(normPath).filter(Boolean))];
     if (!norm.length) throw new Error('give at least one path');
@@ -601,13 +640,43 @@ export class Board {
     return this.getSettings();
   }
 
+  // Give up a role you hold (you can't do the job, e.g. no permission to merge on this laptop).
+  releaseRole(author, role, note = '') {
+    if (!['planner', 'integrator'].includes(role)) throw new Error('role must be planner or integrator');
+    const root = agentRootOf(normName(author));
+    const cur = this.getSettings()[role];
+    if (cur !== root) throw new Error(cur === ANYONE ? 'Merging is shared ("whoever is free"): there is no integrator role to give up.' : `You aren't the ${role}${cur ? ` (${cur} is)` : ''}.`);
+    this.setSettings(author, { [role]: '' }, { human: true });
+    this.emit({ author, kind: 'message', channel: 'general', text: `@all I gave up the ${role} role${note ? `: ${String(note).slice(0, 300)}` : ''}. ${role === 'integrator' ? 'Someone who can merge should claim_role("integrator").' : 'Someone should claim_role("planner") if planning is needed.'}` });
+    return { role, released: true };
+  }
+
+  // Planner (or humans): close a task that shouldn't be done, e.g. a duplicate. It's removed, with the reason.
+  cancelTask(author, id, reason = '', { human = false } = {}) {
+    const task = this.getTask(id);
+    if (!task) throw new Error(`task #${id} not found`);
+    const s = this.getSettings();
+    if (!human && !(s.planner && sameTeam(author, s.planner))) throw new Error(`Only the planner (${s.planner || 'nobody yet'}) or a human can cancel tasks. Post in general why it should go.`);
+    if (task.status === 'done') throw new Error(`#${id} is already done.`);
+    if (!human && task.assignee && !sameTeam(author, task.assignee) && !['open', 'proposed'].includes(task.status)) throw new Error(`#${id} is being worked on by ${task.assignee}: ask them to stop first (post to @${agentRootOf(task.assignee)}).`);
+    reason = String(reason || '').trim().slice(0, 300);
+    this.removeTask(id);
+    this.emit({ author, kind: 'task_deleted', channel: 'tasks', task_id: id, text: `cancelled #${id} ${task.title}${reason ? `: ${reason}` : ''}${task.assignee ? ` @${agentRootOf(task.assignee)}` : ''}` });
+    return { cancelled: id };
+  }
+
   // Atomic: take a role if nobody has it (or you already do).
   claimRole(author, role) {
     if (!['planner', 'integrator'].includes(role)) throw new Error('role must be planner or integrator');
     const root = agentRootOf(author);
     const cur = this.getSettings()[role];
     if (role === 'integrator' && cur === ANYONE) throw new Error('Merging is shared on this board ("whoever is free"): take a review with claim_review(id) when you have room.');
-    if (cur && cur !== root) throw new Error(`${cur} is already the ${role}. Carry on as a worker.`);
+    if (cur && cur !== root && this.isAvailable(cur)) throw new Error(`${cur} is already the ${role}. Carry on as a worker.`);
+    if (cur && cur !== root) {
+      this.setSettings(author, { [role]: root }, { human: true });
+      this.emit({ author: 'board', kind: 'message', channel: 'general', text: `${root} took over as ${role}: ${cur} isn't around (offline or out of usage).` });
+      return { role, holder: root, took_over_from: cur };
+    }
     if (cur === root) return { role, holder: root, already: true };
     this.setSettings(author, { [role]: root }, { human: true });
     return { role, holder: root };
@@ -654,11 +723,16 @@ export class Board {
   }
 
   // Humans on the web board: override an agent's task limit, or mark it as having hit its usage limit.
-  setAgent(author, name, { slots, limited, until, note } = {}) {
+  setAgent(author, name, { slots, limited, until, note, person } = {}) {
     const root = agentRootOf(normName(name));
     const row = this.agentRow(root);
     if (!row) throw new Error(`No agent called ${root} on this board.`);
     const msgs = [];
+    if (person !== undefined) {
+      this.setPerson(root, person, 'human');
+      const now = this.personFor(root);
+      msgs.push(normName(person) ? `${root} now shows under ${now} (set on the web board)` : `${root} is grouped automatically again (under ${now})`);
+    }
     if (slots !== undefined) {
       const n = slots === null || slots === '' ? null : Math.round(Number(slots));
       if (n !== null && !(n >= 1 && n <= 10)) throw new Error('slots must be 1–10, or empty for the plan default');
@@ -684,6 +758,61 @@ export class Board {
 
   agentRow(root) {
     return this.db.prepare("SELECT * FROM presence_v2 WHERE name = ? AND kind = 'agent'").get(agentRootOf(normName(root))) || null;
+  }
+
+  // Which person an agent belongs to. join sends it; a human on the web board can override it,
+  // and join never overwrites a human's choice. person '' (from a human) clears it.
+  setPerson(name, person, by = 'join') {
+    const root = agentRootOf(normName(name));
+    const row = this.agentRow(root);
+    if (!row) return false;
+    const val = normName(person).replace(/[^\w.-]/g, '').slice(0, 64) || null;
+    if (by === 'join' && row.person_by === 'human') return false;
+    if (val === row.person && (val ? by === row.person_by : true)) return false;
+    this.db.prepare("UPDATE presence_v2 SET person = ?, person_by = ? WHERE name = ? AND kind = 'agent'").run(val, val ? by : null, root);
+    return true;
+  }
+
+  // The laptop (join's id, else the network address) an agent name is used from. Two at once within
+  // 10 minutes usually means two people picked the same name: warn once.
+  noteLaptop(name, laptop) {
+    const root = agentRootOf(normName(name));
+    const row = this.agentRow(root);
+    if (!row || !laptop) return false;
+    const now = Date.now();
+    let seen = {};
+    try { seen = JSON.parse(row.laptops || '{}') || {}; } catch {}
+    const known = !!seen[laptop];
+    seen[laptop] = now;
+    for (const k of Object.keys(seen)) if (now - seen[k] > AGENT_ONLINE_MS) delete seen[k];
+    const n = Object.keys(seen).length;
+    const conflictAt = n >= 2 ? row.conflict_at || now : null;
+    this.db.prepare("UPDATE presence_v2 SET laptops = ?, conflict_at = ? WHERE name = ? AND kind = 'agent'").run(JSON.stringify(seen), conflictAt, root);
+    if (conflictAt && !row.conflict_at) {
+      this.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all The name ${root} is being used from ${n} laptops at once. Two people probably joined with the same name: one of them should re-run join with a different name, so tasks and messages reach the right agent.` });
+    }
+    return !known || !!conflictAt !== !!row.conflict_at;
+  }
+
+  // Everyone the board knows as a person: humans on the web board, and people agents belong to.
+  knownPeople(rows = null) {
+    rows = rows || this.db.prepare('SELECT name, kind, person FROM presence_v2').all();
+    const set = new Set();
+    for (const r of rows) {
+      if (r.kind === 'human') set.add(r.name);
+      else if (r.person) set.add(r.person);
+      else { const g = guessPerson(r.name); if (g !== r.name) set.add(g); }
+    }
+    return set;
+  }
+
+  // The person behind an agent (or helper) name: set on the web board, else recorded by join, else guessed.
+  personFor(name, ctx = {}) {
+    const root = agentRootOf(normName(name));
+    const rows = ctx.rows || this.db.prepare('SELECT name, kind, person FROM presence_v2').all();
+    const row = rows.find((r) => r.kind === 'agent' && r.name === root);
+    if (row?.person) return row.person;
+    return guessPerson(root, ctx.known || this.knownPeople(rows));
   }
 
   markStarted(name) {
@@ -727,7 +856,8 @@ export class Board {
     const root = agentRootOf(normName(name));
     const p = this.agentRow(root) || {};
     const base = baseSlots(p);
-    const active = this.listTasks({ status: ['claimed', 'in_progress', 'blocked'] }).filter((t) => sameTeam(root, t.assignee)).length;
+    // Blocked tasks don't hold a slot: the agent can work on something else while it waits.
+    const active = this.listTasks({ status: ['claimed', 'in_progress'] }).filter((t) => sameTeam(root, t.assignee)).length;
     let extra = 0;
     const inUse = Math.max(0, active - base);
     if (withExtra) {
@@ -780,7 +910,7 @@ export class Board {
     const byId = new Map(tasks.map((t) => [t.id, t]));
     return tasks.filter((t) => t.status === 'open'
       && t.depends_on.every((d) => !byId.has(d) || byId.get(d).status === 'done')
-      && (!agent || !t.reserved_for || sameTeam(agent, t.reserved_for)));
+      && (!agent || !t.reserved_for || sameTeam(agent, t.reserved_for) || !this.isAvailable(t.reserved_for)));
   }
 
   // Validates depends_on: ids that exist, no duplicates. Accepts an array or "1, 2".
@@ -805,14 +935,18 @@ export class Board {
     const rows = this.db.prepare('SELECT * FROM presence_v2 ORDER BY name, kind').all();
     const tasks = this.listTasks();
     const settings = this.getSettings();
+    const known = this.knownPeople(rows);
     const out = rows.map((r) => {
-      if (r.kind !== 'agent') return { name: r.name, person: personOf(r.name), kind: r.kind, client: r.client || null, last_seen: r.last_seen, online: humansOnline.has(r.name) };
+      if (r.kind !== 'agent') return { name: r.name, person: r.name, kind: r.kind, client: r.client || null, last_seen: r.last_seen, online: humansOnline.has(r.name) };
       const limited = this.isLimited(r.name) ? { since: r.limited_at, until: r.limited_until || null, note: r.limited_note || null } : null;
       const doing = this.doing(r.name, { row: r, tasks, settings });
       const cap = this.capacity(r.name);
       return {
         name: r.name,
-        person: personOf(r.name),
+        person: r.person || guessPerson(r.name, known),
+        person_source: r.person ? (r.person_by === 'human' ? 'human' : 'join') : 'guess',
+        // The same name used from 2+ laptops in the last 10 minutes.
+        conflict: r.conflict_at && Date.now() - r.last_seen < AGENT_ONLINE_MS ? { since: r.conflict_at, laptops: Object.keys(JSON.parse(r.laptops || '{}')).length } : null,
         kind: r.kind,
         client: r.client || null,
         plan: r.plan || null,
@@ -858,7 +992,10 @@ export class Board {
     const teamSlots = team.reduce((n, r) => n + baseSlots(r), 0) || 1;
     const stale = tasks.filter((t) => t.stale && !sameTeam(agent, t.assignee));
     const openQs = this.listQuestions({ open_only: true });
-    const anyone = s.integrator === ANYONE;
+    // A named integrator who's offline or out of usage: whoever is free merges meanwhile.
+    const integratorAway = !!s.integrator && s.integrator !== ANYONE && !this.isAvailable(s.integrator);
+    const anyone = s.integrator === ANYONE || integratorAway;
+    const awayNote = integratorAway && s.integrator !== root && review.length ? `${s.integrator} (the integrator) isn't around, so whoever is free merges for now, or claim_role("integrator") to take the job.` : '';
     const isIntegrator = !!s.integrator && !anyone && s.integrator === root;
     const isPlanner = !!s.planner && s.planner === root;
     // Proposals don't count as a plan: the planner still has to write the backlog.
@@ -881,6 +1018,7 @@ export class Board {
     const label = (t) => `#${t.id} P${t.priority} ${t.size} ${t.title}${t.reserved_for ? ' (reserved for you)' : ''}`;
 
     const steps = [];
+    if (awayNote) steps.push(awayNote);
     if (this.isLimited(root)) steps.push('A human marked you as out of usage on the web board. If you can work again, carry on: this call clears the mark.');
     if (phase === 'needs_goal') {
       steps.push(
@@ -944,7 +1082,9 @@ export class Board {
 
       if (mine.length) steps.push(`You have active tasks: ${mine.map((t) => `#${t.id} ${t.title} [${t.status}]`).join('; ')}. Keep them moving (or dispatch them to subagents) before claiming more.`);
       const idle = this.idleAgents(agent);
-      if (time.frozen) {
+      if (time.past) {
+        steps.push(`The demo time (${time.deadlineLabel}) has passed. Wrap up: push and merge what's finished, release what isn't with a note, and post a short status in general.`);
+      } else if (time.frozen) {
         const bugfix = claimable.filter((t) => t.priority === 1);
         steps.push(`FEATURE FREEZE (since ${time.freezeLabel}, demo at ${time.deadlineLabel}): don't start new features. Finish and push what you have, get it merged, fix bugs on main, and help with reviews. Unfinished tasks you can't land in time: release_task them with a note.${bugfix.length && cap.active < cap.slots ? ` Priority-1 (bug-fix) tasks may still be claimed: ${bugfix.slice(0, 5).map(label).join('; ')}.` : ''}`);
         if (bugfix.length && cap.active < cap.slots) act('priority-1 tasks claimable');
@@ -1006,7 +1146,7 @@ export class Board {
     const answered = this.db.prepare('SELECT * FROM questions WHERE answer IS NOT NULL ORDER BY answered_at').all();
     const byPerson = new Map();
     for (const t of done) {
-      const who = personOf(t.assignee || t.created_by);
+      const who = this.personFor(t.assignee || t.created_by);
       if (!byPerson.has(who)) byPerson.set(who, []);
       byPerson.get(who).push(t);
     }
@@ -1080,9 +1220,19 @@ function baseSlots(row) {
   return row?.slots_override || row?.slots || (row?.client === 'Claude Code' ? 2 : 1);
 }
 
-// The person behind an agent name: join names extra tools on one laptop "<person>-<tool>".
+// The person behind an agent name, when nobody recorded it: join names extra tools on one laptop
+// "<person>-<tool>" (a second one may get a number, "emil-claude2"); other tools follow the same
+// "<person>-<anything>" pattern, which counts when "<person>" is someone the board already knows.
+const TOOL_SUFFIX = /-(claude|codex|copilot|copilotcli|copilot-vscode|copilot-cli)\d*$/;
+export function guessPerson(name, known = new Set()) {
+  const root = agentRootOf(normName(name));
+  if (TOOL_SUFFIX.test(root)) return root.replace(TOOL_SUFFIX, '');
+  const i = root.lastIndexOf('-');
+  if (i > 0 && known.has(root.slice(0, i))) return root.slice(0, i);
+  return root;
+}
 export function personOf(name) {
-  return String(name || '').split('/')[0].replace(/-(claude|codex|copilot|copilotcli)$/, '');
+  return guessPerson(name);
 }
 
 function normPath(p) {

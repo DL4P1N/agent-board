@@ -154,7 +154,7 @@ try {
   await np.goto(BASE + '/');
   await np.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 5000 });
   check('bell is off by default (aria-pressed=false, labelled)', await np.$eval('#notify-btn', (b) => b.getAttribute('aria-pressed') === 'false' && b.getAttribute('aria-label') === 'Desktop notifications'));
-  await np.click('#notify-btn'); await sleep(200);
+  await np.$eval('#notify-btn', (b) => b.click()); await sleep(200);
   check('bell on after permission granted; preference stored', await np.evaluate(() => $('notify-btn').getAttribute('aria-pressed') === 'true' && localStorage.getItem('board-notify') === 'on'));
   const hide = (h) => np.evaluate((v) => { window.__hidden = v; document.dispatchEvent(new Event('visibilitychange')); }, h);
   const notes = () => np.evaluate(() => window.__notes.map((n) => n.title));
@@ -194,11 +194,12 @@ try {
   await hide(false);
   await settings({ deadline: '' });
 
-  // Turning it off, and a browser that refuses permission.
-  await np.click('#notify-btn'); await sleep(150);
+  // Turning it off, and a browser that refuses permission. Clicks go to the element itself, not a screen
+  // position: the header badges next to the bell re-render with live events and can shift it mid-click.
+  await np.$eval('#notify-btn', (b) => b.click()); await sleep(150);
   check('bell toggles off; stored', await np.evaluate(() => $('notify-btn').getAttribute('aria-pressed') === 'false' && localStorage.getItem('board-notify') === 'off'));
   await np.evaluate(() => { window.__perm = 'denied'; Notification.permission = 'default'; });
-  await np.click('#notify-btn');
+  await np.$eval('#notify-btn', (b) => b.click());
   // The explanation shows as a toast and on the bell itself; toasts can be pushed out by others (max 3), so accept either.
   check('permission denied: stays off and explains how to allow it', await until(np, () => $('notify-btn').getAttribute('aria-pressed') === 'false' && (/blocked for this page/.test($('toasts').innerText) || /blocked for this page/.test($('notify-btn').title))));
   await np.close();

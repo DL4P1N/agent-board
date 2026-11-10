@@ -397,8 +397,9 @@
   <input id="g-token" autocomplete="off" spellcheck="false" required>
   <p class="hint">The password for this board. It's in the link the host shared (<code>…?token=…</code>), or printed by <code>npm start</code> on the host laptop.</p>
   <label for="g-name">Your name</label>
-  <input id="g-name" autocomplete="nickname" spellcheck="false" placeholder="e.g. dana" required>
-  <p class="hint">Agents will @mention you by this name. If you connect your own AI agent, use the same name there.</p>
+  <input id="g-name" autocomplete="nickname" spellcheck="false" placeholder="e.g. dana" list="g-names" required>
+  <datalist id="g-names"></datalist>
+  <p class="hint">Agents will @mention you by this name. Already on the board? Pick your name from the list. If you connect your own AI agent, use the same name there.</p>
   <div id="g-err" class="err" role="alert"></div>
   <button type="submit" id="g-go">Enter board</button>
 </form>
@@ -504,6 +505,8 @@
     <div class="grid2">
       <div><label for="td-res">Reserve for</label><select id="td-res" aria-describedby="td-res-hint td-err"></select></div>
       <p class="hint" id="td-res-hint">Only that agent can claim it; it's listed first for them. "Anyone" lets any agent take it.</p>
+      <div id="td-asg-wrap"><label for="td-asg">Assigned to</label><select id="td-asg" aria-describedby="td-asg-hint td-err"></select></div>
+      <p class="hint" id="td-asg-hint">Hand it to an agent directly. The agent is told on the board; it should pick it up on its next check.</p>
     </div>
     <div id="td-err" class="err" role="alert"></div>
     <div class="hist" id="td-hist-wrap"><div class="sec-h">Activity on this task</div><div class="feed" id="td-history"></div></div>
@@ -584,7 +587,7 @@ const ALL_PHASES = [['connect', 'Connect'], ...PHASES]; // 'connect' is client-s
 const AGENT_ONLINE_MS = 10 * 60 * 1000;
 const ACTIVE = ['claimed', 'in_progress', 'blocked', 'review'];
 const STALE_MS = 15 * 60 * 1000; // matches the server; its per-task `stale` flag wins when present
-const HOLDING = ['claimed', 'in_progress', 'blocked']; // what counts against an agent's slots
+const HOLDING = ['claimed', 'in_progress']; // what counts against an agent's slots (blocked work doesn't)
 const SIZE_TIP = { S: 'Size S: small, under 30 minutes. One-task-at-a-time agents take these first', M: 'Size M: about an hour', L: 'Size L: large. Agents on bigger plans take these first' };
 const HUES = [215, 150, 275, 325, 185, 95, 250, 45, 300, 165]; // person colours, kept away from the red/orange used for warnings
 const DONE_SHOWN = 6;
@@ -592,7 +595,10 @@ const $ = (id) => document.getElementById(id);
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 const qs = new URLSearchParams(location.search);
 let token = qs.get('token') || store.get('board-token') || '';
-let me = (store.get('board-name') || '').toLowerCase(); // names are case-insensitive
+// names are case-insensitive. ?name=<person> (join prints the board link with it) signs in as that person.
+const nameParam = String(qs.get('name') || '').trim().toLowerCase().replace(/[^\w.\-]/g, '');
+if (nameParam) store.set('board-name', nameParam);
+let me = (nameParam || store.get('board-name') || '').toLowerCase();
 const DEFAULT_SETTINGS = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '', planner_extra: '2' };
 const ANYONE = '*'; // settings.integrator: whoever is free merges
 let state = { tasks: [], locks: [], questions: [], events: [], settings: { ...DEFAULT_SETTINGS }, phase: 'needs_goal', presence: [], setup: null };
@@ -607,8 +613,36 @@ const smooth = () => (reduceMotion() ? 'auto' : 'smooth');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // An agent's own name without its helper part: "dana-codex/ui" -> "dana-codex".
 const agentRoot = (a) => String(a || '').split('/')[0].toLowerCase();
-// The person behind a name. With several AI tools on one laptop, join names them "<person>-<tool>".
-const root = (a) => agentRoot(a).replace(/-(claude|codex|copilot|copilotcli)$/, '');
+// The person behind a name. The server says who each connected agent belongs to (set here, recorded by
+// join, or guessed); for other names (old events, helpers) the same guess: drop a tool ending
+// ("-claude", "-codex2"…), else "<person>-<anything>" when that person is known.
+const TOOL_SUFFIX = /-(claude|codex|copilot|copilotcli|copilot-vscode|copilot-cli)\d*$/;
+let personCache = null;
+function personMap() {
+  if (personCache?.s === state && personCache.me === me) return personCache;
+  const byAgent = new Map(); const known = new Set();
+  for (const p of state.presence || []) {
+    const n = String(p.name || '').toLowerCase(); const per = String(p.person || '').toLowerCase();
+    if (p.kind === 'agent' && per) byAgent.set(n, per);
+    if (per) known.add(per);
+    if (p.kind === 'human' && n) known.add(n);
+  }
+  if (me) known.add(me);
+  return (personCache = { s: state, me, byAgent, known, memo: new Map() });
+}
+const root = (a) => {
+  const n = agentRoot(a); if (!n) return n;
+  const pm = personMap();
+  if (pm.byAgent.has(n)) return pm.byAgent.get(n);
+  if (pm.memo.has(n)) return pm.memo.get(n);
+  let r = n;
+  if (TOOL_SUFFIX.test(n)) r = n.replace(TOOL_SUFFIX, '');
+  else { const i = n.lastIndexOf('-'); if (i > 0 && pm.known.has(n.slice(0, i))) r = n.slice(0, i); }
+  pm.memo.set(n, r);
+  return r;
+};
+// Every person we know of: from presence (agents' people, humans), plus `me`.
+const knownPeople = () => [...personMap().known].filter((n) => n && n !== 'board' && n !== 'anonymous').sort();
 const sameTeam = (a, b) => !!a && !!b && root(a) === root(b);
 const hue = (name) => { let h = 0; for (const c of root(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return HUES[h % HUES.length]; };
 const hs = (name) => `style="--h:${hue(name)}"`;
@@ -639,8 +673,10 @@ const short = (s, n = 90) => { s = String(s || '').replace(/\s+/g, ' '); return 
 // Escape-then-format: split raw text into tokens, escape each, linkify #ids and @names.
 // inline=true: links get no Tab stop of their own (the feed would otherwise be dozens of stops).
 function fmt(text, inline = false) {
-  return String(text ?? '').split(/(https?:\/\/[^\s<>"']+|#\d+\b|@[\w.\-/]+)/g).map((p, i) => {
+  return String(text ?? '').split(/(https?:\/\/[^\s<>"']+|#\d+\b|@[\w.\-/]+)/g).map((p, i, all) => {
     if (i % 2 === 0) return esc(p);
+    // "PR #12" / "issue #5" point at GitHub, not at board task #12.
+    if (p[0] === '#' && /(?:\bPRs?|\bpull(?:\s+request)?|\bissues?|!)\s?$/i.test(all[i - 1] || '')) return esc(p);
     if (/^https?:/i.test(p)) {
       const url = p.replace(/[.,;:!?)\]]+$/, ''); const trail = p.slice(url.length);
       return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer"${inline ? ' tabindex="-1"' : ''}>${esc(url)}</a>${esc(trail)}`;
@@ -707,7 +743,22 @@ function showGate(err = '') {
   $('app').hidden = true; $('gate').hidden = false;
   $('g-token').value = token; $('g-name').value = me; $('g-err').textContent = err;
   (token ? $('g-name') : $('g-token')).focus();
+  gateNames();
 }
+// Names already on the board, offered in the name box, so people pick theirs instead of typing a new one.
+async function gateNames() {
+  let names = (state.presence || []).length ? knownPeople() : [];
+  const t = $('g-token').value.trim() || token;
+  if (!names.length && t) {
+    try {
+      const r = await fetch('/api/state', { headers: { Authorization: 'Bearer ' + t } });
+      if (r.ok) { const st = await r.json(); names = [...new Set((st.presence || []).map((p) => String(p.person || p.name || '').toLowerCase()).filter((n) => n && n !== 'board' && n !== 'anonymous'))].sort(); }
+    } catch {}
+  }
+  const html = names.map((n) => `<option value="${esc(n)}"></option>`).join('');
+  if ($('g-names').innerHTML !== html) $('g-names').innerHTML = html;
+}
+$('g-token').addEventListener('change', gateNames);
 $('gate').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const t = $('g-token').value.trim(); const n = $('g-name').value.trim().toLowerCase().replace(/[^\w.\-]/g, '');
@@ -751,6 +802,10 @@ function agentInfo() {
     if (p.slots_override != null) a.override = Number(p.slots_override) || null;
     if (p.busy) a.busy = true; if (p.doing) a.doing = String(p.doing);
     if (p.limited) a.limited = p.limited;
+    // Who it belongs to, and where that came from ('human' = set here, 'join', 'guess' = from its name).
+    if (p.person) a.person = String(p.person).toLowerCase();
+    a.personSource = p.person_source || null;
+    a.conflict = p.conflict || null;
     a.online = a.online || !!p.online; a.started = a.started || !!p.started; a.last = Math.max(a.last, p.last_seen || 0);
   }
   for (const e of state.events) {
@@ -797,7 +852,7 @@ function people() {
   const get = (id) => {
     const r = root(id);
     if (!r || r === 'board' || r === 'anonymous') return null;
-    if (!map.has(r)) map.set(r, { name: r, agents: new Map(), last: 0, asks: 0 });
+    if (!map.has(r)) map.set(r, { name: r, agents: new Map(), last: 0, asks: 0, locks: 0 });
     const p = map.get(r);
     if (!p.agents.has(id)) p.agents.set(id, { id, last: 0, lastText: '', tasks: [] });
     return p.agents.get(id);
@@ -807,13 +862,17 @@ function people() {
   for (const r of ros) { if (r.agent || r.humanOnline) get(r.name); for (const a of r.agents) get(a.name); }
   for (const e of state.events) { const a = get(e.author); if (a && e.ts >= a.last) { a.last = e.ts; a.lastText = e.kind === 'message' ? `“${e.text}”` : e.kind === 'settings' ? settingsText(e) : e.text; } }
   for (const t of state.tasks) { if (t.assignee && ACTIVE.includes(t.status)) get(t.assignee)?.tasks.push(t); }
-  for (const l of state.locks) get(l.owner);
+  for (const l of state.locks) { if (get(l.owner)) map.get(root(l.owner)).locks++; }
   for (const q of state.questions) { if (!q.answer && get(q.asker)) map.get(root(q.asker)).asks++; }
   for (const p of map.values()) {
     p.last = Math.max(0, ...[...p.agents.values()].map((a) => a.last));
     p.r = ros.find((r) => r.name === p.name) || { agent: false, agentOnline: false, humanOnline: false, agents: [] };
   }
-  return [...map.values()].sort((a, b) => (b.name === me) - (a.name === me) || a.name.localeCompare(b.name));
+  // A name with nothing behind it (no agents, tasks, locks or questions, not watching now; e.g. a name
+  // someone typed once on this page) isn't a person on the team: leave it out. Its messages stay in the feed.
+  const empty = (p) => p.name !== me && !p.r.agent && !p.r.humanOnline && !p.locks && !p.asks
+    && ![...p.agents.values()].some((a) => a.tasks.length || a.id.includes('/'));
+  return [...map.values()].filter((p) => !empty(p)).sort((a, b) => (b.name === me) - (a.name === me) || a.name.localeCompare(b.name));
 }
 
 // Who is connected, per person: their agents (one per AI tool, see agentInfo) and whether they have this page open.
@@ -904,7 +963,7 @@ function renderClock() {
   if (!t.deadline) { prevFrozen = null; return; }
   const now = Date.now();
   let text, cls = '', tip;
-  if (t.past) { text = `Demo time (${when(t.deadline)})`; cls = 'past'; tip = 'The demo deadline has passed. Click to change it.'; }
+  if (t.past) { text = 'Demo time passed'; cls = 'past'; tip = `The demo was at ${when(t.deadline)}. Click to change the time.`; }
   else if (t.frozen) { text = `Feature freeze — finish & merge · demo in ${dur(t.deadline - now)}`; cls = 'frozen'; tip = `Feature freeze since ${when(t.freezeAt)}: agents don't take new tasks, except priority-1 bug fixes. Demo at ${when(t.deadline)}. Click to change the time.`; }
   else {
     text = `Demo in ${dur(t.deadline - now)}${t.fm ? ` · freeze ${t.warn ? 'in ' + dur(t.freezeAt - now) : when(t.freezeAt)}` : ''}`;
@@ -1056,7 +1115,9 @@ function renderNeeds(qOpen, unread) {
   const blocked = state.tasks.filter((t) => t.status === 'blocked').length;
   const stale = state.tasks.filter(isStale).length;
   const props = state.tasks.filter((t) => t.status === 'proposed').length;
+  const clash = [...agentInfoNow().values()].filter((a) => a.conflict);
   patch($('needs'), [
+    clash.length ? `<button class="b" data-go="conflict" data-fk="n-c" title="${esc(clash.map(conflictText).join(' '))}">${clash.length === 1 ? `${esc(clash[0].name)} on 2 laptops` : `${clash.length} names on 2 laptops`}</button>` : '',
     props ? `<button class="st" data-go="proposed" data-fk="n-p" title="Tasks agents proposed: approve or reject them (the planner can too)">${props} proposed</button>` : '',
     qOpen.length ? `<button class="q" data-go="questions" data-fk="n-q">${qOpen.length} question${qOpen.length > 1 ? 's' : ''} waiting on you</button>` : '',
     unread.length ? `<button class="m" data-go="mentions" data-fk="n-m">${unread.length} new mention${unread.length > 1 ? 's' : ''}</button>` : '',
@@ -1126,7 +1187,7 @@ function renderSetup(si) {
     patch(el, `<div class="sumbar">
       <span class="goal" title="${esc(S.goal || 'No goal set yet')}"><b>Goal:</b> ${S.goal ? esc(S.goal) : '<span class="muted">not set</span>'}</span>
       ${S.repo ? `<span class="goal" style="flex:0 1 auto;max-width:300px" title="Project repo: ${esc(S.repo)}"><b>Repo:</b> ${esc(S.repo)}</span>` : ''}
-      <span title="The person whose agent merges finished branches into main">Merges to main: ${S.integrator === '*' ? 'whoever is free' : S.integrator ? nameTag(S.integrator) : '<span class="muted">not picked yet</span>'}</span>
+      <span title="The person whose agent merges finished branches into main">Merges to main: ${S.integrator === '*' ? 'whoever is free' : S.integrator ? `${nameTag(S.integrator)}${ownerOffline({ assignee: S.integrator }) || agentLimited(S.integrator) ? ' <span class="muted">(away: whoever is free merges meanwhile)</span>' : ''}` : '<span class="muted">not picked yet</span>'}</span>
       <span title="Online = an agent someone started with /board, seen in the last 10 min. Not started = its tool is connected but nobody typed /board yet. Watching = people with this page open." style="display:inline-flex;align-items:center;gap:5px"><span class="on ${si.workingA.length ? 'y' : si.waitingA.length ? 'w' : ''}"></span>${plural(si.workingA.length, 'agent')} online${si.waitingA.length ? ` · ${si.waitingA.length} not started` : ''} · ${si.watchers.length} watching</span>
       ${teamCapHtml()}
       <span class="acts"><button type="button" class="ghost" data-act="invite" data-fk="s-inv">Connect a laptop</button><button type="button" class="ghost" data-act="setup-open" data-fk="s-open" aria-expanded="false" ${left ? `aria-label="Open the setup guide. Left to do: ${esc(left.left)}"` : ''}>Setup${left ? `: ${esc(left.left)}` : ''}</button></span></div>`);
@@ -1322,6 +1383,10 @@ function renderBoardNote() {
       <div class="inl"><button type="button" data-act="approve" data-fk="bn-appr">Approve plan &amp; start</button><button type="button" class="ghost" data-act="new-task" data-fk="bn-new">+ New task</button></div>`;
   } else if (done) {
     html = `<p><b>Every task is merged.</b> Write-up for your submission: a summary of the goal, who built what, the decisions you made and what's unfinished.</p><div class="inl">${exportBtns('bn')}</div>`;
+  } else if (t.past) {
+    kind = 'freeze';
+    html = `<p><b>The demo time (${esc(when(t.deadline))}) has passed.</b> Agents have been told to wrap up and merge what they have. Write-up for your submission: the goal, who built what, the decisions you made and what's unfinished.</p>
+      <div class="inl">${exportBtns('bn')}</div>`;
   } else if (t.frozen && !t.past) {
     kind = 'freeze';
     html = `<p><b>Feature freeze since ${esc(when(t.freezeAt))}</b> (demo at ${esc(when(t.deadline))}). Agents have been told not to claim new tasks: they finish, push and merge what they have. Priority-1 tasks (bug fixes) can still be claimed, so file a bug as a P1 task. Help test <code>main</code> and get Review merged.</p>
@@ -1351,8 +1416,16 @@ function renderQuestions(qOpen) {
 
 // One compact line per person; click it for their agents, tasks and the filter.
 function toolChip(a, person) {
-  const lbl = a.client || (a.name !== person ? a.name.slice(person.length + 1) || a.name : 'agent');
+  const lbl = a.client || (a.name.startsWith(person + '-') ? a.name.slice(person.length + 1) : a.name !== person ? a.name : 'agent');
   const st = agentState(a);
+  const warn = a.conflict ? `<span class="pill bad" title="${esc(conflictText(a))}">${esc(a.name)} · ${a.conflict.laptops || 2} laptops</span>` : '';
+  return warn + toolChipState(a, st, lbl);
+}
+// Same name used from two laptops at once: almost always two people who picked the same name in join.
+const conflictText = (a) => `${a.name} is connected from ${a.conflict?.laptops || 2} laptops: two people may be using the same name. One of them should re-run join with another name.`;
+// Where an agent's person comes from, for tooltips.
+const personSourceText = (a) => ({ human: 'set here on the web board', join: 'from join', guess: 'guessed from the name' }[a.personSource] || 'guessed from the name');
+function toolChipState(a, st, lbl) {
   if (st === 'limited') return `<span class="pill warn" title="${esc(a.name)} hit its usage limit${a.limited.note ? `: ${esc(a.limited.note)}` : ''}. Other agents may take over its tasks.">${esc(lbl)} · ${esc(limitText(a))}</span>`;
   if (st === 'online') {
     const full = a.active >= a.slots;
@@ -1374,7 +1447,13 @@ function agentControls(a) {
       <div style="flex:1;min-width:140px"><label for="ln-${k}">Note (optional)</label><input id="ln-${k}" data-keep="ln-${k}" maxlength="200" placeholder="e.g. Claude says try again at 3pm" style="width:100%"></div>
       <button type="submit" data-fk="ls-${k}">Mark out of usage</button><button type="button" class="ghost" data-limcancel="${k}" data-fk="lc-${k}">Cancel</button>
       <p class="hint" id="lh-${k}" style="flex-basis:100%;margin:0">No time: it counts as back as soon as it talks to the board again.</p></form>` : '';
-  return `<div class="actl">${slots}${lim}</div>${form}`;
+  // Who this agent belongs to: fixes an agent that shows up as its own person (or under the wrong one).
+  const cur = a.personSource === 'human' ? a.person : '';
+  const ppl = [...new Set([...knownPeople(), a.person, root(a.name)].filter(Boolean))].sort();
+  const owner = `<label for="pb-${k}">Belongs to</label><select id="pb-${k}" data-person="${k}" data-fk="pb-${k}" title="Whose agent this is: ${esc(root(a.name))} (${esc(personSourceText(a))}). Pick a person to group it under them.">
+      <option value="" ${cur ? '' : 'selected'}>automatic (${esc(a.personSource === 'human' ? 'join or name' : root(a.name))})</option>${ppl.map((n) => `<option value="${esc(n)}" ${cur === n ? 'selected' : ''}>${esc(n)}${n === me ? ' (you)' : ''}</option>`).join('')}</select>`;
+  const clash = a.conflict ? `<div class="note" role="status" style="flex-basis:100%">${esc(conflictText(a))}</div>` : '';
+  return `<div class="actl">${owner}${slots}${lim}${clash}</div>${form}`;
 }
 function renderPeople() {
   const ps = people();
@@ -1394,7 +1473,7 @@ function renderPeople() {
       (p.r.agents || []).some((a) => a.reviewing.length) ? `<span class="pill role" title="Reviewing and merging into main">merging ${(p.r.agents || []).flatMap((a) => a.reviewing).map((id) => '#' + id).join(' ')}</span>` : '',
       // Running agents show "x/slots" already; then only tasks waiting in review get their own count.
       hasCap ? (nReview ? `<span class="pill s-review" title="Pushed, waiting to be merged">${nReview} in review</span>` : '')
-        : tasks.length ? `<span class="pill s-in_progress" title="Tasks claimed, in progress, blocked or in review">${tasks.length} active</span>` : hasAgent ? `<span class="muted" style="font-size:12px">${(p.r.agents || []).some((a) => a.busy) ? 'working' : 'idle'}</span>` : '',
+        : tasks.length ? `<span class="pill s-in_progress" title="Tasks claimed, in progress, blocked or in review">${tasks.length} active</span>` : hasAgent && (p.r.agents || []).some((a) => a.online) ? `<span class="muted" style="font-size:12px">${(p.r.agents || []).some((a) => a.busy) ? 'working' : 'idle'}</span>` : '',
       nBlocked ? `<span class="pill bad">${nBlocked} blocked</span>` : '',
       nStale ? '<span class="pill warn" title="No update for 15+ minutes">' + nStale + ' stale</span>' : '',
       p.asks ? `<button type="button" class="pill warn" style="border:0;cursor:pointer;min-height:24px" data-go="questions" tabindex="-1" title="Answer it at the top of the page">${p.asks} question${p.asks > 1 ? 's' : ''} for you</button>` : '',
@@ -1413,10 +1492,12 @@ function renderPeople() {
           // The person themself (messages they wrote on this page), not an AI agent under their name.
           const human = !helper && !info && orch === p.name && !(state.presence || []).some((x) => x.kind === 'agent' && x.name === orch);
           if (human && !a.tasks.length && p.agents.size > 1) return a.lastText ? `<li><div class="tk"><span class="muted">On this page</span><span class="sp"></span>${a.last ? `<span class="muted" style="font-size:11px">${ago(a.last)}</span>` : ''}</div><div class="last" title="${esc(a.lastText)}">${esc(short(a.lastText, 120))}</div></li>` : '';
-          const label = helper ? helper : orch === p.name && p.agents.size < 2 ? 'main agent' : `main agent${tool ? ` · ${tool}` : orch !== p.name ? ` · ${orch.slice(p.name.length + 1)}` : ''}`;
+          // Two agents with the same tool (emil-claude, emil-claude2): name them, "main agent · Claude Code" twice says nothing.
+          const sameTool = !helper && tool && (p.r.agents || []).filter((x) => clientOf(x.name) === tool).length > 1;
+          const label = helper ? helper : sameTool ? orch : orch === p.name && p.agents.size < 2 ? 'main agent' : `main agent${tool ? ` · ${tool}` : orch !== p.name ? ` · ${orch.startsWith(p.name + '-') ? orch.slice(p.name.length + 1) : orch}` : ''}`;
           const tk = a.tasks.map((t) => `<div class="tk"><span class="pill s-${t.status}">${LABEL[t.status]}</span>${isStale(t) ? '<span class="pill warn">stale</span>' : ''}<button type="button" class="link" data-open-task="${t.id}" data-fk="pt-${t.id}" title="${esc(t.title)}">#${t.id} ${esc(t.title)}</button></div>`).join('');
           if (!tk && !a.last && !info && a.id === p.name && p.agents.size > 1) return '';
-          const idleTxt = tk ? '' : info && isLimited(info) ? `<span class="muted">· ${esc(limitText(info))}</span>` : info && info.busy ? `<span class="muted" title="${esc(info.doing || 'Working')}">· ${esc(short(info.doing || 'working', 60))}</span>` : '<span class="muted">· idle</span>';
+          const idleTxt = tk ? '' : info && isLimited(info) ? `<span class="muted">· ${esc(limitText(info))}</span>` : info && !info.online ? `<span class="muted">· offline${info.last ? ` (last seen ${esc(ago(info.last))})` : ''}</span>` : info && info.busy ? `<span class="muted" title="${esc(info.doing || 'Working')}">· ${esc(short(info.doing || 'working', 60))}</span>` : '<span class="muted">· idle</span>';
           return `<li><div class="tk"><button type="button" class="link an" data-mention="${esc(a.id)}" title="${!a.id.includes('/') ? `A main agent${tool ? ` (${esc(tool)})` : ''} on this laptop (orchestrator): it claims tasks from the board. ` : 'Helper agent (subagent) working on one task. '}Click to @mention ${esc(a.id)} in chat"><span aria-hidden="true" class="muted">@</span>${esc(label)}</button>${idleTxt}<span class="sp"></span>${a.last ? `<span class="muted" style="font-size:11px">${ago(a.last)}</span>` : ''}</div>
             ${info ? `<div class="pcap" title="${esc(capTip(info))}">${esc([info.client, info.plan].filter(Boolean).join(' · ') || 'agent')} · ${info.active} of ${info.slots} at once${info.override ? ' (set here)' : ''}${info.extra ? ` <span class="pill ok" title="Planner: nobody else is free and small/medium work is ready, so it may run ${info.extra} more with helpers">+${info.extra} extra as planner</span>` : ''}</div>` : ''}
             ${info && tk && info.doing && !isLimited(info) && !/^#\d+/.test(info.doing) ? `<div class="doing" title="${esc(info.doing)}">${esc(short(info.doing, 120))}</div>` : ''}
@@ -1470,6 +1551,16 @@ function prInfo(t) {
   if (p.checks === 'pass') return { url, text: 'checks ✓', cls: 'ok' };
   return { url, text: '', cls: '' };
 }
+// When a human last pinged this task's owner from a card ("#12 has had no update…"), within 10 minutes.
+function pingedAt(t) {
+  if (!t.assignee) return 0;
+  const who = agentRoot(t.assignee).toLowerCase(); const since = Date.now() - 10 * 60e3;
+  for (let i = state.events.length - 1; i >= 0; i--) {
+    const e = state.events[i]; if (e.ts < since) break;
+    if (e.kind === 'message' && String(e.text).includes(`#${t.id} has had no update`) && (e.data?.mentions || []).some((m) => agentRoot(m).toLowerCase() === who)) return e.ts;
+  }
+  return 0;
+}
 function card(t) {
   const deps = t.depends_on.map((d) => ({ id: d, t: taskById(d) }));
   const waiting = t.status === 'done' ? [] : deps.filter((d) => !d.t || d.t.status !== 'done');
@@ -1497,7 +1588,9 @@ function card(t) {
     <div class="cm">${t.priority === 1 ? '<span class="pill bad" title="Priority 1: do first (often something other tasks build on)">P1</span>' : t.priority >= 3 ? '<span class="pill" title="Low priority: nice to have">low</span>' : ''}
       ${size !== 'M' ? `<span class="pill size ${size}" title="${SIZE_TIP[size]}"><span class="vh">size </span>${size}</span>` : ''}
       ${prop ? `<span class="pill warn" title="Proposed by ${esc(t.created_by)}: nobody can claim it until the planner or a human approves it">proposed by ${esc(t.created_by)}</span>` : ''}
-      ${rsv ? `<span class="pill rsv" title="Reserved: only ${esc(t.reserved_for)} can claim it, and it's listed first for them">reserved for ${esc(t.reserved_for)}</span>` : ''}
+      ${rsv ? (() => { const away = ownerOffline({ assignee: t.reserved_for }) || agentLimited(t.reserved_for);
+        return away ? `<span class="pill rsv" title="Reserved for ${esc(t.reserved_for)}, who isn't around (offline or out of usage), so any agent may take it">reserved for ${esc(t.reserved_for)} · away, open to anyone</span>`
+          : `<span class="pill rsv" title="Reserved: only ${esc(t.reserved_for)} can claim it, and it's listed first for them">reserved for ${esc(t.reserved_for)}</span>`; })() : ''}
       ${pr ? `<a class="pill ${pr.cls}" href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer" tabindex="-1" title="Open the pull request${pr.text ? ` (${esc(pr.text)})` : ''}">PR${pr.text ? ' · ' + esc(pr.text) : ''}</a>` : ''}
       ${merging ? `<span class="pill role" title="${esc(t.reviewer)} is reviewing and merging it">merging: ${esc(t.reviewer)}</span>` : ''}
       ${t.assignee ? `<span class="pc" ${hs(t.assignee)} title="Assigned to ${esc(t.assignee)}">${esc(t.assignee)}</span>` : t.status !== 'done' && !prop ? '<span title="No agent has picked this up yet">unassigned</span>' : ''}
@@ -1505,7 +1598,7 @@ function card(t) {
       ${stale ? `<span class="pill warn" title="Stale: no update for 15+ minutes. The agent may be stuck: ping it, or release the task back to Open.${off ? ' Its owner is offline, so other agents may take it over.' : ''}">stale</span>` : ''}
       <span title="Last update ${esc(new Date(t.updated_at).toLocaleString())}">${ago(t.updated_at)}</span>
       <button type="button" class="mv" data-move="${t.id}" data-fk="mv-${t.id}" aria-expanded="${ui.moveMenu === t.id}" aria-label="Move #${t.id} to another column" title="Change status">Move…</button></div>
-    ${q || stale || outU || prop ? `<div class="ca">${propActs}${q ? `<button type="button" class="qb" data-go-q="${q.id}" data-fk="cq-${t.id}" title="${esc(short(q.question, 120))}">question waiting</button>` : ''}${outU ? '<span class="own off">owner out of usage — agents may take it over</span>' : stale && t.assignee ? `<span class="own${off ? ' off' : ''}">${off ? `owner offline — agents may take it over` : `${esc(agentRoot(t.assignee))} is still online: ping it first`}</span>` : ''}${stale || outU ? `<button type="button" class="ghost" data-release="${t.id}" data-fk="rel-${t.id}">Release to Open</button>${t.assignee && !outU ? `<button type="button" class="ghost" data-ping="${t.id}" data-fk="ping-${t.id}" title="Post a message asking ${esc(t.assignee)} whether it's still on it">Ping @${esc(agentRoot(t.assignee))}</button>` : ''}` : ''}</div>` : ''}
+    ${q || stale || outU || prop ? `<div class="ca">${propActs}${q ? `<button type="button" class="qb" data-go-q="${q.id}" data-fk="cq-${t.id}" title="${esc(short(q.question, 120))}">question waiting</button>` : ''}${outU ? '<span class="own off">owner out of usage — agents may take it over</span>' : stale && t.assignee ? `<span class="own${off ? ' off' : ''}">${off ? `owner offline — agents may take it over` : `${esc(agentRoot(t.assignee))} is still online: ping it first`}</span>` : ''}${stale || outU ? `<button type="button" class="ghost" data-release="${t.id}" data-fk="rel-${t.id}">Release to Open</button>${t.assignee && !outU ? (pingedAt(t) ? `<span class="muted" style="font-size:12px" title="You can ping again 10 minutes after the last ping">pinged ${ago(pingedAt(t))}</span>` : `<button type="button" class="ghost" data-ping="${t.id}" data-fk="ping-${t.id}" title="Post a message asking ${esc(t.assignee)} whether it's still on it">Ping @${esc(agentRoot(t.assignee))}</button>`) : ''}` : ''}</div>` : ''}
     ${menu}</article>`;
 }
 function doneOpen() {
@@ -1622,7 +1715,9 @@ function renderLocks() {
   patch($('locks'), state.locks.length ? state.locks.map((l) => {
     const mins = Math.max(0, Math.ceil((l.expires_at - Date.now()) / 60000));
     const confirming = ui.confirmLock === l.path;
-    return `<li class="lock"><div><code>${esc(l.path)}</code>
+    // Locks over an hour block teammates for a long time: make them stand out.
+    const long = (l.expires_in_s ?? (l.expires_at - Date.now()) / 1000) > 3600;
+    return `<li class="lock"><div><code>${esc(l.path)}</code>${long ? ` <span class="pill warn" title="Locked for over an hour by ${esc(l.owner)}. If someone is waiting on it, ask ${esc(agentRoot(l.owner))} to release it, or release it here.">long lock</span>` : ''}
       <div class="muted" style="margin-top:2px">${who(l.owner, true)}${l.task_id ? ` · <button type="button" class="link tref" data-open-task="${l.task_id}" tabindex="-1">#${l.task_id}</button>` : ''} · expires in ${mins}m${l.reason ? ` · ${esc(l.reason)}` : ''}</div></div>
       <div class="la">${confirming
         ? `<button class="danger" data-unlock-yes="${esc(l.path)}" data-fk="uy-${esc(l.path)}">Force release</button><button class="ghost" data-unlock-no data-fk="un-${esc(l.path)}">Keep</button>`
@@ -1686,6 +1781,7 @@ document.addEventListener('click', (ev) => {
   if (d.go === 'proposed') { const c = document.querySelector('.card.proposed'); c?.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); return c?.focus({ preventScroll: true }); }
   if (d.ping) {
     const t = taskById(Number(d.ping)); if (!t?.assignee) return;
+    if (pingedAt(t)) return toast(`Already pinged ${agentRoot(t.assignee)} ${ago(pingedAt(t))}. Give it a few minutes.`);
     const mins = Math.round((Date.now() - t.updated_at) / 60000);
     act(api('/messages', { method: 'POST', body: JSON.stringify({ text: `@${t.assignee} #${t.id} has had no update for ${mins} min. Still on it? If you're stuck, say why here; if you stopped, release it back to open.`, channel: 'general' }) }), `Pinged ${t.assignee} in chat`).catch(() => {});
     return;
@@ -1719,6 +1815,13 @@ document.addEventListener('click', (ev) => {
     return toast('Message drafted to the planner: edit it or press Enter to send. Or add a task yourself with + New task.');
   }
   if (d.go === 'wrapup') return goWrapup();
+  if (d.go === 'conflict') {
+    // Open the person with the clashing agent, so its warning and "Belongs to" are in view.
+    const a = [...agentInfoNow().values()].find((x) => x.conflict); if (!a) return;
+    const n = root(a.name); ui.openPeople.add(n); render();
+    const el = document.querySelector(`[data-fk="pb-${CSS.escape(a.name)}"]`) || document.querySelector(`[data-fk="ptog-${CSS.escape(n)}"]`);
+    el?.scrollIntoView({ behavior: smooth(), block: 'center' }); return el?.focus({ preventScroll: true });
+  }
   if (d.go === 'review') { $('col-review')?.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); return ($('col-review')?.querySelector('.card') || $('col-review'))?.focus({ preventScroll: true }); }
   if (d.go === 'stale') { const c = document.querySelector('.card.stale'); c?.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); return c?.focus({ preventScroll: true }); }
 });
@@ -1742,7 +1845,7 @@ document.addEventListener('input', (ev) => {
   if (/^qa-\d+$/.test(ev.target.id) && ui.qErr?.[ev.target.id.slice(3)]) { delete ui.qErr[ev.target.id.slice(3)]; ev.target.removeAttribute('aria-invalid'); const e = $('qe-' + ev.target.id.slice(3)); if (e) e.textContent = ''; }
   if (ev.target.id === 'repo-in' && ui.repoErr) { ui.repoErr = ''; ev.target.removeAttribute('aria-invalid'); $('repo-err').textContent = ''; }
   if (['td-name', 'td-deps'].includes(ev.target.id) && ev.target.getAttribute('aria-invalid')) ev.target.removeAttribute('aria-invalid');
-  if (['td-prio', 'td-size', 'td-res'].includes(ev.target.id) && ev.target.getAttribute('aria-invalid')) { ev.target.removeAttribute('aria-invalid'); $('td-err').textContent = ''; }
+  if (['td-prio', 'td-size', 'td-res', 'td-asg'].includes(ev.target.id) && ev.target.getAttribute('aria-invalid')) { ev.target.removeAttribute('aria-invalid'); $('td-err').textContent = ''; }
 });
 document.addEventListener('submit', async (ev) => {
   const lf = ev.target.closest('[data-limform]');
@@ -1847,6 +1950,15 @@ document.addEventListener('change', async (ev) => {
       state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ require_approval: on }) });
       toast(on ? 'Plan approval on: agents wait for your OK on the task list before they start.' : 'Plan approval off: agents start on tasks right away.');
       render(); scheduleReload();
+    } catch (e) { toast(e.message, true); render(); }
+    return;
+  }
+  if (ev.target.dataset.person) {
+    const n = ev.target.dataset.person; const v = ev.target.value;
+    try {
+      await api(`/agents/${encodeURIComponent(n)}`, { method: 'PATCH', body: JSON.stringify({ person: v }) });
+      if (v) ui.openPeople.add(v);
+      toast(v ? `${n} now shows under ${v}` : `${n} is grouped automatically again`); scheduleReload();
     } catch (e) { toast(e.message, true); render(); }
     return;
   }
@@ -2003,9 +2115,19 @@ function moveTask(t, to) {
 
 // ---------- task dialog ----------
 const dlg = $('task-dlg');
-const FIELDS = { title: () => $('td-name').value, description: () => $('td-desc').value, priority: () => Number($('td-prio').value), size: () => $('td-size').value, reserved_for: () => $('td-res').value || null, status: () => $('td-status').value };
-const SETF = { title: (v) => { $('td-name').value = v; }, description: (v) => { $('td-desc').value = v; }, priority: (v) => { $('td-prio').value = String(v); }, size: (v) => { $('td-size').value = v || 'M'; }, reserved_for: (v) => { resOptions(v); }, status: (v) => { $('td-status').value = v; } };
-const FNAME = { title: 'title', description: 'description', priority: 'priority', size: 'size', reserved_for: 'reservation', status: 'status' };
+const FIELDS = { title: () => $('td-name').value, description: () => $('td-desc').value, priority: () => Number($('td-prio').value), size: () => $('td-size').value, reserved_for: () => $('td-res').value || null, assignee: () => $('td-asg').value || null, status: () => $('td-status').value };
+const SETF = { title: (v) => { $('td-name').value = v; }, description: (v) => { $('td-desc').value = v; }, priority: (v) => { $('td-prio').value = String(v); }, size: (v) => { $('td-size').value = v || 'M'; }, reserved_for: (v) => { resOptions(v); }, assignee: (v) => { asgOptions(v); }, status: (v) => { $('td-status').value = v; } };
+const FNAME = { title: 'title', description: 'description', priority: 'priority', size: 'size', reserved_for: 'reservation', assignee: 'assignee', status: 'status' };
+// "Assigned to": agents on the board (helpers like alice/ui-worker stay listed while they hold it).
+function asgOptions(value) {
+  const sel = $('td-asg'); const cur = value !== undefined ? value || '' : sel.value;
+  const ags = [...agentInfo().values()].filter((a) => a.started || a.online).sort((a, b) => a.name.localeCompare(b.name));
+  const opts = [['', 'Nobody (unassigned)'], ...ags.map((a) => [a.name, `${a.name} · ${[a.client, a.plan].filter(Boolean).join(', ') || 'agent'}${a.online ? '' : ' · offline'}`])];
+  if (cur && !opts.some(([v]) => v === cur)) opts.push([cur, cur]);
+  const html = opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');
+  if (sel._html !== html) { sel.innerHTML = html; sel._html = html; }
+  sel.value = cur;
+}
 // "Reserve for…": started agents (with tool and plan), plus whoever it's reserved for now. Keeps the current choice.
 function resOptions(value) {
   const sel = $('td-res'); const cur = value !== undefined ? value || '' : sel.value;
@@ -2046,9 +2168,10 @@ function openTask(id) {
   $('td-name').value = t?.title || '';
   $('td-desc').value = t?.description || '';
   $('td-prio').value = String(t?.priority || 2);
-  if (editing) { editing.size = editing.size || 'M'; editing.reserved_for = editing.reserved_for || null; }
+  if (editing) { editing.size = editing.size || 'M'; editing.reserved_for = editing.reserved_for || null; editing.assignee = editing.assignee || null; }
   $('td-size').value = t?.size || 'M';
   resOptions(t?.reserved_for || '');
+  asgOptions(t?.assignee || ''); $('td-asg-wrap').hidden = !t; $('td-asg-hint').hidden = !t;
   $('td-status').innerHTML = [...(t?.status === 'proposed' ? ['proposed'] : []), ...STATUSES].map((s) => `<option value="${s}">${LABEL[s]}</option>`).join('');
   $('td-status').value = t?.status || 'open';
   $('td-status-wrap').hidden = !t;
@@ -2072,10 +2195,11 @@ function renderDialogLive() {
   if (!t) { $('td-conflict').hidden = false; $('td-conflict').textContent = 'This task no longer exists.'; return; }
   // Fields the human didn't touch follow the server; a warning only when one they DID edit changed underneath them.
   const mine = editedFields();
-  const norm = (f, v) => (f === 'size' ? v || 'M' : f === 'reserved_for' ? v || null : v);
+  const norm = (f, v) => (f === 'size' ? v || 'M' : f === 'reserved_for' || f === 'assignee' ? v || null : v);
   for (const f of Object.keys(FIELDS)) if (!mine.includes(f) && norm(f, t[f]) !== editing[f]) { SETF[f](norm(f, t[f])); editing[f] = norm(f, t[f]); }
   resOptions(mine.includes('reserved_for') ? undefined : editing.reserved_for); // agent list stays current
-  editing.assignee = t.assignee; editing.branch = t.branch;
+  asgOptions(mine.includes('assignee') ? undefined : editing.assignee);
+  editing.branch = t.branch;
   const clash = mine.filter((f) => norm(f, t[f]) !== editing[f]);
   $('td-conflict').hidden = !clash.length;
   if (clash.length) $('td-conflict').textContent = `While you were editing, someone else changed the ${clash.map((f) => FNAME[f]).join(' and ')}${clash.includes('status') ? ` (now ${LABEL[t.status]})` : ''}. Saving replaces it with your version.`;
@@ -2145,6 +2269,8 @@ $('task-form').addEventListener('submit', async (ev) => {
       if (priority !== o.priority) body.priority = priority;
       if (size !== o.size) body.size = size;
       if (reserved_for !== o.reserved_for) body.reserved_for = reserved_for || '';
+      const assignee = $('td-asg').value || null;
+      if (assignee !== o.assignee) body.assignee = assignee || '';
       if ($('td-status').value !== o.status) body.status = $('td-status').value;
       if (Object.keys(body).length) {
         await api(`/tasks/${o.id}`, { method: 'PATCH', body: JSON.stringify(body) });
@@ -2271,7 +2397,7 @@ let resizeT; addEventListener('resize', () => { if (ui.doneOpen) return; clearTi
 let started = false;
 async function start() {
   if (!token || !me) return showGate();
-  if (qs.get('token')) history.replaceState(null, '', location.pathname);
+  if (qs.get('token') || qs.get('name')) history.replaceState(null, '', location.pathname);
   store.set('board-token', token);
   $('gate').hidden = true; $('app').hidden = false;
   applyKeys();

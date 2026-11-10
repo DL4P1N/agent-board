@@ -72,7 +72,13 @@ app.post('/mcp', auth, async (req, res) => {
   const clientChanged = !probe && req.body?.method === 'initialize' && board.setClient(agentFrom(req), clientLabel(req.body.params?.clientInfo));
   // The agent's subscription (join puts ?plan=…&slots=N in the URL): how many tasks it may hold at once.
   const planChanged = !probe && (req.query.plan || req.query.slots) && board.setPlan(agentFrom(req), req.query.plan, req.query.slots);
-  if (cameOnline || clientChanged || planChanged) board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
+  // Which person this agent belongs to (join sends ?person=), and which laptop it runs on (?laptop=, from
+  // join; older setups: the network address), to group a laptop's tools and spot one name on two laptops.
+  const personChanged = !probe && req.query.person && board.setPerson(agentFrom(req), req.query.person, 'join');
+  const laptop = String(req.query.laptop || '').replace(/[^\w-]/g, '').slice(0, 32)
+    || `ip:${String(req.get('cf-connecting-ip') || req.socket.remoteAddress || '').slice(0, 64)}`;
+  const laptopChanged = !probe && board.noteLaptop(agentFrom(req), laptop);
+  if (cameOnline || clientChanged || planChanged || personChanged || laptopChanged) board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
   const server = buildMcpServer(board, agentFrom(req));
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   res.on('close', () => {
@@ -169,7 +175,8 @@ setInterval(() => {
     announced.add(key('warn'));
     board.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all Feature freeze in 30 minutes (${t.freezeLabel}); demo at ${t.deadlineLabel}. Don't start big tasks now. Aim to get what you have merged.` });
   }
-  if (t.frozen && now < t.deadline && !announced.has(key('freeze'))) {
+  // A freeze "0 min before" starts at the deadline itself: still announce it (within a few minutes).
+  if (t.frozen && (now < t.deadline || now - t.freezeAt < 5 * 60e3) && !announced.has(key('freeze'))) {
     announced.add(key('freeze'));
     board.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all FEATURE FREEZE. Demo at ${t.deadlineLabel}. Don't claim new tasks. Finish, push and merge what you have; release anything that can't land in time.` });
   }

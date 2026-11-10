@@ -15,6 +15,7 @@
 //   --slots N    override how many tasks each agent may hold at once
 //   --wait N     Claude's Stop hook long-polls N seconds for teammate activity before letting Claude stop (default 120; 0 = don't wait)
 //   --shared     also append team rules to the repo's CLAUDE.md (optional; one person commits it)
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -76,6 +77,12 @@ const ask = async (q, def) => {
 // Names already on this board that this laptop didn't set up before (so re-running join is fine).
 const agentToken = agentTokenFor(token);
 const previous = (() => { try { const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); return c.token === token || c.token === agentToken ? c : null; } catch { return null; } })();
+// This laptop's id: made once and kept across boards. The board uses it to spot one agent name
+// used from two laptops at once. Not a secret, just a label.
+const laptopId = (() => {
+  try { const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); if (/^[a-z0-9]{8,16}$/.test(c.laptop_id || '')) return c.laptop_id; } catch {}
+  return crypto.randomBytes(6).toString('hex');
+})();
 // Names are case-insensitive on the board (it stores them lowercase).
 const mine = new Set([previous?.agent, ...(previous?.agents || []).map((a) => a.agent)].filter(Boolean).map((n) => n.toLowerCase()));
 const taken = (n) => (boardState?.presence || []).find((p) => p.kind === 'agent' && String(p.person || p.name).toLowerCase() === n && !mine.has(String(p.name).toLowerCase()));
@@ -167,13 +174,16 @@ const plan = tools.map((t, i) => ({
 
 // Identity + token travel in the URL, so the same URL works in every tool (no custom headers needed).
 // Agents get the agent token: enough for MCP and reading the board, not for human-only actions.
-const urlFor = (p) => `${url}/mcp?${new URLSearchParams({ agent: p.agent, token: agentToken, ...(p.plan ? { plan: p.plan } : {}), ...(p.slots ? { slots: String(p.slots) } : {}) })}`;
+// person: who the agent belongs to, so all of this laptop's tools show under one person on the web board.
+const urlFor = (p) => `${url}/mcp?${new URLSearchParams({ agent: p.agent, token: agentToken, person: name, laptop: laptopId, ...(p.plan ? { plan: p.plan } : {}), ...(p.slots ? { slots: String(p.slots) } : {}) })}`;
+// The web board link signs the human in under the same name as their agents.
+const webLink = `${url}/?token=${encodeURIComponent(token)}&name=${encodeURIComponent(name)}`;
 // The Claude Stop hook reads `agent`; `npm run doctor` reads `agents`.
 const claudeAgent = plan.find((p) => p.tool === 'claude')?.agent || name;
 // Re-running join for some tools keeps the others this laptop set up earlier for the same board.
 const keep = (previous?.agents || []).filter((a) => !tools.includes(a.tool));
 const saveConfig = (agents) => writeJson(CONFIG_PATH, {
-  url, token: agentToken, agent: plan.find((p) => p.tool === 'claude')?.agent || previous?.agent?.toLowerCase() || name, hook_wait: wait,
+  url, token: agentToken, agent: plan.find((p) => p.tool === 'claude')?.agent || previous?.agent?.toLowerCase() || name, person: name, laptop_id: laptopId, hook_wait: wait,
   agents: [...keep, ...agents].map(({ tool, agent, dir, plan_id, plan: planLabel, slots }) => ({ tool, agent, dir, plan_id, plan: planLabel, slots })),
 });
 saveConfig(plan);
@@ -200,7 +210,7 @@ const problems = await runDoctor();
 console.log(`
 ────────────────────────────────────────────────────────────
  ${problems ? `⚠ ${problems} problem(s) above. Fix them, then check again with:  npm run doctor` : `You're in as "${name}"${multi ? ` (agents: ${done.map((p) => p.agent).join(', ')})` : ''}.`}
- Web board:  ${url}/?token=${token}
+ Web board:  ${webLink}
  The board tells everyone (people and agents) what to do next.
 ────────────────────────────────────────────────────────────`);
 

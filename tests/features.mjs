@@ -39,13 +39,14 @@ const codex = (name) => agent(name, { client: 'codex-mcp-client', plan: 'ChatGPT
 const newTask = (title, extra = {}) => human('/tasks', 'POST', { title, size: 'S', ...extra });
 
 // ================= 1. names are case-insensitive =================
-await agent('Dana-claude');
-await human('/messages', 'POST', { text: 'hi @Emil-Codex and @Dana-claude.' }, 'Dana');
+await agent('Dana-claude'); await agent('Emil-Codex');
+await human('/messages', 'POST', { text: 'hi @Emil-Codex and @Dana-claude. ping hit@3, see @fastify/rate-limit and @nobody' }, 'Dana');
 let st = await state();
 check('agent name from the URL is stored lowercase', st.presence.some((p) => p.kind === 'agent' && p.name === 'dana-claude') && !st.presence.some((p) => p.name === 'Dana-claude'), st.presence.map((p) => p.name).join(','));
 check('human name from X-Agent is stored lowercase', st.presence.some((p) => p.kind === 'human' && p.name === 'dana') && !st.presence.some((p) => p.name === 'Dana'));
 const hi = st.events.find((e) => /hi @Emil-Codex/.test(e.text));
-check('message author and mentions are lowercase', hi?.author === 'dana' && JSON.stringify(hi?.data?.mentions) === JSON.stringify(['emil-codex', 'dana-claude']), JSON.stringify(hi));
+check('message author and mentions are lowercase', hi?.author === 'dana' && ['emil-codex', 'dana-claude'].every((m) => (hi?.data?.mentions || []).includes(m)) && !(hi?.data?.mentions || []).some((m) => m !== m.toLowerCase()), JSON.stringify(hi));
+check('no mentions from "hit@3" or npm scopes; a not-yet-joined @name still counts', !(hi?.data?.mentions || []).some((m) => ['3', 'fastify/rate-limit'].includes(m)) && (hi?.data?.mentions || []).includes('nobody'), JSON.stringify(hi?.data));
 // An older board with mixed-case rows gets merged once.
 await board.stop();
 db((d) => {
@@ -268,7 +269,7 @@ check('/api/next with the agent token: actionable when work is claimable', na.ac
 await n1('claim_task', { id: N1.id });
 await n1('update_task', { id: N1.id, status: 'blocked', note: 'need a key' });
 const nb2 = await next('n1');
-check('/api/next: not actionable at capacity with only a blocked task', nb2.actionable === false && typeof nb2.reason === 'string', JSON.stringify(nb2).slice(0, 300));
+check('/api/next: a blocked task frees the slot, so other work is actionable', nb2.actionable === true && /claimable/.test(nb2.reason), JSON.stringify(nb2).slice(0, 300));
 check('/api/next has phase and next_action', nb2.phase === 'building' && typeof nb2.next_action === 'string');
 
 // ================= 11. regressions from the code review =================
@@ -349,5 +350,211 @@ st = await state();
 check('planner out of usage: waiting proposals become open', st.tasks.find((t) => t.id === waiting.id)?.status === 'open', st.tasks.find((t) => t.id === waiting.id)?.status);
 const auto = st.events.find((e) => e.task_id === waiting.id && /approved automatically/.test(e.text));
 check('automatic approval is announced and @mentions the proposer', !!auto && (auto.data?.mentions || []).includes('wk'), JSON.stringify(auto));
+
+// ================= 12. people: grouping and one name on two laptops =================
+// Like agent(), plus extra URL params (join adds person= and laptop=).
+async function agentQ(name, extra = {}, client = 'claude-code') {
+  const q = new URLSearchParams({ agent: name, token: AGENT_TOKEN, ...extra });
+  const c = new Client({ name: client, version: '1' });
+  await c.connect(new StreamableHTTPClientTransport(new URL(`${board.base}/mcp?${q}`)));
+  const call = async (tool, args = {}) => {
+    const r = await c.callTool({ name: tool, arguments: args });
+    const t = r.content[0].text;
+    let body; try { body = JSON.parse(t); } catch { body = t; }
+    return r.isError ? { error: t } : body;
+  };
+  await call('board_status');
+  return call;
+}
+await agentQ('bluefox417', { person: 'Emil', laptop: 'lap1' });
+let pp12 = await agentP('bluefox417');
+check('?person= groups an oddly named agent under that person (source join)', pp12?.person === 'emil' && pp12?.person_source === 'join', JSON.stringify(pp12));
+check('?person= is lowercased', pp12?.person === 'emil');
+await agentQ('emil-claude2', { laptop: 'lap1' });
+check('guess: "emil-claude2" belongs to emil', (await agentP('emil-claude2'))?.person === 'emil' && (await agentP('emil-claude2'))?.person_source === 'guess');
+await agentQ('x-copilot-vscode', { laptop: 'lapx' });
+check('guess: "x-copilot-vscode" belongs to x', (await agentP('x-copilot-vscode'))?.person === 'x');
+await agentQ('finn0-omp', { laptop: 'lape' }, 'omp-coding-agent');
+check('guess: "finn0-omp" stays itself while nobody is called finn0', (await agentP('finn0-omp'))?.person === 'finn0-omp', (await agentP('finn0-omp'))?.person);
+await human('/messages', 'POST', { text: 'hello from finn0' }, 'finn0');
+check('guess: "finn0-omp" belongs to finn0 once a human finn0 exists', (await agentP('finn0-omp'))?.person === 'finn0', (await agentP('finn0-omp'))?.person);
+await agentQ('zed-tool', { laptop: 'lapz' });
+await agentQ('zedbot', { person: 'zed', laptop: 'lapz2' });
+check('guess: "zed-tool" belongs to zed when another agent belongs to zed', (await agentP('zed-tool'))?.person === 'zed', (await agentP('zed-tool'))?.person);
+
+// A human's choice wins over join, and can be cleared.
+let ph12 = await http('/agents/bluefox417', 'PATCH', { person: 'Milo' });
+check('human sets "belongs to" → milo, source human', ph12.status === 200 && ph12.body.person === 'milo' && ph12.body.person_source === 'human', JSON.stringify(ph12.body));
+await agentQ('bluefox417', { person: 'other', laptop: 'lap1' });
+pp12 = await agentP('bluefox417');
+check('a later join connection does not override the human\'s choice', pp12?.person === 'milo' && pp12?.person_source === 'human', JSON.stringify(pp12));
+st = await state();
+check('the change is announced', st.events.some((e) => /bluefox417 now shows under milo/.test(e.text)));
+ph12 = await http('/agents/bluefox417', 'PATCH', { person: '' });
+pp12 = await agentP('bluefox417');
+check('clearing it goes back to automatic (guess until join sends a person)', ph12.status === 200 && pp12?.person_source !== 'human' && pp12?.person === 'bluefox417', JSON.stringify(pp12));
+await agentQ('bluefox417', { person: 'emil', laptop: 'lap1' });
+pp12 = await agentP('bluefox417');
+check('after clearing, join\'s person applies again', pp12?.person === 'emil' && pp12?.person_source === 'join', JSON.stringify(pp12));
+st = await state();
+check('clearing is announced', st.events.some((e) => /bluefox417 is grouped automatically again/.test(e.text)));
+
+// Helpers group under the orchestrator's person in the summary.
+const ht12 = await newTask('helper built this');
+await human(`/tasks/${ht12.id}`, 'PATCH', { assignee: 'bluefox417/worker', status: 'done' });
+const sum12 = await fetch(`${board.base}/api/summary`, { headers: { Authorization: `Bearer ${board.token}` } }).then((r) => r.text());
+const emilSec12 = (sum12.split(/\n### /).find((x) => x.startsWith('emil ')) || '');
+check('summary lists a helper\'s task under the orchestrator\'s person', /helper built this/.test(emilSec12), sum12.slice(0, 400));
+
+// One name on two laptops.
+await agentQ('dup-claude', { laptop: 'aaa' });
+await agentQ('dup-claude', { laptop: 'aaa' });
+check('one laptop never conflicts', (await agentP('dup-claude'))?.conflict === null);
+await agentQ('dup-claude', { laptop: 'bbb' });
+let pd12 = await agentP('dup-claude');
+check('same name from a second laptop → conflict {laptops: 2}', pd12?.conflict?.laptops === 2 && pd12.conflict.since > 0, JSON.stringify(pd12?.conflict));
+await agentQ('dup-claude', { laptop: 'aaa' });
+await agentQ('dup-claude', { laptop: 'bbb' });
+st = await state();
+const warns12 = st.events.filter((e) => /The name dup-claude is being used from/.test(e.text));
+check('one @all warning, not repeated', warns12.length === 1 && (warns12[0].data?.mentions || []).includes('all'), warns12.length);
+await agentQ('noid-claude');
+await agentQ('noid-claude');
+check('no ?laptop= from the same address: no conflict', (await agentP('noid-claude'))?.conflict === null, JSON.stringify((await agentP('noid-claude'))?.conflict));
+
+// ================= 13. fixes from the Kubecon data =================
+{
+// Everyone from earlier sections goes offline, so only this section's agents count.
+const ageAgent = (name, mins = 20) => db((d) => d.prepare("UPDATE presence_v2 SET last_seen = ? WHERE kind = 'agent' AND name = ?").run(Date.now() - mins * 60e3, name));
+db((d) => d.prepare("UPDATE presence_v2 SET last_seen = ? WHERE kind = 'agent'").run(Date.now() - 20 * 60e3));
+await human('/settings', 'PUT', { planner: '', integrator: '', deadline: '', require_approval: '' });
+const lastEv = async (re) => [...(await state()).events].reverse().find((e) => re.test(e.text));
+const k1 = await agent('k1');
+const k2 = await agent('k2');
+const k3 = await codex('k3');
+
+// release_role
+await k1('claim_role', { role: 'planner' });
+check('release_role by a non-holder is refused', /aren't the planner/.test(err(await k2('release_role', { role: 'planner' }))));
+const rr = await k1('release_role', { role: 'planner', note: 'testing' });
+st = await state();
+check('release_role clears the planner', rr.released === true && st.settings.planner === '', JSON.stringify(rr) + ' ' + st.settings.planner);
+const rrev = await lastEv(/I gave up the planner role/);
+check('release_role tells everyone (@all, with the note)', rrev?.author === 'k1' && /: testing/.test(rrev.text) && (rrev.data?.mentions || []).includes('all'), JSON.stringify(rrev));
+await k1('claim_role', { role: 'integrator' });
+await k1('release_role', { role: 'integrator' });
+check('release_role clears the integrator', (await state()).settings.integrator === '');
+await human('/settings', 'PUT', { integrator: '*' });
+check('release_role with integrator "whoever is free" is refused', /no integrator role/.test(err(await k1('release_role', { role: 'integrator' }))));
+await human('/settings', 'PUT', { integrator: '' });
+
+// claim_role takeover from a holder who isn't around
+await k1('claim_role', { role: 'planner' });
+check('claim_role refused while the holder is online', /already the planner/.test(err(await k2('claim_role', { role: 'planner' }))));
+ageAgent('k1');
+const to1 = await k2('claim_role', { role: 'planner' });
+check('claim_role takes over from an offline holder', to1.took_over_from === 'k1' && (await state()).settings.planner === 'k2', JSON.stringify(to1));
+check('the takeover is announced', !!(await lastEv(/k2 took over as planner: k1 isn't around/)));
+await http('/agents/k2', 'PATCH', { limited: true });
+const to2 = await k3('claim_role', { role: 'planner' });
+check('claim_role takes over from a holder out of usage', to2.took_over_from === 'k2' && (await state()).settings.planner === 'k3', JSON.stringify(to2));
+await http('/agents/k2', 'PATCH', { limited: false });
+
+// cancel_task
+await k1('board_status'); // online again
+await human('/settings', 'PUT', { planner: 'k1' });
+const dup13 = await newTask('duplicate thing');
+const dep13 = await newTask('needs the duplicate', { depends_on: [dup13.id] });
+check('cancel_task by a non-planner is refused', /Only the planner/.test(err(await k2('cancel_task', { id: dup13.id, reason: 'nope' }))));
+const cx = await k1('cancel_task', { id: dup13.id, reason: 'duplicate of #1' });
+st = await state();
+check('planner cancels an open task: it is gone', cx.cancelled === dup13.id && !st.tasks.some((t) => t.id === dup13.id), JSON.stringify(cx));
+const cev = st.events.find((e) => e.task_id === dup13.id && e.kind === 'task_deleted');
+check('cancel event names the task and the reason', new RegExp(`cancelled #${dup13.id} duplicate thing: duplicate of #1`).test(cev?.text || ''), cev?.text);
+check('dependents lose the cancelled task', !st.tasks.find((t) => t.id === dep13.id).depends_on.includes(dup13.id));
+const wk = await newTask('k2 is working on this');
+await k2('claim_task', { id: wk.id }); await k2('update_task', { id: wk.id, status: 'in_progress' });
+check('planner can\'t cancel a task someone else is working on', /being worked on by k2/.test(err(await k1('cancel_task', { id: wk.id, reason: 'x' }))), err(await k1('cancel_task', { id: wk.id, reason: 'x' })));
+const dn = await newTask('already finished');
+await human(`/tasks/${dn.id}`, 'PATCH', { status: 'done' });
+check('cancelling a done task is refused', /already done/.test(err(await k1('cancel_task', { id: dn.id, reason: 'x' }))));
+
+// a reservation for an agent that isn't around doesn't lock everyone out
+const k4 = await agent('k4');
+const k5 = await codex('k5');
+const rsv = await newTask('for k4');
+await human(`/tasks/${rsv.id}`, 'PATCH', { reserved_for: 'k4' });
+check('reserved for an online agent: others can\'t claim', /reserved for k4/.test(err(await k5('claim_task', { id: rsv.id }))));
+ageAgent('k4');
+const k5st = await k5('board_status');
+check('reserved for an offline agent: listed as claimable for others', new RegExp(`#${rsv.id} `).test(k5st.next_action), k5st.next_action.slice(0, 300));
+const k5c = await k5('claim_task', { id: rsv.id });
+check('…and another agent can claim it', !err(k5c) && k5c.assignee === 'k5', err(k5c));
+
+// a human assigns an open task
+const asg = await newTask('assign me');
+await human(`/tasks/${asg.id}`, 'PATCH', { assignee: 'K2' });
+st = await state();
+const asgT = st.tasks.find((t) => t.id === asg.id);
+check('human assigning an open task claims it for that agent', asgT?.status === 'claimed' && asgT.assignee === 'k2' && new RegExp(`^task/${asg.id}-`).test(asgT.branch || ''), JSON.stringify(asgT));
+const aev = [...st.events].reverse().find((e) => e.task_id === asg.id && e.kind === 'task_updated');
+check('the assigned agent is told (@mention in the event)', (aev?.data?.mentions || []).includes('k2'), aev?.text);
+
+// a blocked task doesn't hold a slot
+const k7 = await codex('k7');
+const bl1 = await newTask('blocked one'); const bl2 = await newTask('next while blocked');
+await k7('claim_task', { id: bl1.id }); await k7('update_task', { id: bl1.id, status: 'blocked', note: 'need a key' });
+const bc = await k7('claim_task', { id: bl2.id });
+check('a 1-slot agent with a blocked task can claim another', !err(bc) && bc.assignee === 'k7', err(bc));
+
+// locks are at most an hour
+const lk = await k1('lock_files', { paths: ['src/long.js'], ttl_s: 3600, reason: 'big refactor' });
+check('lock_files with 3600 s works and stays within an hour', lk.ok === true && lk.expires_in_s <= 3600, JSON.stringify(lk));
+check('lock_files with 7200 s is refused by the tool schema', !!err(await k1('lock_files', { paths: ['src/longer.js'], ttl_s: 7200 })));
+const lks = (await state()).locks.find((l) => l.path === 'src/long.js');
+check('the stored lock expires within an hour', lks && lks.expires_in_s <= 3600, JSON.stringify(lks));
+
+// a named integrator who isn't around: whoever is free merges meanwhile
+const k8 = await agent('k8');
+const k9 = await agent('k9');
+const k10 = await agent('k10');
+await human('/settings', 'PUT', { integrator: 'k8' });
+const rv = await newTask('needs review');
+await k9('claim_task', { id: rv.id }); await k9('update_task', { id: rv.id, status: 'in_progress' }); await k9('update_task', { id: rv.id, status: 'review' });
+check('integrator online: others can\'t take the review', /k8 is the integrator/.test(err(await k10('claim_review', { id: rv.id }))));
+ageAgent('k8');
+const k10st = await k10('board_status');
+check('integrator away: others are told and offered the review', /k8 \(the integrator\) isn't around/.test(k10st.next_action) && new RegExp(`claim_review|#${rv.id}`).test(k10st.next_action), k10st.next_action.slice(0, 400));
+const k10r = await k10('claim_review', { id: rv.id });
+check('integrator away: claim_review succeeds', !err(k10r) && k10r.reviewer === 'k10', err(k10r));
+await human('/settings', 'PUT', { integrator: '' });
+
+// the demo time has passed (freeze "0 min before" = at the deadline)
+await human('/settings', 'PUT', { deadline: Date.now() - 60e3, freeze_minutes: 0 });
+st = await state();
+check('time.past after the deadline', st.time.past === true && st.time.frozen === true, JSON.stringify(st.time));
+const k1past = await k1('board_status');
+check('next_action says the demo time has passed', /has passed/.test(k1past.next_action) && !/FEATURE FREEZE \(since/.test(k1past.next_action), k1past.next_action.slice(0, 300));
+let frz = null;
+for (let i = 0; i < 28 && !frz; i++) { await new Promise((r) => setTimeout(r, 1000)); frz = await lastEv(/@all FEATURE FREEZE/); }
+check('the freeze is announced even when it starts at the deadline (within the 20 s announcer tick)', !!frz, frz ? '' : 'no FEATURE FREEZE event within 28 s');
+await human('/settings', 'PUT', { deadline: '' });
+
+// PR links backfilled once for tasks from before PR links existed
+const bf = await newTask('old reviewed task');
+await k1('claim_task', { id: bf.id }); await k1('update_task', { id: bf.id, status: 'in_progress' });
+await human(`/tasks/${bf.id}`, 'PATCH', { status: 'done' });
+await board.stop();
+db((d) => {
+  d.prepare('UPDATE tasks SET pr_url = NULL WHERE id = ?').run(bf.id);
+  d.prepare("INSERT INTO events (ts, author, kind, channel, task_id, text) VALUES (?, 'board', 'message', 'general', ?, 'see https://github.com/o/r/pull/99')").run(Date.now() - 2000, bf.id);
+  d.prepare("INSERT INTO events (ts, author, kind, channel, task_id, text) VALUES (?, 'k1', 'task_updated', 'tasks', ?, ?)").run(Date.now() - 1000, bf.id, `#${bf.id} in_progress → review — done https://github.com/o/r/pull/12`);
+  d.prepare("DELETE FROM settings WHERE key = '_pr_backfill'").run();
+});
+await board.relaunch();
+const bfT = (await state()).tasks.find((t) => t.id === bf.id);
+check('PR link backfilled from the owner\'s earlier event', bfT?.pr_url === 'https://github.com/o/r/pull/12', JSON.stringify(bfT?.pr_url));
+
+}
 
 await finish(R, { board });

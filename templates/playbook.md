@@ -22,6 +22,9 @@ Before the first task, run `git fetch` and check that the working tree is clean.
 
 ## Capacity and fairness
 - Each agent may hold only as many tasks at once as its plan allows (`next_action` says "you can hold N"; humans can change your limit on the web board). The board refuses claims beyond that, and refuses a second task while idle teammates need the remaining work. If a claim is refused, follow its reason: keep working on what you have, or wait.
+- **Blocked tasks don't use a slot:** while one of yours waits on something, claim other work.
+- **Assigned by a human:** a human can assign a task to you on the web board. It shows up as claimed by you: pick it up like any task you claimed.
+- **Reservations:** a task reserved for an agent that isn't around (offline or out of usage) can be claimed by anyone.
 - **Usage limits:** if your subscription tells you you've hit a usage or rate limit, immediately `release_task` every task you hold with a note ("hit usage limit"), post in `help`, and stop. Humans can also mark you as out of usage on the web board; then anyone may release your tasks and take them over.
 - **Stuck tasks:** if `next_action` lists a task whose owner went offline or ran out of usage, and you have room, release it with a note ("owner offline") and claim it. If the owner is still online, post to them instead.
 - **Work outside the board:** if a human gives you work in your terminal that isn't a board task, call `set_activity("<what you're doing>")` so the board doesn't show you as idle, and `set_activity("")` when you're done. If teammates should know about it, `create_task` for it instead.
@@ -34,6 +37,7 @@ Before the first task, run `git fetch` and check that the working tree is clean.
    - Priority 1 for foundations (scaffolding, schema, API contracts) and for bug fixes. Priority-1 tasks stay claimable during the feature freeze.
    - Use `depends_on` only where truly needed, so several agents can start at once.
    - You may hand a task to a specific agent with `reserved_for` (on `create_task` or `update_task`). Reserve sparingly: when one agent clearly fits (L tasks to agents with more slots, follow-ups to whoever built the part), and spread the work so nobody sits idle.
+   - Duplicates or work that's no longer needed: `cancel_task(id, reason)` (e.g. "duplicate of #19"). Never mark them done.
 3. Post a short summary of the plan in `general`, then work as a normal worker.
 4. **Proposals:** other agents' new tasks arrive as proposals that @mention you. Decide them promptly with `decide_proposal(id, approve, note)`: approve (adjust `priority`, `size` or `reserved_for` if needed), or reject with a reason; the proposer is told either way.
 5. **Extra helpers (Claude Code planner):** when `next_action` says nobody else is free, you may take extra S/M tasks (up to the number it gives) and run them with helpers. Never L tasks this way, and stop taking extra ones as soon as another agent frees up.
@@ -42,7 +46,7 @@ Before the first task, run `git fetch` and check that the working tree is clean.
 1. Run `claim_task(id)`. It returns a branch name. Then `get_task(id)` for the full description.
 2. `git fetch && git checkout -b <branch> origin/main`
 3. `update_task(id, status="in_progress")`
-4. Before editing shared hot files (schema/migrations, package.json/lockfiles, route registries, shared types/config), call `lock_files` with the task_id. A folder path (`src/db/`) covers everything inside it. If the lock is refused, post in `help` mentioning the owner, and do other work meanwhile.
+4. Before editing shared hot files (schema/migrations, package.json/lockfiles, route registries, shared types/config), call `lock_files` with the task_id. A folder path (`src/db/`) covers everything inside it. Locks last at most an hour; re-lock to renew. If the lock is refused, post in `help` mentioning the owner, and do other work meanwhile.
 5. Build it. Run the build and tests. Commit.
    - **Windows:** if PowerShell refuses `npm` ("running scripts is disabled"), use `npm.cmd` (e.g. `npm.cmd test`) or run the tests with `node --test`.
 6. `git push -u origin <branch>`. If the repo is on GitHub and `gh auth status` works, open a pull request too: `gh pr create --base main --head <branch> --title "#<id> <title>" --body "<what changed, how you tested>"`. Check `gh pr checks <url>` and fix any failure first. Then `update_task(id, status="review", pr_url="<PR URL>", note="<what changed, test result>")`. **Never push to `main`** unless you're merging (see "Merging to main").
@@ -63,9 +67,11 @@ Before the first task, run `git fetch` and check that the working tree is clean.
 
 ## Merging to main
 Who merges depends on what the humans chose (`next_action` says which):
-- **A specific integrator:** only that agent merges. If that's you, merge reviews before claiming new work of your own.
+- **A specific integrator:** only that agent merges. If that's you, merge reviews before claiming new work of your own. If that agent is offline or out of usage, whoever is free merges meanwhile (`claim_review`), or someone takes the role with `claim_role("integrator")`.
 - **Whoever is free:** any agent with a free slot merges. Take a review with `claim_review(id)` first, so nobody merges the same branch twice. Never review your own task, and one review at a time.
 - **Nobody chosen yet:** the first agent with work in review calls `claim_role("integrator")` (`claim_review` is refused until then).
+
+**Can't do your role?** If you hold planner or integrator but can't do the job (e.g. `git push` or `gh pr merge` is blocked on your laptop), call `release_role(role, note)` so the team knows and someone else claims it. A role holder who is offline or out of usage can be replaced directly with `claim_role`.
 
 If you're the author, don't mark your own task done once it's in review: whoever merges does that.
 
@@ -81,11 +87,15 @@ For each task you merge:
 
 **Never mark a task done on the author's word, and never merge with failing checks or unresolved "changes requested".** If you can't run the tests (missing tools, blocked commands), set the task to `blocked` with the reason so a human sees it.
 
+## When the demo time has passed
+`next_action` says so: wrap up. Push and merge what's finished, release what isn't with a note, and post a short status in `general`.
+
 ## When everything is done
 Post a status line in `general`, then `ask_human` whether there's more to do, and `wait_for_events` for up to 10 minutes for the answer before you stop.
 
 ## Etiquette
 - Don't edit files someone else has locked, and don't change other people's tasks. Post to them instead. The board refuses status or branch changes on tasks you don't hold.
 - Keep posts short: `#12 blocked: need the schema from #3. @bob, ETA?`
+- `@` inside a word, a version or a package scope isn't a mention (`hit@3`, `@2.0.2`, `@fastify/x`). Write `PR #N` for pull requests; a bare `#N` means board task N.
 - A task marked stale has had no update for 15+ minutes. If its owner is online, ping them; if offline, you may take it over (see "Capacity and fairness").
 - Humans see `ask_human` questions at the top of the web board. Ask one clear question at a time.

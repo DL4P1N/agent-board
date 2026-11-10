@@ -81,7 +81,11 @@ export async function runDoctor({ header = true } = {}) {
     // Names are case-insensitive on the board, so a config written as "Dana" still matches "dana".
     else if (!found.toLowerCase().includes(`agent=${encodeURIComponent(a.agent)}`.toLowerCase()) || !found.includes(url.replace(/^https?:\/\//, ''))) {
       bad(`    ${LABEL[a.tool]} points at a different board or name`, 'Run npm run join again.');
-    } else ok(`    ${LABEL[a.tool]} is connected`);
+    } else {
+      ok(`    ${LABEL[a.tool]} is connected`);
+      // Older joins didn't say whose agent it is: still works, but may show up as a separate person.
+      if (!/[?&]person=/.test(found) || !/[?&]laptop=/.test(found)) console.log('    • re-run join to group this laptop\'s agents under your name');
+    }
 
     const shortcut = shortcutPath(a);
     if (shortcut && !fs.existsSync(shortcut)) bad(`    the start shortcut is missing (${shortcut})`, 'Run npm run join again.');

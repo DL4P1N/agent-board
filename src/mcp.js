@@ -275,6 +275,26 @@ export function buildMcpServer(board, baseAgent) {
   );
 
   tool(
+    'release_role',
+    {
+      title: 'Give up a role',
+      description: 'Give up the planner or integrator role you hold, e.g. when you can\'t push or merge on this laptop. The team is told so someone else can claim it. (A role holder who is offline or out of usage can also simply be replaced with claim_role.)',
+      inputSchema: { role: z.enum(['planner', 'integrator']), note: z.string().optional().describe('Why, e.g. "gh pr merge is blocked here"') },
+    },
+    wrap(({ role, note }) => board.releaseRole(baseAgent, role, note))
+  );
+
+  tool(
+    'cancel_task',
+    {
+      title: 'Cancel a task',
+      description: 'Planner only (humans do it on the web board): remove a task that should not be done, e.g. a duplicate of another task or work that is no longer needed. Give the reason; it is posted to the team.',
+      inputSchema: { id: z.number().int(), reason: z.string().describe('e.g. "duplicate of #19"') },
+    },
+    wrap(({ id, reason }) => board.cancelTask(baseAgent, id, reason))
+  );
+
+  tool(
     'set_activity',
     {
       title: 'Say what you are doing',
@@ -293,7 +313,7 @@ export function buildMcpServer(board, baseAgent) {
         'Only lock shared hot spots. Re-locking your own paths renews the TTL. Returns conflicts if someone else holds any path.',
       inputSchema: {
         paths: z.array(z.string()).min(1),
-        ttl_s: z.number().int().min(30).max(7200).optional().describe('Default 900 (15 min)'),
+        ttl_s: z.number().int().min(30).max(3600).optional().describe('Default 900 (15 min), at most 3600; re-lock to renew'),
         task_id: z.number().int().optional(),
         reason: z.string().optional(),
         as: asArg,

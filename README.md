@@ -60,7 +60,10 @@ Nobody hands out tasks: every agent asks the board what to do next and claims wo
   To override, pass `--slots N` to join, or change an agent's limit on the web board (its row under People) while the board runs.
 - **Fair sharing.** An agent can't take a second task while teammates sit idle and the remaining work is only enough for them.
 - **Sizes.** The planner marks tasks S, M or L. Agents on bigger plans see L tasks first; one-slot agents see small ones first. The planner is told the team's total capacity and writes at least twice that many tasks.
-- **Reserve a task** for a specific agent on the web board ("Reserve for…" in the task dialog). Only that agent can claim it, and it sees it first. The planner can reserve tasks too, to hand work to the agent that fits it best.
+- **Reserve a task** for a specific agent on the web board ("Reserve for…" in the task dialog). Only that agent can claim it, and it sees it first. The planner can reserve tasks too, to hand work to the agent that fits it best. A reservation for an agent that isn't around (offline or out of usage) doesn't block anyone else.
+- **Assign a task** to an agent on the web board ("Assigned to" in the task dialog). It becomes claimed for that agent, which picks it up on its next check.
+- **Blocked tasks don't use a slot.** An agent waiting on a blocked task can claim other work meanwhile.
+- **Duplicates.** The planner removes duplicates and work that's no longer needed with `cancel_task` (humans: **Delete** in the task dialog), so they don't show up as built.
 - **Proposals.** Tasks that other agents create are *proposed*: the planner (or you, on the web board) approves or rejects them before anyone can claim them, and the agent that proposed one is told either way. If the planner is offline or out of usage, new ones go straight onto the board, and ones already waiting are approved automatically.
 - **Extra helpers for the planner.** When tasks are waiting and no other agent is free, a Claude Code planner may take a few extra small or medium tasks with helper agents (2 by default; you can change the number in *Start here*). It stops as soon as someone frees up.
 - **Crashes and usage limits.** A task with no update for 15 minutes is *stale*. If its owner is offline, any agent may release and take it over. An agent that hits its plan's usage limit releases its tasks so others can continue. You can also mark an agent as out of usage on the web board, optionally with when it's back: the board stops counting on it, and others may take over its tasks. The mark clears at that time, or when the agent calls the board again.
@@ -70,16 +73,25 @@ Nobody hands out tasks: every agent asks the board what to do next and claims wo
 ## Your job as a human
 Keep the web board open. The line at the top always says the one thing that needs you, for example:
 - **Answer a question.** Agents ask when they need a product decision, and they wait for your answer.
-- **Pick who merges to `main`:** one agent, or whoever is free.
+- **Pick who merges to `main`:** one agent, or whoever is free. If the chosen agent is offline or out of usage, whoever is free merges meanwhile. An agent that can't do its role (e.g. merging is blocked on its laptop) gives it up with `release_role`; one that's gone can be replaced with `claim_role`.
 - **Approve or reject proposed tasks** if the planner doesn't.
 - **Unblock a task.**
-- To tell any agent something, post a message with an @mention, e.g. `@alice skip OAuth, use a fake login`. Type `@` in the message box to pick a name from the list. Names are case-insensitive: `Alice` and `alice` are the same person.
+- To tell any agent something, post a message with an @mention, e.g. `@alice skip OAuth, use a fake login`. Type `@` in the message box to pick a name from the list. Names are case-insensitive: `Alice` and `alice` are the same person. `@` inside a word or a package name isn't a mention (`hit@3`, `@fastify/x`, `@2.0.2`), and `PR #78` in a message doesn't link to task #78.
 
-**Set the demo time** in *Start here*. The board counts down, and a **feature freeze** starts 60 minutes before the demo (you can change that). 30 minutes before the freeze, and again when it starts, the board tells every agent. During the freeze agents can't claim new tasks; they finish, merge and fix bugs instead.
+**Set the demo time** in *Start here*. The board counts down, and a **feature freeze** starts 60 minutes before the demo (you can change that). 30 minutes before the freeze, and again when it starts (also when it starts at the demo time itself), the board tells every agent. During the freeze agents can't claim new tasks; they finish, merge and fix bugs instead. Once the demo time has passed, agents are told to wrap up.
 
 **Want to check the plan first?** Turn on *Review the task list before agents start*. The planner writes the tasks. You edit, add or delete them, then press **Approve plan & start**.
 
 **At the end**, *Export summary* gives a write-up of the day: what got built and by whom, the decisions you made answering questions, and what's unfinished. Handy for the submission. *Download backup* saves the whole board as JSON.
+
+### Protect main
+Agents merge through `gh`, so let GitHub enforce that code only reaches `main` through pull requests. On GitHub: **Settings → Branches → Add rule** for `main` → **Require a pull request before merging**. Add **Require approvals** if a human should approve each merge, and **Require status checks** if you have CI. Or from a terminal:
+```
+gh api -X PUT repos/<owner>/<repo>/branches/main/protection --input - <<'EOF'
+{"required_status_checks": null, "enforce_admins": false, "required_pull_request_reviews": {"required_approving_review_count": 0}, "restrictions": null}
+EOF
+```
+On private repos this needs a paid GitHub plan.
 
 ## If it can't connect
 Start with `npm run doctor`. It checks the board, the token, the server's version and each tool, and says what to fix. The usual causes:
@@ -88,6 +100,7 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 - **Your tool was set up before the board was restarted with a new token.** Run the join command from the web board again.
 - **Copilot in VS Code** asks before using the board's tools. Choose "Always allow" for the board server.
 - **Codex can't commit inside its sandbox.** Its sandbox keeps `.git` read-only. Codex asks you to approve each git command; choose "don't ask again" for git. If you trust it with your laptop, you can also start it with `codex --sandbox danger-full-access` in the hackathon repo, so it doesn't need to ask.
+- **One laptop shows up as several people** (or a person with nothing under them). Re-run join on that laptop: it records whose agents they are. For an agent join didn't set up, use **belongs to…** on the web board. `npm run doctor` says when a tool's setup predates this.
 - **Codex and Copilot stop more often than Claude.** Only Claude Code gets the auto-wake hook. If an agent sits idle, tell it "continue with the board".
 
 ---
@@ -121,11 +134,11 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 - **Guidance:** `board_status` returns `next_action`, which is plain-language instructions that depend on the team's phase (`needs_goal`, `needs_plan`, `building`, `all_done`) and your role.
 - **Pull requests:** if the project is on GitHub and `gh` is signed in, agents open a PR for each task and attach it when they move the task to review. Review cards link to the PR, and if the host has `gh`, they show its checks and review state too. Whoever merges reads the review (bots' comments count), waits for the checks and merges with `gh pr merge`. A PR that fails goes back to its author with a note saying what to fix. Without GitHub, agents fall back to plain git merges.
 - **Tasks** move `(proposed →) open → claimed → in_progress → (blocked) → review → done`. Claiming is atomic, so two agents can't take the same task. A task can't be claimed until the tasks it `depends_on` are done. Each claimed task gets a branch name like `task/<id>-<slug>`. A task with no update in 15 minutes is marked *stale*.
-- **Locks** are advisory "I'm editing this shared file" markers. They are all-or-nothing, expire after 15 minutes by default, and are released when the task is done.
+- **Locks** are advisory "I'm editing this shared file" markers. They are all-or-nothing, expire after 15 minutes by default (at most an hour; agents re-lock to renew), and are released when the task is done.
 - **Waking agents up:** the `wait_for_events` tool returns as soon as someone else posts. The Stop hook checks the board whenever Claude is about to stop, and feeds it anything new. If nothing is new but the board has work for it (a task it may claim, a review, proposals to decide), it nudges Claude to do it, at most once every 3 minutes. An idle Claude keeps listening for up to 2 minutes before it stops (`--wait 120`, the default; `--wait 0` turns that off). Once the hook has sent Claude back to work and nothing new has arrived since (`stop_hook_active`), it neither waits nor nudges again, so you get the terminal back without pressing Esc. Codex and Copilot have no hook, so the playbook tells them to keep calling `wait_for_events` for up to 10 minutes before they stop.
-- **Identity:** each laptop is a name, like `alice`. Its helper agents show up as `alice/<helper>`. Names are stored lowercase, so case never splits one person in two.
+- **Identity:** each laptop is a name, like `alice`. Its helper agents show up as `alice/<helper>`. Names are stored lowercase, so case never splits one person in two. Join also records which person each agent belongs to (`person=` on its board URL), so all of a laptop's tools (`alice-claude`, `alice-codex`) show under one person, and the web board link join prints opens the board as you. Agents connected some other way are grouped by name (`<person>-<tool>`); if one still lands in the wrong place, fix it on the web board with **belongs to…** on that agent. Each laptop also sends a random id (`laptop=`), so the board warns when one agent name is used from two laptops at once.
 
-**MCP tools:** `get_playbook`, `board_status`, `set_goal`, `claim_role`, `post`, `read_events`, `wait_for_events`, `list_tasks`, `get_task`, `create_task`, `decide_proposal`, `claim_task`, `update_task`, `release_task`, `claim_review`, `set_activity`, `lock_files`, `unlock_files`, `list_locks`, `ask_human`
+**MCP tools:** `get_playbook`, `board_status`, `set_goal`, `claim_role`, `release_role`, `post`, `read_events`, `wait_for_events`, `list_tasks`, `get_task`, `create_task`, `decide_proposal`, `claim_task`, `update_task`, `release_task`, `cancel_task`, `claim_review`, `set_activity`, `lock_files`, `unlock_files`, `list_locks`, `ask_human`
 
 ## Options
 
