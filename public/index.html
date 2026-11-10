@@ -137,6 +137,9 @@
   /* People: --h is set inline per person. */
   .pc { color: hsl(var(--h, 0) var(--ps) var(--pl)); font-weight: 600; }
   .pdot { width: 8px; height: 8px; border-radius: var(--r-full); background: hsl(var(--h, 0) 60% var(--dl)); display: inline-block; flex: 0 0 auto; }
+  /* With an initial it's an avatar (who), not a status light: a second cue when two people share a colour. */
+  .pdot[data-i] { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; color: var(--raised); font-size: 10px; font-weight: 600; line-height: 1; background: hsl(var(--h, 0) var(--ps) var(--pl)); }
+  .pdot[data-i]::after { content: attr(data-i); }
 
   /* Pills: small facts. Colour only when it means something. */
   .pill { display: inline-block; font-size: var(--fs-micro); font-weight: 500; line-height: 18px; padding: 0 6px; border-radius: var(--r-full); background: var(--chip); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -331,6 +334,7 @@
   .person ul { list-style: none; margin: var(--s2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--s3); }
   .person li { font-size: var(--fs-sm); min-width: 0; }
   .person .an { font-weight: 600; }
+  .plegend { margin-left: auto; font-weight: 400; display: inline-flex; flex-wrap: wrap; gap: var(--s2) var(--s3); align-items: center; }
   .person .last, .doing { color: var(--muted); font-size: var(--fs-meta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .person .tk { display: flex; gap: var(--s3); align-items: baseline; min-width: 0; }
   .person .tk button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -615,7 +619,8 @@
     <section id="setup" class="panel setup" aria-label="Team setup guide"></section>
 
     <section class="panel" aria-labelledby="p-h">
-      <div class="sec-h"><h2 id="p-h">Who's doing what</h2><span class="muted">one row per person and their AI tools · click a row for their agents, tasks and filter</span></div>
+      <div class="sec-h"><h2 id="p-h">Who's doing what</h2><span class="muted">one row per person and their AI tools · click a row for their agents, tasks and filter</span>
+        <span class="plegend" id="p-legend" title="Agent pills: x/y = tasks it holds / tasks it may hold at once"><span class="muted">Pills:</span> <span class="pill ok">has room</span> <span class="pill full">full</span> <span class="pill warn">not started or out of usage</span> <span class="pill">offline</span></span></div>
       <ul class="people" id="people"></ul>
     </section>
 
@@ -769,7 +774,7 @@ const ACTIVE = ['claimed', 'in_progress', 'blocked', 'review'];
 const STALE_MS = 15 * 60 * 1000; // matches the server; its per-task `stale` flag wins when present
 const HOLDING = ['claimed', 'in_progress']; // what counts against an agent's slots (blocked work doesn't)
 const SIZE_TIP = { S: 'Size S: small, under 30 minutes. One-task-at-a-time agents take these first', M: 'Size M: about an hour', L: 'Size L: large. Agents on bigger plans take these first' };
-const HUES = [215, 150, 275, 325, 185, 95, 250, 45, 300, 165]; // person colours, kept away from the red/orange used for warnings
+const HUES = [45, 75, 110, 145, 175, 200, 222, 245, 270, 295, 320]; // person colours, evenly spaced, kept away from the red/orange used for warnings
 const DONE_SHOWN = 6;
 const $ = (id) => document.getElementById(id);
 // One server can host several boards: /b/<slug>/ (its API under /b/<slug>/api). The default board is at the root.
@@ -833,19 +838,9 @@ const root = (a) => {
 const knownPeople = () => [...personMap().known].filter((n) => n && n !== 'board' && n !== 'anonymous').sort();
 const sameTeam = (a, b) => !!a && !!b && root(a) === root(b);
 const nameHash = (n) => { let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
-// Every known person gets a colour of their own: a name whose colour is taken moves on to the next free one
-// (names in a–z order, so every screen agrees). Names nobody knows (old events) fall back to the plain hash.
-function personHues() {
-  const pm = personMap(); if (pm.hues) return pm.hues;
-  const used = new Set(); const m = new Map();
-  for (const n of [...pm.known].sort()) {
-    let i = nameHash(n) % HUES.length;
-    for (let k = 0; k < HUES.length && used.has(i); k++) i = (i + 1) % HUES.length;
-    used.add(i); m.set(n, HUES[i]);
-  }
-  return (pm.hues = m);
-}
-const hue = (name) => { const r = root(name); return personHues().get(r) ?? HUES[nameHash(r) % HUES.length]; };
+// A person's colour comes from their name alone, so it never changes when someone else joins, and every
+// screen agrees. Two people can share a colour: the initial in their People dot (.pdot) tells them apart.
+const hue = (name) => HUES[nameHash(root(name)) % HUES.length];
 const hs = (name) => `style="--h:${hue(name)}"`;
 // A name that @mentions on click. inline=true (feed, question headers): clickable but no Tab stop of its own.
 const who = (a, inline = false) => `<button type="button" class="link pc" ${hs(a)} data-mention="${esc(a)}" title="Click to @mention ${esc(a)} in chat"${inline ? ' tabindex="-1"' : ''}>${esc(a)}</button>`;
@@ -1150,6 +1145,8 @@ function people() {
   for (const p of map.values()) {
     p.last = Math.max(0, ...[...p.agents.values()].map((a) => a.last));
     p.r = ros.find((r) => r.name === p.name) || { agent: false, agentOnline: false, humanOnline: false, agents: [] };
+    // Also when its agents last talked to the board, so the row and "last seen" in its detail agree.
+    p.last = Math.max(p.last, ...p.r.agents.map((a) => a.last || 0));
   }
   // A name with nothing behind it (no agents, tasks, locks or questions, not watching now; e.g. a name
   // someone typed once on this page) isn't a person on the team: leave it out. Its messages stay in the feed.
@@ -1794,21 +1791,29 @@ function renderQuestions(qOpen) {
 }
 
 // One compact line per person; click it for their agents, tasks and the filter.
-function toolChip(a, person) {
-  const lbl = a.client || (a.name.startsWith(person + '-') ? a.name.slice(person.length + 1) : a.name !== person ? a.name : 'agent');
+function toolChip(a, person, all = []) {
+  const own = a.name.startsWith(person + '-') ? a.name.slice(person.length + 1) : a.name !== person ? a.name : '';
+  const lbl = a.client || own || 'agent';
   const st = agentState(a);
   const warn = a.conflict ? `<span class="pill bad" title="${esc(conflictText(a))}">${esc(a.name)} · ${a.conflict.laptops || 2} laptops</span>` : '';
-  return warn + toolChipState(a, st, lbl);
+  return warn + toolChipState(a, st, chipName(a, person, all, lbl), chipName(a, person, all, a.plan || lbl));
+}
+// Say which agent a pill is about when the tool alone doesn't: an agent not named <person>-<tool>
+// ("dave · omp-agent", grouped under carol), or two agents with the same tool ("Claude Code (claude2)").
+function chipName(a, person, all, base) {
+  if (a.name !== person && !a.name.startsWith(person + '-')) return base === a.name ? base : `${a.name} · ${base}`;
+  const twin = a.client && all.some((x) => x.name !== a.name && x.client === a.client);
+  return twin && a.name !== person ? `${base} (${a.name.slice(person.length + 1)})` : base;
 }
 // Same name used from two laptops at once: almost always two people who picked the same name in join.
 const conflictText = (a) => `${a.name} is connected from ${a.conflict?.laptops || 2} laptops: two people may be using the same name. One of them should re-run join with another name.`;
 // Where an agent's person comes from, for tooltips.
 const personSourceText = (a) => ({ human: 'set here on the web board', join: 'from join', guess: 'guessed from the name' }[a.personSource] || 'guessed from the name');
-function toolChipState(a, st, lbl) {
+function toolChipState(a, st, lbl, onLbl = a.plan || lbl) {
   if (st === 'limited') return `<span class="pill warn" title="${esc(a.name)} hit its usage limit${a.limited.by === 'agent' ? ' (reported by the agent)' : ''}${a.limited.note ? `: ${esc(a.limited.note)}` : ''}. Other agents may take over its tasks.">${esc(lbl)} · ${esc(limitText(a))}</span>`;
   if (st === 'online') {
     const full = a.active >= a.slots;
-    return `<span class="pill ${full ? 'full' : 'ok'}" title="${esc(capTip(a))} Running on the board.">${esc(a.plan || lbl)} · <span class="cap">${capText(a)}</span><span class="capw"> tasks</span></span>`;
+    return `<span class="pill ${full ? 'full' : 'ok'}" title="${esc(capTip(a))} Running on the board.">${esc(onLbl)} · <span class="cap">${capText(a)}</span><span class="capw"> tasks</span></span>`;
   }
   if (st === 'waiting') return `<span class="pill ns" title="${esc(a.name)}: ${esc(notStartedText(a))}">${esc(lbl)} · not started — type ${esc(startCmd(a.client))}</span>`;
   return `<span class="pill" title="${esc(a.name)}: no contact for 10+ minutes (last seen ${a.last ? ago(a.last) : 'never'})">${esc(lbl)} · offline</span>`;
@@ -1828,7 +1833,8 @@ function agentControls(a) {
       <p class="hint row m0" id="lh-${k}">No time: it counts as back as soon as it talks to the board again.</p></form>` : '';
   // Who this agent belongs to: fixes an agent that shows up as its own person (or under the wrong one).
   const cur = a.personSource === 'human' ? a.person : '';
-  const ppl = [...new Set([...knownPeople(), a.person, root(a.name)].filter(Boolean))].sort();
+  // The people on the People panel (not every name ever typed on this page), plus its current person.
+  const ppl = [...new Set([...people().map((p) => p.name), a.person, root(a.name)].filter(Boolean))].sort();
   const owner = `<label for="pb-${k}">Belongs to</label><select id="pb-${k}" data-person="${k}" data-fk="pb-${k}" title="Whose agent this is: ${esc(root(a.name))} (${esc(personSourceText(a))}). Pick a person to group it under them.">
       <option value="" ${cur ? '' : 'selected'}>automatic (${esc(a.personSource === 'human' ? 'join or name' : root(a.name))})</option>${ppl.map((n) => `<option value="${esc(n)}" ${cur === n ? 'selected' : ''}>${esc(n)}${n === me ? ' (you)' : ''}</option>`).join('')}</select>`;
   const clash = a.conflict ? `<div class="note row" role="status">${esc(conflictText(a))}</div>` : '';
@@ -1836,6 +1842,7 @@ function agentControls(a) {
 }
 function renderPeople() {
   const ps = people();
+  $('p-legend').hidden = !ps.some((p) => p.r.agents?.length);
   const r = filterRoot(); const S = state.settings;
   patch($('people'), ps.length ? ps.map((p) => {
     // Main agents (one per AI tool) first, each followed by its helpers.
@@ -1846,7 +1853,7 @@ function renderPeople() {
     const nBlocked = tasks.filter((t) => t.status === 'blocked').length; const nStale = tasks.filter(isStale).length;
     const hasCap = (p.r.agents || []).some((a) => agentState(a) === 'online'); const nReview = tasks.filter((t) => t.status === 'review').length;
     const summary = [
-      hasAgent ? (p.r.agents?.length ? p.r.agents.map((a) => toolChip(a, p.name)).join('') : '<span class="pill">agent</span>') : `<span class="muted t-meta">${p.r.humanOnline ? 'watching · ' : ''}no AI agent</span>`,
+      hasAgent ? (p.r.agents?.length ? p.r.agents.map((a) => toolChip(a, p.name, p.r.agents)).join('') : '<span class="pill">agent</span>') : `<span class="muted t-meta">${p.r.humanOnline ? 'watching · ' : ''}no AI agent</span>`,
       S.planner && root(S.planner) === p.name ? '<span class="pill role" title="Planner: wrote the task list from the goal">planner</span>' : '',
       S.integrator && S.integrator !== ANYONE && root(S.integrator) === p.name ? '<span class="pill role" title="Integrator: merges finished branches into main">merges to main</span>' : '',
       (p.r.agents || []).some((a) => a.reviewing.length) ? `<span class="pill role" title="Reviewing and merging into main">merging ${(p.r.agents || []).flatMap((a) => a.reviewing).map((id) => '#' + id).join(' ')}</span>` : '',
@@ -1866,18 +1873,20 @@ function renderPeople() {
           ${lt ? `<li><div class="last" title="${esc(lt)}">${esc(short(lt, 120))}</div></li>` : ''}</ul>`;
       } else {
         const ainfo = new Map((p.r.agents || []).map((a) => [a.name, a]));
-        detail = `<div class="inl mt-0">${filt}<span class="muted t-meta">${p.last ? 'active ' + ago(p.last) : 'no activity yet'}</span></div><ul>${agents.map((a) => {
+        detail = `<div class="inl mt-0">${filt}<span class="muted t-meta">${p.last ? 'last seen ' + ago(p.last) : 'no activity yet'}</span></div><ul>${agents.map((a) => {
           const [orch, helper] = a.id.split('/'); const tool = clientOf(orch); const info = !helper && ainfo.get(orch);
           // The person themself (messages they wrote on this page), not an AI agent under their name.
           const human = !helper && !info && orch === p.name && !(state.presence || []).some((x) => x.kind === 'agent' && x.name === orch);
           if (human && !a.tasks.length && p.agents.size > 1) return a.lastText ? `<li><div class="tk"><span class="muted">On this page</span><span class="sp"></span>${a.last ? `<span class="muted t-micro">${ago(a.last)}</span>` : ''}</div><div class="last" title="${esc(a.lastText)}">${esc(short(a.lastText, 120))}</div></li>` : '';
           // Two agents with the same tool (emil-claude, emil-claude2): name them, "main agent · Claude Code" twice says nothing.
           const sameTool = !helper && tool && (p.r.agents || []).filter((x) => clientOf(x.name) === tool).length > 1;
-          const label = helper ? helper : sameTool ? orch : orch === p.name && p.agents.size < 2 ? 'main agent' : `main agent${tool ? ` · ${tool}` : orch !== p.name ? ` · ${orch.startsWith(p.name + '-') ? orch.slice(p.name.length + 1) : orch}` : ''}`;
+          // An agent not named <person>-<tool> (dave, grouped under carol): lead with its own name.
+          const named = orch !== p.name && !orch.startsWith(p.name + '-');
+          const label = helper ? helper : sameTool ? orch : named ? `${orch}${tool ? ` · ${tool}` : ''}` : orch === p.name && p.agents.size < 2 ? 'main agent' : `main agent${tool ? ` · ${tool}` : orch !== p.name ? ` · ${orch.slice(p.name.length + 1)}` : ''}`;
           const tk = a.tasks.map((t) => `<div class="tk"><span class="pill s-${t.status}">${LABEL[t.status]}</span>${isStale(t) ? '<span class="pill warn">stale</span>' : ''}<button type="button" class="link" data-open-task="${t.id}" data-fk="pt-${t.id}" title="${esc(t.title)}">#${t.id} ${esc(t.title)}</button></div>`).join('');
           if (!tk && !a.last && !info && a.id === p.name && p.agents.size > 1) return '';
           const idleTxt = tk ? '' : info && isLimited(info) ? `<span class="muted">· ${esc(limitText(info))}</span>` : info && !info.online ? `<span class="muted">· offline${info.last ? ` (last seen ${esc(ago(info.last))})` : ''}</span>` : info && info.busy ? `<span class="muted" title="${esc(info.doing || 'Working')}">· ${esc(short(info.doing || 'working', 60))}</span>` : '<span class="muted">· idle</span>';
-          return `<li><div class="tk"><button type="button" class="link an" data-mention="${esc(a.id)}" title="${!a.id.includes('/') ? `A main agent${tool ? ` (${esc(tool)})` : ''} on this laptop (orchestrator): it claims tasks from the board. ` : 'Helper agent (subagent) working on one task. '}Click to @mention ${esc(a.id)} in chat"><span aria-hidden="true" class="muted">@</span>${esc(label)}</button>${idleTxt}<span class="sp"></span>${a.last ? `<span class="muted t-micro">${ago(a.last)}</span>` : ''}</div>
+          return `<li><div class="tk"><button type="button" class="link an" data-mention="${esc(a.id)}" title="${!a.id.includes('/') ? `A main agent${tool ? ` (${esc(tool)})` : ''} on this laptop (orchestrator): it claims tasks from the board. ` : 'Helper agent (subagent) working on one task. '}Click to @mention ${esc(a.id)} in chat">${esc(label)}</button>${idleTxt}<span class="sp"></span>${Math.max(a.last, info?.last || 0) ? `<span class="muted t-micro">${ago(Math.max(a.last, info?.last || 0))}</span>` : ''}</div>
             ${info ? `<div class="pcap" title="${esc(capTip(info))}">${esc([info.client, info.plan].filter(Boolean).join(' · ') || 'agent')} · ${info.active} of ${info.slots} at once${info.override ? ' (set here)' : ''}${info.extra ? ` <span class="pill ok" title="Planner: nobody else is free and small/medium work is ready, so it may run ${info.extra} more with helpers">+${info.extra} extra as planner</span>` : ''}</div>` : ''}
             ${info && tk && info.doing && !isLimited(info) && !/^#\d+/.test(info.doing) ? `<div class="doing" title="${esc(info.doing)}">${esc(short(info.doing, 120))}</div>` : ''}
             ${info ? agentControls(info) : ''}
@@ -1888,7 +1897,7 @@ function renderPeople() {
       detail = `<div class="pd" id="pd-${key}">${detail}</div>`;
     }
     return `<li class="person ${sel ? 'sel' : ''}" ${hs(p.name)}>
-      <div class="ph" data-ptoggle="${key}"><button type="button" class="ptog" data-ptoggle="${key}" data-fk="ptog-${key}" aria-expanded="${open}" ${open ? `aria-controls="pd-${key}"` : ''} aria-describedby="ps-${key}" title="${open ? 'Hide' : 'Show'} ${key}'s agents and tasks"><span class="chev" aria-hidden="true"></span><span class="pdot"></span><span class="pc" ${hs(p.name)}>${key}</span>${p.name === me ? '<span class="pill">you</span>' : ''}</button>
+      <div class="ph" data-ptoggle="${key}"><button type="button" class="ptog" data-ptoggle="${key}" data-fk="ptog-${key}" aria-expanded="${open}" ${open ? `aria-controls="pd-${key}"` : ''} aria-describedby="ps-${key}" title="${open ? 'Hide' : 'Show'} ${key}'s agents and tasks"><span class="chev" aria-hidden="true"></span><span class="pdot" aria-hidden="true" data-i="${esc([...p.name][0]?.toUpperCase() || '')}"></span><span class="pc" ${hs(p.name)}>${key}</span>${p.name === me ? '<span class="pill">you</span>' : ''}</button>
         <span class="pchips" id="ps-${key}">${summary}</span><span class="pwhen">${p.last ? ago(p.last) : ''}</span></div>
       ${detail}</li>`;
   }).join('') : '<li class="muted">Nobody yet. When a teammate\'s AI agent connects, it appears here with what it\'s working on.</li>');
@@ -2553,11 +2562,15 @@ const dlg = $('task-dlg');
 const FIELDS = { title: () => $('td-name').value, description: () => $('td-desc').value, priority: () => Number($('td-prio').value), size: () => $('td-size').value, reserved_for: () => $('td-res').value || null, assignee: () => $('td-asg').value || null, status: () => $('td-status').value };
 const SETF = { title: (v) => { $('td-name').value = v; }, description: (v) => { $('td-desc').value = v; }, priority: (v) => { $('td-prio').value = String(v); }, size: (v) => { $('td-size').value = v || 'M'; }, reserved_for: (v) => { resOptions(v); }, assignee: (v) => { asgOptions(v); }, status: (v) => { $('td-status').value = v; } };
 const FNAME = { title: 'title', description: 'description', priority: 'priority', size: 'size', reserved_for: 'reservation', assignee: 'assignee', status: 'status' };
+// The Assign-to and Reserve-for lists: agents that can work now first, then the rest, each a–z; and why not.
+const availRank = (a) => ({ online: 0, waiting: 1, limited: 2, offline: 3 }[agentState(a)]);
+const byAvailable = (a, b) => availRank(a) - availRank(b) || a.name.localeCompare(b.name);
+const availText = (a) => ({ waiting: ' · not started', limited: ` · ${limitText(a)}`, offline: ' · offline' }[agentState(a)] || '');
 // "Assigned to": agents on the board (helpers like alice/ui-worker stay listed while they hold it).
 function asgOptions(value) {
   const sel = $('td-asg'); const cur = value !== undefined ? value || '' : sel.value;
-  const ags = [...agentInfo().values()].filter((a) => a.started || a.online).sort((a, b) => a.name.localeCompare(b.name));
-  const opts = [['', 'Nobody (unassigned)'], ...ags.map((a) => [a.name, `${a.name} · ${[a.client, a.plan].filter(Boolean).join(', ') || 'agent'}${a.online ? '' : ' · offline'}`])];
+  const ags = [...agentInfo().values()].filter((a) => a.started || a.online).sort(byAvailable);
+  const opts = [['', 'Nobody (unassigned)'], ...ags.map((a) => [a.name, `${a.name} · ${[a.client, a.plan].filter(Boolean).join(', ') || 'agent'}${availText(a)}`])];
   if (cur && !opts.some(([v]) => v === cur)) opts.push([cur, cur]);
   const html = opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');
   if (sel._html !== html) { sel.innerHTML = html; sel._html = html; }
@@ -2566,8 +2579,8 @@ function asgOptions(value) {
 // "Reserve for…": started agents (with tool and plan), plus whoever it's reserved for now. Keeps the current choice.
 function resOptions(value) {
   const sel = $('td-res'); const cur = value !== undefined ? value || '' : sel.value;
-  const ags = [...agentInfo().values()].filter((a) => a.started).sort((a, b) => a.name.localeCompare(b.name));
-  const opts = [['', 'Anyone (no reservation)'], ...ags.map((a) => [a.name, `${a.name} · ${[a.client, a.plan].filter(Boolean).join(', ') || 'agent'} · ${capText(a)} tasks${a.online ? '' : ' · offline'}`])];
+  const ags = [...agentInfo().values()].filter((a) => a.started).sort(byAvailable);
+  const opts = [['', 'Anyone (no reservation)'], ...ags.map((a) => [a.name, `${a.name} · ${[a.client, a.plan].filter(Boolean).join(', ') || 'agent'} · ${capText(a)} tasks${availText(a)}`])];
   if (cur && !opts.some(([v]) => v === cur)) opts.push([cur, `${cur} (not started)`]);
   const html = opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');
   if (sel._html !== html) { sel.innerHTML = html; sel._html = html; }

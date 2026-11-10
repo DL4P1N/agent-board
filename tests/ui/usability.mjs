@@ -296,11 +296,11 @@ try {
       const badge = __cr(cs(n).color, cs(n).backgroundColor), danger = __cr(cs(d).color, cs(d).backgroundColor), tb = __cr(cs(t).color, cs(t).backgroundColor);
       probe.remove();
       // person names on panel, chip and stale-card backgrounds, every hue
-      const HUES = [215, 150, 275, 325, 185, 95, 250, 45, 300, 165];
+      const hues = HUES; // the page's own palette
       let worst = 99;
       for (const bgSel of ['.panel', '.chip', '.card.stale']) {
         const host = document.createElement('div'); host.className = bgSel.slice(1).replace('.', ' '); document.querySelector('main').append(host);
-        for (const h of HUES) { const sp = document.createElement('span'); sp.className = 'pc'; sp.style.setProperty('--h', h); host.append(sp); worst = Math.min(worst, __cr(cs(sp).color, cs(host).backgroundColor)); }
+        for (const h of hues) { const sp = document.createElement('span'); sp.className = 'pc'; sp.style.setProperty('--h', h); host.append(sp); worst = Math.min(worst, __cr(cs(sp).color, cs(host).backgroundColor)); }
         host.remove();
       }
       return { fld, ph, badge, danger, tb, worst };
