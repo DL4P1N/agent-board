@@ -4,10 +4,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn, spawnSync, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { Board, timeInfo } from './board.js';
+import { Board, timeInfo, normName } from './board.js';
 import { agentTokenFor } from './tokens.js';
 import { buildMcpServer } from './mcp.js';
 
@@ -59,7 +59,8 @@ function humanOnly(req, res, next) {
 }
 function agentFrom(req) {
   const a = (req.get('x-agent') || req.body?.author || req.query.agent || '').toString().trim();
-  return a.replace(/[^\w.\-/]/g, '').slice(0, 64) || 'anonymous';
+  // Names are case-insensitive: "Dana" and "dana" are one person.
+  return normName(a).replace(/[^\w.\-/]/g, '').slice(0, 64) || 'anonymous';
 }
 
 // ---------- MCP (stateless streamable HTTP) ----------
@@ -125,6 +126,19 @@ api.get('/state', h((req) => {
   };
 }));
 
+// What an agent should do now. The Claude Stop hook calls it (with the agent token) to nudge an idle agent.
+api.get('/next', h((req) => {
+  const g = board.nextAction(agentFrom(req));
+  return { phase: g.phase, next_action: g.next_action, actionable: g.actionable, reason: g.reason };
+}));
+
+// Humans on the web board: an agent's task limit ({slots: n | null}) or its usage-limit mark ({limited, until, note}).
+api.patch('/agents/:name', h((req) => {
+  const r = board.setAgent(agentFrom(req), req.params.name, req.body || {});
+  board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
+  return r;
+}));
+
 // Humans edit goal/roles from the web board.
 api.put('/settings', h((req) => board.setSettings(agentFrom(req), req.body || {}, { human: true })));
 
@@ -161,6 +175,62 @@ setInterval(() => {
   }
 }, 20e3).unref();
 
+// Pull request status for tasks in review, via the host's `gh` (if it's installed and signed in).
+// Shown on review cards; the author is told once when checks fail or changes are requested.
+// Checked with a timeout (a slow network must not stall startup), and again every 10 minutes.
+const ghReady = () => spawnSync('gh', ['auth', 'status'], { stdio: 'ignore', timeout: 8e3, windowsHide: true }).status === 0;
+let ghOk = false;
+function prSummary(j) {
+  const roll = Array.isArray(j.statusCheckRollup) ? j.statusCheckRollup : [];
+  const res = roll.map((c) => String(c.conclusion || c.state || c.status || '').toUpperCase());
+  const checks = !res.length ? null
+    : res.some((r) => ['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(r)) ? 'fail'
+    : res.some((r) => ['PENDING', 'QUEUED', 'IN_PROGRESS', 'EXPECTED', 'WAITING', 'REQUESTED', ''].includes(r)) ? 'pending' : 'pass';
+  return { state: String(j.state || '').toUpperCase() || null, review: j.reviewDecision || null, checks };
+}
+async function pollPrs() {
+  const urls = [...new Set(board.listTasks({ status: 'review' }).map((t) => t.pr_url).filter(Boolean))];
+  let changed = false;
+  for (const url of urls) {
+    const j = await new Promise((resolve) => {
+      execFile('gh', ['pr', 'view', url, '--json', 'state,reviewDecision,statusCheckRollup'], { timeout: 20e3, windowsHide: true }, (err, out) => {
+        try { resolve(err ? null : JSON.parse(out)); } catch { resolve(null); }
+      });
+    });
+    if (!j) continue;
+    const next = { url, ...prSummary(j) };
+    const prev = board.prStatus.get(url);
+    if (JSON.stringify(prev) === JSON.stringify(next)) continue;
+    board.prStatus.set(url, next); changed = true;
+    const bad = next.checks === 'fail' ? 'its checks are failing' : next.review === 'CHANGES_REQUESTED' ? 'changes were requested' : '';
+    const wasBad = prev && (prev.checks === 'fail' || prev.review === 'CHANGES_REQUESTED');
+    // Remembered in the board's data, so a restart doesn't tell the author again about the same failure.
+    const told = `_pr_told_${url}_${next.checks}_${next.review}`;
+    if (bad && !wasBad && !announced.has(told)) {
+      announced.add(told);
+      for (const t of board.listTasks({ status: 'review' }).filter((x) => x.pr_url === url && x.assignee)) {
+        board.emit({ author: 'board', kind: 'message', channel: 'review', task_id: t.id, text: `@${t.assignee.split('/')[0]} #${t.id}: ${bad} on ${url}. Fix it on the same branch and push.` });
+      }
+    }
+  }
+  if (changed) board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
+}
+{
+  let polling = false; let checkedAt = 0;
+  const tick = async () => {
+    if (polling) return; polling = true;
+    try {
+      if (!ghOk && Date.now() - checkedAt > 10 * 60e3) { checkedAt = Date.now(); ghOk = ghReady(); }
+      if (ghOk) await pollPrs();
+    } catch {}
+    polling = false;
+  };
+  setInterval(tick, 60e3).unref();
+  setTimeout(tick, 3e3).unref();
+}
+// Proposals waiting on a planner who went offline become open tasks.
+setInterval(() => { try { board.sweepProposals(); } catch {} }, 30e3).unref();
+
 // End-of-day write-up (markdown) and a full JSON backup of the board.
 api.get('/summary', (_req, res) => res.type('text/markdown; charset=utf-8').send(board.summary()));
 api.get('/export', (_req, res) => {
@@ -169,7 +239,8 @@ api.get('/export', (_req, res) => {
 });
 
 api.post('/messages', h((req) => board.post(agentFrom(req), req.body)));
-api.post('/tasks', h((req) => board.createTask(agentFrom(req), req.body)));
+api.post('/tasks', h((req) => board.createTask(agentFrom(req), req.body || {}, { human: true })));
+api.post('/tasks/:id/decide', h((req) => board.decideProposal(agentFrom(req), Number(req.params.id), req.body || {}, { human: true })));
 api.patch('/tasks/:id', h((req) => board.updateTask(agentFrom(req), Number(req.params.id), req.body, { human: true })));
 api.delete('/tasks/:id', h((req) => board.deleteTask(agentFrom(req), Number(req.params.id))));
 api.post('/questions/:id/answer', h((req) => board.answer(agentFrom(req), Number(req.params.id), req.body.answer)));
@@ -183,7 +254,7 @@ api.get('/stream', (req, res) => {
   const ping = setInterval(() => res.write(': ping\n\n'), 20000);
   board.bus.on('event', send);
   // ?name=<human> marks that person as watching the board.
-  const human = String(req.query.name || '').replace(/[^\w.-]/g, '').slice(0, 64);
+  const human = normName(req.query.name).replace(/[^\w.-]/g, '').slice(0, 64);
   const presenceChanged = () => board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
   if (human) {
     humansOnline.set(human, (humansOnline.get(human) || 0) + 1);

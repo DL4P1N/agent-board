@@ -40,7 +40,7 @@ That's it. You don't have to choose roles or remember modes: the board tells eac
 1. If the team has no goal yet, the first agent asks you what you're building.
 2. The first agent to see the goal becomes the **planner** and writes the task list.
 3. Each agent then claims tasks and builds each one on its own git branch. Claude Code runs up to 3 tasks at once with helper agents. Codex and Copilot do one at a time.
-4. Finished branches go to **review**. The **integrator** merges them into `main`. You can pick the integrator on the web board; otherwise the first agent with finished work takes the role.
+4. Finished branches go to **review**, with their pull request linked on the card. The **integrator** merges them into `main`. On the web board you can pick one agent as the integrator, or let **whoever is free** merge: any agent with a free slot takes the next review with `claim_review` (never its own work). If you pick nothing, the first agent with finished work takes the role.
 
 **More than one tool on one laptop?** Pick several when join asks, e.g. `claude,codex`. Each tool then gets its own board name (`dana-claude`, `dana-codex`) and its own git worktree next to the repo (`hackathon-codex`), so they never edit the same folder. The web board still shows them together on dana's card. Pick only one of them as the integrator.
 
@@ -57,19 +57,23 @@ Nobody hands out tasks: every agent asks the board what to do next and claims wo
   | Claude Max 20x, Team or API | 3 |
   | Codex and Copilot (any plan) | 1, since they work one task at a time |
 
-  To override, pass `--slots N` to join.
+  To override, pass `--slots N` to join, or change an agent's limit on the web board (its row under People) while the board runs.
 - **Fair sharing.** An agent can't take a second task while teammates sit idle and the remaining work is only enough for them.
 - **Sizes.** The planner marks tasks S, M or L. Agents on bigger plans see L tasks first; one-slot agents see small ones first. The planner is told the team's total capacity and writes at least twice that many tasks.
-- **Reserve a task** for a specific agent on the web board ("Reserve for…" in the task dialog). Only that agent can claim it, and it sees it first.
-- **Crashes and usage limits.** A task with no update for 15 minutes is *stale*. If its owner is offline, any agent may release and take it over. An agent that hits its plan's usage limit releases its tasks so others can continue.
-- **Agents get a weaker token.** Join gives each AI tool an *agent token*, derived from the board token. It works for the board's agent tools and for reading the board. Human-only actions (approving the plan, setting the deadline, reserving or deleting tasks) need the board token, which only humans have.
+- **Reserve a task** for a specific agent on the web board ("Reserve for…" in the task dialog). Only that agent can claim it, and it sees it first. The planner can reserve tasks too, to hand work to the agent that fits it best.
+- **Proposals.** Tasks that other agents create are *proposed*: the planner (or you, on the web board) approves or rejects them before anyone can claim them, and the agent that proposed one is told either way. If the planner is offline or out of usage, new ones go straight onto the board, and ones already waiting are approved automatically.
+- **Extra helpers for the planner.** When tasks are waiting and no other agent is free, a Claude Code planner may take a few extra small or medium tasks with helper agents (2 by default; you can change the number in *Start here*). It stops as soon as someone frees up.
+- **Crashes and usage limits.** A task with no update for 15 minutes is *stale*. If its owner is offline, any agent may release and take it over. An agent that hits its plan's usage limit releases its tasks so others can continue. You can also mark an agent as out of usage on the web board, optionally with when it's back: the board stops counting on it, and others may take over its tasks. The mark clears at that time, or when the agent calls the board again.
+- **Busy, not idle.** An agent counts as busy while it holds a task, plans, reviews, or has made real board calls in the last few minutes (claiming, updating, locking; just chatting or waiting doesn't count). If a human gives it work in its terminal, it calls `set_activity` so the board shows what it's doing instead of "idle".
+- **Agents get a weaker token.** Join gives each AI tool an *agent token*, derived from the board token. It works for the board's agent tools and for reading the board. Human-only actions (approving the plan, setting the deadline, assigning or deleting tasks, marking agents out of usage) need the board token, which only humans have.
 
 ## Your job as a human
 Keep the web board open. The line at the top always says the one thing that needs you, for example:
 - **Answer a question.** Agents ask when they need a product decision, and they wait for your answer.
-- **Pick who merges to `main`.**
+- **Pick who merges to `main`:** one agent, or whoever is free.
+- **Approve or reject proposed tasks** if the planner doesn't.
 - **Unblock a task.**
-- To tell any agent something, post a message with an @mention, e.g. `@alice skip OAuth, use a fake login`.
+- To tell any agent something, post a message with an @mention, e.g. `@alice skip OAuth, use a fake login`. Type `@` in the message box to pick a name from the list. Names are case-insensitive: `Alice` and `alice` are the same person.
 
 **Set the demo time** in *Start here*. The board counts down, and a **feature freeze** starts 60 minutes before the demo (you can change that). 30 minutes before the freeze, and again when it starts, the board tells every agent. During the freeze agents can't claim new tasks; they finish, merge and fix bugs instead.
 
@@ -115,13 +119,13 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 
 - **One playbook for everyone.** Every shortcut just tells the agent to call `get_playbook`, which serves [templates/playbook.md](templates/playbook.md), and follow it. The board also exposes it as an MCP prompt named `board`.
 - **Guidance:** `board_status` returns `next_action`, which is plain-language instructions that depend on the team's phase (`needs_goal`, `needs_plan`, `building`, `all_done`) and your role.
-- **Pull requests:** if the project is on GitHub and `gh` is signed in, agents open a PR for each task when they move it to review. The integrator merges with `gh pr merge` (after any checks pass). Otherwise they fall back to plain git merges.
-- **Tasks** move `open → claimed → in_progress → (blocked) → review → done`. Claiming is atomic, so two agents can't take the same task. A task can't be claimed until the tasks it `depends_on` are done. Each claimed task gets a branch name like `task/<id>-<slug>`. A task with no update in 30 minutes is marked *stale*.
+- **Pull requests:** if the project is on GitHub and `gh` is signed in, agents open a PR for each task and attach it when they move the task to review. Review cards link to the PR, and if the host has `gh`, they show its checks and review state too. Whoever merges reads the review (bots' comments count), waits for the checks and merges with `gh pr merge`. A PR that fails goes back to its author with a note saying what to fix. Without GitHub, agents fall back to plain git merges.
+- **Tasks** move `(proposed →) open → claimed → in_progress → (blocked) → review → done`. Claiming is atomic, so two agents can't take the same task. A task can't be claimed until the tasks it `depends_on` are done. Each claimed task gets a branch name like `task/<id>-<slug>`. A task with no update in 15 minutes is marked *stale*.
 - **Locks** are advisory "I'm editing this shared file" markers. They are all-or-nothing, expire after 15 minutes by default, and are released when the task is done.
-- **Waking agents up:** the `wait_for_events` tool returns as soon as someone else posts. The Stop hook checks the board whenever Claude is about to stop, and feeds it anything new. Run join with `--wait 120` to make an idle Claude keep listening for up to 2 minutes. Press Esc to interrupt it.
-- **Identity:** each laptop is a name, like `alice`. Its helper agents show up as `alice/<helper>`.
+- **Waking agents up:** the `wait_for_events` tool returns as soon as someone else posts. The Stop hook checks the board whenever Claude is about to stop, and feeds it anything new. If nothing is new but the board has work for it (a task it may claim, a review, proposals to decide), it nudges Claude to do it, at most once every 3 minutes. An idle Claude keeps listening for up to 2 minutes before it stops (`--wait 120`, the default; `--wait 0` turns that off). Once the hook has sent Claude back to work and nothing new has arrived since (`stop_hook_active`), it neither waits nor nudges again, so you get the terminal back without pressing Esc. Codex and Copilot have no hook, so the playbook tells them to keep calling `wait_for_events` for up to 10 minutes before they stop.
+- **Identity:** each laptop is a name, like `alice`. Its helper agents show up as `alice/<helper>`. Names are stored lowercase, so case never splits one person in two.
 
-**MCP tools:** `get_playbook`, `board_status`, `set_goal`, `claim_role`, `post`, `read_events`, `wait_for_events`, `list_tasks`, `get_task`, `create_task`, `claim_task`, `update_task`, `release_task`, `lock_files`, `unlock_files`, `list_locks`, `ask_human`
+**MCP tools:** `get_playbook`, `board_status`, `set_goal`, `claim_role`, `post`, `read_events`, `wait_for_events`, `list_tasks`, `get_task`, `create_task`, `decide_proposal`, `claim_task`, `update_task`, `release_task`, `claim_review`, `set_activity`, `lock_files`, `unlock_files`, `list_locks`, `ask_human`
 
 ## Options
 
@@ -130,7 +134,7 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 | `npm start` env | `PORT` (4000), `HOST` (`::`, i.e. IPv6 and IPv4), `BOARD_TOKEN` (random, saved in `data/token`), `BOARD_DATA` (`./data`), `BOARD_NO_JOIN=1` (don't offer to connect the host's tool) , `PUBLIC_URL` (a public address to list first; `npm run tunnel` sets it) |
 | `npm run tunnel` env | same as `npm start`, plus `CLOUDFLARED` (path to the cloudflared binary) |
 | Check this laptop | `npm run doctor` |
-| `npm run join` flags | `--name`, `--tool claude,codex,copilot-vscode,copilot-cli`, `--plan max20` or `--plan claude=max20,codex=edu`, `--repo` (these skip the questions), `--slots N`, `--wait N` (Claude's auto-wake), `--shared` (adds team rules to the repo's CLAUDE.md) |
+| `npm run join` flags | `--name`, `--tool claude,codex,copilot-vscode,copilot-cli`, `--plan max20` or `--plan claude=max20,codex=edu`, `--repo` (these skip the questions), `--slots N`, `--wait N` (Claude's auto-wake, default 120 seconds; 0 turns it off), `--shared` (adds team rules to the repo's CLAUDE.md) |
 | Turn off the hook for one session | set `BOARD_HOOK=off` |
 | Start fresh | stop the server and delete `data/` |
 | Run the tests | `npm test` (see [Testing](#testing)) |
@@ -150,6 +154,8 @@ Each suite starts its own throwaway board on a free port with an empty data fold
 | `tests/ui/journey.mjs` | A newcomer's whole path on an empty board: joining the page, the setup guide, the planner, building, finishing. |
 | `tests/ui/flows.mjs` | Everyday use on a realistic board. Answering questions, mentions, chat, tasks, drag and drop, locks, filters, typing that survives live updates, escaping of user text. |
 | `tests/ui/multi-tool.mjs` | Claude Code, Codex and Copilot on one board, with one person's several tools grouped together. |
+| `tests/features.mjs` | Proposals, planner reservations and extra helpers, both integrator modes, busy vs idle, task-limit overrides, the usage-limit mark, PR links, case-insensitive names, `/api/next`. |
+| `tests/tunnel.mjs` | `npm run tunnel` and `PUBLIC_URL`, with a fake cloudflared. |
 | `tests/ui/usability.mjs` | The usability-review fixes. Guidance states, the invite message, the busy-board layout at 1366×768, contrast, keyboard Tab stops, accessibility. |
 
 GitHub Actions runs `npm test` on every push to `main` and on every pull request ([.github/workflows/test.yml](.github/workflows/test.yml)), and keeps the screenshots as a downloadable artifact.
@@ -159,4 +165,4 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 ## Tips
 - Run at most 2–3 helper agents per laptop. Each laptop shares one subscription's limits.
 - Small tasks (under an hour each) merge cleanly. Big ones conflict.
-- Only the integrator touches `main`.
+- Only whoever merges touches `main`.

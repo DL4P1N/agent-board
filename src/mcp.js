@@ -2,6 +2,7 @@
 // bound to the calling agent's identity from the X-Agent header.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { normName } from './board.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +12,7 @@ const PLAYBOOK_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
 const playbook = () => fs.readFileSync(PLAYBOOK_PATH, 'utf8');
 
 export function buildMcpServer(board, baseAgent) {
+  baseAgent = normName(baseAgent);
   const server = new McpServer(
     { name: 'claude-board', version: '1.0.0' },
     {
@@ -30,7 +32,7 @@ export function buildMcpServer(board, baseAgent) {
   const who = (as) => {
     if (!as) return baseAgent;
     // Helper names: short, plain characters only (no slashes, so nobody can pose as another agent).
-    const clean = String(as).trim().replace(/\s+/g, '-').replace(/^.*\//, '').replace(/[^\w.-]/g, '').slice(0, 40);
+    const clean = normName(as).replace(/\s+/g, '-').replace(/^.*\//, '').replace(/[^\w.-]/g, '').slice(0, 40);
     if (!clean) return baseAgent;
     return clean === baseAgent ? baseAgent : `${baseAgent}/${clean}`;
   };
@@ -40,8 +42,14 @@ export function buildMcpServer(board, baseAgent) {
   const wrap = (fn) => async (args, extra) => {
     try { return ok(await fn(args || {}, extra)); } catch (e) { return fail(e); }
   };
+  // Every tool call is recorded: real work (not waiting/reading) shows the agent as busy on the web board.
+  const presence = () => board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
+  const tool = (name, def, handler) => server.registerTool(name, def, async (args, extra) => {
+    try { if (board.noteToolCall(baseAgent, name)) presence(); } catch {}
+    return handler(args, extra);
+  });
 
-  server.registerTool(
+  tool(
     'board_status',
     {
       title: 'Board status',
@@ -53,7 +61,7 @@ export function buildMcpServer(board, baseAgent) {
     wrap(({ as }) => { started(); return board.status(who(as)); })
   );
 
-  server.registerTool(
+  tool(
     'get_playbook',
     {
       title: 'Get the playbook',
@@ -70,7 +78,7 @@ export function buildMcpServer(board, baseAgent) {
     () => ({ messages: [{ role: 'user', content: { type: 'text', text: 'Join the team board and follow this playbook:\n\n' + playbook() } }] })
   );
 
-  server.registerTool(
+  tool(
     'set_goal',
     {
       title: 'Set project goal',
@@ -80,7 +88,7 @@ export function buildMcpServer(board, baseAgent) {
     wrap(({ goal }) => board.setSettings(baseAgent, { goal }))
   );
 
-  server.registerTool(
+  tool(
     'claim_role',
     {
       title: 'Claim a role',
@@ -92,7 +100,7 @@ export function buildMcpServer(board, baseAgent) {
     wrap(({ role }) => board.claimRole(baseAgent, role))
   );
 
-  server.registerTool(
+  tool(
     'post',
     {
       title: 'Post message',
@@ -107,7 +115,7 @@ export function buildMcpServer(board, baseAgent) {
     wrap(({ text, channel, task_id, as }) => board.post(who(as), { text, channel, task_id }))
   );
 
-  server.registerTool(
+  tool(
     'read_events',
     {
       title: 'Read events',
@@ -126,7 +134,7 @@ export function buildMcpServer(board, baseAgent) {
     })
   );
 
-  server.registerTool(
+  tool(
     'wait_for_events',
     {
       title: 'Wait for events',
@@ -150,7 +158,7 @@ export function buildMcpServer(board, baseAgent) {
     })
   );
 
-  server.registerTool(
+  tool(
     'list_tasks',
     {
       title: 'List tasks',
@@ -163,7 +171,7 @@ export function buildMcpServer(board, baseAgent) {
     wrap(({ status, assignee }) => board.listTasks({ status, assignee }))
   );
 
-  server.registerTool(
+  tool(
     'get_task',
     {
       title: 'Get task',
@@ -177,24 +185,26 @@ export function buildMcpServer(board, baseAgent) {
     })
   );
 
-  server.registerTool(
+  tool(
     'create_task',
     {
       title: 'Create task',
-      description: 'Add a task to the backlog. Keep tasks small (1 branch, < ~1 hour). priority: 1=high, 2=normal, 3=low (priority-1 tasks stay claimable during the feature freeze, so use it for bug fixes). size: S/M/L (agents on bigger plans get L tasks first). depends_on: ids of existing tasks that must be done first.',
+      description: 'Add a task to the backlog. Keep tasks small (1 branch, < ~1 hour). priority: 1=high, 2=normal, 3=low (priority-1 tasks stay claimable during the feature freeze, so use it for bug fixes). size: S/M/L (agents on bigger plans get L tasks first). depends_on: ids of existing tasks that must be done first. ' +
+        'If you are not the planner and the planner is online, the task is a PROPOSAL: it waits (status proposed) until the planner approves it; carry on meanwhile. reserved_for (planner only): the agent that should do it.',
       inputSchema: {
         title: z.string(),
         description: z.string().optional().describe('Acceptance criteria, relevant files, interfaces to respect'),
         priority: z.number().int().min(1).max(3).optional(),
         size: z.enum(['S', 'M', 'L']).optional().describe('S: < 20 min, M: < 1 h, L: bigger or trickier'),
         depends_on: z.array(z.number().int()).optional(),
+        reserved_for: z.string().optional().describe('Planner only: agent name (e.g. "alice-codex") that should do this task. Only it can claim it.'),
         as: asArg,
       },
     },
-    wrap(({ title, description, priority, size, depends_on, as }) => board.createTask(who(as), { title, description, priority, size, depends_on }))
+    wrap(({ title, description, priority, size, depends_on, reserved_for, as }) => board.createTask(who(as), { title, description, priority, size, depends_on, reserved_for }))
   );
 
-  server.registerTool(
+  tool(
     'claim_task',
     {
       title: 'Claim task',
@@ -204,26 +214,28 @@ export function buildMcpServer(board, baseAgent) {
     wrap(({ id, as }) => board.claimTask(who(as), id))
   );
 
-  server.registerTool(
+  tool(
     'update_task',
     {
       title: 'Update task',
       description:
-        'Update your task: status (claimed, in_progress, blocked, review, done), a progress note, branch, or size. You can only change tasks you hold (the integrator may move review → done/in_progress). ' +
-        'Use "review" when the branch is pushed and ready to merge; "blocked" with a note explaining why. Locks held for the task are released on done.',
+        'Update your task: status (claimed, in_progress, blocked, review, done), a progress note, branch, size, or its pull request (pr_url). You can only change tasks you hold; whoever merges (the integrator, or the agent that took the review with claim_review) may move review → done, or → in_progress to send it back for fixes (the author is @mentioned). ' +
+        'Use "review" when the branch is pushed and ready to merge (pass pr_url if you opened a PR); "blocked" with a note explaining why. Locks held for the task are released on done. Planner only: reserved_for reserves an open task for an agent ("" clears).',
       inputSchema: {
         id: z.number().int(),
         status: z.enum(['claimed', 'in_progress', 'blocked', 'review', 'done']).optional(),
         note: z.string().optional(),
         branch: z.string().optional(),
         size: z.enum(['S', 'M', 'L']).optional(),
+        pr_url: z.string().optional().describe('Link to the pull request for this task'),
+        reserved_for: z.string().optional().describe('Planner only: agent that should do this task ("" clears)'),
         as: asArg,
       },
     },
-    wrap(({ id, status, note, branch, size, as }) => board.updateTask(who(as), id, { status, note, branch, size }))
+    wrap(({ id, status, note, branch, size, pr_url, reserved_for, as }) => board.updateTask(who(as), id, { status, note, branch, size, pr_url, reserved_for }))
   );
 
-  server.registerTool(
+  tool(
     'release_task',
     {
       title: 'Release task',
@@ -233,7 +245,46 @@ export function buildMcpServer(board, baseAgent) {
     wrap(({ id, note, as }) => board.releaseTask(who(as), id, note))
   );
 
-  server.registerTool(
+  tool(
+    'claim_review',
+    {
+      title: 'Take a review',
+      description:
+        'Take a task that is in review so you can merge it (atomic: two agents never merge the same task). Not your own work, one review at a time. ' +
+        'Allowed when the integrator setting is "whoever is free", or when you are the integrator. Then review, merge, test, and update_task done, or send it back with update_task status in_progress and what to fix.',
+      inputSchema: { id: z.number().int(), as: asArg },
+    },
+    wrap(({ id, as }) => board.claimReview(who(as), id))
+  );
+
+  tool(
+    'decide_proposal',
+    {
+      title: 'Approve or reject a proposed task',
+      description: 'Planner (or humans): approve a proposed task so agents can claim it (optionally adjust priority, size or reserved_for), or reject it with a reason that goes back to the agent that proposed it.',
+      inputSchema: {
+        id: z.number().int(),
+        approve: z.boolean(),
+        note: z.string().optional().describe('Why (sent to the proposer), especially when rejecting'),
+        priority: z.number().int().min(1).max(3).optional(),
+        size: z.enum(['S', 'M', 'L']).optional(),
+        reserved_for: z.string().optional(),
+      },
+    },
+    wrap(({ id, approve, note, priority, size, reserved_for }) => board.decideProposal(baseAgent, id, { approve, note, priority, size, reserved_for }))
+  );
+
+  tool(
+    'set_activity',
+    {
+      title: 'Say what you are doing',
+      description: 'Tell the board what you are working on when it is not a board task (e.g. something a human asked you in your terminal), so the web board shows you as busy, not idle. Shown for up to 30 minutes; set_activity("") clears it.',
+      inputSchema: { doing: z.string().describe('Short, e.g. "fixing the CI config Dana asked for"') },
+    },
+    wrap(({ doing }) => board.setActivity(baseAgent, doing))
+  );
+
+  tool(
     'lock_files',
     {
       title: 'Lock files',
@@ -251,7 +302,7 @@ export function buildMcpServer(board, baseAgent) {
     wrap(({ paths, ttl_s, task_id, reason, as }) => board.lockFiles(who(as), { paths, ttl_s, task_id, reason }))
   );
 
-  server.registerTool(
+  tool(
     'unlock_files',
     {
       title: 'Unlock files',
@@ -261,13 +312,13 @@ export function buildMcpServer(board, baseAgent) {
     wrap(({ paths, force, as }) => board.unlockFiles(who(as), { paths, force }))
   );
 
-  server.registerTool(
+  tool(
     'list_locks',
     { title: 'List locks', description: 'Current file locks with owners and seconds until expiry.', inputSchema: {} },
     wrap(() => board.listLocks())
   );
 
-  server.registerTool(
+  tool(
     'ask_human',
     {
       title: 'Ask a human',

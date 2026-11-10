@@ -110,7 +110,8 @@ try {
   check('A mention cleared after being visible in the feed', (await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label'))) === '@me' && !(await page.$('#needs .m')));
 
   // Tasks + my own agent → setup collapses, calm state suggests picking a merger
-  const t1 = await erin('create_task', { title: 'Project scaffolding' });
+  // A human adds it: an agent's own create_task would count as recent work and make it busy, not idle.
+  const t1 = await rest('dana', '/tasks', 'POST', { title: 'Project scaffolding' });
   const dc = await agent('dana-claude', 'claude-code'); await dc('board_status');
   await page.evaluate(() => { localStorage.removeItem('board-setup'); ui.forceSetup = false; ui.steps = {}; });
   await reload(page); await sleep(400);

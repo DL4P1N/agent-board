@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 // Claude Code Stop hook: when Claude is about to end its turn, check the board.
 // If teammates posted anything new, block the stop and feed the events back in,
-// so the orchestrator reacts without a human typing.
+// so the orchestrator reacts without a human typing. If nothing new arrived but the
+// board has work for this agent (a task it may claim, a review, proposals to decide…),
+// nudge it once, at most every few minutes, so a refused claim can't loop forever.
+// When Claude is already continuing because of this hook (stop_hook_active), it neither waits
+// nor nudges: it only reports new activity, so the human gets the terminal back after one round.
 //
 // Config (env vars override ~/.claude-board.json written by `npm run join`):
 //   BOARD_URL, BOARD_TOKEN, BOARD_AGENT
@@ -15,18 +19,24 @@ import os from 'node:os';
 import path from 'node:path';
 
 const RECENT_MS = 15 * 60e3;
+// At most one "the board has work for you" nudge per agent in this window.
+const NUDGE_EVERY_MS = 3 * 60e3;
 
 async function main() {
   let cfg = {};
   try { cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude-board.json'), 'utf8')); } catch {}
   const url = (process.env.BOARD_URL || cfg.url || '').replace(/\/$/, '');
   const token = process.env.BOARD_TOKEN || cfg.token;
-  const agent = process.env.BOARD_AGENT || cfg.agent;
-  const wait = Number(process.env.BOARD_HOOK_WAIT ?? cfg.hook_wait ?? 0);
+  // Board names are case-insensitive (the server stores them lowercase).
+  const agent = String(process.env.BOARD_AGENT || cfg.agent || '').toLowerCase();
   if (process.env.BOARD_HOOK === 'off' || !url || !token || !agent) return; // allow the stop
 
-  // Drain stdin (hook input JSON); we don't need it but must not leave the pipe hanging.
-  try { fs.readFileSync(0); } catch {}
+  // Hook input (JSON on stdin). stop_hook_active: Claude is already continuing because a Stop hook
+  // blocked its last stop. Then don't wait and don't nudge, so it can't keep the terminal forever.
+  let input = {};
+  try { input = JSON.parse(fs.readFileSync(0, 'utf8') || '{}') || {}; } catch {}
+  const continuing = input.stop_hook_active === true;
+  const wait = continuing ? 0 : Number(process.env.BOARD_HOOK_WAIT ?? cfg.hook_wait ?? 0);
 
   // One cursor per board + agent, so a different (or freshly wiped) board doesn't inherit an old position.
   const boardKey = Buffer.from(url).toString('base64url').slice(-16);
@@ -49,9 +59,9 @@ async function main() {
   fs.writeFileSync(cursorFile, String(cursor));
 
   const relevant = events.filter((e) => !['lock', 'unlock'].includes(e.kind) && (!fresh || Date.now() - e.ts < RECENT_MS));
-  if (!relevant.length) return; // allow the stop
+  if (!relevant.length) return continuing ? undefined : nudgeIfWork({ get, agent, nudgeFile: cursorFile + '-nudge' }); // else allow the stop
 
-  const mentionsMe = (e) => (e.data?.mentions || []).some((m) => m === agent || m.startsWith(agent + '/') || m === 'all' || m === 'everyone');
+  const mentionsMe = (e) => (e.data?.mentions || []).map((m) => String(m).toLowerCase()).some((m) => m === agent || m.startsWith(agent + '/') || m === 'all' || m === 'everyone');
   const lines = relevant.slice(-40).map((e) => {
     const tag = mentionsMe(e) ? ' [MENTIONS YOU]' : '';
     const task = e.task_id ? ` #${e.task_id}` : '';
@@ -62,6 +72,23 @@ async function main() {
     lines.join('\n') +
     `\n\nReact if any of this affects you (mentions, answers to your questions, tasks you depend on, review requests). ` +
     `If nothing needs action, continue your current plan or pick up the next open task. Use the board MCP tools to respond.`;
+  process.stdout.write(JSON.stringify({ decision: 'block', reason }));
+}
+
+// Nothing new from teammates: ask the board whether this agent still has something to do right now.
+// Older boards have no /api/next (404): then just allow the stop.
+async function nudgeIfWork({ get, agent, nudgeFile }) {
+  let last = 0;
+  try { last = Number(fs.readFileSync(nudgeFile, 'utf8')) || 0; } catch {}
+  if (Date.now() - last < NUDGE_EVERY_MS) return; // nudged recently: allow the stop
+  let next;
+  try { next = await get(`/api/next?agent=${encodeURIComponent(agent)}`); } catch { return; }
+  if (!next?.actionable) return;
+  fs.writeFileSync(nudgeFile, String(Date.now()));
+  const reason =
+    `The board has work for you${next.reason ? ` (${next.reason})` : ''}:\n${next.next_action || ''}\n\n` +
+    'Do it now with the board MCP tools (call board_status if you need the details). ' +
+    'If a claim is refused, follow the refusal\'s reason; if there is really nothing you can do, post a short status line in general and stop.';
   process.stdout.write(JSON.stringify({ decision: 'block', reason }));
 }
 

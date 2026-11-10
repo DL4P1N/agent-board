@@ -13,7 +13,7 @@
 //   --name NAME --repo PATH   skip the questions
 //   --plan PLAN  your subscription, e.g. max20, or per tool: claude=max20,codex=edu (sets how many tasks the agent may hold)
 //   --slots N    override how many tasks each agent may hold at once
-//   --wait N     Claude's Stop hook long-polls N seconds for teammate activity before letting Claude stop (default 0)
+//   --wait N     Claude's Stop hook long-polls N seconds for teammate activity before letting Claude stop (default 120; 0 = don't wait)
 //   --shared     also append team rules to the repo's CLAUDE.md (optional; one person commits it)
 import fs from 'node:fs';
 import os from 'node:os';
@@ -43,9 +43,10 @@ const TOOLS = {
 const args = parseArgs(process.argv.slice(2));
 const url = (args.url || '').replace(/\/$/, '');
 const token = args.token;
-const wait = Number(args.wait || 0);
+// How long an idle Claude keeps listening to the board before it stops (its Stop hook). 0 turns waiting off.
+const wait = args.wait === undefined || args.wait === true ? 120 : Math.max(0, Math.min(600, Number(args.wait) || 0));
 if (!url || !token) {
-  console.error('usage: npm run join -- --url http://HOST:4000 --token TOKEN [--name NAME] [--tool claude,codex,copilot-vscode,copilot-cli] [--repo PATH] [--wait 0] [--shared]');
+  console.error('usage: npm run join -- --url http://HOST:4000 --token TOKEN [--name NAME] [--tool claude,codex,copilot-vscode,copilot-cli] [--repo PATH] [--wait 120] [--shared]');
   console.error('Copy the exact command shown on the web board (Start here → step 1) or printed by `npm start` on the host.');
   process.exit(1);
 }
@@ -75,12 +76,13 @@ const ask = async (q, def) => {
 // Names already on this board that this laptop didn't set up before (so re-running join is fine).
 const agentToken = agentTokenFor(token);
 const previous = (() => { try { const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); return c.token === token || c.token === agentToken ? c : null; } catch { return null; } })();
-const mine = new Set([previous?.agent, ...(previous?.agents || []).map((a) => a.agent)].filter(Boolean));
-const taken = (n) => (boardState?.presence || []).find((p) => p.kind === 'agent' && (p.person || p.name) === n && !mine.has(p.name));
+// Names are case-insensitive on the board (it stores them lowercase).
+const mine = new Set([previous?.agent, ...(previous?.agents || []).map((a) => a.agent)].filter(Boolean).map((n) => n.toLowerCase()));
+const taken = (n) => (boardState?.presence || []).find((p) => p.kind === 'agent' && String(p.person || p.name).toLowerCase() === n && !mine.has(String(p.name).toLowerCase()));
 
 let name = '';
 for (let attempt = 0; attempt < 5 && !name; attempt++) {
-  const n = String(args.name || (await ask('Your name on the board (short, no spaces)', previous?.agent?.replace(/-(claude|codex|copilot|copilotcli)$/, '') || defaultName())) || '').replace(/[^\w.-]/g, '');
+  const n = String(args.name || (await ask('Your name on the board (short, no spaces)', previous?.agent?.toLowerCase().replace(/-(claude|codex|copilot|copilotcli)$/, '') || defaultName())) || '').toLowerCase().replace(/[^\w.-]/g, '');
   if (!n) fail('A name is required (--name NAME).');
   const t = taken(n);
   if (t && rl && !args.name) {
@@ -171,7 +173,7 @@ const claudeAgent = plan.find((p) => p.tool === 'claude')?.agent || name;
 // Re-running join for some tools keeps the others this laptop set up earlier for the same board.
 const keep = (previous?.agents || []).filter((a) => !tools.includes(a.tool));
 const saveConfig = (agents) => writeJson(CONFIG_PATH, {
-  url, token: agentToken, agent: plan.find((p) => p.tool === 'claude')?.agent || previous?.agent || name, hook_wait: wait,
+  url, token: agentToken, agent: plan.find((p) => p.tool === 'claude')?.agent || previous?.agent?.toLowerCase() || name, hook_wait: wait,
   agents: [...keep, ...agents].map(({ tool, agent, dir, plan_id, plan: planLabel, slots }) => ({ tool, agent, dir, plan_id, plan: planLabel, slots })),
 });
 saveConfig(plan);

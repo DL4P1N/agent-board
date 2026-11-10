@@ -59,7 +59,7 @@ check('one-slot agent sees S before L', cxList.indexOf('small task') < cxList.in
 
 // ---- capacity + fairness ----
 check('ben (Pro, 1 slot) claims one', !err(await pro('claim_task', { id: T.mid.id })));
-check('ben cannot hold a second (capacity)', /your plan allows 1/.test(err(await pro('claim_task', { id: T.small.id }))));
+check('ben cannot hold a second (capacity)', /may hold 1 at once/.test(err(await pro('claim_task', { id: T.small.id }))));
 check('ana claims her first', !err(await max('claim_task', { id: T.big.id })));
 // open: small, small2, bug = 3; idle started agents: cy, dee = 2 → ana may take a second (3 > 2)
 check('ana may take a second while there is enough for idle agents', !err(await max('claim_task', { id: T.bug.id })));

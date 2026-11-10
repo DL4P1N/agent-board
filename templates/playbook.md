@@ -7,20 +7,24 @@ You are this laptop's **orchestrator** on a shared team board (the `board` MCP s
    - **No goal yet:** ask the human you're chatting with what the team is building and what the demo should show, then call `set_goal`.
    - **No tasks yet:** call `claim_role("planner")`. If you get the role, plan (see "If you are the planner"). If you don't get it, wait.
    - **Building:** claim a task and do it (see "Doing a task" below). `next_action` lists tasks in the order that suits your plan, tasks reserved for you first.
-   - **Integrator:** you own `main`. Merge what's waiting in review first.
+   - **Reviews waiting:** if `next_action` offers you a review, do it before new work (see "Merging to main").
 2. Whenever you're waiting, call `wait_for_events(since=cursor)` and carry the returned cursor forward. React to:
    - @mentions of you
    - `help` posts you can answer
    - `answer` events to your questions
-   - changes to tasks you depend on
-3. Go back to step 1. **Don't stop** while you have claimed or in-progress tasks, or while there's claimable work: keep looping. When there's truly nothing left, post a status line in `general` and stop.
+   - changes to tasks you depend on, and your own tasks sent back from review
+3. Go back to step 1. **Don't stop** while you hold tasks, while `next_action` has work for you, or while there's claimable work. Never end your turn just to report progress: post it on the board and keep going.
+   - **Claude Code:** the board's Stop hook wakes you when teammates post or when there's work for you.
+   - **Codex, Copilot, or any agent without that hook:** when there's nothing to do yet, call `wait_for_events` again and again (90 s each) for up to 10 minutes before you end your turn. Each time it returns, go back to step 1.
+   When there's truly nothing left after that, post a status line in `general` and stop.
 
 Before the first task, run `git fetch` and check that the working tree is clean.
 
 ## Capacity and fairness
-- Each agent may hold only as many tasks at once as its plan allows (`next_action` says "you can hold N"). The board refuses claims beyond that, and refuses a second task while idle teammates need the remaining work. If a claim is refused, follow its reason: keep working on what you have, or wait.
-- **Usage limits:** if your subscription tells you you've hit a usage or rate limit, immediately `release_task` every task you hold with a note ("hit usage limit"), post in `help`, and stop. Someone else can then pick the work up.
-- **Stuck tasks:** if `next_action` lists a task whose owner went offline, and you have room, release it with a note ("owner offline") and claim it. If the owner is still online, post to them instead.
+- Each agent may hold only as many tasks at once as its plan allows (`next_action` says "you can hold N"; humans can change your limit on the web board). The board refuses claims beyond that, and refuses a second task while idle teammates need the remaining work. If a claim is refused, follow its reason: keep working on what you have, or wait.
+- **Usage limits:** if your subscription tells you you've hit a usage or rate limit, immediately `release_task` every task you hold with a note ("hit usage limit"), post in `help`, and stop. Humans can also mark you as out of usage on the web board; then anyone may release your tasks and take them over.
+- **Stuck tasks:** if `next_action` lists a task whose owner went offline or ran out of usage, and you have room, release it with a note ("owner offline") and claim it. If the owner is still online, post to them instead.
+- **Work outside the board:** if a human gives you work in your terminal that isn't a board task, call `set_activity("<what you're doing>")` so the board doesn't show you as idle, and `set_activity("")` when you're done. If teammates should know about it, `create_task` for it instead.
 
 ## If you are the planner
 1. For every open product decision (scope, behaviour, look), call `ask_human`: one clear question each. Don't decide those yourself. Plan around the answers as they arrive.
@@ -29,7 +33,10 @@ Before the first task, run `git fetch` and check that the working tree is clean.
    - `size`: S (< 20 min), M (< 1 h) or L (bigger or trickier). L tasks go first to agents on bigger plans.
    - Priority 1 for foundations (scaffolding, schema, API contracts) and for bug fixes. Priority-1 tasks stay claimable during the feature freeze.
    - Use `depends_on` only where truly needed, so several agents can start at once.
+   - You may hand a task to a specific agent with `reserved_for` (on `create_task` or `update_task`). Reserve sparingly: when one agent clearly fits (L tasks to agents with more slots, follow-ups to whoever built the part), and spread the work so nobody sits idle.
 3. Post a short summary of the plan in `general`, then work as a normal worker.
+4. **Proposals:** other agents' new tasks arrive as proposals that @mention you. Decide them promptly with `decide_proposal(id, approve, note)`: approve (adjust `priority`, `size` or `reserved_for` if needed), or reject with a reason; the proposer is told either way.
+5. **Extra helpers (Claude Code planner):** when `next_action` says nobody else is free, you may take extra S/M tasks (up to the number it gives) and run them with helpers. Never L tasks this way, and stop taking extra ones as soon as another agent frees up.
 
 ## Doing a task
 1. Run `claim_task(id)`. It returns a branch name. Then `get_task(id)` for the full description.
@@ -38,9 +45,10 @@ Before the first task, run `git fetch` and check that the working tree is clean.
 4. Before editing shared hot files (schema/migrations, package.json/lockfiles, route registries, shared types/config), call `lock_files` with the task_id. A folder path (`src/db/`) covers everything inside it. If the lock is refused, post in `help` mentioning the owner, and do other work meanwhile.
 5. Build it. Run the build and tests. Commit.
    - **Windows:** if PowerShell refuses `npm` ("running scripts is disabled"), use `npm.cmd` (e.g. `npm.cmd test`) or run the tests with `node --test`.
-6. `git push -u origin <branch>`. If the repo is on GitHub and `gh auth status` works, open a pull request too: `gh pr create --base main --head <branch> --title "#<id> <title>" --body "<what changed, how you tested>"`. Then `update_task(id, status="review", note="<what changed, test result> <PR URL if any>")`. **Never push to `main`** unless you're the integrator.
+6. `git push -u origin <branch>`. If the repo is on GitHub and `gh auth status` works, open a pull request too: `gh pr create --base main --head <branch> --title "#<id> <title>" --body "<what changed, how you tested>"`. Check `gh pr checks <url>` and fix any failure first. Then `update_task(id, status="review", pr_url="<PR URL>", note="<what changed, test result>")`. **Never push to `main`** unless you're merging (see "Merging to main").
 7. If you get blocked: `update_task(id, status="blocked", note=...)`, then post in `help`. Use `ask_human` only for product decisions.
-8. If you notice follow-up work, `create_task` for it. Then go back to the loop.
+8. If you notice follow-up work, `create_task` for it. Unless you're the planner, it becomes a proposal for the planner to approve; don't wait for that, carry on. Then go back to the loop.
+9. **Sent back from review:** if a reviewer moves your task back to `in_progress`, fix what they list on the same branch (and PR) before any new work, push, and move it back to `review`.
 
 ## Tool-specific notes
 - **Claude Code:** you can work on as many tasks in parallel as your plan allows. Claim one per subagent and launch each with the Agent tool using `isolation: "worktree"` and `run_in_background: true`. Give each subagent a self-contained prompt:
@@ -53,16 +61,25 @@ Before the first task, run `git fetch` and check that the working tree is clean.
 - **Codex:** its sandbox makes `.git` read-only, so `git fetch`, `commit` and `push` fail inside it. When that happens, ask the human to approve running the git command outside the sandbox. Never work around it by cloning the repo into a subfolder or anywhere else.
 - **Everyone:** do all work in the folder you were started in.
 
-## If you are the integrator
-For each task in `review`:
-- **If it has a pull request** (a URL in its note): review it with `gh pr diff <url>`, wait for any checks (`gh pr checks <url>`), then `gh pr merge <url> --merge --delete-branch`. Run the tests yourself on the updated `main`. Then `update_task(id, status="done")`.
+## Merging to main
+Who merges depends on what the humans chose (`next_action` says which):
+- **A specific integrator:** only that agent merges. If that's you, merge reviews before claiming new work of your own.
+- **Whoever is free:** any agent with a free slot merges. Take a review with `claim_review(id)` first, so nobody merges the same branch twice. Never review your own task, and one review at a time.
+- **Nobody chosen yet:** the first agent with work in review calls `claim_role("integrator")` (`claim_review` is refused until then).
+
+If you're the author, don't mark your own task done once it's in review: whoever merges does that.
+
+For each task you merge:
+- **If it has a pull request** (its `pr_url`): review it with `gh pr diff <url>`, read the review comments (a review bot's comments, e.g. Gitar's, count too) and wait for the checks (`gh pr checks <url>`). If everything passes, `gh pr merge <url> --merge --delete-branch`, run the tests yourself on the updated `main`, then `update_task(id, status="done")`.
 - **Otherwise, merge with git:**
 
 1. `git fetch`, then `git switch --detach origin/main`. This works even when `main` is checked out in another folder.
 2. `git merge --no-ff origin/<branch>`, review the diff, and **run the build and tests yourself**.
 3. `git push origin HEAD:main`, then `update_task(id, status="done")`.
 
-**Never mark a task done on the author's word.** If you can't run the tests (missing tools, blocked commands), set the task to `blocked` with the reason so a human sees it. If a merge breaks the build, set the task back to `in_progress` with a note @mentioning the assignee. Merge before you claim new work of your own.
+**When it fails review** (failing checks, "changes requested", review comments, your own review finds problems, or the merge breaks the build): don't merge. Summarise what's wrong and send it back: `update_task(id, status="in_progress", note="@<author> <what to fix: failing check, comment, file>")`. The author fixes it on the same branch and PR and moves it back to review. Don't wait for them: go on to the next review. If the author is marked out of usage, any agent with room may release the task right away, claim it and fix it; if the author is offline, that's possible once the task goes stale (15 minutes without an update). Fix only trivial things (a typo, a lint error) yourself.
+
+**Never mark a task done on the author's word, and never merge with failing checks or unresolved "changes requested".** If you can't run the tests (missing tools, blocked commands), set the task to `blocked` with the reason so a human sees it.
 
 ## When everything is done
 Post a status line in `general`, then `ask_human` whether there's more to do, and `wait_for_events` for up to 10 minutes for the answer before you stop.

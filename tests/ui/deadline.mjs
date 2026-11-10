@@ -59,7 +59,7 @@ try {
   await page.evaluate(() => goStep('goal', 'dl')); await sleep(300);
   check('step 2 has a labelled demo-time input (datetime-local) and freeze minutes (default 60)', await page.evaluate(() => {
     const d = $('dl-in'); const f = $('fz-in');
-    return d?.type === 'datetime-local' && !!document.querySelector('label[for="dl-in"]') && !!document.querySelector('label[for="fz-in"]') && f?.value === '60' && d.value.slice(0, 10) === localInput(Date.now()).slice(0, 10);
+    return d?.type === 'datetime-local' && !!document.querySelector('label[for="dl-in"]') && !!document.querySelector('label[for="fz-in"]') && f?.value === '60' && d.value.slice(0, 10) === localInput(defaultDeadline()).slice(0, 10);
   }));
   // Past time is refused inline.
   await page.evaluate(() => { $('dl-in').value = localInput(Date.now() - 3600e3); });
@@ -70,10 +70,10 @@ try {
   await page.click('[data-fk="dl-save"]');
   await until(page, () => !document.getElementById('clock').hidden);
   const clock1 = await txt(page, '#clock');
-  check('countdown in header: "Demo in 3h 1Xm · freeze HH:MM"', /^Demo in 3h 1[123]m · freeze \d\d?:\d\d(?: ?[AP]M)?$/.test(clock1), clock1);
+  check('countdown in header: "Demo in 3h 1Xm · freeze HH:MM"', /^Demo in 3h 1[123]m · freeze (?:\w{3} )?\d\d?:\d\d(?: ?[AP]M)?$/.test(clock1), clock1);
   const s1 = await rest(board, 'dana', '/state');
   check('deadline saved on the server', Math.abs(Number(s1.settings.deadline) - Math.floor(target / 60e3) * 60e3) < 60e3 && s1.settings.freeze_minutes === '60' && s1.time.deadline > 0, JSON.stringify(s1.settings));
-  check('step 2 shows the demo time and a Change button', /Demo: \d\d?:\d\d(?: ?[AP]M)? · feature freeze \d\d?:\d\d(?: ?[AP]M)? \(60 min before\)/.test(await txt(page, '#step-goal')) && !!(await page.$('[data-fk="dl-edit"]')), await txt(page, '#step-goal'));
+  check('step 2 shows the demo time and a Change button', /Demo: (?:\w{3} )?\d\d?:\d\d(?: ?[AP]M)? · feature freeze (?:\w{3} )?\d\d?:\d\d(?: ?[AP]M)? \(60 min before\)/.test(await txt(page, '#step-goal')) && !!(await page.$('[data-fk="dl-edit"]')), await txt(page, '#step-goal'));
   check('clock is not warning-coloured 2h before the freeze', await page.$eval('#clock', (e) => !e.classList.contains('warn') && !e.classList.contains('frozen')));
   // Typing elsewhere survives the 30s tick re-render.
   await page.click('#msg'); await page.type('#msg', 'half-typed');

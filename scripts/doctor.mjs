@@ -78,7 +78,8 @@ export async function runDoctor({ header = true } = {}) {
     const found = toolConfig(a);
     if (found === null) console.log('    • (can\'t inspect this tool\'s config from here)');
     else if (!found) bad(`    ${LABEL[a.tool]} isn't connected to this board`, 'Run npm run join again and pick this tool.');
-    else if (!found.includes(`agent=${encodeURIComponent(a.agent)}`) || !found.includes(url.replace(/^https?:\/\//, ''))) {
+    // Names are case-insensitive on the board, so a config written as "Dana" still matches "dana".
+    else if (!found.toLowerCase().includes(`agent=${encodeURIComponent(a.agent)}`.toLowerCase()) || !found.includes(url.replace(/^https?:\/\//, ''))) {
       bad(`    ${LABEL[a.tool]} points at a different board or name`, 'Run npm run join again.');
     } else ok(`    ${LABEL[a.tool]} is connected`);
 
