@@ -1207,6 +1207,8 @@ export class Board {
     const min = (ms) => { const m = Math.round(ms / 60e3); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; };
     const median = (xs) => { if (!xs.length) return 0; const a = [...xs].sort((x, y) => x - y); const i = Math.floor(a.length / 2); return a.length % 2 ? a[i] : (a[i - 1] + a[i]) / 2; };
     const at = (ms) => (ms ? new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—');
+    const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+    const now = Date.now();
     const byTask = new Map();
     for (const e of events) if (e.task_id) { if (!byTask.has(e.task_id)) byTask.set(e.task_id, []); byTask.get(e.task_id).push(e); }
     const title = (id) => tasks.find((t) => t.id === id)?.title || events.find((e) => e.task_id === id && e.kind === 'task_created')?.text?.replace(/^(proposed )?#\d+\s*/, '').split(' — ')[0] || '';
@@ -1228,7 +1230,9 @@ export class Board {
           if (next === 'done') doneAt = e.ts;
         }
       }
-      stats.push({ id, title: title(id), work: firstClaim && doneAt > firstClaim ? doneAt - firstClaim : 0, blocked, bounces, claimers: claimers.size, released, stale, doneAt });
+      const stillBlocked = status === 'blocked' && tasks.some((t) => t.id === id && t.status === 'blocked');
+      if (stillBlocked) blocked += Math.max(0, now - since);
+      stats.push({ id, title: title(id), work: firstClaim && doneAt > firstClaim ? doneAt - firstClaim : 0, blocked, stillBlocked, bounces, claimers: claimers.size, released, stale, doneAt });
     }
     const done = stats.filter((x) => x.work);
     const L = ['# Retro', ''];
@@ -1242,19 +1246,20 @@ export class Board {
     }
     const bounced = stats.filter((x) => x.bounces).sort((a, b) => b.bounces - a.bounces);
     L.push('## Sent back from review', '');
-    L.push(bounced.length ? `${bounced.length} task(s), ${bounced.reduce((n, x) => n + x.bounces, 0)} time(s) in all.` : 'None.');
+    L.push(bounced.length ? `${plural(bounced.length, 'task')}, ${plural(bounced.reduce((n, x) => n + x.bounces, 0), 'time')} in all.` : 'None.');
     for (const x of bounced.slice(0, 5)) L.push(`- #${x.id} ${x.title}: ${x.bounces}×`);
     L.push('');
-    const blocked = stats.filter((x) => x.blocked).sort((a, b) => b.blocked - a.blocked);
+    const blocked = stats.filter((x) => x.blocked || x.stillBlocked).sort((a, b) => b.blocked - a.blocked);
+    const still = blocked.filter((x) => x.stillBlocked).length;
     L.push('## Blocked time', '');
-    L.push(blocked.length ? `${blocked.length} task(s) were blocked, ${min(blocked.reduce((n, x) => n + x.blocked, 0))} in all.` : 'Nothing was blocked.');
-    for (const x of blocked.slice(0, 5)) L.push(`- #${x.id} ${x.title}: ${min(x.blocked)}`);
+    L.push(blocked.length ? `${plural(blocked.length, 'task was', 'tasks were')} blocked, ${min(blocked.reduce((n, x) => n + x.blocked, 0))} in all${still ? ` (${still} still blocked)` : ''}.` : 'Nothing was blocked.');
+    for (const x of blocked.slice(0, 5)) L.push(`- #${x.id} ${x.title}: ${min(x.blocked)}${x.stillBlocked ? ', still blocked' : ''}`);
     L.push('');
     const moved = stats.filter((x) => x.released || x.claimers > 1);
     const staleN = stats.reduce((n, x) => n + x.stale, 0);
     L.push('## Handovers and stalls', '');
-    L.push(`- Released or taken over: ${moved.length} task(s)${moved.length ? ` (${moved.slice(0, 8).map((x) => `#${x.id}`).join(', ')})` : ''}`);
-    L.push(`- Went 15+ min without an update while being worked on: ${staleN} time(s)`);
+    L.push(`- Released or taken over: ${plural(moved.length, 'task')}${moved.length ? ` (${moved.slice(0, 8).map((x) => `#${x.id}`).join(', ')})` : ''}`);
+    L.push(`- Went 15+ min without an update while being worked on: ${plural(staleN, 'time')}`);
     L.push('');
     const answered = questions.filter((q) => q.answered_at).map((q) => q.answered_at - q.created_at);
     L.push('## Questions to humans', '');
@@ -1264,13 +1269,23 @@ export class Board {
     const ctx = { rows: this.db.prepare('SELECT name, kind, person FROM presence_v2').all() };
     ctx.known = this.knownPeople(ctx.rows);
     const people = new Map();
-    const P = (name) => { const p = this.personFor(name, ctx); if (!people.has(p)) people.set(p, { done: 0, bounces: 0, helpers: new Set() }); return people.get(p); };
+    const P = (name) => { const p = this.personFor(name, ctx); if (!people.has(p)) people.set(p, { done: 0, bounces: 0, helpers: new Set(), reviewed: new Set(), merged: new Set() }); return people.get(p); };
     for (const t of tasks) if (t.status === 'done' && t.assignee) P(t.assignee).done++;
     for (const x of bounced) { const t = tasks.find((y) => y.id === x.id); if (t?.assignee) P(t.assignee).bounces += x.bounces; }
     for (const e of events) if (String(e.author).includes('/')) P(e.author).helpers.add(e.author);
+    // Reviews: taking a review, sending work back, or merging someone else's task (review → done).
+    for (const e of events) {
+      if (!e.task_id || e.kind !== 'task_updated') continue;
+      const merge = /review → done/.test(e.text);
+      if (!merge && !/review → in_progress/.test(e.text) && !/^#\d+ reviewing to merge/.test(e.text)) continue;
+      const owner = tasks.find((t) => t.id === e.task_id)?.assignee;
+      if (owner && this.personFor(owner, ctx) === this.personFor(e.author, ctx)) continue;
+      P(e.author).reviewed.add(e.task_id);
+      if (merge) P(e.author).merged.add(e.task_id);
+    }
     if (people.size) {
       L.push('## Per person', '');
-      for (const [p, v] of [...people].sort((a, b) => b[1].done - a[1].done)) L.push(`- **${p}**: ${v.done} done${v.bounces ? `, ${v.bounces} sent back from review` : ''}${v.helpers.size ? `, ${v.helpers.size} helper(s)` : ''}`);
+      for (const [p, v] of [...people].sort((a, b) => b[1].done - a[1].done || b[1].reviewed.size - a[1].reviewed.size)) L.push(`- **${p}**: ${v.done} done${v.reviewed.size ? `, ${v.reviewed.size} reviewed (${v.merged.size} merged)` : ''}${v.bounces ? `, ${v.bounces} sent back from review` : ''}${v.helpers.size ? `, ${plural(v.helpers.size, 'helper')}` : ''}`);
       L.push('');
     }
     const first = events[0]?.ts;
@@ -1337,10 +1352,11 @@ export class Board {
     const s = this.getSettings();
     const tasks = this.listTasks();
     const done = tasks.filter((t) => t.status === 'done');
-    const notDone = tasks.filter((t) => t.status !== 'done');
+    const notDone = tasks.filter((t) => t.status !== 'done').sort((a, b) => a.id - b.id);
+    const STATUS_LABEL = { proposed: 'proposed', open: 'not started', claimed: 'claimed', in_progress: 'in progress', review: 'in review', blocked: 'blocked' };
     const answered = this.db.prepare('SELECT * FROM questions WHERE answer IS NOT NULL ORDER BY answered_at').all();
     const byPerson = new Map();
-    for (const t of done) {
+    for (const t of [...done].sort((a, b) => a.id - b.id)) {
       const who = this.personFor(t.assignee || t.created_by);
       if (!byPerson.has(who)) byPerson.set(who, []);
       byPerson.get(who).push(t);
@@ -1366,7 +1382,7 @@ export class Board {
     }
     if (notDone.length) {
       L.push('## Not finished', '');
-      for (const t of notDone) L.push(`- #${t.id} ${t.title} — ${t.status}${t.assignee ? ` (${t.assignee})` : ''}`);
+      for (const t of notDone) L.push(`- #${t.id} ${t.title} — ${STATUS_LABEL[t.status] || t.status.replace(/_/g, ' ')}${t.assignee ? ` (${t.assignee})` : ''}`);
       L.push('');
     }
     return L.join('\n');

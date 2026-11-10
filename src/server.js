@@ -440,7 +440,8 @@ function createBoardRuntime(slug, dir) {
   // a different freeze time (to the nearest 5 min) is announced again.
   const flagKey = (k, t) => `_announced_${k}_${Math.round(t.freezeAt / 300e3)}`;
   const announced = { has: (k) => !!board.db.prepare('SELECT 1 FROM settings WHERE key = ?').get(k), add: (k) => board.db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, '1')").run(k) };
-  every(() => {
+  const announceFreeze = () => {
+    if (board.closed) return;
     const t = timeInfo(board.getSettings());
     if (!t.deadline) return;
     const key = (k) => flagKey(k, t);
@@ -454,7 +455,10 @@ function createBoardRuntime(slug, dir) {
       announced.add(key('freeze'));
       board.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all FEATURE FREEZE. Demo at ${t.deadlineLabel}. Don't claim new tasks. Finish, push and merge what you have; release anything that can't land in time.` });
     }
-  }, 20e3);
+  };
+  every(announceFreeze, 20e3);
+  // A new deadline or freeze time is checked at once: a short freeze could pass between two ticks.
+  board.bus.on('event', (e) => { if (e?.kind === 'settings' && /deadline|feature freeze starts/.test(e.text || '')) setImmediate(announceFreeze); });
 
   // ---------- notifications to humans away from the laptop (Slack / Discord / ntfy / any webhook) ----------
   // At Kubecon a question waited 31 minutes for a human. Settings `_notify_url` / `_notify_events` are
