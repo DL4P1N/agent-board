@@ -3,63 +3,84 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>Board presenter</title>
-<link rel="icon" href="data:,">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%233d5afe'/><rect x='3' y='4' width='3' height='8' fill='white'/><rect x='7' y='4' width='3' height='5' fill='white'/><rect x='11' y='4' width='2' height='6' fill='white'/></svg>">
 <meta name="description" content="Read-only big-screen view of the team board for the room or the demo">
 <style>
+  /* Presenter view: the board's design system (see public/index.html), set large for a screen across the room.
+     Same colours, radius, status colours and motion; the type scale is fluid, from a phone to a projector. */
   :root {
-    --bg: #f6f6f3; --panel: #ffffff; --ink: #1c1c1a; --muted: #5e5e58; --line: #dcdcd5;
-    --accent: #4f5bd5; --ok: #1f7a43; --warn: #9a5b00; --bad: #b42318; --track: #e7e7e1; --dl: 42%;
     color-scheme: light;
+    --bg: #f5f5f2; --panel: #ffffff; --chip: #eeede8; --ink: #1d1d1b; --muted: #66665f; --line: #e2e1db; --field-line: #8a897f;
+    --accent: #3448d8; --accent-ink: #ffffff; --ok: #15803d; --warn: #b4410a; --warn-soft: #fff1e6; --bad: #b91c1c; --bad-soft: #fdecec;
+    --pl: 28%; --ps: 60%;
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif;
+    --fs-label: clamp(.8125rem, .95vw, 1.125rem); --fs-body: clamp(1rem, 1.5vw, 1.5rem); --fs-stat: clamp(1.5rem, 2.6vw, 2.75rem);
+    --fs-goal: clamp(1.75rem, 3.6vw, 3.5rem); --fs-clock: clamp(2.75rem, 6.4vw, 6.5rem);
+    --gap: clamp(12px, 1.6vw, 24px); --pad: clamp(16px, 2vw, 32px); --edge: clamp(16px, 3vw, 48px);
+    --r-lg: 12px; --r-full: 999px; --e1: 0 1px 2px rgba(24, 24, 20, .06);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #141413; --panel: #1d1d1b; --ink: #f1f0ea; --muted: #a8a79f; --line: #34342f;
-      --accent: #9aa3ff; --ok: #4fd18b; --warn: #f0b44c; --bad: #ff7a6b; --track: #2b2b27; --dl: 72%;
       color-scheme: dark;
+      --bg: #141413; --panel: #1d1d1b; --chip: #262624; --ink: #ecebe6; --muted: #a09f98; --line: #31312d; --field-line: #75746c;
+      --accent: #8f9dff; --accent-ink: #111111; --ok: #4ade80; --warn: #fb9a5b; --warn-soft: #33241a; --bad: #f87171; --bad-soft: #3a1d1d;
+      --pl: 72%; --ps: 65%; --e1: none;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #141413; --panel: #1d1d1b; --ink: #f1f0ea; --muted: #a8a79f; --line: #34342f;
-    --accent: #9aa3ff; --ok: #4fd18b; --warn: #f0b44c; --bad: #ff7a6b; --track: #2b2b27; --dl: 72%;
     color-scheme: dark;
+    --bg: #141413; --panel: #1d1d1b; --chip: #262624; --ink: #ecebe6; --muted: #a09f98; --line: #31312d; --field-line: #75746c;
+    --accent: #8f9dff; --accent-ink: #111111; --ok: #4ade80; --warn: #fb9a5b; --warn-soft: #33241a; --bad: #f87171; --bad-soft: #3a1d1d;
+    --pl: 72%; --ps: 65%; --e1: none;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
-  body { background: var(--bg); color: var(--ink); font: 18px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; min-height: 100vh; }
-  main { max-width: 1600px; margin: 0 auto; padding: clamp(16px, 3vw, 40px); display: grid; gap: clamp(14px, 2vw, 28px); }
-  header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 16px; }
-  header .brand { font-weight: 700; color: var(--ink); }
+  body { background: var(--bg); color: var(--ink); font: var(--fs-body)/1.4 var(--font); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+  h1, h2, p { margin: 0; }
+  main { max-width: 1680px; margin: 0 auto; padding: var(--edge); display: grid; gap: var(--gap); }
+  header { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; color: var(--muted); font-size: var(--fs-label); }
+  header .brand { font-weight: 600; color: var(--ink); letter-spacing: -.01em; display: inline-flex; align-items: center; gap: 10px; }
+  .mark { width: 1.4em; height: 1.4em; flex: 0 0 auto; }
+  header .live { display: inline-flex; align-items: center; gap: 8px; }
   header .sp { flex: 1; }
-  header a { color: var(--muted); font-size: 14px; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .dot { width: .6em; height: .6em; border-radius: var(--r-full); background: var(--field-line); display: inline-block; flex: 0 0 auto; }
   .dot.live { background: var(--ok); }
-  .goal { font-size: clamp(26px, 3.6vw, 52px); font-weight: 700; line-height: 1.15; margin: 0; text-wrap: balance; }
-  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: clamp(14px, 2vw, 28px); }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: clamp(16px, 2vw, 28px); min-width: 0; }
-  .card h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-  .clock { font-size: clamp(40px, 6vw, 96px); font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1; }
+  /* The goal leads: the largest words on the screen after the countdown. */
+  .goal { font-size: var(--fs-goal); font-weight: 600; line-height: 1.12; letter-spacing: -.022em; text-wrap: balance; max-width: 30ch; }
+  .goal.unset { color: var(--muted); }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--gap); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--pad); min-width: 0; box-shadow: var(--e1); }
+  .card h2 { margin-bottom: .75em; font-size: var(--fs-label); line-height: 1.3; color: var(--muted); font-weight: 600; }
+  .clock { font-size: var(--fs-clock); font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -.03em; }
   .clock.warn { color: var(--warn); } .clock.bad { color: var(--bad); }
-  .sub { color: var(--muted); font-size: clamp(16px, 1.6vw, 24px); margin-top: 8px; }
-  .prog { font-size: clamp(30px, 4vw, 64px); font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1; }
-  .bar { height: 18px; border-radius: 9px; background: var(--track); overflow: hidden; margin: 14px 0 12px; }
-  .bar > span { display: block; height: 100%; background: var(--ok); border-radius: 9px; transition: width .6s ease; }
-  @media (prefers-reduced-motion: reduce) { .bar > span { transition: none; } }
-  .cols { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: clamp(15px, 1.4vw, 20px); color: var(--muted); }
-  .cols b { color: var(--ink); font-variant-numeric: tabular-nums; }
-  ul.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-  ul.list li { font-size: clamp(17px, 1.6vw, 24px); display: flex; gap: 10px; align-items: baseline; min-width: 0; }
-  ul.list .who { font-weight: 700; color: hsl(var(--h) 60% var(--dl)); flex: 0 0 auto; }
-  ul.list .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  ul.list .when { margin-left: auto; color: var(--muted); font-size: .8em; flex: 0 0 auto; }
-  .empty { color: var(--muted); font-size: clamp(16px, 1.5vw, 22px); }
-  .pills { display: flex; flex-wrap: wrap; gap: 10px; }
-  .pill { border-radius: 999px; padding: 6px 14px; font-size: clamp(15px, 1.4vw, 20px); border: 1px solid var(--line); background: var(--panel); }
-  .pill.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
-  .pill.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); font-weight: 700; }
-  .pill.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
-  .msg { max-width: 640px; margin: 15vh auto; padding: 24px; font-size: 20px; }
-  .msg code { font-size: 16px; }
+  .clock.none { font-size: var(--fs-stat); line-height: 1.1; letter-spacing: -.018em; color: var(--muted); }
+  .sub { color: var(--muted); margin-top: .6em; }
+  .prog { font-size: var(--fs-stat); font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -.018em; }
+  /* One bar, one segment per status, in the board's status colours. */
+  .bar { display: flex; height: clamp(12px, 1.2vw, 20px); border-radius: var(--r-full); background: var(--chip); overflow: hidden; margin: 1em 0 .8em; }
+  .bar > span { display: block; height: 100%; flex: 0 0 auto; }
+  .s-done { background: var(--ok); } .s-review { background: var(--warn); } .s-blocked { background: var(--bad); } .s-doing { background: var(--accent); }
+  .s-open { background: transparent; box-shadow: inset 0 0 0 2px var(--field-line); }
+  .cols { display: flex; flex-wrap: wrap; gap: .4em 1.2em; color: var(--muted); }
+  .cols > span { display: inline-flex; align-items: center; gap: .45em; white-space: nowrap; }
+  .cols i { width: .6em; height: .6em; border-radius: var(--r-full); flex: 0 0 auto; }
+  .cols b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  ul.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .55em; }
+  ul.list li { display: flex; gap: .6em; align-items: baseline; min-width: 0; }
+  ul.list .who { font-weight: 600; color: hsl(var(--h) var(--ps) var(--pl)); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+  ul.list .what { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
+  ul.list .when { margin-left: auto; color: var(--muted); font-size: .8em; flex: 0 0 auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .empty { color: var(--muted); }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { border-radius: var(--r-full); padding: .25em .9em; background: var(--chip); color: var(--muted); font-weight: 500; white-space: nowrap; }
+  .pill.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent); }
+  .pill.bad { color: var(--bad); background: var(--bad-soft); font-weight: 600; white-space: normal; }
+  .pill.warn { color: var(--warn); background: var(--warn-soft); }
+  .msg { max-width: 640px; margin: 15vh auto; padding: var(--pad); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--e1); }
+  .msg code { font-size: .85em; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
@@ -89,7 +110,19 @@ function personOf(name) {
   if (p?.person) return p.person;
   return root.replace(/-(claude|codex|copilot|copilotcli|copilot-vscode|copilot-cli)\d*$/, '');
 }
-const hue = (name) => { let h = 0; for (const c of personOf(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return HUES[h % HUES.length]; };
+const nameHash = (n) => { let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
+// One colour per known person, like the board: a name whose colour is taken moves on to the next free one (a–z order).
+let hueCache = null;
+function personHues() {
+  if (hueCache?.s === state) return hueCache.m;
+  const known = new Set();
+  for (const p of state?.presence || []) { const per = String(p.person || '').toLowerCase(); if (per) known.add(per); if (p.kind === 'human' && p.name) known.add(String(p.name).toLowerCase()); }
+  const used = new Set(); const m = new Map();
+  for (const n of [...known].sort()) { let i = nameHash(n) % HUES.length; for (let k = 0; k < HUES.length && used.has(i); k++) i = (i + 1) % HUES.length; used.add(i); m.set(n, HUES[i]); }
+  hueCache = { s: state, m };
+  return m;
+}
+const hue = (name) => { const r = String(personOf(name)).toLowerCase(); return personHues().get(r) ?? HUES[nameHash(r) % HUES.length]; };
 const clock = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 function ago(ts) { const m = Math.round((Date.now() - ts) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : `${Math.floor(m / 60)}h ${m % 60}m ago`; }
 function dur(ms) { const t = Math.max(0, Math.round(ms / 1000)); const h = Math.floor(t / 3600); const m = Math.floor((t % 3600) / 60); const s = t % 60; return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}:${String(s).padStart(2, '0')}`; }
@@ -104,11 +137,11 @@ async function load() {
     render();
   } catch (e) { lastErr = 'Can\'t reach the board server; retrying…'; if (state) render(); else showMsg(esc(lastErr)); }
 }
-function showMsg(html) { $('app').innerHTML = `<p class="msg">${html}</p>`; }
+function showMsg(html) { const a = $('app'); a._html = undefined; a.innerHTML = `<p class="msg">${html}</p>`; }
 
 function countdown() {
   const t = state?.time || {}; const now = Date.now();
-  if (!t.deadline) return { big: '—', sub: 'No demo time set', cls: '' };
+  if (!t.deadline) return { big: 'Not set', sub: 'Set the demo time on the board: Start here, step 2.', cls: 'none' };
   if (t.past || now >= t.deadline) return { big: 'Demo time', sub: `Demo was at ${clock(t.deadline)}. Wrapping up.`, cls: 'warn' };
   if (t.freezeAt && now >= t.freezeAt) return { big: dur(t.deadline - now), sub: `Feature freeze · demo at ${clock(t.deadline)}`, cls: 'bad' };
   return { big: dur(t.deadline - now), sub: `until the demo (${clock(t.deadline)})${t.freezeAt && t.freezeAt < t.deadline ? ` · feature freeze at ${clock(t.freezeAt)}` : ''}`, cls: t.freezeAt && t.freezeAt - now < 30 * 60e3 ? 'warn' : '' };
@@ -129,22 +162,35 @@ function render() {
   const qOpen = (state.questions || []).filter((q) => !q.answer).length;
   const ci = state.main_ci;
   const ciPill = !ci ? '' : ci.status === 'fail' ? `<span class="pill bad">main is failing${ci.failing?.length ? `: ${esc(ci.failing.join(', '))}` : ''}</span>` : ci.status === 'pending' ? '<span class="pill">main: checks running…</span>' : '<span class="pill ok">✓ main green</span>';
-  $('app').innerHTML = `
-    <header><span class="dot ${live ? 'live' : ''}" aria-hidden="true"></span><span class="brand">Claude Board</span><span>${live ? 'Live' : lastErr ? esc(lastErr) : 'Connecting…'}</span></header>
-    <h1 class="goal">${esc(state.settings?.goal || 'No goal set yet')}</h1>
+  const n = { done, review: by('review'), blocked: by('blocked'), doing: by(['claimed', 'in_progress']), open: by('open') };
+  const seg = (k) => (n[k] ? `<span class="s-${k}" data-seg="${k}" style="width:${(n[k] / total) * 100}%"></span>` : '');
+  const key = (k, label) => `<span><i class="s-${k}" aria-hidden="true"></i>${label} <b>${n[k]}</b></span>`;
+  const html = `
+    <header><span class="brand"><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" rx=".6" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" rx=".6" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" rx=".6" fill="var(--accent-ink)"/></svg>Claude Board</span><span class="live"><span class="dot ${live ? 'live' : ''}" aria-hidden="true"></span>${live ? 'Live' : lastErr ? esc(lastErr) : 'Connecting…'}</span><span class="sp"></span>
+      ${ciPill || qOpen ? `<div class="pills">${ciPill}${qOpen ? `<span class="pill warn">${qOpen} question${qOpen > 1 ? 's' : ''} waiting for a human</span>` : ''}</div>` : ''}</header>
+    <h1 class="goal${state.settings?.goal ? '' : ' unset'}">${esc(state.settings?.goal || 'No goal set yet')}</h1>
     <div class="row">
       <section class="card" aria-labelledby="h-time"><h2 id="h-time">Time</h2><div class="clock ${cd.cls}" id="clock">${esc(cd.big)}</div><div class="sub" id="clock-sub">${esc(cd.sub)}</div></section>
       <section class="card" aria-labelledby="h-prog"><h2 id="h-prog">Progress</h2><div class="prog">${done} of ${total} done</div>
-        <div class="bar" role="progressbar" aria-label="Tasks done" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}"><span style="width:${pct}%"></span></div>
-        <div class="cols"><span>Open <b>${by('open')}</b></span><span>In progress <b>${by(['claimed', 'in_progress'])}</b></span><span>Blocked <b>${by('blocked')}</b></span><span>Review <b>${by('review')}</b></span><span>Done <b>${done}</b></span></div></section>
+        <div class="bar" role="progressbar" aria-label="Tasks done" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}">${total ? ['done', 'review', 'blocked', 'doing'].map(seg).join('') : ''}</div>
+        <div class="cols">${key('open', 'Open')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}${key('done', 'Done')}</div></section>
     </div>
     <div class="row">
       <section class="card" aria-labelledby="h-now"><h2 id="h-now">Now working on</h2>
-        ${groups.size ? `<ul class="list">${[...groups].map(([person, list]) => list.map((a) => `<li style="--h:${hue(a.name)}"><span class="who">${esc(person)}</span><span class="what" title="${esc(a.doing)}">${esc(a.doing)}</span></li>`).join('')).join('')}</ul>` : '<p class="empty">Nobody is working on anything right now.</p>'}</section>
+        ${groups.size ? `<ul class="list">${[...groups].map(([person, list]) => list.map((a) => `<li style="--h:${hue(a.name)}"><span class="who">${esc(person)}</span><span class="what" title="${esc(a.doing)}">${esc(a.doing)}</span></li>`).join('')).join('')}</ul>` : '<p class="empty">Nobody is working on a task right now.</p>'}</section>
       <section class="card" aria-labelledby="h-merged"><h2 id="h-merged">Just merged</h2>
-        ${merges.length ? `<ul class="list">${merges.map((e) => `<li style="--h:${hue(e.author)}"><span class="who">#${esc(e.task_id)}</span><span class="what">${esc(taskTitle(e.task_id) || String(e.text || '').replace(/^#\d+\s*/, ''))}</span><span class="when">${esc(ago(e.ts))}</span></li>`).join('')}</ul>` : '<p class="empty">Nothing merged yet.</p>'}</section>
-    </div>
-    ${ciPill || qOpen ? `<div class="pills">${ciPill}${qOpen ? `<span class="pill warn">${qOpen} question${qOpen > 1 ? 's' : ''} waiting for a human</span>` : ''}</div>` : ''}`;
+        ${merges.length ? `<ul class="list">${merges.map((e) => `<li style="--h:${hue(e.author)}"><span class="who">#${esc(e.task_id)}</span><span class="what">${esc(taskTitle(e.task_id) || String(e.text || '').replace(/^#\d+\s*/, ''))}</span><span class="when">${esc(ago(e.ts))}</span></li>`).join('')}</ul>` : '<p class="empty">Nothing merged yet. Finished tasks show up here.</p>'}</section>
+    </div>`;
+  // Live events arrive often: only touch the page when something on it changed, and let the bar grow from where it was.
+  const app = $('app');
+  if (app._html !== html) {
+    const was = {}; app.querySelectorAll('[data-seg]').forEach((x) => { was[x.dataset.seg] = x.style.width; });
+    app.innerHTML = html; app._html = html;
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches && !document.hidden) app.querySelectorAll('[data-seg]').forEach((x) => {
+      const from = was[x.dataset.seg] || '0%';
+      if (from !== x.style.width && x.animate) x.animate([{ width: from }, { width: x.style.width }], { duration: 600, easing: 'cubic-bezier(.2, .7, .2, 1)' });
+    });
+  }
   document.title = total ? `${done}/${total} done · Board presenter` : 'Board presenter';
 }
 // Tick the countdown every second without re-rendering everything.
