@@ -19,7 +19,7 @@
                Status: open = grey ring, claimed = accent ring, in progress = accent,
                blocked = red, review = amber, done = green.
                People: --h (hue) is set inline per person; lightness comes from the theme.
-     Type      System font. Six sizes: micro 11, meta 12, sm 13, body 14, lead 16, title 18
+     Type      System font. Six sizes: micro 12 (the minimum), meta 12, sm 13, body 14, lead 16, title 18
                (in rem, so the user's text size is respected). Weights 400 / 500 / 600.
                Counts and times use tabular numerals (.num and the components below).
      Space     2 4 6 8 12 16 24 32 (--s1 … --s8).
@@ -43,7 +43,7 @@
 
     --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif;
     --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
-    --fs-micro: .6875rem; --fs-meta: .75rem; --fs-sm: .8125rem; --fs-body: .875rem; --fs-lead: 1rem; --fs-title: 1.125rem;
+    --fs-micro: .75rem; --fs-meta: .75rem; --fs-sm: .8125rem; --fs-body: .875rem; --fs-lead: 1rem; --fs-title: 1.125rem;
     --lh: 1.45; --lh-tight: 1.3;
 
     --s1: 2px; --s2: 4px; --s3: 6px; --s4: 8px; --s5: 12px; --s6: 16px; --s7: 24px; --s8: 32px;
@@ -229,6 +229,8 @@
   .phases span.p.past { color: var(--ink); }
   .phases span.p.cur { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
   .phases .arr { opacity: .5; }
+  .phases ol { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1); list-style: none; margin: 0; padding: 0; flex: 1 1 0; min-width: 0; }
+  .phases li { display: inline-flex; align-items: center; gap: var(--s1); }
 
   /* Questions: the one thing that must not be missed. */
   .attn { background: var(--warn-soft); border-color: var(--warn-line); }
@@ -370,7 +372,7 @@
   .col h3 > span:last-child { margin-left: auto; display: inline-flex; align-items: center; gap: var(--s2); color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
   .col.s-blocked.has h3 > span:last-child { color: var(--bad); font-weight: 600; }
   .col.s-review.has h3 > span:last-child { color: var(--warn); font-weight: 600; }
-  .col .cd { font-size: var(--fs-micro); line-height: var(--lh-tight); color: var(--muted); margin: 0 var(--s2) var(--s4); }
+  .col .cd { font-size: .6875rem; /* one line in a 178px column, so cards start above the fold at 1366×768 */ line-height: var(--lh-tight); color: var(--muted); margin: 0 var(--s2) var(--s4); }
   .col .empty { font-size: var(--fs-meta); color: var(--muted); padding: var(--s2); }
   .col.collapsed { padding: var(--s2); }
   .dtog { width: 100%; background: none; color: var(--muted); border: 0; padding: var(--s4) 0; font-size: var(--fs-meta); font-weight: 600; writing-mode: vertical-rl; white-space: nowrap; min-height: 140px; display: flex; align-items: center; gap: var(--s3); font-variant-numeric: tabular-nums; }
@@ -523,11 +525,14 @@
   .toast button { pointer-events: auto; background: transparent; color: inherit; border: 1px solid currentColor; font-size: var(--fs-meta); padding: 0 10px; min-height: var(--ctl-xs); }
   .toast button:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
 
+  .tochat { display: none; }
   /* ---------- small screens ---------- */
   @media (max-width: 600px) {
     header { padding: var(--s4) var(--s5); position: static; -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--panel); }
-    header .needs { order: 10; flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; padding-bottom: var(--s1); scrollbar-width: none; }
-    header .needs button { flex: 0 0 auto; }
+    /* Badges wrap instead of scrolling, so none is cut off at the edge. */
+    header .needs { order: 10; flex: 1 1 100%; flex-wrap: wrap; }
+    header .needs:empty { display: none; }
+    header .needs button { flex: 0 1 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
     /* Row 1: brand, live, you. Row 2: filter and actions, edge to edge. Row 3: what's waiting. */
     .hacts { display: contents; }
     header > .sp { display: none; }
@@ -550,6 +555,16 @@
     .tool-r .tw { grid-column: 1; }
     .capw { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     dialog { padding: var(--s5); }
+    /* Chat sits far down on a phone: a button jumps to it, hidden while the chat is on screen. */
+    .tochat { display: inline-flex; align-items: center; position: fixed; right: var(--s5); bottom: var(--s5); z-index: 40; min-height: var(--ctl); padding: 0 var(--s6); border-radius: var(--r-full); background: var(--accent); color: var(--accent-ink); font-size: var(--fs-sm); font-weight: 600; text-decoration: none; box-shadow: var(--e2); }
+  }
+
+  /* ---------- touch: every control at least 32px tall ---------- */
+  @media (hover: none) and (pointer: coarse) {
+    .card .mv { min-height: var(--ctl-xs); }
+    .person .ptog { min-height: var(--ctl-sm); }
+    /* Names and #ids inside text: a taller hit area that doesn't move the text. */
+    #feed button.link, #locks button.link, #questions button.link { padding: var(--s4) var(--s3); margin: calc(-1 * var(--s4)) calc(-1 * var(--s3)); }
   }
 
   /* ---------- reduced motion: everything rests ---------- */
@@ -615,6 +630,8 @@
   </header>
   <div id="downbar" class="downbar" role="alert" hidden></div>
   <div id="announcer" class="vh" aria-live="polite"></div>
+  <div id="activity-live" class="vh" aria-live="polite" aria-atomic="true"></div>
+  <a class="tochat" id="tochat" href="#f-h">Chat</a>
   <main>
     <section id="now" class="now" aria-label="What to do now"></section>
     <section id="q-panel" class="panel attn" aria-labelledby="q-h" hidden>
@@ -1373,6 +1390,34 @@ function checkNotify() {
   }
 }
 
+// Screen readers: mentions of me and newly blocked tasks, said politely, at most once every ACT_GAP ms.
+// Questions and the freeze have their own announcements (#announcer).
+let ACT_GAP = 10e3;
+let actCursor = null, actQueue = [], actTimer = 0, actLast = 0;
+function activityLine(e) {
+  if (e.kind === 'message' && mentionsMe(e)) return `${e.author} mentioned you: ${short(e.text, 120)}`;
+  if (e.kind === 'task_updated' && e.data?.status === 'blocked' && e.task_id) {
+    const s = selfMoves.get(e.task_id); if (s && s.status === 'blocked' && Date.now() - s.ts < 2 * 60e3) return null;
+    const t = taskById(e.task_id); return t && t.status === 'blocked' ? `#${t.id} is blocked: ${short(t.title, 80)}` : null;
+  }
+  return null;
+}
+function announceActivity() {
+  const maxId = state.events.reduce((m, e) => Math.max(m, e.id), 0);
+  if (actCursor === null) { actCursor = maxId; return; } // history on first load isn't read out
+  for (const e of state.events) if (e.id > actCursor) { const l = activityLine(e); if (l) actQueue.push(l); }
+  actCursor = Math.max(actCursor, maxId);
+  flushActivity();
+}
+function flushActivity() {
+  if (!actQueue.length || actTimer) return;
+  const wait = actLast + ACT_GAP - Date.now();
+  if (wait > 0) { actTimer = setTimeout(() => { actTimer = 0; flushActivity(); }, wait); return; }
+  const q = actQueue.splice(0); actLast = Date.now();
+  const msg = q.length === 1 ? q[0] : `${q.length} updates. ${q.slice(0, 3).join('. ')}${q.length > 3 ? '. And more in the activity feed' : ''}`;
+  const a = $('activity-live'); a.textContent = ''; setTimeout(() => { a.textContent = msg; }, 60);
+}
+
 // ---------- render ----------
 let prevQIds = null;
 function render() {
@@ -1404,7 +1449,7 @@ function render() {
   renderFeed(unread.length);
   renderLocks();
   if ($('task-dlg').open) renderDialogLive();
-  checkNotify();
+  checkNotify(); announceActivity();
 }
 
 function renderNeeds(qOpen, unread) {
@@ -1471,8 +1516,9 @@ function renderNow(qOpen, unread, si) {
   // With plan approval on, a "Review plan" step sits between writing tasks and building.
   const track = S.require_approval || approvalWait() ? [...ALL_PHASES.slice(0, 3), ['awaiting_approval', 'Review plan'], ...ALL_PHASES.slice(3)] : ALL_PHASES;
   const ci = track.findIndex(([k]) => k === curP);
-  const phases = `<span class="phases" title="Where the team is: connect laptops → set a goal → the planner writes tasks${track !== ALL_PHASES ? ' → humans approve them' : ''} → agents build → everything merged"><span class="ph-l">Phase</span>${track.map(([k, l], i) =>
-    `${i ? '<span class="arr" aria-hidden="true">›</span>' : ''}<span class="p ${k === curP ? 'cur' : i < ci ? 'past' : ''}" ${k === curP ? 'aria-current="step"' : ''}>${l}</span>`).join('')}</span>`;
+  // A list, so screen readers hear "Phase: Build, step 5 of 6" and each step as a list item.
+  const phases = `<div class="phases" title="Where the team is: connect laptops → set a goal → the planner writes tasks${track !== ALL_PHASES ? ' → humans approve them' : ''} → agents build → everything merged"><span class="ph-l" aria-hidden="true">Phase</span><ol role="list" aria-label="${ci < 0 ? 'Phase' : `Phase: ${track[ci][1]}, step ${ci + 1} of ${track.length}`}">${track.map(([k, l], i) =>
+    `<li>${i ? '<span class="arr" aria-hidden="true">›</span>' : ''}<span class="p ${k === curP ? 'cur' : i < ci ? 'past' : ''}" ${k === curP ? 'aria-current="step"' : ''}>${l}</span></li>`).join('')}</ol></div>`;
   patch(el, `<span class="nl">What to do now</span>${go
     ? `<button type="button" class="link na" data-go="${go}" data-fk="now-go">${esc(text)} <span class="go" aria-hidden="true">→</span></button>`
     : `<span class="na">${esc(text)}</span>`}${appr ? '<button type="button" class="appr" data-act="approve" data-fk="now-appr">Approve plan &amp; start</button>' : ''}${text2 ? `<button type="button" class="link na2" data-go="${go2}" data-fk="now-go2">${esc(text2)} <span aria-hidden="true">→</span></button>` : ''}${phases}`);
@@ -2059,6 +2105,7 @@ function renderBoard() {
   const el = $('board');
   const before = boardDrawn && el._html !== html && canMove() ? cardRects() : null;
   patch(el, html); boardDrawn = true;
+  roveCards();
   if (before) moveCards(before);
 }
 let boardDrawn = false;
@@ -2071,6 +2118,48 @@ const actionText = (e) => String(e.text).replace(/^@all\s+/, '').replace(/ \(set
 // Long posts are clamped to 4 lines with "Show more"; which ones are open survives re-renders.
 const expandedEv = new Set();
 const isLong = (t) => String(t || '').split('\n').length > 5 || String(t || '').length > 500;
+// Roving tabindex: one Tab stop per column. Arrow keys move between its cards (Left/Right: next column);
+// the current card's own buttons and links stay in the Tab order, other cards' are skipped.
+const roveAt = {}; // column status → id of its current card
+const CARD_CTLS = 'button, a[href], input, select, textarea';
+function setRove(c, on) {
+  c.tabIndex = on ? 0 : -1;
+  for (const n of c.querySelectorAll(CARD_CTLS)) {
+    if (!('rt' in n.dataset)) n.dataset.rt = n.getAttribute('tabindex') ?? '';
+    if (!on) n.tabIndex = -1; else if (n.dataset.rt === '') n.removeAttribute('tabindex'); else n.setAttribute('tabindex', n.dataset.rt);
+  }
+}
+function roveCards() {
+  const act = document.activeElement?.closest?.('.card');
+  for (const col of $('board').querySelectorAll('.col')) {
+    const cards = [...col.querySelectorAll('.card')]; if (!cards.length) continue;
+    const cur = cards.find((c) => c === act) || cards.find((c) => c.dataset.id === roveAt[col.dataset.status]) || cards[0];
+    for (const c of cards) setRove(c, c === cur);
+  }
+}
+function roveTo(c) {
+  const col = c.closest('.col'); if (!col) return;
+  roveAt[col.dataset.status] = c.dataset.id;
+  for (const x of col.querySelectorAll('.card')) setRove(x, x === c);
+}
+$('board').addEventListener('focusin', (ev) => { const c = ev.target.closest('.card'); if (c && c.tabIndex !== 0) roveTo(c); });
+$('board').addEventListener('keydown', (ev) => {
+  const c = ev.target.closest?.('.card'); if (!c || ev.target !== c || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  const col = c.closest('.col'); const cards = [...col.querySelectorAll('.card')]; const i = cards.indexOf(c);
+  let n = null;
+  if (ev.key === 'ArrowDown') n = cards[i + 1];
+  else if (ev.key === 'ArrowUp') n = cards[i - 1];
+  else if (ev.key === 'Home') n = cards[0];
+  else if (ev.key === 'End') n = cards[cards.length - 1];
+  else if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') {
+    const cols = [...$('board').querySelectorAll('.col')].filter((x) => x.querySelector('.card'));
+    const nc = cols[cols.indexOf(col) + (ev.key === 'ArrowRight' ? 1 : -1)];
+    n = nc && (nc.querySelector('.card[tabindex="0"]') || nc.querySelector('.card'));
+  } else return;
+  ev.preventDefault();
+  if (n) { n.focus(); n.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+});
+
 function evHtml(e, prev) {
   if (!isChat(e)) {
     // Consecutive status lines from the same author are grouped: the name shows once.
@@ -2228,6 +2317,8 @@ function skipTo(where) {
   const c = $('board').querySelector('.card'); ($('board').hidden || !state.tasks.length ? $('board-empty') : $('board')).scrollIntoView({ block: 'start' });
   if (c) c.focus({ preventScroll: true }); else { $('board').focus({ preventScroll: true }); }
 }
+// Phones: the floating Chat button (CSS shows it under 600px) hides while the Activity panel is on screen.
+if ('IntersectionObserver' in window) new IntersectionObserver(([e]) => { $('tochat').hidden = e.isIntersecting; }).observe($('f-h').closest('.panel'));
 document.addEventListener('click', (ev) => {
   const sk = ev.target.closest('[data-skip]'); if (sk) { ev.preventDefault(); return skipTo(sk.dataset.skip); }
   if (ev.target.closest('a[href]')) return; // links (PRs, URLs in chat) open by themselves
