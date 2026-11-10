@@ -503,11 +503,11 @@ check('the assigned agent is told (@mention in the event)', (aev?.data?.mentions
 // a human move to claimed / in progress needs an owner and finished dependencies (unless force)
 const mv1 = await newTask('move me'); const mv2 = await newTask('after move me', { depends_on: [mv1.id] });
 let mvr = await http(`/tasks/${mv1.id}`, 'PATCH', { status: 'in_progress' });
-check('moving to in progress without an owner is refused', mvr.status === 400 && /nobody assigned/.test(err(mvr.body)), JSON.stringify(mvr.body));
+check('moving to in progress without an owner is refused', mvr.status === 400 && /^Pick who #\d+ is for first\.$/.test(err(mvr.body)) && !/force/.test(err(mvr.body)), JSON.stringify(mvr.body));
 mvr = await http(`/tasks/${mv1.id}`, 'PATCH', { status: 'claimed' });
 check('moving to claimed without an owner is refused', mvr.status === 400, JSON.stringify(mvr.body));
 mvr = await http(`/tasks/${mv2.id}`, 'PATCH', { status: 'in_progress', assignee: 'k2' });
-check('moving a task whose dependency isn\'t done is refused', mvr.status === 400 && new RegExp(`waits on #${mv1.id}`).test(err(mvr.body)), JSON.stringify(mvr.body));
+check('moving a task whose dependency isn\'t done is refused', mvr.status === 400 && new RegExp(`waits on #${mv1.id}, which isn't done yet`).test(err(mvr.body)) && !/force/.test(err(mvr.body)), JSON.stringify(mvr.body));
 mvr = await http(`/tasks/${mv1.id}`, 'PATCH', { status: 'in_progress', assignee: 'k2' });
 check('moving with an assignee works and gets a branch', mvr.status === 200 && mvr.body.assignee === 'k2' && mvr.body.status === 'in_progress' && /^task\//.test(mvr.body.branch || ''), JSON.stringify(mvr.body));
 mvr = await http(`/tasks/${mv2.id}`, 'PATCH', { status: 'claimed', force: true });

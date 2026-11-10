@@ -94,6 +94,15 @@ try {
   await rest('bob-claude', '/messages', 'POST', { text: 'after paging' });
   await page.waitForFunction(() => [...document.querySelectorAll('#feed .ev')].some((e) => e.innerText.includes('after paging')), { timeout: 5000 });
   check('WB-21 live updates keep the earlier page', await page.evaluate(() => state.events[0].id === 1));
+  // More than 200 events between two reloads: the events in between are fetched, not skipped.
+  await page.evaluate(() => { window.__load = load; load = async () => {}; });
+  for (let i = 0; i < 260; i++) await rest('bob-claude', '/messages', 'POST', { text: `burst ${i}` });
+  await page.evaluate(() => { load = window.__load; return load(); });
+  const gap = await page.evaluate(() => {
+    const ids = state.events.map((e) => e.id); const texts = state.events.map((e) => e.text);
+    return { first: ids[0], sorted: ids.every((x, i) => !i || ids[i - 1] < x), dup: new Set(ids).size !== ids.length, all: Array.from({ length: 260 }, (_, i) => `burst ${i}`).every((t) => texts.includes(t)) };
+  });
+  check('WB-21 a reload after 260 new events keeps every event (gap fetched, no duplicates)', gap.first === 1 && gap.sorted && !gap.dup && gap.all, JSON.stringify(gap));
 
   // WB-25: I save a task, then someone else saves over it: I'm told.
   const t = await rest('erin', '/tasks', 'POST', { title: 'Write the README' });

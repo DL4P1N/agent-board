@@ -10,6 +10,8 @@ import path from 'node:path';
 const STATUSES = ['proposed', 'open', 'claimed', 'in_progress', 'blocked', 'review', 'done'];
 const STALE_MS = 15 * 60 * 1000;
 const AGENT_ONLINE_MS = 10 * 60 * 1000;
+// How long a laptop keeps an agent name after it was last seen, when its agent holds no active tasks.
+const NAME_LEASE_MS = 30 * 60 * 1000;
 // An agent that made a real board call (not just waiting/reading) this recently counts as busy.
 const ACTIVE_MS = 5 * 60 * 1000;
 // What an agent said it's doing outside board tasks (set_activity) counts for this long.
@@ -435,12 +437,16 @@ export class Board {
     if (status !== undefined && !STATUSES.includes(status)) throw new Error(`status must be one of ${STATUSES.join(', ')}`);
     const changingStatus = status !== undefined && status !== task.status;
     // A human moving a card to claimed / in progress: it needs an owner, and its dependencies done
-    // (otherwise nobody holds it and no agent can claim it). force: true moves it anyway.
+    // (otherwise nobody holds it and no agent can claim it). API callers can send force: true to move it
+    // anyway; the messages are for people on the web board, so they don't mention it.
     if (human && !force && changingStatus && ['claimed', 'in_progress'].includes(status)) {
-      const word = status.replace('_', ' ');
-      if (!(assignee !== undefined ? assignee : task.assignee)) throw new Error(`#${id} has nobody assigned. Pick who it's for before moving it to ${word}, or send force: true to move it anyway.`);
+      if (!(assignee !== undefined ? assignee : task.assignee)) throw new Error(`Pick who #${id} is for first.`);
       const waiting = ['claimed', 'in_progress'].includes(task.status) ? [] : task.depends_on.filter((d) => { const x = this.getTask(d); return x && x.status !== 'done'; });
-      if (waiting.length) throw new Error(`#${id} waits on ${waiting.map((d) => '#' + d).join(', ')}, not done yet. Send force: true to move it to ${word} anyway.`);
+      if (waiting.length) {
+        const list = waiting.map((d) => '#' + d);
+        const names = list.length === 1 ? list[0] : `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
+        throw new Error(`#${id} waits on ${names}, which ${list.length === 1 ? "isn't" : "aren't"} done yet.`);
+      }
     }
     const owner = !!task.assignee && sameTeam(author, task.assignee);
     const s = this.getSettings();
@@ -877,7 +883,7 @@ export class Board {
     if (!laptop) return null;
     const row = this.db.prepare('SELECT * FROM name_owners WHERE name = ?').get(root);
     const now = Date.now();
-    if (row && row.laptop !== laptop && row.via === 'agent' && now - row.seen_at < AGENT_ONLINE_MS) return row;
+    if (row && row.laptop !== laptop && this.ownerHolds(row)) return row;
     this.db.prepare("INSERT INTO name_owners (name, laptop, person, via, seen_at) VALUES (?,?,?,'agent',?) ON CONFLICT(name) DO UPDATE SET laptop = excluded.laptop, person = COALESCE(excluded.person, person), via = 'agent', seen_at = excluded.seen_at")
       .run(root, laptop, person ? normName(person) : null, now);
     return null;
@@ -888,7 +894,22 @@ export class Board {
     const laptop = callerLaptop.getStore();
     if (!laptop) return null;
     const row = this.db.prepare('SELECT * FROM name_owners WHERE name = ?').get(agentRootOf(normName(name)));
-    return row && row.laptop !== laptop && row.via === 'agent' && Date.now() - row.seen_at < AGENT_ONLINE_MS ? row : null;
+    return row && row.laptop !== laptop && this.ownerHolds(row) ? row : null;
+  }
+  // Does the agent owner of a name still hold it? An agent can code quietly for a long time without a board
+  // call, so the name is never taken over while its tasks are claimed, in progress or in review; otherwise
+  // it is held for NAME_LEASE_MS since the owner laptop was last seen (MCP calls, or Stop-hook polls that
+  // say which laptop they come from, see seenName).
+  ownerHolds(row) {
+    if (!row || row.via !== 'agent') return false;
+    if (Date.now() - row.seen_at < NAME_LEASE_MS) return true;
+    return !!this.db.prepare("SELECT 1 FROM tasks WHERE status IN ('claimed', 'in_progress', 'review') AND (assignee = ? OR assignee LIKE ? ESCAPE '\\') LIMIT 1")
+      .get(row.name, row.name.replace(/[\\%_]/g, (c) => '\\' + c) + '/%');
+  }
+  // A Stop-hook poll (/api/next, /api/events) from `laptop`: refreshes the name's lease if that laptop owns it.
+  seenName(name, laptop) {
+    if (!laptop) return;
+    this.db.prepare("UPDATE name_owners SET seen_at = ? WHERE name = ? AND laptop = ? AND via = 'agent'").run(Date.now(), agentRootOf(normName(name)), laptop);
   }
   assertOwnName(name) {
     if (this.nameClash(name)) throw new Error(`Another laptop is already using the name ${agentRootOf(normName(name))}, so this one can't claim or change tasks under it. Ask your human to re-run join with a different name.`);
@@ -911,7 +932,7 @@ export class Board {
     if (row && row.laptop === laptop) {
       if (person) this.db.prepare('UPDATE name_owners SET person = ? WHERE name = ?').run(normName(person), root);
       reserved = true;
-    } else if (!(row && row.via === 'agent' && now - row.seen_at < AGENT_ONLINE_MS)) {
+    } else if (!this.ownerHolds(row)) {
       this.db.prepare("INSERT INTO name_owners (name, laptop, person, via, seen_at) VALUES (?,?,?,'join',?) ON CONFLICT(name) DO UPDATE SET laptop = excluded.laptop, person = excluded.person, via = 'join', seen_at = excluded.seen_at")
         .run(root, laptop, person ? normName(person) : null, now);
       reserved = true;

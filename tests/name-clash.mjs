@@ -62,10 +62,46 @@ check('the first laptop may still change its task', !r.error && r.status === 'in
 r = await api(`/tasks/${t2.id}`, { method: 'PATCH', body: { note: 'human note' }, token: board.token });
 check('a human can still edit tasks over REST', r.status === 200, JSON.stringify(r));
 
-// The first laptop goes away for 10+ min: the other laptop may take the name over (someone switched laptops).
-db((d) => d.prepare("UPDATE name_owners SET seen_at = ? WHERE name = 'ben-claude'").run(Date.now() - 11 * 60e3));
+// The first laptop's agent codes quietly for 10+ min (no board calls) while its task is in progress:
+// it keeps the name, and the second laptop stays blocked (AG-6 lockout).
+const quiet = (min) => db((d) => d.prepare("UPDATE name_owners SET seen_at = ? WHERE name = 'ben-claude'").run(Date.now() - min * 60e3));
+quiet(11);
 s = await benB('board_status');
-check('owner gone 10+ min: the second laptop takes the name over', !s.name_clash && !/Another laptop/.test(s.next_action || ''), s.next_action);
+check('owner silent 11 min with a task in progress: the second laptop is still told to stop', s.name_clash === true && /^Another laptop/.test(s.next_action || ''), s.next_action);
+r = await benB('claim_task', { id: t2.id });
+check('…and still can\'t claim', /Another laptop is already using the name ben-claude/.test(r.error || ''), JSON.stringify(r));
+quiet(45);
+s = await benB('board_status');
+check('owner silent 45 min with a task in progress: still keeps the name', s.name_clash === true, s.next_action);
+r = await benB('update_task', { id: t1.id, status: 'review' });
+check('…and the second laptop still can\'t change the owner\'s task', /Another laptop/.test(r.error || ''), JSON.stringify(r));
+s = await benA('board_status');
+check('the quiet owner is not refused on its own task', !s.name_clash, s.next_action);
+r = await benA('update_task', { id: t1.id, status: 'review', note: 'ready' });
+check('…it moves its task to review', !r.error && r.status === 'review', JSON.stringify(r).slice(0, 200));
+quiet(45);
+r = await benB('claim_task', { id: t2.id });
+check('a task in review also keeps the name', /Another laptop/.test(r.error || ''), JSON.stringify(r));
+
+// A Stop-hook poll from the owner laptop (X-Laptop) refreshes its hold; one from another laptop doesn't.
+await human(`/tasks/${t1.id}`, 'PATCH', { status: 'done' });
+quiet(25);
+await fetch(`${board.base}/api/next?agent=ben-claude`, { headers: { Authorization: `Bearer ${AGENT_TOKEN}`, 'X-Laptop': 'lapb2222' } });
+let seenAt = db((d) => d.prepare("SELECT seen_at FROM name_owners WHERE name = 'ben-claude'").get().seen_at);
+check('a poll from another laptop doesn\'t refresh the owner\'s hold', Date.now() - seenAt > 20 * 60e3, seenAt);
+await fetch(`${board.base}/api/next?agent=ben-claude`, { headers: { Authorization: `Bearer ${AGENT_TOKEN}`, 'X-Laptop': 'lapa1111' } });
+seenAt = db((d) => d.prepare("SELECT seen_at FROM name_owners WHERE name = 'ben-claude'").get().seen_at);
+check('a Stop-hook poll from the owner laptop refreshes its hold', Date.now() - seenAt < 60e3, seenAt);
+
+// No active tasks: the name is held for 30 min since the owner was last seen.
+quiet(20);
+s = await benB('board_status');
+check('owner silent 20 min, no active tasks: still holds the name (30 min lease)', s.name_clash === true, s.next_action);
+
+// The first laptop goes away for 30+ min with nothing active: the other laptop may take the name over (someone switched laptops).
+quiet(31);
+s = await benB('board_status');
+check('owner gone 30+ min with no active tasks: the second laptop takes the name over', !s.name_clash && !/Another laptop/.test(s.next_action || ''), s.next_action);
 s = await benA('board_status');
 check('…and now the first laptop is the one told to stop', s.name_clash === true, s.next_action);
 
@@ -88,6 +124,19 @@ r = await api('/names/alice', { method: 'POST', body: { laptop: 'homealice1', pe
 check('reserving works with the board token too', r.status === 200 && r.body.reserved === true, JSON.stringify(r));
 r = await api('/names/alice', { method: 'POST', body: {} });
 check('reserving without a laptop id: 400', r.status === 400 && /laptop is required/.test(r.body.error || ''), JSON.stringify(r));
+// Names and person are 1-64 of letters, digits, _ . - (strings only).
+for (const bad of ['a b', 'x'.repeat(65), 'bad%2Fslash', 'semi%3Bcolon', '%C3%A9t%C3%A9']) {
+  r = await api(`/names/${bad}?laptop=homealice1`);
+  check(`GET /names/${bad.slice(0, 20)}: 400`, r.status === 400 && /1-64 letters/.test(r.body.error || ''), JSON.stringify(r));
+  r = await api(`/names/${bad}`, { method: 'POST', body: { laptop: 'homealice1' } });
+  check(`POST /names/${bad.slice(0, 20)}: 400`, r.status === 400, JSON.stringify(r));
+}
+for (const person of [42, ['alice'], { x: 1 }, 'has space', '', 'y'.repeat(65)]) {
+  r = await api('/names/valid-name', { method: 'POST', body: { laptop: 'homealice1', person } });
+  check(`POST /names: person ${JSON.stringify(person).slice(0, 20)} is 400`, r.status === 400 && /person must be/.test(r.body.error || ''), JSON.stringify(r));
+}
+r = await api(`/names/${'z'.repeat(64)}`, { method: 'POST', body: { laptop: 'homealice1', person: 'some.one_1-x' } });
+check('a 64-character name and a person with . _ - are fine', r.status === 200 && r.body.reserved === true, JSON.stringify(r));
 
 // Multi-tool join reserves "carol-claude" with person "carol": the person name is taken too.
 await api('/names/carol-claude', { method: 'POST', body: { laptop: 'lapcarol1', person: 'carol' } });

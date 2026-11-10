@@ -47,7 +47,9 @@ async function main() {
   const boardKey = crypto.createHash('sha256').update(url).digest('hex').slice(0, 16);
   const cursorFile = path.join(os.tmpdir(), `claude-board-cursor-${agent.replace(/[^\w.-]/g, '_')}-${boardKey}`);
   const get = async (p) => {
-    const r = await fetch(url + p, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout((wait + 15) * 1000) });
+    // The laptop id lets the board know this name's owner is still here while its agent works quietly.
+    const laptop = /^[a-z0-9]{8,16}$/.test(cfg.laptop_id || '') ? { 'X-Laptop': cfg.laptop_id } : {};
+    const r = await fetch(url + p, { headers: { Authorization: `Bearer ${token}`, 'X-Agent': agent, ...laptop }, signal: AbortSignal.timeout((wait + 15) * 1000) });
     if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
     return r.json();
   };

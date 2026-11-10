@@ -175,6 +175,32 @@ await page.evaluate(() => [...document.querySelectorAll('#toasts button')].find(
 await page.waitForSelector(`.card[data-id="${apiId}"] .mvask`, { timeout: 5000 });
 await page.keyboard.press('Escape'); await sleep(200);
 check('WB-13 Escape cancels the owner question; the task stays Open', !(await page.$(`.card[data-id="${apiId}"] .mvask`)) && (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === apiId).status === 'open');
+// The dialog's Status goes through the same steps: dependencies first ("Move anyway"), then who it's for.
+await page.evaluate(() => { [...document.querySelectorAll('#toasts .toast')].forEach((t) => t.remove()); });
+await page.evaluate((id) => openTask(id), apiId);
+await page.waitForSelector('#task-dlg[open]');
+await page.select('#td-status', 'in_progress');
+await page.click('#td-save');
+await page.waitForFunction(() => !document.getElementById('task-dlg').open && [...document.querySelectorAll('#toasts .toast')].some((t) => /waits on/.test(t.innerText) && /Move anyway/.test(t.innerText)), { timeout: 5000 }).catch(() => {});
+const dt1 = await page.$$eval('#toasts .toast', (ts) => ts.map((t) => t.innerText).join(' | '));
+check('DLG-1 dialog status to In progress past unfinished dependencies: "Move anyway" toast, no refusal', /waits on/.test(dt1) && /Move anyway/.test(dt1) && (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === apiId).status === 'open', dt1);
+await page.evaluate(() => [...document.querySelectorAll('#toasts button')].find((b) => b.textContent === 'Move anyway').click());
+await page.waitForSelector(`.card[data-id="${apiId}"] .mvask [data-ask-to="bob"]`, { timeout: 5000 });
+check('DLG-1 then asks who it is for, on the card', true);
+await domClick(`.card[data-id="${apiId}"] [data-ask-to="bob"]`);
+await page.waitForFunction((id) => document.querySelector(`#col-in_progress .card[data-id="${id}"]`), { timeout: 5000 }, apiId).catch(() => {});
+const ap = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === apiId);
+check('DLG-1 and moves it (forced) with that owner', ap.status === 'in_progress' && ap.assignee === 'bob', `${ap.status} ${ap.assignee} ${await page.$eval('#toasts', (x) => x.innerText)}`);
+// With Assign to set in the dialog, that agent is the owner: no question.
+const dlgT = await rest('dana', '/tasks', 'POST', { title: 'Dialog claim test' });
+await page.waitForSelector(`.card[data-id="${dlgT.id}"]`, { timeout: 5000 });
+await page.evaluate((id) => openTask(id), dlgT.id);
+await page.waitForSelector('#task-dlg[open]');
+await page.select('#td-asg', 'bob'); await page.select('#td-status', 'claimed');
+await page.click('#td-save');
+await page.waitForFunction((id) => document.querySelector(`#col-claimed .card[data-id="${id}"]`), { timeout: 5000 }, dlgT.id).catch(() => {});
+const dc = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === dlgT.id);
+check('DLG-1 dialog Status Claimed + Assign to bob: claimed for bob, no question asked', dc.status === 'claimed' && dc.assignee === 'bob' && !(await page.$(`.card[data-id="${dlgT.id}"] .mvask`)), `${dc.status} ${dc.assignee}`);
 
 // WB-19: column names read "Open, 3 tasks" (no stray space before the comma)
 check('WB-19 column region names', await page.evaluate(() => { const c = document.getElementById('col-open'); const n = c.getAttribute('aria-labelledby').split(' ').map((i) => document.getElementById(i).textContent).join(' '); return /^Open, \d+ tasks?$/.test(n) ? true : n; }) === true);

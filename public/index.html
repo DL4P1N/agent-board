@@ -1000,6 +1000,9 @@ function announce(msg) { const a = $('announcer'); a.textContent = ''; setTimeou
 
 // A page that held a working token gets a 401: the host rotated the token or started a fresh board.
 const TOKEN_CHANGED = 'The board\'s link changed. Ask the host for the new link.';
+// Only a 401 that says the token was rotated means the link changed; any other 401 is a token the board doesn't know.
+const TOKEN_REJECTED = 'That token was rejected. Ask the host for the board link.';
+const tokenError = (body) => (body?.reason === 'token_rotated' ? TOKEN_CHANGED : TOKEN_REJECTED);
 let savingN = 0;
 function savingCount(d) { savingN = Math.max(0, savingN + d); $('conn').toggleAttribute('data-saving', savingN > 0); }
 async function api(path, opts = {}) {
@@ -1014,7 +1017,7 @@ async function api(path, opts = {}) {
   finally { clearTimeout(slow); if (slowOn) savingCount(-1); }
   const body = await r.json().catch(() => ({}));
   if (unavailableStatus(r.status, body)) throw new Error('Token rejected');
-  if (r.status === 401) { showGate(TOKEN_CHANGED); throw new Error('Token rejected'); }
+  if (r.status === 401) { showGate(tokenError(body)); throw new Error('Token rejected'); }
   if (!r.ok) throw new Error(body.error || r.statusText || 'Request failed');
   return body;
 }
@@ -1063,7 +1066,7 @@ async function tryRecover() {
     $('app').hidden = false; await load(); if (!unavailable) connect();
     return toast('The board is back.');
   }
-  if (r.status === 401) { clearInterval(recoverTimer); unavailable = null; for (const id of UNAVAILABLE) $(id).hidden = true; return showGate(TOKEN_CHANGED); }
+  if (r.status === 401) { clearInterval(recoverTimer); unavailable = null; for (const id of UNAVAILABLE) $(id).hidden = true; return showGate(tokenError(body)); }
   const kind = r.status === 410 ? 'archived' : r.status === 409 ? 'moved' : r.status === 503 ? 'failed' : null;
   if (kind && kind !== unavailable) unavailableStatus(r.status, body);
 }
@@ -1096,7 +1099,7 @@ $('gate').addEventListener('submit', async (ev) => {
   const r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
   if (!r) { $('g-err').textContent = 'Cannot reach the board server. Is it still running?'; return; }
   if (r.status === 410 || r.status === 409 || r.status === 503) { token = t; me = n; const body = await r.json().catch(() => ({})); return unavailableStatus(r.status, body); }
-  if (r.status === 401) { const b = await r.json().catch(() => ({})); $('g-err').textContent = b.reason === 'token_rotated' ? TOKEN_CHANGED : 'That token was rejected.'; return $('g-token').focus(); }
+  if (r.status === 401) { const b = await r.json().catch(() => ({})); $('g-err').textContent = tokenError(b); return $('g-token').focus(); }
   token = t; me = n; store.set('board-token', token); store.set('board-name', me);
   start();
 });
@@ -1108,11 +1111,31 @@ async function load() {
     const s = await api('/state');
     s.settings = { ...DEFAULT_SETTINGS, ...(s.settings || {}) };
     s.presence = s.presence || []; s.phase = s.phase || (s.tasks.length ? 'building' : 'needs_goal');
-    if (older.keep && s.events?.length) s.events = [...state.events.filter((e) => e.id < s.events[0].id), ...s.events];
+    if (older.keep && s.events?.length) s.events = await keepOlder(s.events);
     checkOverwrites(s);
     state = s; setConn(esOpen ? 'live' : 'connecting'); render();
   }
   catch (e) { if (e.message !== 'Token rejected') setConn('down', e.message); }
+}
+// Earlier pages are loaded (older.keep): put them in front of the latest events. If more events arrived
+// since the last reload than the latest page holds, the events in between are fetched first; if that
+// gap is too long (or can't be fetched), the earlier pages are dropped instead, so the feed never skips.
+async function keepOlder(latest) {
+  const first = latest[0].id; const lastHave = state.events.at(-1)?.id ?? 0;
+  let gap = [];
+  if (lastHave < first - 1) {
+    let before = first; let closed = false;
+    try {
+      for (let i = 0; i < 5 && !closed; i++) {
+        const got = (await api(`/events?before=${before}`))?.events || [];
+        gap = [...got.filter((e) => e.id > lastHave), ...gap];
+        closed = got.length < 200 || got[0].id <= lastHave + 1;
+        if (got.length) before = got[0].id;
+      }
+    } catch { closed = false; }
+    if (!closed) { older.keep = false; older.more = null; return latest; }
+  }
+  return [...state.events.filter((e) => e.id < (gap[0]?.id ?? first)), ...gap, ...latest];
 }
 let reloadTimer;
 const scheduleReload = () => { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 150); };
@@ -1332,8 +1355,9 @@ async function fetchExport(kind) {
   let r;
   try { r = await fetch(BASE + '/api/' + (kind === 'json' ? 'export' : kind === 'retro' ? 'retro' : 'summary'), { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); }
   catch { throw new Error('Cannot reach the board server. Is it still running?'); }
-  if (unavailableStatus(r.status, await r.clone().json().catch(() => ({})))) throw new Error('Token rejected');
-  if (r.status === 401) { showGate(TOKEN_CHANGED); throw new Error('Token rejected'); }
+  const body = await r.clone().json().catch(() => ({}));
+  if (unavailableStatus(r.status, body)) throw new Error('Token rejected');
+  if (r.status === 401) { showGate(tokenError(body)); throw new Error('Token rejected'); }
   if (!r.ok) throw new Error(`Could not get the ${kind === 'json' ? 'backup' : kind === 'retro' ? 'retro' : 'summary'} (${r.status})`);
   return r.text();
 }
@@ -2158,8 +2182,9 @@ function renderBoard() {
   }).join('');
   const el = $('board');
   const before = boardDrawn && el._html !== html && canMove() ? cardRects() : null;
-  patch(el, html); boardDrawn = true;
-  roveCards();
+  // Roving tabindex only when the board was redrawn (focus moves between cards are handled by roveTo).
+  if (patch(el, html)) roveCards();
+  boardDrawn = true;
   if (before) moveCards(before);
 }
 let boardDrawn = false;
@@ -2214,7 +2239,25 @@ $('board').addEventListener('keydown', (ev) => {
   if (n) { n.focus(); n.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
 });
 
+// evHtml is cached per event: the key holds everything else its HTML depends on. Task titles (#id links),
+// people (mention highlights, colours) and who I am are shared by every line: when they change, the cache is dropped.
+const evCache = new Map(); let evShared = { s: null, k: '' };
 function evHtml(e, prev) {
+  if (evShared.s !== state) {
+    const k = me + '\u0001' + state.tasks.map((t) => t.id + ':' + t.title).join('\u0002') + '\u0001' + (state.presence || []).map((p) => `${p.kind}:${p.name}:${p.person || ''}`).join('\u0002');
+    if (k !== evShared.k || evCache.size > 5000) evCache.clear();
+    evShared = { s: state, k };
+  }
+  const cont = !isChat(e) && !!prev && !isChat(prev) && prev.author === e.author && e.ts - prev.ts < 10 * 60e3;
+  const open = e.kind === 'question' && state.questions.some((q) => q.id === e.data?.question_id && !q.answer);
+  const key = `${cont}|${open}|${expandedEv.has(e.id)}|${Date.now() - e.ts < 3600e3 ? ago(e.ts) : ''}`;
+  const hit = evCache.get(e.id);
+  if (hit && hit.key === key && hit.e === e.ts + e.text) return hit.html;
+  const html = evHtmlRaw(e, prev);
+  evCache.set(e.id, { key, e: e.ts + e.text, html });
+  return html;
+}
+function evHtmlRaw(e, prev) {
   if (!isChat(e)) {
     // Consecutive status lines from the same author are grouped: the name shows once.
     const cont = prev && !isChat(prev) && prev.author === e.author && e.ts - prev.ts < 10 * 60e3;
@@ -2942,13 +2985,22 @@ $('task-form').addEventListener('submit', async (ev) => {
       if (priority !== o.priority) body.priority = priority;
       if (size !== o.size) body.size = size;
       if (reserved_for !== o.reserved_for) body.reserved_for = reserved_for || '';
-      const assignee = $('td-asg').value || null;
-      if (assignee !== o.assignee) body.assignee = assignee || '';
-      if ($('td-status').value !== o.status) body.status = $('td-status').value;
+      const assignee = $('td-asg').value || null; const to = $('td-status').value;
+      // A status change goes through moveTask, like Move… and drag: it asks who a Claimed / In progress
+      // task is for (unless Assign to is set here) and offers "Move anyway" past unfinished dependencies.
+      const move = to !== o.status;
+      if (assignee !== o.assignee && !(move && assignee)) body.assignee = assignee || '';
       if (Object.keys(body).length) {
         const saved = await api(`/tasks/${o.id}`, { method: 'PATCH', body: JSON.stringify(body) });
         noteSave(o.id, body, saved);
-        toast(`Saved #${o.id}`); scheduleReload();
+        if (!move) toast(`Saved #${o.id}`);
+        scheduleReload();
+      }
+      if (move) {
+        const t = taskById(o.id) || o; if ('assignee' in body) t.assignee = assignee;
+        dlg.close();
+        moveTask(t, to, assignee && assignee !== t.assignee ? { assignee } : {});
+        return;
       }
     } else {
       const raw = $('td-deps').value.split(/[\s,]+/).map((s) => s.replace(/^#/, '')).filter(Boolean);

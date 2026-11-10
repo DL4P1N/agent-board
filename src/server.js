@@ -269,7 +269,12 @@ function createBoardRuntime(slug, dir) {
   let VIEW_TOKEN = viewerTokenFor(TOKEN);
   const timers = [];
   const every = (fn, ms) => { const t = setInterval(fn, ms); t.unref?.(); timers.push(t); return t; };
-  const later = (fn, ms) => { const t = setTimeout(fn, ms); t.unref?.(); timers.push(t); return t; };
+  // A fired timeout leaves the list, so it doesn't grow with every one-off timer.
+  const later = (fn, ms) => {
+    const t = setTimeout(() => { forget(t); fn(); }, ms);
+    t.unref?.(); timers.push(t); return t;
+  };
+  const forget = (t) => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); };
   const presence = () => board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
   // Tokens retired by a rotation (hashed, kept in the board's folder), so an old link or agent config
   // gets "the token was changed" instead of a bare "bad token". reason: 'token_rotated' is for the web page.
@@ -356,6 +361,13 @@ function createBoardRuntime(slug, dir) {
   // agent token: those must not show up as a human.
   api.use((req, _res, next) => {
     if (req.role === 'human' && req.method !== 'GET' && req.get('x-agent')) board.touch(agentFrom(req), 'human');
+    // A Stop-hook poll that says which laptop it runs on (X-Laptop or ?laptop=) keeps that laptop's hold on the
+    // agent name while the agent works without board calls (one name, one laptop).
+    if (req.role === 'agent' && req.method === 'GET' && (req.path === '/next' || req.path === '/events')) {
+      const laptop = String(req.get('x-laptop') || req.query.laptop || '').replace(/[^\w-]/g, '').slice(0, 32);
+      const who = req.get('x-agent') || req.query.agent || req.query.exclude;
+      if (laptop && who) board.seenName(String(who), laptop);
+    }
     next();
   });
 
@@ -418,11 +430,20 @@ function createBoardRuntime(slug, dir) {
   // Is an agent name taken by another laptop? join asks before any agent connects (GET), then reserves the
   // names it sets up (POST {laptop, person?}). laptop: join's laptop id. Same answer shape for both.
   const laptopParam = (v) => String(v || '').replace(/[^\w-]/g, '').slice(0, 32);
-  api.get('/names/:name', h((req) => board.checkName(req.params.name, laptopParam(req.query.laptop) || null)));
+  // Names are 1-64 letters, digits, _ . or -; anything else is refused before it reaches the board.
+  const NAME_RE = /^[\w.-]{1,64}$/;
+  const badName = (res, what) => { res.status(400); throw new Error(`${what} must be 1-64 letters, digits, _ . or -.`); };
+  api.get('/names/:name', h((req, res) => {
+    if (!NAME_RE.test(req.params.name)) badName(res, 'The name');
+    return board.checkName(req.params.name, laptopParam(req.query.laptop) || null);
+  }));
   api.post('/names/:name', h((req, res) => {
+    if (!NAME_RE.test(req.params.name)) badName(res, 'The name');
+    const person = req.body?.person ?? null;
+    if (person !== null && (typeof person !== 'string' || !NAME_RE.test(person))) badName(res, 'person');
     const laptop = laptopParam(req.body?.laptop);
     if (!laptop) { res.status(400); throw new Error('laptop is required (join\'s laptop id).'); }
-    return board.reserveName(req.params.name, laptop, req.body?.person || null);
+    return board.reserveName(req.params.name, laptop, person);
   }));
 
   // An agent reports that it hit its usage limit ({until?, note?}). Humans may mark any agent; with the
@@ -492,15 +513,27 @@ function createBoardRuntime(slug, dir) {
   };
   every(announceTime, 20e3);
   // Also check right at the warning, the freeze and the demo time, so nobody waits for the next tick.
+  // Rescheduled only when the deadline or freeze time actually changes (other settings edits leave them
+  // alone), with one set of handles: the old checks are cleared before new ones are scheduled.
+  let announceTimers = [];
+  let scheduledFor = null;
+  const clearAnnounceTimers = () => {
+    for (const t of announceTimers) { clearTimeout(t); forget(t); }
+    announceTimers = [];
+  };
   board.bus.on('event', (e) => {
     if (e?.kind !== 'settings') return;
+    const t = timeInfo(board.getSettings());
+    const key = t.deadline ? `${t.deadline}|${t.freezeAt}` : '';
+    if (key === scheduledFor) return;
+    scheduledFor = key;
+    clearAnnounceTimers();
     // A new deadline or freeze time is checked at once: a short freeze could pass between two ticks.
     setImmediate(announceTime);
-    const t = timeInfo(board.getSettings());
     if (!t.deadline) return;
     for (const at of [t.freezeAt - 30 * 60e3, t.freezeAt, t.deadline]) {
       const ms = at - Date.now() + 50;
-      if (ms > 0 && ms < 2 ** 31 - 1) later(announceTime, ms);
+      if (ms > 0 && ms < 2 ** 31 - 1) announceTimers.push(later(announceTime, ms));
     }
   });
 
@@ -804,6 +837,7 @@ function createBoardRuntime(slug, dir) {
     if (closed) return;
     closed = true;
     for (const t of timers) { clearInterval(t); clearTimeout(t); }
+    clearAnnounceTimers();
     closeStreams();
     // Settles pending long-polls before the file closes (a timer touching a closed DB would crash the server).
     board.close();
