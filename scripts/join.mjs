@@ -9,12 +9,15 @@
 //   codex           Codex CLI     → MCP server (tools pre-approved) + $board skill
 //   copilot-vscode  Copilot in VS Code (Agent mode) → .vscode/mcp.json + /board prompt file (in the repo, git-ignored locally)
 //   copilot-cli     Copilot CLI   → ~/.copilot/mcp-config.json + /board skill
+//   other           any other MCP-capable tool → prints the board's MCP URL to add yourself
+//                   ("other:omp" names the agent <you>-omp when you use several tools)
 // Other options:
 //   --name NAME --repo PATH   skip the questions
 //   --plan PLAN  your subscription, e.g. max20, or per tool: claude=max20,codex=edu (sets how many tasks the agent may hold)
 //   --slots N    override how many tasks each agent may hold at once
 //   --wait N     Claude's Stop hook long-polls N seconds for teammate activity before letting Claude stop (default 120; 0 = don't wait)
 //   --shared     also append team rules to the repo's CLAUDE.md (optional; one person commits it)
+//   --no-git-allow  don't pre-approve the git/gh commands agents use (Claude Code settings, Codex rules)
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -39,15 +42,31 @@ const TOOLS = {
   codex: { label: 'Codex CLI', bin: 'codex', start: 'type  $board' },
   'copilot-vscode': { label: 'GitHub Copilot in VS Code', bin: 'code', start: 'open Copilot Chat in Agent mode and type  /board' },
   'copilot-cli': { label: 'GitHub Copilot CLI', bin: 'copilot', start: 'run  copilot --allow-tool board --autopilot --max-autopilot-continues 50  then type  /board' },
+  other: { label: 'Another MCP tool', bin: null, start: 'tell it: "follow the board playbook (call get_playbook)"' },
 };
+// Commands the playbook has agents run. Pre-approved so git and gh never stall on a permission prompt
+// (at Kubecon the merging job moved between laptops 6 times because pushes and merges were blocked).
+const GIT_ALLOW = ['fetch', 'switch', 'checkout', 'add', 'commit', 'push', 'merge', 'pull', 'status', 'diff', 'log', 'worktree', 'branch', 'rev-parse', 'remote'];
+const GH_ALLOW = [['pr'], ['run'], ['auth', 'status'], ['repo', 'view']];
+// Codex runs allowed commands OUTSIDE its sandbox, so only what needs that: writing .git (add, commit,
+// switch/checkout, merge) and the network (fetch, pull, push, gh). Reading (diff, log, status) works inside.
+const CODEX_GIT_ALLOW = ['fetch', 'pull', 'push', 'add', 'commit', 'merge', 'switch', 'checkout'];
+const CODEX_GH_ALLOW = [['pr'], ['run']];
+// Force pushes rewrite teammates' history. These rules only catch the flag right after "push"
+// (rules match command prefixes), so they discourage force pushes; branch protection on GitHub prevents them.
+const FORCE_PUSH = ['--force', '-f', '--force-with-lease'];
+// What older join versions pre-approved for Claude Code: far broader than needed, so removed on re-run.
+const LEGACY_ALLOW = ['Bash(git:*)', 'Bash(gh:*)'];
+const FORCE_NOTE = 'force pushes are discouraged, not prevented: protect main on GitHub (README: "Protect main")';
 
 const args = parseArgs(process.argv.slice(2));
+const gitAllow = !args['no-git-allow'];
 const url = (args.url || '').replace(/\/$/, '');
 const token = args.token;
 // How long an idle Claude keeps listening to the board before it stops (its Stop hook). 0 turns waiting off.
 const wait = args.wait === undefined || args.wait === true ? 120 : Math.max(0, Math.min(600, Number(args.wait) || 0));
 if (!url || !token) {
-  console.error('usage: npm run join -- --url http://HOST:4000 --token TOKEN [--name NAME] [--tool claude,codex,copilot-vscode,copilot-cli] [--repo PATH] [--wait 120] [--shared]');
+  console.error('usage: npm run join -- --url http://HOST:4000 --token TOKEN [--name NAME] [--tool claude,codex,copilot-vscode,copilot-cli,other] [--repo PATH] [--wait 120] [--shared] [--no-git-allow]');
   console.error('Copy the exact command shown on the web board (Start here → step 1) or printed by `npm start` on the host.');
   process.exit(1);
 }
@@ -102,13 +121,20 @@ for (let attempt = 0; attempt < 5 && !name; attempt++) {
 }
 if (!name) fail('No name chosen.');
 
-const installed = Object.keys(TOOLS).filter((t) => onPath(TOOLS[t].bin));
+const installed = Object.keys(TOOLS).filter((t) => TOOLS[t].bin && onPath(TOOLS[t].bin));
 if (!args.tool && rl) {
   console.log('\nWhich AI tool(s) will you use on this laptop?');
-  for (const [id, t] of Object.entries(TOOLS)) console.log(`  ${id.padEnd(15)} ${t.label}${installed.includes(id) ? '  (installed)' : ''}`);
+  for (const [id, t] of Object.entries(TOOLS)) console.log(`  ${id.padEnd(15)} ${t.label}${installed.includes(id) ? '  (installed)' : ''}${id === 'other' ? ' (any MCP-capable agent; other:<label> to name it, e.g. other:omp)' : ''}`);
 }
 const toolAnswer = String(args.tool || (await ask('Tool(s), comma-separated', previous?.agents?.map((a) => a.tool).join(',') || installed[0] || 'claude')) || '');
-const tools = [...new Set(toolAnswer.split(/[\s,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean))];
+// "other" or "other:<label>": a tool join doesn't know; the label names its agent (<you>-<label>).
+let otherLabel = 'other';
+const tools = [...new Set(toolAnswer.split(/[\s,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean).map((t) => {
+  const m = t.match(/^other(?::([a-z0-9][\w.-]{0,19}))?$/);
+  if (!m) return t;
+  if (m[1]) otherLabel = m[1];
+  return 'other';
+}))];
 const unknown = tools.filter((t) => !TOOLS[t]);
 if (unknown.length || !tools.length) fail(`Unknown tool(s): ${unknown.join(', ') || '(none)'}. Pick from: ${Object.keys(TOOLS).join(', ')}`);
 
@@ -119,6 +145,7 @@ const planArg = String(args.plan || '');
 const planFor = {};
 for (const t of tools) {
   const opts = PLANS[t];
+  if (!opts) { planFor[t] = args.slots ? { slots: Math.max(1, Math.min(5, Number(args.slots) || 1)) } : {}; continue; }
   const fromArg = planArg.includes('=') ? (planArg.split(',').find((x) => x.split('=')[0].trim() === t) || '').split('=')[1] : tools.length === 1 ? planArg : '';
   const prevPlan = previous?.agents?.find((a) => a.tool === t)?.plan_id;
   let id = String(fromArg || '').trim().toLowerCase();
@@ -164,7 +191,7 @@ if (multi && !repo) fail('Using more than one tool needs --repo: each tool gets 
 
 // One agent per tool. With several tools on this laptop, each gets its own board name
 // (dana-claude, dana-codex, …) and its own git worktree, so they never share a working folder.
-const SHORT = { claude: 'claude', codex: 'codex', 'copilot-vscode': 'copilot', 'copilot-cli': 'copilotcli' };
+const SHORT = { claude: 'claude', codex: 'codex', 'copilot-vscode': 'copilot', 'copilot-cli': 'copilotcli', other: otherLabel };
 const plan = tools.map((t, i) => ({
   tool: t,
   agent: multi ? `${name}-${SHORT[t]}` : name,
@@ -198,6 +225,7 @@ for (const p of plan) {
     if (p.tool === 'codex') setupCodex(ctx);
     if (p.tool === 'copilot-vscode') setupCopilotVSCode(ctx);
     if (p.tool === 'copilot-cli') setupCopilotCli(ctx);
+    if (p.tool === 'other') setupOther(ctx);
     done.push(p);
   } catch (e) {
     bad(e.message);
@@ -257,13 +285,20 @@ function setupClaude({ mcpUrl, dir }) {
   settings.hooks.Stop.push({ hooks: [{ type: 'command', command: `node "${hookPath}"`, timeout: wait + 30 }] });
   // Don't ask before every board call in this repo.
   settings.permissions ??= {};
-  // Background helper agents can't show permission prompts, so pre-approve what a task needs: the board, git, npm/node, gh.
-  settings.permissions.allow = [...new Set([...(settings.permissions.allow || []), 'mcp__board', 'Bash(git:*)', 'Bash(npm:*)', 'Bash(npx:*)', 'Bash(node:*)', 'Bash(gh:*)'])];
+  // Background helper agents can't show permission prompts, so pre-approve what a task needs: the board,
+  // npm/node, and the git/gh commands the playbook uses (unless --no-git-allow). User entries are kept.
+  const ourGit = [...GIT_ALLOW.map((c) => `Bash(git ${c}:*)`), ...GH_ALLOW.map((c) => `Bash(gh ${c.join(' ')}:*)`)];
+  // Older versions' broad "Bash(git:*)"/"Bash(gh:*)" go; with --no-git-allow, so do the git/gh rules join adds.
+  const drop = new Set([...LEGACY_ALLOW, ...(gitAllow ? [] : ourGit)]);
+  settings.permissions.allow = [...new Set([...(settings.permissions.allow || []).filter((r) => !drop.has(r)), 'mcp__board', 'Bash(npm:*)', 'Bash(npx:*)', 'Bash(node:*)', ...(gitAllow ? ourGit : [])])];
+  // Deny wins over allow in Claude Code. It only catches the flag right after "push" (prefix rules).
+  settings.permissions.deny = [...new Set([...(settings.permissions.deny || []), ...FORCE_PUSH.map((f) => `Bash(git push ${f}:*)`)])];
   writeJson(settingsPath, settings);
   keepOutOfGit(settingsPath, settingsCreated, dir);
   // Claude Code puts its helper agents' git worktrees in .claude/worktrees/; keep them out of `git status`.
   keepOutOfGit(path.join(dir, '.claude', 'worktrees'), true, dir);
   ok(`auto-wake hook installed and board tools pre-approved (${settingsPath})`);
+  if (gitAllow) ok(`pre-approved git (${GIT_ALLOW.join(', ')}) and gh (${GH_ALLOW.map((c) => c.join(' ')).join(', ')}); ${FORCE_NOTE}. Skip with --no-git-allow`);
 
   if (args.shared) {
     const mdPath = path.join(dir, 'CLAUDE.md');
@@ -276,23 +311,63 @@ function setupClaude({ mcpUrl, dir }) {
   }
 }
 
-function setupCodex({ mcpUrl }) {
+function setupCodex({ mcpUrl, dir }) {
   if (!onPath('codex')) throw new Error('`codex` not found on PATH. Install the Codex CLI (npm i -g @openai/codex), then re-run join.');
+  const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+  const cfg = path.join(codexHome, 'config.toml');
+  const rulesPath = path.join(codexHome, 'rules', 'default.rules');
+  // Back up both files once, before anything (including `codex mcp add`) changes them.
+  backupOnce(cfg);
+  if (gitAllow) backupOnce(rulesPath);
   sh('codex mcp remove board', true);
   const r = sh(`codex mcp add board --url ${q(mcpUrl)}`);
   if (r.status !== 0) throw new Error(`codex mcp add failed. Run manually:\n  codex mcp add board --url ${q(mcpUrl)}`);
-  // Pre-approve the board's tools so Codex doesn't stop to ask before every board call.
-  const cfg = path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'config.toml');
+  // Pre-approve the board's tools so Codex doesn't stop to ask before every board call. (Only the
+  // [mcp_servers.board] table Codex just wrote is touched; project trust is left to Codex's own prompt.)
   let toml = fs.readFileSync(cfg, 'utf8');
+  const before = toml;
   const header = /^\[mcp_servers\.board\]\s*$/m;
   if (header.test(toml) && !/\[mcp_servers\.board\][^[]*default_tools_approval_mode/.test(toml)) {
     toml = toml.replace(header, (h) => `${h}\ndefault_tools_approval_mode = "approve"`);
-    fs.writeFileSync(cfg, toml);
   }
+  if (toml !== before) fs.writeFileSync(cfg, toml);
   ok('connected Codex to the board (MCP server "board", tools pre-approved)');
   installOurFile(path.join(TEMPLATES, 'codex-skill', 'SKILL.md'), path.join(os.homedir(), '.agents', 'skills', 'board', 'SKILL.md'), 'the $board skill');
-  console.log('  • Codex\'s sandbox keeps .git read-only, so it asks before each git commit/push. Answer "don\'t ask again" for git,');
-  console.log('    or start it with `codex --sandbox danger-full-access` if you trust it on this laptop.');
+  // Codex's sandbox keeps .git read-only and blocks the network, so git push and gh fail inside it.
+  // Its execpolicy rules ("don't ask again" writes the same file) let these commands run outside the sandbox.
+  if (!gitAllow) {
+    console.log('  • Codex\'s sandbox keeps .git read-only and blocks the network, so it asks before git push/commit and gh. Answer "don\'t ask again" for them.');
+    return;
+  }
+  const cur = fs.existsSync(rulesPath) ? fs.readFileSync(rulesPath, 'utf8') : '';
+  const rule = (words, decision) => `prefix_rule(pattern=${JSON.stringify(words).replace(/","/g, '", "')}, decision="${decision}")`;
+  const want = [
+    ...CODEX_GIT_ALLOW.map((c) => rule(['git', c], 'allow')),
+    ...CODEX_GH_ALLOW.map((c) => rule(['gh', ...c], 'allow')),
+    ...FORCE_PUSH.map((f) => rule(['git', 'push', f], 'forbidden')),
+  ].filter((r) => !cur.includes(r));
+  if (want.length) {
+    fs.mkdirSync(path.dirname(rulesPath), { recursive: true });
+    fs.appendFileSync(rulesPath, `${cur && !cur.endsWith('\n') ? '\n' : ''}# claude-board: git/gh commands the board playbook uses; they run outside Codex's sandbox\n${want.join('\n')}\n`);
+  }
+  ok(`pre-approved git (${CODEX_GIT_ALLOW.join(', ')}) and gh (${CODEX_GH_ALLOW.map((c) => c.join(' ')).join(', ')}) for Codex in ${rulesPath}`);
+  console.log(`  • these commands run outside Codex's sandbox (that's how push and gh reach the network); ${FORCE_NOTE}. Skip with --no-git-allow`);
+}
+
+// A copy of a config file before join first changes it: <file>.bak-claude-board.
+function backupOnce(file) {
+  const bak = `${file}.bak-claude-board`;
+  if (fs.existsSync(file) && !fs.existsSync(bak)) fs.copyFileSync(file, bak);
+}
+
+// A tool join can't configure: print what to add, so any MCP-capable agent can join.
+function setupOther({ mcpUrl, agent }) {
+  console.log('  Add an MCP server to your tool with these settings:');
+  console.log('    name: board');
+  console.log('    type: http (streamable HTTP)');
+  console.log(`    url:  ${mcpUrl}`);
+  console.log(`  Then start it in the hackathon repo and tell it: "follow the board playbook (call get_playbook)". It joins as "${agent}".`);
+  ok('board address printed for your tool (keep it private: it contains the agent token)');
 }
 
 function setupCopilotVSCode({ mcpUrl, dir }) {

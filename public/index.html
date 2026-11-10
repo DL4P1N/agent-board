@@ -362,6 +362,15 @@
   .bnote { border: 1px solid var(--line); border-left: 4px solid var(--ok); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; background: var(--panel); }
   .bnote.k-appr { border-left-color: var(--accent); background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
   .bnote.k-freeze { border-left-color: var(--warn); background: var(--warn-soft); border-color: var(--warn-line); }
+  .bnote.k-ci { border-left-color: var(--bad); background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+  .bnote.k-ci a { color: inherit; }
+  .ci-pill { font-size: 11px; margin-left: 6px; }
+  .qrs { display: flex; gap: 14px; flex-wrap: wrap; margin: 6px 0 4px; }
+  .qrs figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); max-width: 200px; text-align: center; }
+  .qrs img { width: 180px; height: 180px; background: #fff; padding: 8px; border-radius: 8px; box-sizing: content-box; }
+  .prfb { margin: 6px 0 2px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; }
+  .prfb ul { margin: 2px 0 0; padding-left: 18px; }
+  .prfb li { margin: 2px 0; overflow-wrap: anywhere; }
   .bnote p { margin: 0; }
   .bnote .inl { margin-top: 8px; }
   .bnote .inl button { font-size: 12px; padding: 3px 10px; }
@@ -445,6 +454,7 @@
       <section aria-labelledby="b-h" style="min-width:0">
         <h2 id="b-h" class="vh">Tasks</h2>
         <div class="filterbar" id="filterbar" hidden></div>
+        <div class="bnote k-ci" id="ci-note" tabindex="-1" role="status" hidden></div>
         <div class="bnote" id="board-note" tabindex="-1" hidden></div>
         <div class="board-empty" id="board-empty" role="status" hidden></div>
         <div class="board" id="board" tabindex="-1"></div>
@@ -610,6 +620,9 @@ const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matche
 const smooth = () => (reduceMotion() ? 'auto' : 'smooth');
 
 // ---------- helpers ----------
+// Links that come from GitHub or agents (CI runs, PRs) only become links when they're web addresses.
+const isHttps = (u) => /^https:\/\//i.test(String(u || ''));
+const isWebUrl = (u) => /^https?:\/\//i.test(String(u || ''));
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // An agent's own name without its helper part: "dana-codex/ui" -> "dana-codex".
 const agentRoot = (a) => String(a || '').split('/')[0].toLowerCase();
@@ -988,10 +1001,10 @@ function tickTime() {
 // ---------- export: write-up + backup ----------
 async function fetchExport(kind) {
   let r;
-  try { r = await fetch('/api/' + (kind === 'json' ? 'export' : 'summary'), { headers: { Authorization: 'Bearer ' + token } }); }
+  try { r = await fetch('/api/' + (kind === 'json' ? 'export' : kind === 'retro' ? 'retro' : 'summary'), { headers: { Authorization: 'Bearer ' + token } }); }
   catch { throw new Error('Cannot reach the board server. Is it still running?'); }
   if (r.status === 401) { showGate('That token was rejected. Check it with the host.'); throw new Error('Token rejected'); }
-  if (!r.ok) throw new Error(`Could not get the ${kind === 'json' ? 'backup' : 'summary'} (${r.status})`);
+  if (!r.ok) throw new Error(`Could not get the ${kind === 'json' ? 'backup' : kind === 'retro' ? 'retro' : 'summary'} (${r.status})`);
   return r.text();
 }
 async function exportFile(kind, btn) {
@@ -1002,14 +1015,14 @@ async function exportFile(kind, btn) {
     const day = new Date().toISOString().slice(0, 10);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([text], { type: kind === 'json' ? 'application/json' : 'text/markdown' }));
-    a.download = kind === 'json' ? `claude-board-backup-${day}.json` : `claude-board-summary-${day}.md`;
+    a.download = kind === 'json' ? `claude-board-backup-${day}.json` : kind === 'retro' ? `claude-board-retro-${day}.md` : `claude-board-summary-${day}.md`;
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-    toast(kind === 'json' ? 'Backup downloaded (JSON).' : 'Summary downloaded (markdown).');
+    toast(kind === 'json' ? 'Backup downloaded (JSON).' : kind === 'retro' ? 'Retro downloaded (markdown): what took long, review bounces, where it got stuck.' : 'Summary downloaded (markdown).');
   } catch (e) { if (e.message !== 'Token rejected') toast(e.message, true); }
   finally { if (btn) { btn.disabled = false; btn.focus({ preventScroll: true }); } }
 }
-const exportBtns = (k) => `<button type="button" data-act="export-md" data-fk="${k}-md">Download summary (.md)</button><button type="button" class="ghost" data-act="export-copy" data-fk="${k}-cp">Copy summary</button><button type="button" class="ghost" data-act="export-json" data-fk="${k}-js">Download backup (JSON)</button>`;
+const exportBtns = (k) => `<button type="button" data-act="export-md" data-fk="${k}-md">Download summary (.md)</button><button type="button" class="ghost" data-act="export-copy" data-fk="${k}-cp">Copy summary</button><button type="button" class="ghost" data-act="export-retro" data-fk="${k}-rt" title="For the team: time per task, review bounces, where work got stuck">Download retro (.md)</button><button type="button" class="ghost" data-act="export-json" data-fk="${k}-js">Download backup (JSON)</button>`;
 
 // ---------- desktop notifications (opt-in; only while this tab is in the background) ----------
 let notifyOn = store.get('board-notify') === 'on';
@@ -1100,7 +1113,7 @@ function render() {
   renderNow(qOpen, unread, si);
   renderSetup(si);
   renderBoardEmpty(si);
-  renderBoardNote();
+  renderBoardNote(); renderCi();
   renderQuestions(qOpen);
   renderPeople();
   renderFilter();
@@ -1116,7 +1129,9 @@ function renderNeeds(qOpen, unread) {
   const stale = state.tasks.filter(isStale).length;
   const props = state.tasks.filter((t) => t.status === 'proposed').length;
   const clash = [...agentInfoNow().values()].filter((a) => a.conflict);
+  const ci = state.main_ci;
   patch($('needs'), [
+    ci?.status === 'fail' ? `<button class="b" data-go="ci" data-fk="n-ci" title="${esc(`The latest CI run on main failed${ci.failing?.length ? ': ' + ci.failing.join(', ') : ''}`)}">main is failing</button>` : '',
     clash.length ? `<button class="b" data-go="conflict" data-fk="n-c" title="${esc(clash.map(conflictText).join(' '))}">${clash.length === 1 ? `${esc(clash[0].name)} on 2 laptops` : `${clash.length} names on 2 laptops`}</button>` : '',
     props ? `<button class="st" data-go="proposed" data-fk="n-p" title="Tasks agents proposed: approve or reject them (the planner can too)">${props} proposed</button>` : '',
     qOpen.length ? `<button class="q" data-go="questions" data-fk="n-q">${qOpen.length} question${qOpen.length > 1 ? 's' : ''} waiting on you</button>` : '',
@@ -1187,7 +1202,7 @@ function renderSetup(si) {
     patch(el, `<div class="sumbar">
       <span class="goal" title="${esc(S.goal || 'No goal set yet')}"><b>Goal:</b> ${S.goal ? esc(S.goal) : '<span class="muted">not set</span>'}</span>
       ${S.repo ? `<span class="goal" style="flex:0 1 auto;max-width:300px" title="Project repo: ${esc(S.repo)}"><b>Repo:</b> ${esc(S.repo)}</span>` : ''}
-      <span title="The person whose agent merges finished branches into main">Merges to main: ${S.integrator === '*' ? 'whoever is free' : S.integrator ? `${nameTag(S.integrator)}${ownerOffline({ assignee: S.integrator }) || agentLimited(S.integrator) ? ' <span class="muted">(away: whoever is free merges meanwhile)</span>' : ''}` : '<span class="muted">not picked yet</span>'}</span>
+      <span title="The person whose agent merges finished branches into main">Merges to main: ${S.integrator === '*' ? 'whoever is free' : S.integrator ? `${nameTag(S.integrator)}${ownerOffline({ assignee: S.integrator }) || agentLimited(S.integrator) ? ' <span class="muted">(away: whoever is free merges meanwhile)</span>' : ''}` : '<span class="muted">not picked yet</span>'}${ciPill()}</span>
       <span title="Online = an agent someone started with /board, seen in the last 10 min. Not started = its tool is connected but nobody typed /board yet. Watching = people with this page open." style="display:inline-flex;align-items:center;gap:5px"><span class="on ${si.workingA.length ? 'y' : si.waitingA.length ? 'w' : ''}"></span>${plural(si.workingA.length, 'agent')} online${si.waitingA.length ? ` · ${si.waitingA.length} not started` : ''} · ${si.watchers.length} watching</span>
       ${teamCapHtml()}
       <span class="acts"><button type="button" class="ghost" data-act="invite" data-fk="s-inv">Connect a laptop</button><button type="button" class="ghost" data-act="setup-open" data-fk="s-open" aria-expanded="false" ${left ? `aria-label="Open the setup guide. Left to do: ${esc(left.left)}"` : ''}>Setup${left ? `: ${esc(left.left)}` : ''}</button></span></div>`);
@@ -1244,6 +1259,8 @@ function inviteText() {
   L.push('', `Just watching? Open ${boardLink()}`);
   return L.join('\n');
 }
+// A QR code image for some text, drawn by the board server (works offline: no outside service).
+const qrSrc = (text) => `/api/qr.svg?token=${encodeURIComponent(token)}&text=${encodeURIComponent(text)}`;
 function stepInvite(si) {
   const su = state.setup;
   if (!su || !su.join_commands?.length) return '<p>Ask the host for the join command printed by <code>npm start</code>.</p>' + chips(si);
@@ -1257,6 +1274,10 @@ function stepInvite(si) {
     ${rest.length ? `<button type="button" class="link muted" data-act="addrs" data-fk="addrs" aria-expanded="${ui.addrs}" style="font-size:12px;margin-top:4px">${ui.addrs ? '▾' : '▸'} Other addresses (if that one doesn't connect)</button>
       ${ui.addrs ? rest.map((a, i) => `<div class="sub" title="${esc(a.label)}">${esc(addrText(a))}</div>${cmdBox(a.command, 'alt' + i, 'join command: ' + addrText(a))}`).join('') : ''}` : ''}
     <div class="sub">Just want to watch? Send them this page's link</div>${cmdBox(best.web_url, 'web', 'board link')}
+    <button type="button" class="link muted" data-act="qr" data-fk="qr-tog" aria-expanded="${!!ui.qr}" aria-controls="qr-codes" style="font-size:12px;margin-top:4px">${ui.qr ? '▾ Hide QR codes' : '▸ Show QR codes (scan with a phone)'}</button>
+    ${ui.qr ? `<div class="qrs" id="qr-codes">
+      <figure><img src="${esc(qrSrc(best.web_url))}" alt="QR code for this board's link, ${esc(best.web_url)}" width="180" height="180"><figcaption>Board link: open it on a phone to watch</figcaption></figure>
+      <figure><img src="${esc(qrSrc(best.command))}" alt="QR code for the join command" width="180" height="180"><figcaption>Join command: scan, then paste it in the claude-board folder</figcaption></figure></div>` : ''}
     <div class="sub">Connected now</div>${chips(si)}`;
 }
 function stepGoal() {
@@ -1358,7 +1379,7 @@ function stepIntegrator() {
   return `<p>Finished branches are merged into <code>main</code> by one agent at a time, which runs the tests first, so changes don't collide. Pick one agent to always do it, or let <b>whoever is free</b> take the next task in Review (never its own work).${S.integrator ? '' : ' If nobody is picked, the first agent with finished work takes the job.'}</p>
     ${review && !S.integrator ? `<p class="note">${plural(review, 'finished task is', 'finished tasks are')} waiting to be merged.</p>` : ''}
     <div class="inl"><label for="integ-sel" style="margin:0">Merges to main</label>
-      <select id="integ-sel" data-fk="integ"><option value="">Let the first agent with finished work do it</option><option value="${ANYONE}" ${S.integrator === ANYONE ? 'selected' : ''}>Whoever is free (any agent with room merges)</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.integrator ? 'selected' : ''}>${esc(n)}${n === me ? ' (you)' : ''}</option>`).join('')}</select></div>`;
+      <select id="integ-sel" data-fk="integ"><option value="">Let the first agent with finished work do it</option><option value="${ANYONE}" ${S.integrator === ANYONE ? 'selected' : ''}>Whoever is free (any agent with room merges)</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.integrator ? 'selected' : ''}>${esc(n)}${n === me ? ' (you)' : ''}</option>`).join('')}</select>${ciPill()}</div>`;
 }
 function renderBoardEmpty(si) {
   const el = $('board-empty'); const S = state.settings;
@@ -1374,6 +1395,25 @@ function renderBoardEmpty(si) {
 }
 
 // A banner above the board: waiting for plan approval, the feature freeze, or the end-of-day write-up.
+// main's CI failed: a banner above the board, so nobody merges on top of a broken main unnoticed.
+function renderCi() {
+  const el = $('ci-note'); const ci = state.main_ci;
+  const html = ci?.status === 'fail'
+    ? `<p><b>main is failing</b>${ci.failing?.length ? `: ${esc(ci.failing.join(', '))}` : ''}${ci.title ? ` — ${esc(short(ci.title, 120))}` : ''}${ci.sha ? ` <code>${esc(String(ci.sha).slice(0, 7))}</code>` : ''}. Agents have been told to fix main before merging more.</p>
+      ${ci.url || ci.at ? `<div class="inl">${isHttps(ci.url) ? `<a href="${esc(ci.url)}" target="_blank" rel="noopener noreferrer" data-fk="ci-link">Open the failing run</a>` : ci.url ? `<span class="muted">Failing run: ${esc(ci.url)}</span>` : ''}${ci.at ? `<span class="muted" style="font-size:12px">${timeEl(ci.at)}</span>` : ''}</div>` : ''}`
+    : '';
+  el.hidden = !html;
+  patch(el, html);
+}
+// A small pill next to "Merges to main": main's latest CI run.
+function ciPill() {
+  const ci = state.main_ci; if (!ci) return '';
+  if (ci.status === 'pass') return `<span class="pill ok ci-pill" title="The latest CI run on main passed${ci.title ? ': ' + esc(ci.title) : ''}">✓ main green</span>`;
+  if (ci.status === 'pending') return `<span class="pill ci-pill" title="CI is running on main">main: checks running…</span>`;
+  if (ci.status === 'fail') return `<span class="pill bad ci-pill" title="${esc(`main is failing${ci.failing?.length ? ': ' + ci.failing.join(', ') : ''}`)}">main failing</span>`;
+  return '';
+}
+
 function renderBoardNote() {
   const el = $('board-note'); const t = timeNow(); const done = state.phase === 'all_done' && state.tasks.length;
   let kind = '', html = '';
@@ -1540,8 +1580,14 @@ function blockedNote(t) {
 // A task's pull request, from its link and (when the host has gh) its state on GitHub.
 // text: the most important thing about it; cls: pill colour.
 function prInfo(t) {
-  const url = t.pr?.url || t.pr_url; if (!url) return null;
+  const url = t.pr?.url || t.pr_url; if (!url || !isWebUrl(url)) return null;
   const p = t.pr || {};
+  const r = prInfoBase(url, p);
+  r.failing = Array.isArray(p.failing) ? p.failing : [];
+  r.tip = `Open the pull request${r.text ? ` (${r.text})` : ''}${r.failing.length ? `. Failing: ${r.failing.join(', ')}` : ''}`;
+  return r;
+}
+function prInfoBase(url, p) {
   if (p.state === 'MERGED') return { url, text: 'merged', cls: 'ok' };
   if (p.state === 'CLOSED') return { url, text: 'closed', cls: 'bad' };
   if (p.review === 'CHANGES_REQUESTED') return { url, text: 'changes requested', cls: 'bad' };
@@ -1550,6 +1596,13 @@ function prInfo(t) {
   if (p.review === 'APPROVED') return { url, text: p.checks === 'pass' ? 'approved · checks ✓' : 'approved', cls: 'ok' };
   if (p.checks === 'pass') return { url, text: 'checks ✓', cls: 'ok' };
   return { url, text: '', cls: '' };
+}
+// Failing checks and the latest review comments on a task's pull request (from the host's gh), for the task dialog.
+function prFeedback(t) {
+  const p = t.pr || {}; const failing = Array.isArray(p.failing) ? p.failing : []; const fb = Array.isArray(p.feedback) ? p.feedback : [];
+  if (!failing.length && !fb.length) return '';
+  const kindText = (f) => f.kind === 'review' ? (f.state === 'CHANGES_REQUESTED' ? 'requested changes' : f.state === 'APPROVED' ? 'approved' : 'reviewed') : 'commented';
+  return `<div class="prfb" style="flex-basis:100%">${failing.length ? `<div><b>Failing checks:</b> ${esc(failing.join(', '))}</div>` : ''}${fb.length ? `<div><b>Latest review feedback</b></div><ul>${fb.slice(0, 5).map((f) => `<li><b>${esc(f.author || 'someone')}</b> <span class="muted">${esc(kindText(f))}</span>${f.body ? `: ${fmt(String(f.body), true)}` : ''}</li>`).join('')}</ul>` : ''}</div>`;
 }
 // When a human last pinged this task's owner from a card ("#12 has had no update…"), within 10 minutes.
 function pingedAt(t) {
@@ -1591,7 +1644,7 @@ function card(t) {
       ${rsv ? (() => { const away = ownerOffline({ assignee: t.reserved_for }) || agentLimited(t.reserved_for);
         return away ? `<span class="pill rsv" title="Reserved for ${esc(t.reserved_for)}, who isn't around (offline or out of usage), so any agent may take it">reserved for ${esc(t.reserved_for)} · away, open to anyone</span>`
           : `<span class="pill rsv" title="Reserved: only ${esc(t.reserved_for)} can claim it, and it's listed first for them">reserved for ${esc(t.reserved_for)}</span>`; })() : ''}
-      ${pr ? `<a class="pill ${pr.cls}" href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer" tabindex="-1" title="Open the pull request${pr.text ? ` (${esc(pr.text)})` : ''}">PR${pr.text ? ' · ' + esc(pr.text) : ''}</a>` : ''}
+      ${pr ? `<a class="pill ${pr.cls}" href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer" tabindex="-1" title="${esc(pr.tip)}">PR${pr.text ? ' · ' + esc(pr.text) : ''}</a>` : ''}
       ${merging ? `<span class="pill role" title="${esc(t.reviewer)} is reviewing and merging it">merging: ${esc(t.reviewer)}</span>` : ''}
       ${t.assignee ? `<span class="pc" ${hs(t.assignee)} title="Assigned to ${esc(t.assignee)}">${esc(t.assignee)}</span>` : t.status !== 'done' && !prop ? '<span title="No agent has picked this up yet">unassigned</span>' : ''}
       ${waiting.length ? `<span class="pill warn" title="Depends on other tasks: can't be picked up until these are done">waits on ${waiting.map((d) => '#' + d.id).join(' ')}</span>` : deps.length ? `<span title="Dependencies done">after ${deps.map((d) => '#' + d.id).join(' ')} ✓</span>` : ''}
@@ -1778,6 +1831,7 @@ document.addEventListener('click', (ev) => {
   if (d.limit) { ui.limitForm = d.limit; render(); return $('lu-' + d.limit)?.focus(); }
   if (d.limcancel) { const n = d.limcancel; ui.limitForm = null; render(); return document.querySelector(`[data-fk="lm-${CSS.escape(n)}"]`)?.focus(); }
   if (d.unlimit) { const n = d.unlimit; act(api(`/agents/${encodeURIComponent(n)}`, { method: 'PATCH', body: JSON.stringify({ limited: false }) }), `${n} counts as available again`).catch(() => {}); return; }
+  if (d.go === 'ci') { const n = $('ci-note'); n.scrollIntoView({ behavior: smooth(), block: 'center' }); return (n.querySelector('a') || n).focus({ preventScroll: true }); }
   if (d.go === 'proposed') { const c = document.querySelector('.card.proposed'); c?.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); return c?.focus({ preventScroll: true }); }
   if (d.ping) {
     const t = taskById(Number(d.ping)); if (!t?.assignee) return;
@@ -2005,6 +2059,8 @@ function doAct(a, el) {
   if (a === 'export-md') return exportFile('md', el);
   if (a === 'export-copy') return exportFile('copy', el);
   if (a === 'export-json') return exportFile('json', el);
+  if (a === 'export-retro') return exportFile('retro', el);
+  if (a === 'qr') { ui.qr = !ui.qr; render(); return document.querySelector('[data-fk="qr-tog"]')?.focus({ preventScroll: true }); }
   if (a === 'clock') return goStep('goal', 'dl');
   if (a === 'dl-edit') { ui.editDeadline = true; render(); return $('dl-in')?.focus(); }
   if (a === 'dl-cancel') { ui.editDeadline = false; ui.dlErr = ''; render(); return document.querySelector('[data-fk="dl-edit"]')?.focus(); }
@@ -2210,7 +2266,7 @@ function renderDialogLive() {
     t.assignee ? `<span>assignee ${who(t.assignee)}</span>` : '<span>unassigned</span>',
     t.branch ? `<span>branch <code>${esc(t.branch)}</code></span>` : '',
     t.status === 'proposed' ? `<span class="pill warn">proposed by ${esc(t.created_by)}: approve it on its card, or set the status to Open</span>` : '',
-    (() => { const pr = prInfo(t); return pr ? `<span>pull request <a href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer">${esc(pr.url.replace(/^https?:\/\/(www\.)?/, ''))}</a>${pr.text ? ` <span class="pill ${pr.cls}">${esc(pr.text)}</span>` : ''}</span>` : ''; })(),
+    (() => { const pr = prInfo(t); return pr ? `<span>pull request <a href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer">${esc(pr.url.replace(/^https?:\/\/(www\.)?/, ''))}</a>${pr.text ? ` <span class="pill ${pr.cls}">${esc(pr.text)}</span>` : ''}</span>${prFeedback(t)}` : ''; })(),
     t.status === 'review' && t.reviewer ? `<span>being merged by ${who(t.reviewer)}</span>` : '',
     t.assignee && HOLDING.includes(t.status) && agentLimited(t.assignee) ? '<span class="pill warn">owner out of usage — agents may take it over</span>' : '',
     `<span>created by ${who(t.created_by)} ${ago(t.created_at)}</span>`,

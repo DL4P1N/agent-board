@@ -14,8 +14,9 @@ export const START = {
   codex: 'open Codex there and type  $board',
   'copilot-vscode': 'open the folder in VS Code, Copilot Chat in Agent mode, type  /board',
   'copilot-cli': 'run  copilot --allow-tool board --autopilot --max-autopilot-continues 50  there, then type  /board',
+  other: 'start your tool there and tell it: "follow the board playbook (call get_playbook)"',
 };
-const LABEL = { claude: 'Claude Code', codex: 'Codex', 'copilot-vscode': 'Copilot in VS Code', 'copilot-cli': 'Copilot CLI' };
+const LABEL = { claude: 'Claude Code', codex: 'Codex', 'copilot-vscode': 'Copilot in VS Code', 'copilot-cli': 'Copilot CLI', other: 'Your MCP tool' };
 
 export async function runDoctor({ header = true } = {}) {
   let problems = 0;
@@ -30,6 +31,7 @@ export async function runDoctor({ header = true } = {}) {
   }
   const { url, token } = cfg;
   const agents = cfg.agents?.length ? cfg.agents : [{ tool: 'claude', agent: cfg.agent, dir: null }];
+  const pushChecked = new Set();
 
   // 1. Reachable + same code version
   let health;
@@ -76,7 +78,7 @@ export async function runDoctor({ header = true } = {}) {
     else ok(`    board answers (${tools.length} tools)`);
 
     const found = toolConfig(a);
-    if (found === null) console.log('    • (can\'t inspect this tool\'s config from here)');
+    if (found === null) console.log(a.tool === 'other' ? '    • add the board to your tool yourself: npm run join printed its address (or re-run join with --tool other)' : '    • (can\'t inspect this tool\'s config from here)');
     else if (!found) bad(`    ${LABEL[a.tool]} isn't connected to this board`, 'Run npm run join again and pick this tool.');
     // Names are case-insensitive on the board, so a config written as "Dana" still matches "dana".
     else if (!found.toLowerCase().includes(`agent=${encodeURIComponent(a.agent)}`.toLowerCase()) || !found.includes(url.replace(/^https?:\/\//, ''))) {
@@ -96,7 +98,12 @@ export async function runDoctor({ header = true } = {}) {
       if (!fs.existsSync(a.dir)) bad(`    its folder is gone (${a.dir})`, 'Run npm run join again with the right --repo.');
       else if (git('rev-parse', '--is-inside-work-tree').status !== 0) bad(`    ${a.dir} is not a git repository`, 'Clone the team\'s repo there (or git init and add an origin remote), then run npm run join again.');
       else if (!git('remote', 'get-url', 'origin').stdout.trim()) bad('    the repo has no "origin" remote, so agents can\'t push their branches', 'git remote add origin <the team repo URL>');
-      else ok(`    git repo with origin ${git('remote', 'get-url', 'origin').stdout.trim()}`);
+      else {
+        const origin = git('remote', 'get-url', 'origin').stdout.trim();
+        ok(`    git repo with origin ${origin}`);
+        // Worktrees of one repo share the origin: check pushing once per repo.
+        if (!pushChecked.has(origin)) { pushChecked.add(origin); checkPush(a.dir, origin, ok, bad); }
+      }
     }
   }
 
@@ -105,6 +112,37 @@ export async function runDoctor({ header = true } = {}) {
     for (const a of agents) console.log(`    ${(LABEL[a.tool] || a.tool).padEnd(20)} ${a.dir ? `in "${a.dir}": ` : 'in your hackathon repo: '}${START[a.tool]}`);
   }
   return problems;
+}
+
+// Agents push their branches and (on GitHub) open and merge pull requests with gh. Check that this
+// laptop can, before the event: at Kubecon, blocked pushes and merges moved the merging job around 6 times.
+function checkPush(dir, origin, ok, bad) {
+  const run = (cmd, argv) => spawnSync(cmd, argv, { encoding: 'utf8', timeout: 20e3, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' } });
+  const gh = origin.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?\/?$/i);
+  if (gh) {
+    const slug = `${gh[1]}/${gh[2]}`;
+    const ver = run('gh', ['--version']);
+    if (ver.error || ver.status !== 0) {
+      console.log('    • gh (GitHub CLI) isn\'t installed: agents can still push branches, but opening and merging pull requests needs it (https://cli.github.com, then gh auth login)');
+    } else if (run('gh', ['auth', 'status']).status !== 0) {
+      bad('    gh isn\'t signed in to GitHub, so agents can\'t open or merge pull requests', 'Run  gh auth login  (then  gh auth setup-git  so git pushes use the same login).');
+    } else {
+      const perm = run('gh', ['repo', 'view', slug, '--json', 'viewerPermission', '-q', '.viewerPermission']);
+      const level = (perm.stdout || '').trim();
+      if (perm.status !== 0) bad(`    can't see ${slug} on GitHub with your gh login`, `Check the repo URL, or ask the repo owner to add your GitHub account as a collaborator (${slug} → Settings → Collaborators).`);
+      else if (!['WRITE', 'MAINTAIN', 'ADMIN'].includes(level)) bad(`    your GitHub account can only read ${slug} (${level || 'no access'}), so your agents can't push`, `Ask the repo owner to add you as a collaborator with write access (${slug} → Settings → Collaborators).`);
+      else ok(`    you can push to ${slug} (${level.toLowerCase()})`);
+    }
+  }
+  // A dry run sends nothing: it only checks that git can log in and would be allowed to push.
+  // --no-verify: pre-push hooks (husky running the tests, say) would make it slow or fail for other reasons.
+  const dry = run('git', ['-C', dir, 'push', '--dry-run', '--no-verify', 'origin', 'HEAD:refs/heads/claude-board-push-check']);
+  const msg = `${dry.stderr || ''}${dry.stdout || ''}`;
+  if (dry.status === 0) ok('    git can push to origin (dry run)');
+  else if (dry.error?.code === 'ETIMEDOUT' || dry.signal) bad('    git push (dry run) didn\'t finish: it may be waiting for a login', gh ? 'Run  gh auth login  and then  gh auth setup-git , or push once by hand to save your login.' : 'Push once by hand to save your login.');
+  else if (/auth|denied|permission|403|401|could not read Username|terminal prompts disabled/i.test(msg)) bad('    git can\'t push to origin: not signed in, or no write access', gh ? 'Run  gh auth login  and then  gh auth setup-git ; if that doesn\'t help, ask the repo owner for write access.' : 'Sign in for this remote (push once by hand), or ask the repo owner for write access.');
+  else if (/src refspec|does not match any/i.test(msg)) console.log('    • couldn\'t test pushing (no commit checked out yet)');
+  else bad(`    git push (dry run) failed: ${msg.trim().split('\n').pop()}`, 'Check the network and the origin URL.');
 }
 
 // The board URL as the tool has it configured, or '' if not configured, or null if we can't tell.

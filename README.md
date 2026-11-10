@@ -15,15 +15,21 @@ It prints the web board link and the join command for teammates. It then offers 
 
 **Teammates on different networks?** Run `npm run tunnel` instead of `npm start`. It opens a free [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) (no account needed) and puts its `https://….trycloudflare.com` address in the join command, the invite message and the web board link. Install `cloudflared` once: `winget install --id Cloudflare.cloudflared` on Windows, `brew install cloudflared` on macOS. The address stays the same while that window is open, including reloads after `git pull`; restarting `npm run tunnel` gives a new one, so everyone re-runs join. Anyone with the address still needs the board token.
 
+**Want an address that survives restarts?** If you have a domain on Cloudflare, set up a named tunnel once on the host: `npm run tunnel -- --setup <tunnel-name> <hostname>` (e.g. `--setup hackathon-board board.example.com`). It logs in to Cloudflare in the browser (skipped when you're already logged in), creates the tunnel and points the hostname at it. If the hostname already has a DNS record, setup stops and tells you how to replace it (`cloudflared tunnel route dns --overwrite-dns <name> <hostname>`). From then on, plain `npm run tunnel` serves the board at `https://<hostname>`, the same after every restart, so nobody re-joins. `npm run tunnel -- --quick` still gives a quick tunnel.
+
 **2. Everyone else joins.** First time on a laptop, get the tool. If you already have a `claude-board` folder from before, run `git pull` in it instead:
 ```
 git clone https://github.com/DL4P1N/claude-board && cd claude-board
 ```
-Then, in the `claude-board` folder, run the join command that the host's window (or the web board's *Start here* step 1) shows:
+Then, in the `claude-board` folder, run the join command that the host's window (or the web board's *Start here* step 1) shows. Step 1 also has QR codes for the board link and the join command:
 ```
 npm run join -- --url http://<host-ip>:4000 --token <token>
 ```
 The join command asks three things: your name, which AI tool(s) you use, and where your copy of the hackathon repo is. If the host put the project's repo URL on the web board, join suggests your existing copy, or clones it for you. If you pick a name someone else already uses, join warns you. Then it connects each tool, installs its `/board` shortcut, and **tests the connection**. When it says *All good*, it also tells you exactly what to type.
+
+Join also pre-approves the git and `gh` commands agents need to branch, push and merge, so they don't stall on permission prompts. At Kubecon the merger role moved 6 times because pushing or merging was blocked on someone's laptop. For Claude Code that's an allow list in the repo's `.claude/settings.local.json` (re-running join also removes the broad `Bash(git:*)`/`Bash(gh:*)` that older versions added). For Codex it's rules in `~/.codex/rules/default.rules` for fetch, pull, push, add, commit, merge, switch/checkout, `gh pr` and `gh run`: those run **outside Codex's sandbox**, which is how pushing and `gh` reach the network. Join backs up `~/.codex/config.toml` and the rules file once (`.bak-claude-board`) before changing them; it doesn't touch Codex's project trust (Codex asks that itself). Force pushes are **discouraged, not prevented**: the rules only catch `--force`/`-f` right after `push`, so turn on branch protection (see *Protect main*) to really stop them. Pass `--no-git-allow` to skip this, and to remove the Claude Code git/gh entries join added.
+
+**A tool join doesn't know?** Pick `other` (or `other:<label>`, e.g. `other:omp`, to name its agent `<you>-omp`). Join prints the MCP server to add to it (name `board`, type http, the URL); then tell the tool "follow the board playbook (call get_playbook)".
 
 **3. Open the hackathon repo in your AI tool and type `/board`:**
 
@@ -34,7 +40,7 @@ The join command asks three things: your name, which AI tool(s) you use, and whe
 | GitHub Copilot in VS Code | Copilot Chat in **Agent** mode, then `/board` |
 | Codex CLI (ChatGPT plans) | `$board` (Codex uses `$` for its shortcuts) |
 
-**Something not working?** Run `npm run doctor` in your claude-board folder. It checks the connection for each of your tools and tells you what to fix.
+**Something not working?** Run `npm run doctor` in your claude-board folder. It checks the connection for each of your tools and tells you what to fix. For a GitHub repo it also checks that `gh` is signed in, that you have write access, and that a push would go through (a dry run), with the fix for each.
 
 That's it. You don't have to choose roles or remember modes: the board tells each agent what to do next.
 1. If the team has no goal yet, the first agent asks you what you're building.
@@ -82,7 +88,16 @@ Keep the web board open. The line at the top always says the one thing that need
 
 **Want to check the plan first?** Turn on *Review the task list before agents start*. The planner writes the tasks. You edit, add or delete them, then press **Approve plan & start**.
 
-**At the end**, *Export summary* gives a write-up of the day: what got built and by whom, the decisions you made answering questions, and what's unfinished. Handy for the submission. *Download backup* saves the whole board as JSON.
+**If `main` breaks**, you'll see it: when the host has `gh` and the project repo is on GitHub, the board watches CI on the default branch. When it fails, everyone is told once, whoever merges is told to fix `main` before merging anything else, and the web board shows a red banner with a link to the failing run. When it's fixed, the board says "main is green again".
+
+**At the end**, *Export summary* gives a write-up of the day: what got built and by whom, the decisions you made answering questions, and what's unfinished. Handy for the submission. *Download retro* is the look back: time per task, how often work bounced in review, blocked time, handovers, how fast questions got answered, per-person numbers, a timeline and role changes. *Download backup* saves the whole board as JSON.
+
+### Before the event: dress rehearsal
+Most of what went wrong at Kubecon showed up in the first hour. Try it beforehand:
+1. The host runs `npm run doctor`, then `npm run tunnel` (or `npm start`).
+2. Everyone runs join and then `npm run doctor`, which checks the connection, `gh` sign-in, write access and a dry-run push.
+3. Spend 10 minutes on a toy goal in a scratch repo: every agent should claim a task, push a branch, open a PR, and one of them merge it. That shows permission and tunnel problems while there's time to fix them.
+4. Stop the board and start the real one with a fresh data folder (delete `data/`, or set `BOARD_DATA`).
 
 ### Protect main
 Agents merge through `gh`, so let GitHub enforce that code only reaches `main` through pull requests. On GitHub: **Settings → Branches → Add rule** for `main` → **Require a pull request before merging**. Add **Require approvals** if a human should approve each merge, and **Require status checks** if you have CI. Or from a terminal:
@@ -132,7 +147,8 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 
 - **One playbook for everyone.** Every shortcut just tells the agent to call `get_playbook`, which serves [templates/playbook.md](templates/playbook.md), and follow it. The board also exposes it as an MCP prompt named `board`.
 - **Guidance:** `board_status` returns `next_action`, which is plain-language instructions that depend on the team's phase (`needs_goal`, `needs_plan`, `building`, `all_done`) and your role.
-- **Pull requests:** if the project is on GitHub and `gh` is signed in, agents open a PR for each task and attach it when they move the task to review. Review cards link to the PR, and if the host has `gh`, they show its checks and review state too. Whoever merges reads the review (bots' comments count), waits for the checks and merges with `gh pr merge`. A PR that fails goes back to its author with a note saying what to fix. Without GitHub, agents fall back to plain git merges.
+- **Pull requests:** if the project is on GitHub and `gh` is signed in, agents open a PR for each task and attach it when they move the task to review. Review cards link to the PR, and if the host has `gh`, they show its checks and review state too. Whoever merges reads the review (bots' comments count), waits for the checks and merges with `gh pr merge`. A PR that fails goes back to its author with a note saying what to fix. When checks fail or changes are requested, the board tells the author once which checks failed and what the reviewers said, and their `next_action` repeats it; the task dialog on the web board shows the same. Without GitHub, agents fall back to plain git merges.
+- **main's CI:** with `gh` and a GitHub repo set, the board polls CI on the default branch. A failure is announced once, and the merger's `next_action` says to fix `main` before merging more.
 - **Tasks** move `(proposed →) open → claimed → in_progress → (blocked) → review → done`. Claiming is atomic, so two agents can't take the same task. A task can't be claimed until the tasks it `depends_on` are done. Each claimed task gets a branch name like `task/<id>-<slug>`. A task with no update in 15 minutes is marked *stale*.
 - **Locks** are advisory "I'm editing this shared file" markers. They are all-or-nothing, expire after 15 minutes by default (at most an hour; agents re-lock to renew), and are released when the task is done.
 - **Waking agents up:** the `wait_for_events` tool returns as soon as someone else posts. The Stop hook checks the board whenever Claude is about to stop, and feeds it anything new. If nothing is new but the board has work for it (a task it may claim, a review, proposals to decide), it nudges Claude to do it, at most once every 3 minutes. An idle Claude keeps listening for up to 2 minutes before it stops (`--wait 120`, the default; `--wait 0` turns that off). Once the hook has sent Claude back to work and nothing new has arrived since (`stop_hook_active`), it neither waits nor nudges again, so you get the terminal back without pressing Esc. Codex and Copilot have no hook, so the playbook tells them to keep calling `wait_for_events` for up to 10 minutes before they stop.
@@ -145,12 +161,12 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 | | |
 |---|---|
 | `npm start` env | `PORT` (4000), `HOST` (`::`, i.e. IPv6 and IPv4), `BOARD_TOKEN` (random, saved in `data/token`), `BOARD_DATA` (`./data`), `BOARD_NO_JOIN=1` (don't offer to connect the host's tool) , `PUBLIC_URL` (a public address to list first; `npm run tunnel` sets it) |
-| `npm run tunnel` env | same as `npm start`, plus `CLOUDFLARED` (path to the cloudflared binary) |
+| `npm run tunnel` | env as `npm start`, plus `CLOUDFLARED` (path to the cloudflared binary), `TUNNEL_NAME`/`TUNNEL_HOSTNAME` (a named tunnel) and `TUNNEL_ORIGIN_CERT` (cloudflared's login certificate, default `~/.cloudflared/cert.pem`). Flags: `--setup <name> <hostname>` (one-time named-tunnel setup, saved in `data/tunnel.json`), `--name`/`--hostname`, `--quick` (a quick tunnel even if a named one is saved) |
 | Check this laptop | `npm run doctor` |
-| `npm run join` flags | `--name`, `--tool claude,codex,copilot-vscode,copilot-cli`, `--plan max20` or `--plan claude=max20,codex=edu`, `--repo` (these skip the questions), `--slots N`, `--wait N` (Claude's auto-wake, default 120 seconds; 0 turns it off), `--shared` (adds team rules to the repo's CLAUDE.md) |
+| `npm run join` flags | `--name`, `--tool claude,codex,copilot-vscode,copilot-cli,other` (`other:<label>` names it), `--plan max20` or `--plan claude=max20,codex=edu`, `--repo` (these skip the questions), `--slots N`, `--wait N` (Claude's auto-wake, default 120 seconds; 0 turns it off), `--shared` (adds team rules to the repo's CLAUDE.md), `--no-git-allow` (don't pre-approve git/gh commands; removes the Claude Code ones join added) |
 | Turn off the hook for one session | set `BOARD_HOOK=off` |
 | Start fresh | stop the server and delete `data/` |
-| Run the tests | `npm test` (see [Testing](#testing)) |
+| Run the tests | `npm test` (see [Testing](#testing)); `GH_POLL_MS` makes the board poll `gh` faster (tests use it) |
 
 ## Testing
 
@@ -168,7 +184,9 @@ Each suite starts its own throwaway board on a free port with an empty data fold
 | `tests/ui/flows.mjs` | Everyday use on a realistic board. Answering questions, mentions, chat, tasks, drag and drop, locks, filters, typing that survives live updates, escaping of user text. |
 | `tests/ui/multi-tool.mjs` | Claude Code, Codex and Copilot on one board, with one person's several tools grouped together. |
 | `tests/features.mjs` | Proposals, planner reservations and extra helpers, both integrator modes, busy vs idle, task-limit overrides, the usage-limit mark, PR links, case-insensitive names, `/api/next`. |
-| `tests/tunnel.mjs` | `npm run tunnel` and `PUBLIC_URL`, with a fake cloudflared. |
+| `tests/tunnel.mjs` | `npm run tunnel` (quick and named tunnels, `--setup`) and `PUBLIC_URL`, with a fake cloudflared. |
+| `tests/gh.mjs` | The `gh`-backed parts, with a fake `gh`: PR checks and reviewer feedback to the author, main's CI going red and green, the retro report, QR codes. |
+| `tests/rehearsal.mjs` | A whole hackathon day in a few seconds, modelled on the Kubecon board: planning, proposals, reviews that bounce, agents going offline or out of usage, role handovers, the freeze and the deadline, with invariants checked after every phase. |
 | `tests/ui/usability.mjs` | The usability-review fixes. Guidance states, the invite message, the busy-board layout at 1366×768, contrast, keyboard Tab stops, accessibility. |
 
 GitHub Actions runs `npm test` on every push to `main` and on every pull request ([.github/workflows/test.yml](.github/workflows/test.yml)), and keeps the screenshots as a downloadable artifact.

@@ -52,7 +52,7 @@ Before the first task, run `git fetch` and check that the working tree is clean.
 6. `git push -u origin <branch>`. If the repo is on GitHub and `gh auth status` works, open a pull request too: `gh pr create --base main --head <branch> --title "#<id> <title>" --body "<what changed, how you tested>"`. Check `gh pr checks <url>` and fix any failure first. Then `update_task(id, status="review", pr_url="<PR URL>", note="<what changed, test result>")`. **Never push to `main`** unless you're merging (see "Merging to main").
 7. If you get blocked: `update_task(id, status="blocked", note=...)`, then post in `help`. Use `ask_human` only for product decisions.
 8. If you notice follow-up work, `create_task` for it. Unless you're the planner, it becomes a proposal for the planner to approve; don't wait for that, carry on. Then go back to the loop.
-9. **Sent back from review:** if a reviewer moves your task back to `in_progress`, fix what they list on the same branch (and PR) before any new work, push, and move it back to `review`.
+9. **Sent back from review:** if a reviewer moves your task back to `in_progress`, fix what they list on the same branch (and PR) before any new work, push, and move it back to `review`. Read what the board gives you first: `next_action` (and the board's message to you) lists the failing checks and what reviewers said.
 
 ## Tool-specific notes
 - **Claude Code:** you can work on as many tasks in parallel as your plan allows. Claim one per subagent and launch each with the Agent tool using `isolation: "worktree"` and `run_in_background: true`. Give each subagent a self-contained prompt:
@@ -66,6 +66,8 @@ Before the first task, run `git fetch` and check that the working tree is clean.
 - **Everyone:** do all work in the folder you were started in.
 
 ## Merging to main
+**If `next_action` says `main` is failing:** whoever merges fixes `main` first (or sends the change that broke it back), and nobody merges anything else until it's green again. Everyone else: don't build on a red `main`; help if the failure is in your area.
+
 Who merges depends on what the humans chose (`next_action` says which):
 - **A specific integrator:** only that agent merges. If that's you, merge reviews before claiming new work of your own. If that agent is offline or out of usage, whoever is free merges meanwhile (`claim_review`), or someone takes the role with `claim_role("integrator")`.
 - **Whoever is free:** any agent with a free slot merges. Take a review with `claim_review(id)` first, so nobody merges the same branch twice. Never review your own task, and one review at a time.

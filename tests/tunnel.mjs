@@ -35,8 +35,8 @@ const killTree = (child) => {
   if (process.platform === 'win32') spawnSync('taskkill', ['/T', '/F', '/PID', String(child.pid)], { stdio: 'ignore' });
   else child.kill('SIGTERM');
 };
-function runTunnel(env) {
-  const child = spawn(process.execPath, [path.join(ROOT, 'scripts', 'tunnel.mjs')], {
+function runTunnel(env, extra = []) {
+  const child = spawn(process.execPath, [path.join(ROOT, 'scripts', 'tunnel.mjs'), ...extra], {
     cwd: ROOT,
     env: { ...process.env, BOARD_TOKEN: TOKEN, BOARD_NO_JOIN: '1', BOARD_DATA: fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-test-')), ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -76,6 +76,59 @@ function runTunnel(env) {
   check('the board it started is up and advertises the tunnel', st?.setup?.join_commands?.[0]?.ip === 'fake-test-tunnel.trycloudflare.com');
   killTree(r.child);
   await r.exited;
+}
+
+// ---- named tunnel: a fixed address ----
+const HOST = 'board.example.test';
+const startNamed = async (env, extra = [], label = 'named') => {
+  const port = await freePort();
+  const argsFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cf-args-')), 'args.json');
+  const r = runTunnel({ CLOUDFLARED: FAKE, FAKE_CF_ARGS: argsFile, PORT: String(port), TUNNEL_NAMED_WAIT_MS: '15000', ...env }, extra);
+  const up = await r.waitFor(/Keep this window open/);
+  let args = []; try { args = JSON.parse(fs.readFileSync(argsFile, 'utf8')); } catch {}
+  return { r, port, up, args };
+};
+{
+  const { r, port, up, args } = await startNamed({ TUNNEL_NAME: 'myboard', TUNNEL_HOSTNAME: HOST });
+  check('named tunnel (env): cloudflared runs the named tunnel to the board port', up && args.join(' ') === `tunnel --no-autoupdate run --url http://localhost:${port} myboard`, args.join(' ') || r.out().slice(-400));
+  check('named tunnel: banner uses the fixed https address', r.out().includes(`npm run join -- --url https://${HOST} --token ${TOKEN}`) && /fixed address/.test(r.out()), r.out().slice(-600));
+  let st = null;
+  try { st = await (await fetch(`http://localhost:${port}/api/state`, { headers: { Authorization: `Bearer ${TOKEN}` } })).json(); } catch {}
+  check('named tunnel: the board advertises the fixed address', st?.setup?.join_commands?.[0]?.ip === HOST, JSON.stringify(st?.setup?.join_commands?.[0] || null));
+  killTree(r.child); await r.exited;
+}
+{
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-test-'));
+  const logFile = path.join(data, 'cf-log.jsonl');
+  // Not logged in yet: no origin certificate where TUNNEL_ORIGIN_CERT points.
+  const s1 = runTunnel({ CLOUDFLARED: FAKE, FAKE_CF_LOG: logFile, BOARD_DATA: data, TUNNEL_ORIGIN_CERT: path.join(data, 'no-cert.pem') }, ['--setup', 'myboard', HOST]);
+  const code = await s1.exited;
+  const calls = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8').trim().split(/\r?\n/).map((l) => JSON.parse(l).join(' ')) : [];
+  check('--setup logs in, creates the tunnel and routes the hostname', code === 0 && calls[0] === 'tunnel login' && calls[1] === 'tunnel create myboard' && calls[2] === `tunnel route dns myboard ${HOST}`, `${code} ${JSON.stringify(calls)} ${s1.out().slice(-300)}`);
+  let saved = null; try { saved = JSON.parse(fs.readFileSync(path.join(data, 'tunnel.json'), 'utf8')); } catch {}
+  check('--setup saves the tunnel in data/tunnel.json', saved?.name === 'myboard' && saved?.hostname === HOST, JSON.stringify(saved));
+  const { r, port, up, args } = await startNamed({ BOARD_DATA: data });
+  check('after --setup, plain npm run tunnel uses the saved named tunnel', up && args.join(' ') === `tunnel --no-autoupdate run --url http://localhost:${port} myboard` && r.out().includes(`https://${HOST}`), args.join(' '));
+  killTree(r.child); await r.exited;
+  const q = await startNamed({ BOARD_DATA: data }, ['--quick']);
+  check('--quick still gives a quick tunnel', q.up && q.args.join(' ') === `tunnel --no-autoupdate --url http://localhost:${q.port}` && q.r.out().includes(PUB), q.args.join(' '));
+  killTree(q.r.child); await q.r.exited;
+  const bad = runTunnel({ CLOUDFLARED: FAKE, BOARD_DATA: data }, ['--setup', 'myboard']);
+  check('--setup without a hostname: usage + exit 1', (await bad.exited) === 1 && /usage: npm run tunnel -- --setup/.test(bad.out()), bad.out().slice(0, 200));
+}
+{
+  // Already logged in (a certificate exists): no login step. A hostname that already has a DNS record:
+  // setup fails with the --overwrite-dns hint and saves nothing.
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-test-'));
+  const certFile = path.join(data, 'cert.pem'); fs.writeFileSync(certFile, 'fake');
+  const logFile = path.join(data, 'cf-log.jsonl');
+  const s2 = runTunnel({ CLOUDFLARED: FAKE, FAKE_CF_LOG: logFile, FAKE_CF_ROUTE: 'exists', BOARD_DATA: data, TUNNEL_ORIGIN_CERT: certFile }, ['--setup', 'myboard', HOST]);
+  const code = await s2.exited;
+  const calls = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8').trim().split(/\r?\n/).map((l) => JSON.parse(l).join(' ')) : [];
+  check('--setup with a certificate already present skips the login', calls[0] === 'tunnel create myboard' && !calls.includes('tunnel login'), JSON.stringify(calls));
+  check('--setup: an existing DNS record is a failure, with the --overwrite-dns hint', code === 1 && /--overwrite-dns myboard/.test(s2.out()) && !fs.existsSync(path.join(data, 'tunnel.json')), `${code} ${s2.out().slice(-300)}`);
+  const badHost = runTunnel({ CLOUDFLARED: FAKE, BOARD_DATA: data, PORT: String(await freePort()) }, ['--name', 'myboard', '--hostname', 'not a host']);
+  check('a run-time --hostname that is not a hostname: exit 1 with an explanation', (await badHost.exited) === 1 && /Not a valid tunnel name and hostname/.test(badHost.out()), badHost.out().slice(0, 200));
 }
 
 await finish(R);

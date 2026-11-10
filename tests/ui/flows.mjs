@@ -13,6 +13,14 @@ const rest = (who, path, method, body) => fetch(BASE + '/api' + path, { method, 
 
 const browser = await launchBrowser({ headless: true, defaultViewport: { width: 1440, height: 1000 } });
 const page = await browser.newPage();
+// The People panel, tabs and badges re-render on every presence change: click the element itself
+// (not a screen position, which can land on a node that was just replaced), retrying if it was.
+const domClick = async (sel) => {
+  for (let i = 0; i < 3; i++) {
+    try { await page.waitForSelector(sel, { timeout: 5000 }); await page.$eval(sel, (el) => el.click()); return; }
+    catch (e) { if (i === 2) throw e; await new Promise((r) => setTimeout(r, 100)); }
+  }
+};
 const errors = [];
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push('console: ' + m.text()));
@@ -60,20 +68,20 @@ check('feedback toast after answer', /Answer sent/.test(toastTxt), toastTxt);
 // mentions
 const mBadge = await page.$eval('[data-tab="me"]', (e) => e.innerText);
 check('@me tab shows unread count', /\d/.test(mBadge), mBadge);
-await page.click('#needs .m');
+await domClick('#needs .m');
 await sleep(200);
 const meFeed = await page.$$eval('#feed .ev', (e) => e.length);
 const mBadge2 = await page.$eval('[data-tab="me"]', (e) => e.innerText);
 check('mentions view filters + clears unread', meFeed >= 2 && !/\d/.test(mBadge2), `${meFeed} items, tab "${mBadge2}"`);
-await page.click('[data-tab="all"]');
+await domClick('[data-tab="all"]');
 
 // chat + click-to-mention
 await page.keyboard.press('Escape');
 await page.evaluate(() => document.activeElement.blur());
 await page.keyboard.press('/');
 check('"/" focuses the composer', await page.evaluate(() => document.activeElement.id === 'msg'));
-await page.click('.person [data-ptoggle="alice"].ptog'); // expand alice's row
-await page.click('.person [data-mention="alice/db-worker"]');
+await domClick('.person [data-ptoggle="alice"].ptog'); // expand alice's row
+await domClick('.person [data-mention="alice/db-worker"]');
 check('click name inserts @mention', (await page.$eval('#msg', (e) => e.value)) === '@alice/db-worker ');
 await page.type('#msg', 'how close is #1?');
 await page.keyboard.press('Enter');
@@ -148,13 +156,13 @@ await page.waitForFunction((n) => document.querySelectorAll('#locks .lock').leng
 check('force-release removes lock', true);
 
 // person filter
-await page.click('.person [data-ptoggle="bob"].ptog'); // expand bob's row
-await page.click('.person [data-filter="bob"]');
+await domClick('.person [data-ptoggle="bob"].ptog'); // expand bob's row
+await domClick('.person [data-filter="bob"]');
 await sleep(200);
 const owners = await page.$$eval('#board .card', (cs) => cs.map((c) => c.innerText));
 check('per-person filter shows only bob', owners.length > 0 && owners.every((t) => /bob/.test(t) || !/alice|chen/.test(t)), owners.length + ' cards');
 await page.screenshot({ path: `${out}/v2-filter-bob.png` });
-await page.click('#filterbar button');
+await domClick('#filterbar button');
 await sleep(200);
 
 // light mode
