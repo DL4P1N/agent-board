@@ -6,6 +6,10 @@
 // mentions, response times). Time is faked by ageing timestamps in the board's database.
 // Starts its own throwaway board. Run all suites with: npm test
 import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { startBoard, finish, rest, Client, StreamableHTTPClientTransport } from './helpers.mjs';
 import { agentTokenFor } from '../src/tokens.js';
@@ -286,5 +290,33 @@ const md = await retro.text();
 check('retro is markdown', retro.status === 200 && /markdown/.test(retro.headers.get('content-type') || '') && /^# /.test(md.trim()), md.slice(0, 200));
 const sentBack = md.match(/## Sent back from review\n([\s\S]*?)(?:\n## |$)/)?.[1] || '';
 check("retro counts the demo task's two bounces", new RegExp(`^- #${T.demo.id} [^\\n]*: 2×$`, 'm').test(sentBack), sentBack.slice(0, 300));
+
+// ================= npm run rehearse -- --dry-run =================
+// A fake `claude` on PATH and a private temp dir: the dry run must say the board "would run" and
+// delete its temp folder unless --keep is passed.
+{
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'rehearse-dry-'));
+  const bin = path.join(scratch, 'bin'); const temp = path.join(scratch, 'temp');
+  fs.mkdirSync(bin); fs.mkdirSync(temp);
+  if (process.platform === 'win32') {
+    fs.writeFileSync(path.join(bin, 'fake-claude.js'), 'process.exit(0)\n');
+    fs.writeFileSync(path.join(bin, 'claude.cmd'), '@node "%dp0%\\fake-claude.js" %*\r\n');
+  } else {
+    fs.writeFileSync(path.join(bin, 'claude'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  }
+  const env = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, TEMP: temp, TMP: temp, TMPDIR: temp };
+  const script = fileURLToPath(new URL('../scripts/rehearse.mjs', import.meta.url));
+  const dry = (extra) => spawnSync(process.execPath, [script, '--dry-run', '--tools', 'claude', ...extra], { env, encoding: 'utf8', timeout: 60e3, windowsHide: true });
+  const leftovers = () => fs.readdirSync(temp).filter((n) => n.startsWith('claude-board-rehearsal-'));
+  let r = dry([]);
+  const out = `${r.stdout}${r.stderr}`;
+  check('dry run exits 0', r.status === 0, out.slice(-400));
+  check('dry run says the board would run at …', /the board would run at: http:\/\/localhost:\d+\/\?token=/.test(out) && !/^\s*board: /m.test(out), out.slice(0, 600));
+  check('dry run says the temp folder is deleted', /temp folder is deleted \(use --keep to keep it\)/.test(out), out.slice(-300));
+  check('dry run leaves no temp folder behind', leftovers().length === 0, leftovers().join(', '));
+  r = dry(['--keep']);
+  check('dry run with --keep keeps the temp folder and says where', r.status === 0 && leftovers().length === 1 && /temp folder is kept: .*claude-board-rehearsal-/.test(r.stdout), `${r.stdout}${r.stderr}`.slice(-300));
+  try { fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {}
+}
 
 await finish(R, { board });

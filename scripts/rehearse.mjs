@@ -7,7 +7,7 @@
 //   --tools claude,codex   which tools to run (default: whichever are installed)
 //   --minutes N            how long the agents work (default 8); they're stopped at N + 2
 //   --keep                 keep the temp folder (repo, board data, logs, retro)
-//   --dry-run              print what would run, start nothing that spends quota
+//   --dry-run              print what would run, start nothing that spends quota (add --keep to keep the temp folder)
 // Spends a little of your subscription quota (a real run).
 import fs from 'node:fs';
 import os from 'node:os';
@@ -22,10 +22,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = parseArgs(process.argv.slice(2));
 const MINUTES = Math.max(1, Math.min(60, Number(args.minutes) || 8));
 const DRY = !!args['dry-run'];
-const KEEP = !!args.keep || DRY;
+const KEEP = !!args.keep;
 const GOAL = 'Add a tiny CLI todo app: add/list/done commands with tests';
 const children = new Set();
 let tmp = null;
+let boardLog = null;
 
 const sh = (cmd, a, opts = {}) => spawnSync(cmd, a, { encoding: 'utf8', windowsHide: true, ...opts });
 
@@ -59,7 +60,8 @@ function parseArgs(argv) {
 
 function cleanup() {
   for (const c of children) killTree(c);
-  if (tmp && !KEEP) { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} }
+  try { boardLog?.end(); } catch {}
+  if (tmp && !KEEP) { try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {} }
 }
 function killTree(c) {
   if (!c || c.exitCode !== null) return;
@@ -100,7 +102,7 @@ async function startBoard(dir, port, token) {
     cwd: ROOT, env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', BOARD_TOKEN: token, BOARD_DATA: data, BOARD_NO_JOIN: '1' }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
   });
   children.add(c);
-  const out = fs.createWriteStream(path.join(dir, 'board.log'));
+  const out = boardLog = fs.createWriteStream(path.join(dir, 'board.log'));
   c.stdout.pipe(out); c.stderr.pipe(out);
   const base = `http://localhost:${port}`;
   for (let i = 0; i < 100; i++) {
@@ -197,7 +199,7 @@ async function main() {
   const board = await startBoard(tmp, port, token);
   // Tokens are only shown on a real run (a throwaway board on 127.0.0.1, but dry-run output gets pasted around).
   const mask = (t) => (DRY ? `${String(t).slice(0, 6)}…` : t);
-  log(`  board: ${board.base}/?token=${mask(token)}`);
+  log(`  ${DRY ? 'the board would run at' : 'board'}: ${board.base}/?token=${mask(token)}`);
   await api(board.base, token, '/settings', 'PUT', { goal: GOAL, repo: proj.origin, integrator: '*', deadline: Date.now() + MINUTES * 60e3, freeze_minutes: 0 });
 
   const laptop = crypto.randomBytes(4).toString('hex');
@@ -211,7 +213,7 @@ async function main() {
   });
   const hide = (a) => (DRY ? String(a).split(agentToken).join(mask(agentToken)) : a);
   for (const s of specs) log(`  ${s.name}: (in ${s.spec.cwd})\n    ${s.spec.cmd} ${s.spec.args.map((a) => hide(/\s|"/.test(a) ? JSON.stringify(a) : a)).join(' ')}`);
-  if (DRY) { log('\nDry run: stopping here. The temp folder is kept.'); killTree(board.child); return 0; }
+  if (DRY) { log(`\nDry run: stopping here. ${KEEP ? `The temp folder is kept: ${tmp}` : 'The temp folder is deleted (use --keep to keep it).'}`); killTree(board.child); return 0; }
 
   // Answer agents' questions so nobody blocks on a human.
   const answered = new Set();
