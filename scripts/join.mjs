@@ -20,6 +20,9 @@
 //   --wait N     Claude's Stop hook long-polls N seconds for teammate activity before letting Claude stop (default 120; 0 = don't wait)
 //   --shared     also append team rules to the repo's CLAUDE.md (optional; one person commits it)
 //   --no-git-allow  don't pre-approve the git/gh commands agents use (Claude Code settings, Codex rules)
+//   --yes        don't ask anything: use the flags and the defaults
+//   --offline    set up even when the board can't be reached right now (check later with npm run doctor)
+//   --verbose    list exactly which git/gh commands were pre-approved
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -65,12 +68,26 @@ const FORCE_NOTE = 'force pushes are discouraged, not prevented: protect main on
 
 const args = parseArgs(process.argv.slice(2));
 const gitAllow = !args['no-git-allow'];
-const url = (args.url || '').replace(/\/$/, '');
-const token = args.token;
+// Forgive the usual address mistakes: no http://, or the web board link (…/?token=…) pasted instead.
+let pastedToken = '';
+const url = (() => {
+  let u = String(args.url && args.url !== true ? args.url : '').trim();
+  if (!u) return '';
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) u = `http://${u}`;
+  try {
+    const x = new URL(u);
+    pastedToken = x.searchParams.get('token') || '';
+    x.search = ''; x.hash = '';
+    u = x.toString();
+  } catch {}
+  return u.replace(/\/+$/, '');
+})();
+const token = args.token && args.token !== true ? args.token : pastedToken;
+if (url && url !== String(args.url).trim().replace(/\/+$/, '')) console.log(`  • using the board address ${url}`);
 // How long an idle Claude keeps listening to the board before it stops (its Stop hook). 0 turns waiting off.
 const wait = args.wait === undefined || args.wait === true ? 120 : Math.max(0, Math.min(600, Number(args.wait) || 0));
 if (!url || !token) {
-  console.error('usage: npm run join -- --url http://HOST:4000 --token TOKEN [--name NAME] [--tool claude,codex,copilot-vscode,copilot-cli,gemini,cursor,other] [--repo PATH] [--wait 120] [--shared] [--no-git-allow]');
+  console.error('usage: npm run join -- --url http://HOST:4000 --token TOKEN [--name NAME] [--tool claude,codex,copilot-vscode,copilot-cli,gemini,cursor,other] [--plan PLAN] [--repo PATH] [--slots N] [--wait 120] [--shared] [--no-git-allow] [--yes] [--offline] [--verbose]');
   console.error('Copy the exact command shown on the web board (Start here → step 1) or printed by `npm start` on the host.');
   process.exit(1);
 }
@@ -79,19 +96,29 @@ if (!url || !token) {
 let boardState = null;
 try {
   const r = await fetch(`${url}/api/state`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) });
-  if (r.status === 401) fail('The board rejected the token. Copy the join command from the web board again (the host may have started a fresh board).');
+  if (r.status === 401) fail('The board rejected the token: the token changed (the host rotated it, or started a fresh board). Ask the host for the new join command (web board → Start here → step 1) and run it.');
   // 409: this is the plain address, and the board behind the token moved to its own /b/<name> address.
   if (r.status === 409) { const m = await r.json().catch(() => ({})); fail(`This join command uses the plain board address, but that board is now at ${url}${m.moved_to || '/b/<name>'}. Copy the new join command from the web board (or use --url ${url}${m.moved_to || '/b/<name>'}).`); }
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   boardState = await r.json();
   ok(`board${boardState.board?.name ? ` "${boardState.board.name}"` : ''} reachable at ${url}${boardState.settings?.goal ? ` (goal: ${boardState.settings.goal.slice(0, 60)}${boardState.settings.goal.length > 60 ? '…' : ''})` : ''}`);
 } catch (e) {
-  bad(`cannot reach board at ${url}: ${e.message}`);
-  console.error('  Same wifi? Firewall allowing the port? Using the Tailscale IP? Continuing anyway; run npm run doctor later.');
+  // https against an http board fails the TLS handshake with "wrong version number".
+  const why = `${e.cause?.code || ''} ${e.cause?.message || ''} ${e.message}`;
+  const httpOnly = url.startsWith('https://') && /WRONG_VERSION_NUMBER|wrong version number|EPROTO/i.test(why);
+  if (httpOnly) bad(`This board uses http, not https. Try:  --url ${url.replace(/^https:/, 'http:')}`);
+  else bad(`Can't reach the board at ${url} (${e.cause?.code || e.message}).`);
+  if (!args.offline) {
+    if (!httpOnly) console.error('  Check the address. Is the host\'s npm start window still open? Same wifi (or Tailscale)? Then run this again.');
+    console.error('  Nothing was set up. To set up anyway, add --offline.');
+    process.exit(1);
+  }
+  console.error('  Setting up anyway (--offline). Run npm run doctor once the board is up.');
 }
 
 // ---------- questions (only for what wasn't passed) ----------
-const interactive = process.stdin.isTTY && !args.yes;
+// CLAUDE_BOARD_JOIN_ASK=1 asks even without a terminal (the tests answer through a pipe).
+const interactive = (process.stdin.isTTY || process.env.CLAUDE_BOARD_JOIN_ASK === '1') && !args.yes;
 const rl = interactive ? readline.createInterface({ input: process.stdin, output: process.stdout }) : null;
 const ask = async (q, def) => {
   if (!rl) return def;
@@ -116,17 +143,46 @@ const laptopId = (() => {
   return crypto.randomBytes(6).toString('hex');
 })();
 // Names are case-insensitive on the board (it stores them lowercase).
-const mine = new Set([previous?.agent, ...priorAgents.filter(sameBoard).map((a) => a.agent)].filter(Boolean).map((n) => n.toLowerCase()));
-const taken = (n) => (boardState?.presence || []).find((p) => p.kind === 'agent' && String(p.person || p.name).toLowerCase() === n && !mine.has(String(p.name).toLowerCase()));
+const mine = new Set([previous?.agent, ...priorAgents.filter(sameBoard).map((a) => a.agent), ...(previous || priorAgents.some(sameBoard) ? [prior?.person] : [])].filter(Boolean).map((n) => n.toLowerCase()));
+// Is the name already used on the board by someone else? Not only connected agents: also people on
+// the web board, task owners and authors, so a clash shows before anyone has typed /board.
+const taken = (n) => {
+  const lc = (x) => String(x || '').toLowerCase();
+  const isN = (x) => lc(x) === n || new RegExp(`^${n.replace(/\./g, '\\.')}-(claude|codex|copilot|copilotcli|gemini|cursor|other)$`).test(lc(x));
+  const theirs = (x) => isN(x) && !mine.has(lc(x));
+  const p = (boardState?.presence || []).find((p) => (p.kind === 'agent' ? lc(p.person || p.name) === n || isN(p.name) : lc(p.name) === n) && !mine.has(lc(p.name)));
+  if (p) return { where: p.kind === 'agent' ? p.client || 'an agent' : 'on the web board' };
+  if ((boardState?.tasks || []).some((t) => theirs(t.assignee) || theirs(t.created_by))) return { where: 'on a task' };
+  if ((boardState?.events || []).some((ev) => ev.author !== 'board' && theirs(ev.author))) return { where: 'in the feed' };
+  return null;
+};
+// The board's own answer (GET /api/names/<name>): it also knows names other laptops reserved with join
+// before their agent connected. Older boards answer 404: then the check above is all there is.
+const nameApi = (n, method = 'GET', body) => fetch(`${url}/api/names/${encodeURIComponent(n)}${method === 'GET' ? `?laptop=${laptopId}` : ''}`, {
+  method, headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+  body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(4000),
+}).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+const takenOnBoard = async (n) => {
+  const j = boardState ? await nameApi(n) : null;
+  if (!j) return taken(n);
+  if (!j.taken) return null;
+  const h = (j.holders || [])[0] || {};
+  return { where: h.connected === false ? 'reserved by another laptop; its agent hasn\'t started yet' : h.client || 'an agent' };
+};
 
 let name = '';
 for (let attempt = 0; attempt < 5 && !name; attempt++) {
-  const n = String(args.name || (await ask('Your name on the board (short, no spaces)', previous?.agent?.toLowerCase().replace(/-(claude|codex|copilot|copilotcli|gemini|cursor)$/, '') || prior?.person || defaultName())) || '').toLowerCase().replace(/[^\w.-]/g, '');
+  const def = previous?.agent?.toLowerCase().replace(/-(claude|codex|copilot|copilotcli|gemini|cursor)$/, '') || prior?.person || defaultName();
+  const raw = String(args.name || (await ask(`Your name on the board (short, no spaces${def ? '' : ', e.g. alex'})`, def)) || '').trim();
+  const n = raw.toLowerCase().replace(/[^\w.-]/g, '');
+  if (!n && rl && !args.name) { console.log('  A name is needed: letters, digits, dots, dashes or underscores.'); continue; }
   if (!n) fail('A name is required (--name NAME).');
-  const t = taken(n);
+  // Say so when spaces or symbols were dropped, so people recognise their own @mentions.
+  if (n !== raw.toLowerCase()) console.log(`  • You'll appear as "${n}" (names keep only letters, digits, dots, dashes and underscores).`);
+  const t = await takenOnBoard(n);
   if (t && rl && !args.name) {
-    console.log(`  "${n}" is already on this board${t.client ? ` (${t.client})` : ''}. If that's not you on another laptop, pick a different name, or you'll share tasks with them.`);
-    if (!/^y/i.test(await ask(`  Use "${n}" anyway? (y/N)`, 'N'))) continue;
+    console.log(`  "${n}" is already on this board (${t.where}). If that's not you on another laptop, pick a different name, or you'll share tasks with them.`);
+    if (!/^y/i.test(await ask(`  Use "${n}" anyway? (y/N)`, ''))) continue;
   } else if (t) {
     console.log(`  • "${n}" is already on this board. If that's someone else, re-run with a different --name.`);
   }
@@ -139,17 +195,25 @@ if (!args.tool && rl) {
   console.log('\nWhich AI tool(s) will you use on this laptop?');
   for (const [id, t] of Object.entries(TOOLS)) console.log(`  ${id.padEnd(15)} ${t.label}${installed.includes(id) ? '  (installed)' : ''}${id === 'other' ? ' (any MCP-capable agent; other:<label> to name it, e.g. other:omp)' : ''}`);
 }
-const toolAnswer = String(args.tool || (await ask('Tool(s), comma-separated', previous?.agents?.map((a) => a.tool).join(',') || installed[0] || 'claude')) || '');
 // "other" or "other:<label>": a tool join doesn't know; the label names its agent (<you>-<label>).
 let otherLabel = 'other';
-const tools = [...new Set(toolAnswer.split(/[\s,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean).map((t) => {
-  const m = t.match(/^other(?::([a-z0-9][\w.-]{0,19}))?$/);
-  if (!m) return t;
-  if (m[1]) otherLabel = m[1];
-  return 'other';
-}))];
-const unknown = tools.filter((t) => !TOOLS[t]);
-if (unknown.length || !tools.length) fail(`Unknown tool(s): ${unknown.join(', ') || '(none)'}. Pick from: ${Object.keys(TOOLS).join(', ')}`);
+let tools = [];
+// A typo asks again (when asking), with the closest tool as a hint.
+for (let attempt = 0; attempt < 5; attempt++) {
+  const toolAnswer = String((attempt === 0 && args.tool) || (await ask('Tool(s), comma-separated', previous?.agents?.map((a) => a.tool).join(',') || installed[0] || 'claude')) || '');
+  tools = [...new Set(toolAnswer.split(/[\s,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean).map((t) => {
+    const m = t.match(/^other(?::([a-z0-9][\w.-]{0,19}))?$/);
+    if (!m) return t;
+    if (m[1]) otherLabel = m[1];
+    return 'other';
+  }))];
+  const unknown = tools.filter((t) => !TOOLS[t]);
+  if (!unknown.length && tools.length) break;
+  const hint = unknown.map(closestTool).filter(Boolean);
+  const msg = `Unknown tool(s): ${unknown.join(', ') || '(none)'}.${hint.length ? ` Did you mean ${hint.join(', ')}?` : ''} Pick from: ${Object.keys(TOOLS).join(', ')}`;
+  if (!rl || attempt === 4) fail(msg);
+  console.log(`  ${msg}`);
+}
 
 const multi = tools.length > 1;
 
@@ -162,10 +226,14 @@ for (const t of tools) {
   const fromArg = planArg.includes('=') ? (planArg.split(',').find((x) => x.split('=')[0].trim() === t) || '').split('=')[1] : tools.length === 1 ? planArg : '';
   const prevPlan = previous?.agents?.find((a) => a.tool === t)?.plan_id;
   let id = String(fromArg || '').trim().toLowerCase();
-  if (!id && rl) {
+  // Only ask when the answer matters: every Codex and Copilot plan means 1 task at a time.
+  const allSame = new Set(opts.map((o) => o[2])).size === 1;
+  if (!id && allSame && rl) id = prevPlan || '';
+  else if (!id && rl) {
     console.log(`\nWhich plan is ${TOOLS[t].label} on? (sets how many tasks its agent works on at once)`);
     for (const [pid, label, n] of opts) console.log(`  ${pid.padEnd(9)} ${label}  → ${n} task${n > 1 ? 's' : ''} at a time`);
-    id = String(await ask('Plan', prevPlan || (t === 'claude' ? 'max5' : opts[0][0]))).trim().toLowerCase();
+    // The smallest plan by default: pressing Enter must not promise more than the plan allows.
+    id = String(await ask('Plan', prevPlan || opts[0][0])).trim().toLowerCase();
   }
   const hit = opts.find(([pid]) => pid === id);
   if (id && !hit) console.log(`  • unknown plan "${id}" for ${TOOLS[t].label}; using the default (${t === 'claude' ? 2 : 1} at a time)`);
@@ -182,8 +250,8 @@ if (!args.repo) {
     ? 'required: each tool gets its own git worktree of it'
       : tools.includes('copilot-vscode') ? 'required for Copilot in VS Code'
     : tools.includes('cursor') ? 'installs the /board command there; blank to skip'
-    : tools.includes('claude') ? 'installs the auto-wake hook there; blank to skip' : 'so join can tell you where to start your agent; blank to skip';
-  const def = previous?.agents?.[0]?.dir || (sibling && fs.existsSync(sibling) ? sibling : '');
+    : tools.includes('claude') ? `installs the auto-wake hook${gitAllow ? ' and pre-approves git/gh' : ''} there, so agents don't stall on permission prompts; blank to skip` :'so join can tell you where to start your agent; blank to skip';
+  const def = previous?.agents?.[0]?.dir || hereRepo() || (sibling && fs.existsSync(sibling) ? sibling : '');
   if (projectUrl && !def && rl) console.log(`\nThe team's project is ${projectUrl}. Leave the next answer blank to clone it into ${sibling}.`);
   const r = await ask(`Path to your copy of the hackathon repo (${why})`, def);
   if (r) args.repo = r.replace(/^["']|["']$/g, '');
@@ -237,6 +305,9 @@ const saveConfig = (agents) => {
   writeJson(CONFIG_PATH, { ...top, person: name, laptop_id: laptopId, hook_wait: wait, agents: all });
 };
 saveConfig(plan);
+// Reserve each agent name for this laptop, so a teammate who joins with the same name is warned
+// even before anyone types /board. Older boards don't have this; that's fine.
+if (boardState) for (const p of plan) await nameApi(p.agent, 'POST', { laptop: laptopId, person: name });
 
 const done = [];
 for (const p of plan) {
@@ -262,10 +333,12 @@ saveConfig(done);
 const problems = await runDoctor();
 console.log(`
 ────────────────────────────────────────────────────────────
- ${problems ? `⚠ ${problems} problem(s) above. Fix them, then check again with:  npm run doctor` : `You're in as "${name}"${multi ? ` (agents: ${done.map((p) => p.agent).join(', ')})` : ''}.`}
+ ${problems ? `⚠ ${problems === 1 ? '1 problem' : `${problems} problems`} above. Fix ${problems === 1 ? 'it' : 'them'}, then check again with:  npm run doctor` :`You're in as "${name}"${multi ? ` (agents: ${done.map((p) => p.agent).join(', ')})` : ''}.`}
  Web board:  ${webLink}
  The board tells everyone (people and agents) what to do next.
 ────────────────────────────────────────────────────────────`);
+// Scripts (and people) can tell a join that didn't fully work from one that did.
+if (problems) process.exitCode = 1;
 
 // ======================================================================
 // A separate checkout of the same repo, so two tools on one laptop never edit the same folder.
@@ -327,7 +400,10 @@ function setupClaude({ mcpUrl, dir }) {
   // Claude Code puts its helper agents' git worktrees in .claude/worktrees/; keep them out of `git status`.
   keepOutOfGit(path.join(dir, '.claude', 'worktrees'), true, dir);
   ok(`auto-wake hook installed and board tools pre-approved (${settingsPath})`);
-  if (gitAllow) ok(`pre-approved git (${GIT_ALLOW.join(', ')}) and gh (${GH_ALLOW.map((c) => c.join(' ')).join(', ')}); ${FORCE_NOTE}. Skip with --no-git-allow`);
+  if (gitAllow) {
+    ok('git and gh commands pre-approved (no prompts when agents push or merge). Skip with --no-git-allow');
+    if (args.verbose) console.log(`    git ${GIT_ALLOW.join(', ')}; gh ${GH_ALLOW.map((c) => c.join(' ')).join(', ')}. ${FORCE_NOTE[0].toUpperCase()}${FORCE_NOTE.slice(1)}.`);
+  }
 
   if (args.shared) {
     const mdPath = path.join(dir, 'CLAUDE.md');
@@ -379,8 +455,8 @@ function setupCodex({ mcpUrl, dir }) {
     fs.mkdirSync(path.dirname(rulesPath), { recursive: true });
     fs.appendFileSync(rulesPath, `${cur && !cur.endsWith('\n') ? '\n' : ''}# claude-board: git/gh commands the board playbook uses; they run outside Codex's sandbox\n${want.join('\n')}\n`);
   }
-  ok(`pre-approved git (${CODEX_GIT_ALLOW.join(', ')}) and gh (${CODEX_GH_ALLOW.map((c) => c.join(' ')).join(', ')}) for Codex in ${rulesPath}`);
-  console.log(`  • these commands run outside Codex's sandbox (that's how push and gh reach the network); ${FORCE_NOTE}. Skip with --no-git-allow`);
+  ok('git and gh commands pre-approved for Codex (they run outside its sandbox, so push and gh reach the network). Skip with --no-git-allow');
+  if (args.verbose) console.log(`    git ${CODEX_GIT_ALLOW.join(', ')}; gh ${CODEX_GH_ALLOW.map((c) => c.join(' ')).join(', ')} (in ${rulesPath}). ${FORCE_NOTE[0].toUpperCase()}${FORCE_NOTE.slice(1)}.`);
 }
 
 // A copy of a config file before join first changes it: <file>.bak-claude-board.
@@ -548,10 +624,33 @@ function ok(msg) { console.log(`  ✓ ${msg}`); }
 function bad(msg) { console.error(`  ✗ ${msg}`); }
 function fail(msg) { console.error(`✗ ${msg}`); process.exit(1); }
 
+// Your git name's first word, else nothing (the OS user name is often a shared or made-up account).
 function defaultName() {
   const r = sh('git config user.name', true);
-  const raw = (r.stdout || '').trim().split(/\s+/)[0] || os.userInfo().username || '';
+  const raw = (r.stdout || '').trim().split(/\s+/)[0] || '';
   return raw.toLowerCase().replace(/[^\w.-]/g, '');
+}
+
+// The git repo of the folder join was started from (npm sets INIT_CWD), unless that is claude-board itself.
+function hereRepo() {
+  const r = sh(`git -C ${q(process.env.INIT_CWD || process.cwd())} rev-parse --show-toplevel`, true);
+  if (r.status !== 0 || !r.stdout.trim()) return '';
+  const top = path.resolve(r.stdout.trim());
+  const norm = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+  const inside = (a, b) => norm(a) === norm(b) || norm(a).startsWith(norm(b) + path.sep);
+  return inside(top, ROOT) || inside(ROOT, top) ? '' : top;
+}
+
+// The known tool nearest to a typo ("claud" → claude), or '' when nothing is close.
+function closestTool(word) {
+  const dist = (a, b) => {
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    return d[a.length][b.length];
+  };
+  const [best] = Object.keys(TOOLS).map((t) => [t, t.startsWith(word) || word.startsWith(t) ? 0 : dist(word, t)]).sort((x, y) => x[1] - y[1]);
+  return best && best[1] <= 3 ? best[0] : '';
 }
 
 function parseArgs(argv) {
