@@ -52,10 +52,46 @@ try {
   await ana('update_task', { id: t2.id, status: 'review' }); await human(`/tasks/${t2.id}`, 'PATCH', { status: 'done' });
   const updated = await page.waitForFunction(() => /2 of 3 done/.test(document.body.innerText), { timeout: 8000 }).then(() => true).catch(() => false);
   check('updates live (2 of 3 done)', updated);
+  // A busier board: more merges, a claimed task, an agent out of usage, an agent with no task.
+  const more = [];
+  for (const title of ['Dark mode', 'Share link', 'QR code', 'Export CSV', 'Search box']) more.push(await ana('create_task', { title }));
+  for (const t of more.slice(0, 4)) { await ana('claim_task', { id: t.id }); await ana('update_task', { id: t.id, status: 'review' }); await human(`/tasks/${t.id}`, 'PATCH', { status: 'done' }); }
+  const bobCodex = await agent(board, 'bob-codex', 'codex'); await bobCodex('board_status'); await bobCodex('claim_task', { id: more[4].id });
+  const bobClaude = await agent(board, 'bob-claude'); await bobClaude('board_status');
+  const erin = await agent(board, 'erin-claude'); await erin('board_status');
+  const submit = (await human('/state')).tasks.find((t) => t.title === 'Submit form');
+  await erin('claim_task', { id: submit.id }); await human('/agents/erin-claude', 'PATCH', { limited: true });
+  await page.waitForFunction(() => /6 of 8 done/.test(document.body.innerText), { timeout: 8000 }).catch(() => {});
+  await sleep(300);
+  const nowTxt = await page.$eval('#h-now', (h) => h.parentElement.innerText);
+  check('now working on: no tool-call jargon', !/board call|board_status|update_task/.test(nowTxt), nowTxt);
+  check('now working on: bob with bob-codex\'s claimed task', new RegExp(`bob[\\s\\S]*#${more[4].id} Search box`).test(nowTxt), nowTxt);
+  check('now working on: erin is out of usage but her task is still shown', new RegExp(`erin[\\s\\S]*#${submit.id} Submit form[\\s\\S]*out of usage`).test(nowTxt), nowTxt);
+  check('just merged: capped at 4', await page.$eval('#h-merged', (h) => h.parentElement.querySelectorAll('li').length) === 4);
+  const colsTxt = await page.$eval('.cols', (c) => c.innerText);
+  check('claimed counted apart from in progress', /Claimed\s*2/.test(colsTxt) && /In progress\s*0/.test(colsTxt), colsTxt);
+  // A goal pasted from a doc: plain words, at most 2 lines.
+  await human('/settings', 'PUT', { goal: 'Follow the design document: `docs/design.md` and **ship** a [companion app](https://example.com) that every attendee at the conference can use on their phone during the talks, the breaks and the evening events' });
+  await page.waitForFunction(() => /Follow the design/.test(document.querySelector('h1.goal')?.textContent || ''), { timeout: 8000 });
+  const goal = await page.$eval('h1.goal', (h) => ({ t: h.textContent, lines: h.clientHeight / parseFloat(getComputedStyle(h).lineHeight) }));
+  check('goal: markdown stripped', !/[`*[\]]/.test(goal.t) && /docs\/design\.md and ship a companion app/.test(goal.t), goal.t);
+  check('goal: at most 2 lines', goal.lines <= 2.2, String(goal.lines));
+  // Fits a 1366×768 projector and 1920×1080 without scrolling.
+  for (const [w, hgt] of [[1366, 768], [1920, 1080]]) {
+    await page.setViewport({ width: w, height: hgt }); await sleep(300);
+    const sh = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, Math.ceil(document.getElementById("app").getBoundingClientRect().bottom)));
+    check(`fits ${w}×${hgt} without scrolling`, sh <= hgt, `scrollHeight ${sh}`);
+    await page.screenshot({ path: path.join(out, `present-${w}.png`) });
+  }
+  await page.setViewport({ width: 1600, height: 900 });
   // Deadline passed.
   await human('/settings', 'PUT', { deadline: Date.now() - 60e3, freeze_minutes: 0 });
   const past = await page.waitForFunction(() => /Demo time/.test(document.getElementById('clock')?.textContent || ''), { timeout: 8000 }).then(() => true).catch(() => false);
   check('after the deadline: "Demo time"', past);
+  // An hour or more after the demo: "Event finished" with the final numbers.
+  await human('/settings', 'PUT', { deadline: Date.now() - 2 * 3600e3 });
+  const fin = await page.waitForFunction(() => /Event finished/.test(document.getElementById('clock')?.textContent || ''), { timeout: 8000 }).then(() => true).catch(() => false);
+  check('long after the demo: "Event finished" with the final numbers', fin && /Final: 6 of 8 tasks done/.test(await page.$eval('#clock-sub', (s) => s.textContent)), await page.$eval('#clock-sub', (s) => s.textContent));
   // Phone width: no horizontal scroll.
   await page.setViewport({ width: 390, height: 844 }); await sleep(300);
   check('phone width: no horizontal overflow', await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
