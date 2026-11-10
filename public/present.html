@@ -109,7 +109,7 @@ let expired = false; let unavailable = 0;
 let state = null; let live = false; let lastErr = '';
 
 // Person colours, the same as the main board.
-const HUES = [215, 150, 275, 325, 185, 95, 250, 45, 300, 165];
+const HUES = [45, 75, 110, 145, 175, 200, 222, 245, 270, 295, 320];
 const agentRoot = (a) => String(a || '').split('/')[0];
 function personOf(name) {
   const root = agentRoot(name);
@@ -118,18 +118,8 @@ function personOf(name) {
   return root.replace(/-(claude|codex|copilot|copilotcli|copilot-vscode|copilot-cli)\d*$/, '');
 }
 const nameHash = (n) => { let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
-// One colour per known person, like the board: a name whose colour is taken moves on to the next free one (a–z order).
-let hueCache = null;
-function personHues() {
-  if (hueCache?.s === state) return hueCache.m;
-  const known = new Set();
-  for (const p of state?.presence || []) { const per = String(p.person || '').toLowerCase(); if (per) known.add(per); if (p.kind === 'human' && p.name) known.add(String(p.name).toLowerCase()); }
-  const used = new Set(); const m = new Map();
-  for (const n of [...known].sort()) { let i = nameHash(n) % HUES.length; for (let k = 0; k < HUES.length && used.has(i); k++) i = (i + 1) % HUES.length; used.add(i); m.set(n, HUES[i]); }
-  hueCache = { s: state, m };
-  return m;
-}
-const hue = (name) => { const r = String(personOf(name)).toLowerCase(); return personHues().get(r) ?? HUES[nameHash(r) % HUES.length]; };
+// A person's colour comes from their name alone, like the board: it never changes when someone else joins.
+const hue = (name) => HUES[nameHash(String(personOf(name)).toLowerCase()) % HUES.length];
 const clock = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 function ago(ts) { const m = Math.round((Date.now() - ts) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : `${Math.floor(m / 60)}h ${m % 60}m ago`; }
 // The goal is often pasted from a doc: show it as plain words (no `code`, **bold**, [links](…) or # headings).
