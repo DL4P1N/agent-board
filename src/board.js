@@ -656,6 +656,8 @@ export class Board {
       if (key === 'deadline' && val) {
         const t = /^\d+$/.test(val) ? Number(val) : Date.parse(val);
         if (!Number.isFinite(t)) throw new Error('deadline must be a date/time');
+        // A minute of slack: the web board picks whole minutes, and clocks differ a little.
+        if (t < Date.now() - 60e3 && String(t) !== cur.deadline) throw new Error('That time has already passed. Pick a demo time in the future.');
         val = String(t);
       }
       if (key === 'freeze_minutes') val = String(Math.max(0, Math.min(600, Math.round(Number(val) || 0))));

@@ -85,7 +85,8 @@ try {
   }
   await page.setViewport({ width: 1600, height: 900 });
   // Deadline passed.
-  await human('/settings', 'PUT', { deadline: Date.now() - 60e3, freeze_minutes: 0 });
+  await human('/settings', 'PUT', { deadline: Date.now() + 1000, freeze_minutes: 0 }); // a past time is refused: let it pass
+  await new Promise((r) => setTimeout(r, 1200));
   const past = await page.waitForFunction(() => /Demo time/.test(document.getElementById('clock')?.textContent || ''), { timeout: 8000 }).then(() => true).catch(() => false);
   check('after the deadline: "Demo time"', past);
   // An hour or more after the demo: "Event finished" with the final numbers.
