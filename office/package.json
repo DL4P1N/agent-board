@@ -1,0 +1,23 @@
+{
+  "name": "agent-board",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Agent Board - a shared 3D pixel office where coding agents work tickets together (frontend demo)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "test:sim": "tsx src/sim/smoke.ts"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.170.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.0"
+  }
+}

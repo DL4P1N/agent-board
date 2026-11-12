@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Office scene demo</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0c0a18; overflow: hidden; font: 12px ui-monospace, Menlo, monospace; color: #d8d0f0; }
+  #scene { position: fixed; inset: 0; }
+  #bar { position: fixed; left: 8px; top: 8px; z-index: 5; display: flex; flex-wrap: wrap; gap: 6px; max-width: 70vw; }
+  #bar button, #bar select { background: rgba(20,16,40,.85); color: #e8e0ff; border: 1px solid #5a4a8a; font: inherit; padding: 2px 6px; cursor: pointer; }
+  #hud { position: fixed; right: 8px; top: 8px; z-index: 5; text-align: right; background: rgba(20,16,40,.7); padding: 4px 8px; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+<div id="bar"></div>
+<div id="hud"></div>
+<script type="module" src="./demo.ts"></script>
+</body>
+</html>

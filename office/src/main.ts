@@ -1,0 +1,35 @@
+import './styles.css';
+import { Simulation } from './sim';
+import { OfficeScene } from './scene/OfficeScene';
+import { UI } from './ui/UI';
+import { load } from './ui/store';
+
+const loaded = load();
+document.documentElement.dataset.palette = loaded.visual.palette;
+
+const sceneHost = document.getElementById('scene') as HTMLElement;
+const uiRoot = document.getElementById('ui') as HTMLElement;
+
+const sim = new Simulation(loaded.settings);
+const scene = new OfficeScene(sceneHost, { ...loaded.visual });
+const ui = new UI(uiRoot, sim, scene, loaded);
+
+scene.onPick((id) => ui.pick(id));
+
+const onResize = (): void => scene.resize();
+window.addEventListener('resize', onResize);
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(onResize).observe(sceneHost);
+
+let last = performance.now();
+function frame(now: number): void {
+  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
+  last = now;
+  sim.step(dt);
+  scene.update(sim.state, dt);
+  ui.update(sim.state, now);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Handy for debugging in the console.
+(window as unknown as { agentBoard: unknown }).agentBoard = { sim, scene, ui };

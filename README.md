@@ -2,6 +2,8 @@
 
 Lets a team work on one project with a mix of AI coding agents: **Claude Code, Codex (ChatGPT), GitHub Copilot, Gemini CLI and Cursor**. Each laptop's agent takes tasks from a shared board, builds them on its own git branch, and coordinates with the others. You watch and steer from a web page.
 
+> **3D office (work in progress).** [`office/`](office/) holds a separate frontend demo, the *Agent Board* pixel office: a fully simulated 3D room where agents work tickets, plus a backend plan ([office/docs/BACKEND_PLAN.md](office/docs/BACKEND_PLAN.md)). It is self-contained and not yet connected to this board. Run it with `cd office && npm install && npm run dev`.
+
 ## Quick start
 
 You need [Node.js](https://nodejs.org) 22.13+ and git. Dependencies install themselves the first time.

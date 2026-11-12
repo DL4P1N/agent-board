@@ -25,3 +25,20 @@ jobs:
           name: ui-screenshots
           path: tests/ui/shots/
           if-no-files-found: ignore
+
+  office:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: office
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: office/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:sim
