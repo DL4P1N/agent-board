@@ -363,7 +363,7 @@ export function createTechView(ctx: UICtx): Panel {
     // costs
     const tiers = Object.entries(m.costByTier ?? {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
     byTier.set(tiers.map(([k, v], i) => ({ key: k, value: v, color: tierColor(k, i) })));
-    byProv.set(PROVIDER_IDS.map((id) => ({ key: PROVIDERS[id].short, value: m.costByProvider?.[id] ?? 0, color: PROVIDERS[id].color })).filter((i) => i.value > 0));
+    byProv.set(PROVIDER_IDS.map((id) => ({ key: PROVIDERS[id].short, value: m.costByProvider?.[id] ?? 0, color: `var(--p-${id})` })).filter((i) => i.value > 0));
     setText(kvs.total, usd(m.totalCostUsd)); setText(kvs.orch, usd(m.orchestrationCostUsd)); setText(kvs.waste, usd(m.wasteUsd));
     setText(kvs.perMerge, m.avgCostPerMergedUsd > 0 ? usd(m.avgCostPerMergedUsd) : '-'); setText(kvs.projected, usd(m.projectedScopeCostUsd));
     setText(kvs.budget, budget > 0 ? `${usd(budget)} (${Math.round(m.budgetUsedPct)}% used)` : 'unlimited');

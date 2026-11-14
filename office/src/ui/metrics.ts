@@ -130,7 +130,7 @@ export function createMetrics(ctx: UICtx): Panel & { win: HudWin } {
     setText(orch.v, usd(m.orchestrationCostUsd));
     const tiers = Object.entries(m.costByTier ?? {}).sort((a, b) => b[1] - a[1]);
     tier.set(tiers.map(([k, v], i) => ({ key: k, value: v, color: tierColor(k, i) })));
-    prov.set(PROVIDER_IDS.map((id) => ({ key: PROVIDERS[id].short, value: m.costByProvider?.[id] ?? 0, color: PROVIDERS[id].color })).filter((i) => i.value > 0));
+    prov.set(PROVIDER_IDS.map((id) => ({ key: PROVIDERS[id].short, value: m.costByProvider?.[id] ?? 0, color: `var(--p-${id})` })).filter((i) => i.value > 0));
 
     readColors();
     const mx = Math.max(total, 1);

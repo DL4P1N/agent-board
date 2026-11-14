@@ -63,7 +63,7 @@ export function createControlPanel(ctx: UICtx): Panel {
     const row = sliderRow({ label: p.name, min: 0, max: 10, step: 1, value: st().fleetMix[id], def: DEFAULT_SETTINGS.fleetMix[id], idPrefix: `mix-${id}`,
       hint: `How much of the fleet runs ${p.name}. The agents are split in proportion to these weights.`, fmt: fmtCount(id),
       onInput: (v) => ctx.setSettings({ fleetMix: { ...st().fleetMix, [id]: v } }) });
-    row.el.classList.add('mix-row'); row.el.style.setProperty('--pc', p.color);
+    row.el.classList.add('mix-row'); row.el.style.setProperty('--pc', `var(--p-${id})`);
     row.el.querySelector('.sl-label')?.prepend(h('i', { class: `pdot ${id}` }), ' ');
     return { id, row };
   });
