@@ -9,6 +9,7 @@ import { setSkillChips } from './chips';
 import { KIND_LABEL, phaseInfo, usd } from './format';
 import { stack, tierColor } from './metrics';
 import { snippet } from './interact';
+import { PROVIDERS, PROVIDER_IDS } from '../providers';
 import './techView.css';
 
 const COLS: { id: string; title: string; statuses: Ticket['status'][] }[] = [
@@ -65,8 +66,9 @@ export function createTechView(ctx: UICtx): Panel {
   const tHelp = tile('Help', 'Unanswered help requests between agents');
   const tSpend = tile('Spend (est.)', 'Estimated spend so far against the budget', true);
   const tBurn = tile('Burn', 'Current spend rate and the average cost of one merged ticket');
+  const tTools = tile('Tools', 'Which coding-agent tools the connected agents run');
   const tTime = tile('Time', 'Hackathon countdown, or the orchestrator\'s ETA against the deadline');
-  const stats = h('div', { class: 'tv-stats', role: 'group', 'aria-label': 'Key numbers' }, ...[tScope, tActive, tReview, tHelp, tSpend, tBurn, tTime].map((t) => t.el));
+  const stats = h('div', { class: 'tv-stats', role: 'group', 'aria-label': 'Key numbers' }, ...[tScope, tActive, tReview, tHelp, tSpend, tBurn, tTools, tTime].map((t) => t.el));
 
   // ---------------------------------------------------------------- needs attention
   const attn = panel('Needs attention', 'tv-attn');
@@ -151,7 +153,7 @@ export function createTechView(ctx: UICtx): Panel {
 
   // ---------------------------------------------------------------- helpers
   const agentBtn = (a: AgentState | undefined, fallback = 'unassigned'): HTMLElement => a
-    ? h('button', { type: 'button', class: `tv-who${a.id === ctx.selectedId ? ' on' : ''}`, title: `${a.name} (${a.owner}) - ${a.config.model}. Click to inspect`, onClick: (e: Event) => { e.stopPropagation(); ctx.select(a.id === ctx.selectedId ? null : a.id); } },
+    ? h('button', { type: 'button', class: `tv-who${a.id === ctx.selectedId ? ' on' : ''}`, title: `${a.name} (${a.owner}) - ${PROVIDERS[a.provider]?.name ?? a.provider}, ${a.config.model}. Click to inspect`, onClick: (e: Event) => { e.stopPropagation(); ctx.select(a.id === ctx.selectedId ? null : a.id); } },
       h('i', { class: `pdot ${a.provider}` }), h('b', {}, a.name), h('span', { class: `tier ${a.provider}` }, a.config.tier))
     : h('span', { class: 'dim tv-who none' }, fallback);
 
@@ -236,7 +238,8 @@ export function createTechView(ctx: UICtx): Panel {
   // ---------------------------------------------------------------- update
   let sig = '';
   let lastLog: LogEntry | null = null;
-  let attnSig = '', helpSig = '', lastSel: string | null = null;
+  const STALE = '<stale>'; // never equals a real signature, so the next update always redraws (including "nothing to show")
+  let attnSig = STALE, helpSig = STALE, lastSel: string | null = null;
   let lastState: SimState | null = null;
   const refresh = (): void => { if (lastState) update(lastState, true); };
 
@@ -246,7 +249,7 @@ export function createTechView(ctx: UICtx): Panel {
     const m = state.metrics, p = state.plan;
     const byId = new Map(state.agents.map((a) => [a.id, a]));
     const workers = state.agents.filter((a) => a.role === 'worker');
-    if (lastSel !== ctx.selectedId) { lastSel = ctx.selectedId; sig = ''; attnSig = ''; helpSig = ''; }
+    if (lastSel !== ctx.selectedId) { lastSel = ctx.selectedId; sig = ''; attnSig = STALE; helpSig = STALE; }
 
     // tiles
     const total = Math.max(p.totalTickets, m.merged);
@@ -264,6 +267,9 @@ export function createTechView(ctx: UICtx): Panel {
     tSpend.bar!.className = `bar thin budget${m.budgetUsedPct >= 100 ? ' over' : m.budgetUsedPct >= 80 ? ' warn' : ''}`;
     toggleClass(tSpend.el, 'bad', budget > 0 && m.budgetUsedPct >= 100);
     setText(tBurn.v, `${usd(m.burnUsdPerMin)}/min`); setText(tBurn.sub, m.avgCostPerMergedUsd > 0 ? `${usd(m.avgCostPerMergedUsd)} per merge` : 'no merges yet');
+    const online = workers.filter((a) => a.phase !== 'offline');
+    const byTool = PROVIDER_IDS.map((id) => [id, online.filter((a) => a.provider === id).length] as const).filter(([, n]) => n > 0);
+    setText(tTools.v, String(byTool.length)); setText(tTools.sub, byTool.map(([id, n]) => `${n} ${PROVIDERS[id].short}`).join(' / ') || 'no agents online');
     const hk = state.hack;
     if (hk?.active && hk.stage !== 'idle') {
       const left = hk.endsAt - state.time;
@@ -357,7 +363,7 @@ export function createTechView(ctx: UICtx): Panel {
     // costs
     const tiers = Object.entries(m.costByTier ?? {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
     byTier.set(tiers.map(([k, v], i) => ({ key: k, value: v, color: tierColor(k, i) })));
-    byProv.set((['claude', 'codex'] as const).map((k) => ({ key: k, value: m.costByProvider?.[k] ?? 0, color: k === 'claude' ? '#d97757' : '#2dd4bf' })).filter((i) => i.value > 0));
+    byProv.set(PROVIDER_IDS.map((id) => ({ key: PROVIDERS[id].short, value: m.costByProvider?.[id] ?? 0, color: PROVIDERS[id].color })).filter((i) => i.value > 0));
     setText(kvs.total, usd(m.totalCostUsd)); setText(kvs.orch, usd(m.orchestrationCostUsd)); setText(kvs.waste, usd(m.wasteUsd));
     setText(kvs.perMerge, m.avgCostPerMergedUsd > 0 ? usd(m.avgCostPerMergedUsd) : '-'); setText(kvs.projected, usd(m.projectedScopeCostUsd));
     setText(kvs.budget, budget > 0 ? `${usd(budget)} (${Math.round(m.budgetUsedPct)}% used)` : 'unlimited');

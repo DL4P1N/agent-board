@@ -56,7 +56,7 @@ const ctx: ChatContext = {
   skills: SKILLS.map((s) => ({ ...s })),
   metrics: {
     merged: 2, open: 7, inReview: 1, rejected: 1, throughputPerMin: 0.4, avgCycleSec: 180, utilization: 0.6, scopeDone: 0.2, etaMinutes: 22, helpTotal: 3, helpOpen: 1,
-    totalCostUsd: 37.5, burnUsdPerMin: 1.2, avgCostPerMergedUsd: 4.1, wasteUsd: 3.2, projectedScopeCostUsd: 120, budgetUsedPct: 25, costByTier: {}, costByProvider: { claude: 30, codex: 7.5 }, orchestrationCostUsd: 4,
+    totalCostUsd: 37.5, burnUsdPerMin: 1.2, avgCostPerMergedUsd: 4.1, wasteUsd: 3.2, projectedScopeCostUsd: 120, budgetUsedPct: 25, costByTier: {}, costByProvider: { claude: 30, codex: 7.5, copilot: 0, gemini: 0, cursor: 0, other: 0 }, orchestrationCostUsd: 4,
   },
   plan: { name: 'Sticky Wall', totalTickets: 10, deadlineMinutes: 40, epics: ['Core'], note: '' },
   hack: {

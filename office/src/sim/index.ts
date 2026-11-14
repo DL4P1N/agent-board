@@ -4,6 +4,7 @@
  * mutated in place (never replaced), so the UI/scene can hold references.
  */
 import type { Skill } from '../skills';
+import { perProvider } from '../providers';
 import { DEFAULT_SETTINGS, type AgentOverride, type BoardCommands, type SimEvent, type SimSettings, type SimState, type Ticket, type TicketSpec } from '../types';
 import { say as chatSay } from './chat';
 import * as cmd from './commands';
@@ -25,7 +26,7 @@ function initialState(): SimState {
       merged: 0, open: 0, inReview: 0, rejected: 0, throughputPerMin: 0, avgCycleSec: 0, utilization: 0, scopeDone: 0, etaMinutes: null,
       helpTotal: 0, helpOpen: 0,
       totalCostUsd: 0, burnUsdPerMin: 0, avgCostPerMergedUsd: 0, wasteUsd: 0, projectedScopeCostUsd: 0, budgetUsedPct: 0,
-      costByTier: {}, costByProvider: { claude: 0, codex: 0 }, orchestrationCostUsd: 0,
+      costByTier: {}, costByProvider: perProvider(() => 0), orchestrationCostUsd: 0,
     },
     plan: { name: '', totalTickets: 0, deadlineMinutes: 0, epics: [], note: '' },
     depotStacks: 0, inboxStacks: 0, libraryStock: [], outStacks: 0, mainCommits: 0, deployments: 0,

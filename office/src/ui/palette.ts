@@ -5,6 +5,7 @@ import { DIFF_COLORS, DIFF_NAMES, h, setText, toggleClass } from './dom';
 import { icon, type IconName } from './icons';
 import { agentOf, cmd, dot, fuzzy, nameOf, mmss } from './interact';
 import './palette.css';
+import { providerName } from '../providers';
 
 export interface PaletteHooks {
   togglePanels(): void;
@@ -112,11 +113,11 @@ export function createPalette(ctx: UICtx, hooks: PaletteHooks): Palette {
     add({ id: 'msg-all', group: 'Team', bulk: true, label: 'Message everyone...', ico: 'users', keywords: 'broadcast team all chat', run: () => messageMode('all') });
     for (const a of agents) {
       if (a.role === 'orchestrator') continue;
-      add({ id: `msg-${a.id}`, group: 'Team', bulk: true, label: `Message ${a.name}...`, boost: 6, sub: a.role === 'worker' ? a.owner : 'integrator', agent: a, ico: 'chat', keywords: `chat tell say ${a.provider} ${a.owner} ${a.role}`, run: () => messageMode(a.id) });
+      add({ id: `msg-${a.id}`, group: 'Team', bulk: true, label: `Message ${a.name}...`, boost: 6, sub: a.role === 'worker' ? a.owner : 'integrator', agent: a, ico: 'chat', keywords: `chat tell say ${a.provider} ${providerName(a.provider)} ${a.owner} ${a.role}`, run: () => messageMode(a.id) });
     }
     for (const a of agents) {
       if (a.role === 'integrator') continue;
-      add({ id: `help-${a.id}`, group: 'Team', bulk: true, label: `Ask ${a.role === 'orchestrator' ? 'Orchestrator' : a.name} to help...`, agent: a, ico: 'plane', keywords: `help assist plane pair ${a.provider}`, run: () => ({
+      add({ id: `help-${a.id}`, group: 'Team', bulk: true, label: `Ask ${a.role === 'orchestrator' ? 'Orchestrator' : a.name} to help...`, agent: a, ico: 'plane', keywords: `help assist plane pair ${a.provider} ${providerName(a.provider)}`, run: () => ({
         kind: 'list', crumb: `${nameOf(s, a.id)} helps`, placeholder: 'Who needs help?', filter: true,
         items: () => workers.filter((w) => w.id !== a.id).map((w): Item => ({
           id: `help-${a.id}-${w.id}`, label: `Ask ${nameOf(S(), a.id)} to help ${w.name}`, agent: w, ico: 'plane', keywords: w.owner,
@@ -125,7 +126,7 @@ export function createPalette(ctx: UICtx, hooks: PaletteHooks): Palette {
       }) });
     }
     for (const a of agents) {
-      add({ id: `sel-${a.id}`, group: 'Team', bulk: true, label: `Select agent ${nameOf(s, a.id)}`, boost: 3, agent: a, ico: a.role === 'worker' ? 'worker' : a.role === 'orchestrator' ? 'orchestrator' : 'integrator', keywords: `inspect focus ${a.provider} ${a.owner} ${a.role}`, run: () => { ctx.select(a.id); } });
+      add({ id: `sel-${a.id}`, group: 'Team', bulk: true, label: `Select agent ${nameOf(s, a.id)}`, boost: 3, agent: a, ico: a.role === 'worker' ? 'worker' : a.role === 'orchestrator' ? 'orchestrator' : 'integrator', keywords: `inspect focus ${a.provider} ${providerName(a.provider)} ${a.owner} ${a.role}`, run: () => { ctx.select(a.id); } });
     }
 
     // skills

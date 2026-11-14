@@ -6,6 +6,7 @@ import { icon } from './icons';
 import { EFFORTS, allModels, configForDifficulty, findModel } from './models';
 import { dock } from './hud';
 import { usd } from './format';
+import { PROVIDERS, PROVIDER_IDS, fleetCounts, mixShares, type ProviderId } from '../providers';
 
 const SPEED_STEPS = [0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 6, 8];
 export const speedIndex = (v: number): number => {
@@ -53,13 +54,23 @@ export function createControlPanel(ctx: UICtx): Panel {
       h('button', { type: 'button', class: 'btn warn', title: 'Restore all sliders to their defaults and restart', onClick: () => ctx.resetAll() }, 'Reset')));
 
   // --- Fleet ----------------------------------------------------------------------------------
-  const split = (): { c: number; x: number } => {
-    const n = st().workerCount; const x = Math.round(n * st().codexShare); return { c: n - x, x };
-  };
   const wc = numRow('workerCount', { label: 'Agents (cubicles)', min: 1, max: 12, step: 1, unit: 'agents', hint: 'How many agents are connected to the room.' });
-  const codex = numRow('codexShare', { label: 'Codex share', min: 0, max: 1, step: 0.05, hint: 'Share of agents that are Codex instead of Claude Code.', fmt: () => { const s = split(); return `${s.c} Claude / ${s.x} Codex`; } });
+  // fleet mix: one weight per tool; the agents are split in proportion (0 = none of that tool)
+  const counts = (): Record<ProviderId, number> => fleetCounts(st().workerCount, st().fleetMix);
+  const fmtCount = (id: ProviderId) => (v: number): string => { const n = counts()[id]; return v <= 0 ? 'none' : `${n} agent${n === 1 ? '' : 's'}`; };
+  const mixRows = PROVIDER_IDS.map((id) => {
+    const p = PROVIDERS[id];
+    const row = sliderRow({ label: p.name, min: 0, max: 10, step: 1, value: st().fleetMix[id], def: DEFAULT_SETTINGS.fleetMix[id], idPrefix: `mix-${id}`,
+      hint: `How much of the fleet runs ${p.name}. The agents are split in proportion to these weights.`, fmt: fmtCount(id),
+      onInput: (v) => ctx.setSettings({ fleetMix: { ...st().fleetMix, [id]: v } }) });
+    row.el.classList.add('mix-row'); row.el.style.setProperty('--pc', p.color);
+    row.el.querySelector('.sl-label')?.prepend(h('i', { class: `pdot ${id}` }), ' ');
+    return { id, row };
+  });
+  const mixSummary = h('p', { class: 'sec-desc mix-sum' });
+  const mixBox = h('div', { class: 'mix', role: 'group', 'aria-label': 'Fleet mix by tool' }, h('div', { class: 'mix-h' }, 'Tools in the room'), mixSummary, ...mixRows.map((m) => m.row.el));
   const legend = h('div', { class: 'owners', 'aria-label': 'Contributors' });
-  const fleet = sec('fleet', 'Fleet', 'Each contributor brings their own agents into the shared room.', wc.el, codex.el, legend);
+  const fleet = sec('fleet', 'Fleet', 'Each contributor brings their own agents, in whatever tool they use: Claude Code, Codex, GitHub Copilot, Gemini CLI, Cursor or any MCP tool.', wc.el, mixBox, legend);
 
   // --- Workload -------------------------------------------------------------------------------
   const chips = ([1, 2, 3, 4, 5] as Difficulty[]).map((n) => h('button', { type: 'button', class: 'dchip', style: `--c:${DIFF_COLORS[n]}`, title: `Add a ${DIFF_NAMES[n]} ticket (difficulty ${n})`, 'aria-label': `Add difficulty ${n} ticket`, onClick: () => { ctx.sim.addTicket(n); ctx.refresh(); } }, String(n)));
@@ -99,14 +110,16 @@ export function createControlPanel(ctx: UICtx): Panel {
 
   const tbl = h('div', { class: 'cfg-table', role: 'table', 'aria-label': 'Difficulty to agent configuration' });
   const th = (t: string): HTMLElement => h('span', { class: 'cfg-h', role: 'columnheader' }, t);
-  tbl.appendChild(h('div', { class: 'cfg-row head', role: 'row' }, th('Diff'), th('Claude'), th('Codex'), th('Autocompact buffer'), th('Subagents'), th('Effort')));
+  tbl.appendChild(h('div', { class: 'cfg-row head', role: 'row' }, th('Diff'), th('Model per tool in use'), th('Autocompact buffer'), th('Subagents'), th('Effort')));
   const cfgRows: HTMLElement[] = [];
+  const cfgModels: HTMLElement[] = [];
   for (let n = 1; n <= 5; n++) {
-    const c = configForDifficulty('claude', n); const x = configForDifficulty('codex', n);
+    const c = configForDifficulty('claude', n);
+    const models = h('span', { class: 'cfg-models' });
+    cfgModels.push(models);
     const row = h('div', { class: 'cfg-row', role: 'row', dataset: { d: String(n) }, title: `Difficulty ${n} (${DIFF_NAMES[n]})` },
       h('span', { class: 'cfg-d' }, pips(n)),
-      h('span', { class: 'tier claude', title: c.model }, c.tier),
-      h('span', { class: 'tier codex', title: x.model }, x.tier),
+      models,
       h('span', { class: 'cfg-buf', title: `${c.autocompactBuffer}% of the context window is kept free before auto-compaction fires` },
         h('span', { class: 'bar' }, h('i', { style: `width:${Math.round((c.autocompactBuffer / 50) * 100)}%` })), h('b', {}, `${c.autocompactBuffer}%`)),
       h('span', { class: 'cfg-sub', title: `up to ${c.subagents} parallel subagents` }, icon('bot'), h('b', {}, `x${c.subagents}`)),
@@ -120,7 +133,7 @@ export function createControlPanel(ctx: UICtx): Panel {
   const mc = (): AgentConfig => st().manualConfig;
   const mcPatch = (p: Partial<AgentConfig>): void => ctx.setSettings({ manualConfig: { ...mc(), ...p } });
   const mModel = selectRow('Model', [], mc().model, (v) => { const m = findModel(v); mcPatch({ model: v, tier: m?.tier ?? mc().tier }); }, 'mcmodel');
-  fillSelect(mModel.select, allModels().map((m) => ({ value: m.model, label: `${m.model} (${m.tier})`, group: m.provider === 'claude' ? 'Claude' : 'Codex' })));
+  fillSelect(mModel.select, allModels().map((m) => ({ value: m.model, label: `${m.model} (${m.tier})`, group: PROVIDERS[m.provider].name })));
   mModel.select.value = mc().model;
   const mBuf = sliderRow({ label: 'Autocompact buffer', min: 5, max: 50, step: 1, unit: '%', value: mc().autocompactBuffer, def: DEFAULT_SETTINGS.manualConfig.autocompactBuffer, idPrefix: 'mcbuf', hint: 'Share of the context window kept free before auto-compaction.', onInput: (v) => mcPatch({ autocompactBuffer: v }) });
   const mSub = sliderRow({ label: 'Subagents', min: 0, max: 8, step: 1, value: mc().subagents, def: DEFAULT_SETTINGS.manualConfig.subagents, idPrefix: 'mcsub', hint: 'Max parallel subagents each agent may spawn.', onInput: (v) => mcPatch({ subagents: v }) });
@@ -160,12 +173,22 @@ export function createControlPanel(ctx: UICtx): Panel {
   d.body.append(scenarios.el, fleet.el, workload.el, time.el, config.el, behaviour.el, visuals.el);
 
   // --- update ---------------------------------------------------------------------------------
-  let lastWC = -1, lastSplit = -1, ownersSig = '', lastMode = '', lastHL = 0, lastPaused: boolean | null = null;
+  let mixSig = '', ownersSig = '', lastMode = '', lastHL = 0, lastPaused: boolean | null = null;
   const update = (state: SimState): void => {
     for (const r of rows) r.row.set(r.read());
     for (const v of vrows) v.set(ctx.visual);
     const s = st();
-    if (s.workerCount !== lastWC || s.codexShare !== lastSplit) { lastWC = s.workerCount; lastSplit = s.codexShare; codex.setFormat(() => { const q = split(); return `${q.c} Claude / ${q.x} Codex`; }); }
+    const ms = `${s.workerCount}|${PROVIDER_IDS.map((id) => s.fleetMix[id]).join(',')}`;
+    if (ms !== mixSig) {
+      mixSig = ms;
+      const c = counts(), sh = mixShares(s.fleetMix);
+      for (const m of mixRows) { m.row.set(s.fleetMix[m.id]); m.row.setFormat(fmtCount(m.id)); toggleClass(m.row.el, 'off', s.fleetMix[m.id] <= 0); }
+      const used = PROVIDER_IDS.filter((id) => c[id] > 0);
+      setText(mixSummary, used.length ? used.map((id) => `${c[id]} ${PROVIDERS[id].short}`).join(' / ') : 'No agents');
+      // config table: show the model each tool in use would pick at every difficulty
+      const shown = PROVIDER_IDS.filter((id) => sh[id] > 0);
+      cfgModels.forEach((box, i) => box.replaceChildren(...shown.map((id) => { const cf = configForDifficulty(id, i + 1); return h('span', { class: `tier ${id}`, title: `${PROVIDERS[id].name}: ${cf.model}` }, cf.tier); })));
+    }
     mode.set(s.configMode);
     if (lastMode !== s.configMode) { lastMode = s.configMode; autoBox.hidden = s.configMode !== 'auto'; manualBox.hidden = s.configMode !== 'manual'; }
     if (document.activeElement !== mModel.select) mModel.select.value = mc().model;
@@ -182,7 +205,7 @@ export function createControlPanel(ctx: UICtx): Panel {
       for (const a of workers) { const e = byOwner.get(a.owner) ?? { color: a.ownerColor, list: [] }; e.list.push(a); byOwner.set(a.owner, e); }
       legend.replaceChildren(...[...byOwner.entries()].map(([name, e]) => h('div', { class: 'owner' },
         h('i', { class: 'swatch', style: `background:${e.color || 'var(--muted)'}` }), h('span', { class: 'owner-name' }, name),
-        h('span', { class: 'owner-dots' }, ...e.list.map((a) => h('i', { class: `pdot ${a.provider}${a.phase === 'offline' ? ' off' : ''}`, title: `${a.name} (${a.provider})` }))))));
+        h('span', { class: 'owner-dots' }, ...e.list.map((a) => h('i', { class: `pdot ${a.provider}${a.phase === 'offline' ? ' off' : ''}`, title: `${a.name} (${PROVIDERS[a.provider].name})` }))))));
       if (!byOwner.size) legend.replaceChildren(h('span', { class: 'note' }, 'No agents connected yet.'));
     }
 

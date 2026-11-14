@@ -1,4 +1,5 @@
 // Shared helpers for the interaction layer (comms, help feed, palette, hackathon).
+import { isProvider } from '../providers';
 import type { AgentState, BoardCommands, SimState } from '../types';
 import type { UICtx } from './ctx';
 import { h } from './dom';
@@ -32,7 +33,7 @@ export function nameOf(state: SimState, id: string): string {
 
 /** Small provider-coloured square (owner colour as an outline stripe when given). */
 export function dot(provider: string | null | undefined, ownerColor?: string | null): HTMLElement {
-  const el = h('i', { class: `pdot ${provider === 'claude' || provider === 'codex' ? provider : ''}`.trim() });
+  const el = h('i', { class: `pdot ${isProvider(provider) ? provider : ''}`.trim() });
   if (ownerColor) el.style.setProperty('--oc', ownerColor);
   return el;
 }

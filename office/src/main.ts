@@ -1,4 +1,7 @@
 import './styles.css';
+import { installProviderCss } from './providers';
+
+installProviderCss(); // colour classes for every coding-agent tool
 import { Simulation } from './sim';
 import { LazyScene } from './scene/LazyScene';
 import { UI } from './ui/UI';

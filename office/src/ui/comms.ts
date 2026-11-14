@@ -1,4 +1,5 @@
 // COMMS window: chat with the Orchestrator / any agent / everyone + the paper-plane help feed. Key: C.
+import { providerName } from '../providers';
 import type { AgentState, ChatMessage, SimState } from '../types';
 import type { Panel, UICtx } from './ctx';
 import { fmtClock, h, setHidden, setText, toggleClass, setAttr } from './dom';
@@ -105,7 +106,7 @@ export function createComms(ctx: UICtx): CommsPanel {
     items.push(opt('all', undefined, 'whole team'));
     const integ = agents.find((a) => a.role === 'integrator');
     if (integ) items.push(opt(integ.id, integ, 'reviews PRs'));
-    for (const a of agents.filter((x) => x.role === 'worker')) items.push(opt(a.id, a, `${a.provider}${a.owner ? ` - ${a.owner}` : ''}`));
+    for (const a of agents.filter((x) => x.role === 'worker')) items.push(opt(a.id, a, `${providerName(a.provider)}${a.owner ? ` - ${a.owner}` : ''}`));
     rcptList.replaceChildren(...items);
     if (to !== 'all' && !agentOf(state, to)) to = orch?.id ?? 'orch';
     paintRcpt(state);

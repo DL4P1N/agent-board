@@ -5,6 +5,7 @@ import { clamp, h, setStyle, setText, toggleClass } from './dom';
 import { hudWindow, type HudWin } from './hud';
 import { Sparkline } from './sparkline';
 import { usd } from './format';
+import { PROVIDERS, PROVIDER_IDS } from '../providers';
 
 const TIER_COLORS: Record<string, string> = { haiku: '#4ade80', sonnet: '#38bdf8', opus: '#c084fc', fable: '#f472b6', mini: '#5eead4', standard: '#fbbf24', max: '#fb7185' };
 const FALLBACK = ['#94a3b8', '#fb923c', '#a3e635', '#22d3ee'];
@@ -129,7 +130,7 @@ export function createMetrics(ctx: UICtx): Panel & { win: HudWin } {
     setText(orch.v, usd(m.orchestrationCostUsd));
     const tiers = Object.entries(m.costByTier ?? {}).sort((a, b) => b[1] - a[1]);
     tier.set(tiers.map(([k, v], i) => ({ key: k, value: v, color: tierColor(k, i) })));
-    prov.set([{ key: 'claude', value: m.costByProvider?.claude ?? 0, color: 'var(--claude)' }, { key: 'codex', value: m.costByProvider?.codex ?? 0, color: 'var(--codex)' }]);
+    prov.set(PROVIDER_IDS.map((id) => ({ key: PROVIDERS[id].short, value: m.costByProvider?.[id] ?? 0, color: PROVIDERS[id].color })).filter((i) => i.value > 0));
 
     readColors();
     const mx = Math.max(total, 1);

@@ -1,6 +1,8 @@
 /** Shared simulation world: runtime per-agent data (Rt), ticket factory, config selection, cost accounting, flights. */
 import { DESKS, STATIONS } from '../layout';
 import { OWNER_COLORS, SKILLS, SKILL_SLOTS, type Skill } from '../skills';
+import { PROVIDER_IDS, deskRank, perProvider, providerForRank, type FleetMix } from '../providers';
+import { DEFAULT_SETTINGS } from '../types';
 import type {
   AgentConfig, AgentOverride, AgentState, ChatMessage, Difficulty, Flight, FlightEndpoint, FlightKind, HelpRequest, LogEntry, Phase, PlannedTicket,
   Pose, Provider, SimEvent, SimSettings, SimState, Ticket, TicketSpec, Vec2,
@@ -110,7 +112,7 @@ export class World {
       merged: 0, open: 0, inReview: 0, rejected: 0, throughputPerMin: 0, avgCycleSec: 0, utilization: 0, scopeDone: 0, etaMinutes: null,
       helpTotal: 0, helpOpen: 0,
       totalCostUsd: 0, burnUsdPerMin: 0, avgCostPerMergedUsd: 0, wasteUsd: 0, projectedScopeCostUsd: 0, budgetUsedPct: 0,
-      costByTier: {}, costByProvider: { claude: 0, codex: 0 }, orchestrationCostUsd: 0,
+      costByTier: {}, costByProvider: perProvider(() => 0), orchestrationCostUsd: 0,
     });
     Object.assign(s.hack, {
       active: false, project: '', brief: '', stage: 'idle', startedAt: 0, endsAt: 0, milestones: [], checklist: [], demoReadiness: 0,
@@ -204,10 +206,13 @@ export class World {
       if (n !== v) (s as unknown as Record<string, number>)[k] = n;
     };
     cl('workerCount', 1, 12); s.workerCount = Math.round(s.workerCount);
-    cl('codexShare', 0, 1); cl('simSpeed', 0, 8); cl('ticketsPerMinute', 0, 6); cl('meanDifficulty', 1, 5); cl('difficultySpread', 0, 2);
+    cl('simSpeed', 0, 8); cl('ticketsPerMinute', 0, 6); cl('meanDifficulty', 1, 5); cl('difficultySpread', 0, 2);
     cl('workSpeed', 0.25, 4); cl('rejectRate', 0, 0.7); cl('blockRate', 0, 0.5); cl('walkSpeed', 0.5, 3); cl('helpRate', 0, 1);
     cl('totalScope', 4, 60); s.totalScope = Math.round(s.totalScope); cl('deadlineMinutes', 5, 120); cl('budgetUsd', 0, 1e9);
     if (s.mode !== 'sprint' && s.mode !== 'hackathon') s.mode = 'hackathon';
+    const mix = { ...DEFAULT_SETTINGS.fleetMix } as FleetMix;
+    for (const id of PROVIDER_IDS) { const v = Number(s.fleetMix?.[id]); mix[id] = Number.isFinite(v) ? Math.min(10, Math.max(0, v)) : 0; }
+    s.fleetMix = mix;
   }
 
   sigOf(): string {
@@ -218,9 +223,8 @@ export class World {
   providerFor(deskIndex: number): Provider {
     const ov = this.overrides.get('a' + (deskIndex + 1));
     if (ov && ov.provider) return ov.provider;
-    // stable low-discrepancy rank per desk: moving the slider flips only the nearest agents
-    const rank = ((deskIndex + 1) * 0.6180339887498949) % 1;
-    return rank < this.settings.codexShare ? 'codex' : 'claude';
+    // stable low-discrepancy rank per desk: moving a slider flips only the nearest agents
+    return providerForRank(deskRank(deskIndex), this.settings.fleetMix);
   }
 
   /** Effective config for a ticket of `diff` for this agent (auto/manual + budget downshift + per-agent override). */
@@ -416,7 +420,7 @@ export class World {
     const epic = spec.epic ?? (plan.epics.length ? r.pick(plan.epics) : 'General');
     // hackathon pace stretches work time (and so cost); fixed costs (review, skill loads, compaction) do not stretch with it
     const pace = this.curMode === 'hackathon' ? 1 + 0.42 * (this.hackScale * this.hackBurn - 1) : 1;
-    const est = estimateForDifficulty(d, this.settings.codexShare, this.settings.rejectRate) * (0.9 + 0.2 * r.next()) * pace;
+    const est = estimateForDifficulty(d, this.settings.fleetMix, this.settings.rejectRate) * (0.9 + 0.2 * r.next()) * pace;
     const pin = spec.pinnedTo && this.rts.get(spec.pinnedTo)?.a.role === 'worker' ? spec.pinnedTo : null;
     const t: Ticket = {
       id: `T-${seq}`, title, difficulty: d, status: 'backlog', assignee: null, progress: 0, createdAt: this.state.time,

@@ -12,6 +12,9 @@ npm run test:sim   # headless simulation invariants
 
 ## What you are looking at
 
+- **Any coding-agent tool.** Claude Code, Codex, GitHub Copilot, Gemini CLI, Cursor, or any other MCP tool. Fleet
+  sliders (Control room > Fleet) set the mix; each tool has its own colour, model ladder and cost line. All tools live in
+  one registry, `src/providers.ts`. Model names and prices other than Claude's are placeholders.
 - **Two views, same room.** Switch in the top bar (or press `V`, or open `?view=board` / `?view=office`); the choice is remembered.
   - **Board** is the default. **3D office** is created on the first switch: three.js and the scene load as a separate
     chunk then, so the board view never downloads them or starts WebGL.

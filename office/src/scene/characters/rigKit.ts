@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Provider, Role } from '../../types';
+import { PROVIDERS, perProvider } from '../../providers';
 
 // ---------------------------------------------------------------- dimensions (local units ~ metres)
 export const DIM = {
@@ -56,10 +57,7 @@ export function parseHex(s: string | undefined, fallback = 0x888888): number {
 }
 
 export interface Accent { main: number; dark: number; light: number; glow: number }
-export const ACCENT: Record<Provider, Accent> = {
-  claude: { main: 0xd97757, dark: 0xa4522f, light: 0xf6d2c0, glow: 0xff9d78 },
-  codex: { main: 0x2dd4bf, dark: 0x16897b, light: 0xc0f6ee, glow: 0x7dfff0 },
-};
+export const ACCENT: Record<Provider, Accent> = perProvider((id) => ({ ...PROVIDERS[id].accent }));
 
 const SKINS = [0xf6d2b0, 0xe8b88c, 0xcf9560, 0xa9693b, 0x7a4a2a, 0x4f2f1c, 0xfbdcc4];
 const HAIRS = [0x2a1d16, 0x4b2e1b, 0x8a5a2b, 0xdcaa45, 0xb5402a, 0x15151c, 0x8a8f9a, 0x7a4fd8, 0x2f9bd9, 0xe86aa6];

@@ -2,6 +2,7 @@
 import type { AgentState, HelpRequest, SimState } from '../types';
 import type { UICtx } from './ctx';
 import { fillSelect, h, setHidden, setText, toggleClass, fmtClock } from './dom';
+import { providerName } from '../providers';
 import { icon } from './icons';
 import { cmd, dot, EMPTY, nameOf, agentOf } from './interact';
 import './comms.css';
@@ -12,7 +13,7 @@ interface HelpRow { el: HTMLElement; update(req: HelpRequest, state: SimState): 
 
 function endpoint(state: SimState, id: string): HTMLElement {
   const a = agentOf(state, id);
-  return h('span', { class: 'who-tag', title: a ? `${a.name} (${a.provider})` : id },
+  return h('span', { class: 'who-tag', title: a ? `${a.name} (${providerName(a.provider)})` : id },
     a ? dot(a.provider, a.ownerColor) : null, h('span', { class: 'wt-name' }, nameOf(state, id)));
 }
 

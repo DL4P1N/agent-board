@@ -42,7 +42,7 @@ export function updateTicket(w: World, id: string, patch: Partial<TicketSpec>): 
   if (patch.difficulty !== undefined) {
     const d: Difficulty = clampDifficulty(patch.difficulty);
     if (d !== t.difficulty) {
-      t.estimatedCostUsd *= estimateForDifficulty(d, w.settings.codexShare, w.settings.rejectRate) / Math.max(1e-6, estimateForDifficulty(t.difficulty, w.settings.codexShare, w.settings.rejectRate));
+      t.estimatedCostUsd *= estimateForDifficulty(d, w.settings.fleetMix, w.settings.rejectRate) / Math.max(1e-6, estimateForDifficulty(t.difficulty, w.settings.fleetMix, w.settings.rejectRate));
       t.difficulty = d; changes.push(`difficulty d${d}`);
     }
   }

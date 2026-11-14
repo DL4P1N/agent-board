@@ -7,6 +7,8 @@ import { ScreenCanvas, type ScreenMode } from './screens';
 import { glowTexture, makeCanvasTex } from './textures';
 import { drawText, textWidth } from './pixelFont';
 import type { Shared } from './shared';
+import type { AccentKey } from './shared';
+import type { ProviderId } from '../providers';
 import type { Palette } from './palettes';
 
 const WARM = new THREE.Color(0xffd9a0);
@@ -108,7 +110,7 @@ export class DeskVis {
   acc = Math.random();
   glowCur = 0;
   chairZ: number;
-  private kind: 'claude' | 'codex' | 'off' = 'off';
+  private kind: AccentKey = 'off';
   private screenMode: ScreenMode | '' = '';
 
   constructor(public d: DeskSlot, private sh: Shared) {
@@ -204,7 +206,7 @@ export class DeskVis {
     this.setLook('off');
   }
 
-  private setLook(k: 'claude' | 'codex' | 'off'): void {
+  private setLook(k: AccentKey): void {
     if (k === this.kind) return;
     this.kind = k;
     const s = this.sh;
@@ -234,9 +236,9 @@ export class DeskVis {
     const occ = !!agent;
     this.occupied = occ;
     const asleep = !occ || agent!.phase === 'offline' || agent!.pose === 'sleep';
-    const kind: 'claude' | 'codex' | 'off' = !occ ? 'off' : agent!.provider;
+    const kind: AccentKey = !occ ? 'off' : agent!.provider;
     this.setLook(kind);
-    const accentHex = kind === 'off' ? '#556' : '#' + ACCENT[kind as 'claude' | 'codex'].toString(16).padStart(6, '0');
+    const accentHex = kind === 'off' ? '#556' : '#' + ACCENT[kind as ProviderId].toString(16).padStart(6, '0');
     // chair push
     const targetZ = occ ? this.chairZ : this.d.center.z - 0.1;
     this.chair.position.z += (targetZ - this.chair.position.z) * (1 - Math.exp(-5 * dt));
@@ -250,7 +252,7 @@ export class DeskVis {
     this.glowCur += (glowTarget - this.glowCur) * (1 - Math.exp(-3 * dt));
     const flick = reduced ? 1 : 0.94 + 0.06 * Math.sin(t * 5 + this.d.index);
     this.glowMat.opacity = this.glowCur * pal.lampStrength * 0.55 * flick;
-    if (kind !== 'off') this.glowMat.color.setHex(ACCENT[kind as 'claude' | 'codex']).lerp(WARM, 0.55);
+    if (kind !== 'off') this.glowMat.color.setHex(ACCENT[kind as ProviderId]).lerp(WARM, 0.55);
     this.parts.shade.material = asleep ? this.sh.lampOn.off : this.sh.lampOn[kind];
     // papers
     this.paper.visible = !!agent && !!agent.ticketId && !agent.carrying && ['working', 'waiting', 'blocked', 'reworking', 'awaiting_review', 'asking_help', 'awaiting_help', 'helping'].includes(agent.phase);

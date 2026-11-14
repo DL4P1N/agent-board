@@ -10,7 +10,9 @@
 import type { StationId } from './layout';
 import type { Skill } from './skills';
 
-export type Provider = 'claude' | 'codex';
+import type { FleetMix, ProviderId } from './providers';
+/** Which coding-agent tool runs an agent. The full list (names, colours) lives in providers.ts. */
+export type Provider = ProviderId;
 export type Role = 'worker' | 'orchestrator' | 'integrator';
 export type Difficulty = 1 | 2 | 3 | 4 | 5;
 
@@ -381,7 +383,8 @@ export interface BriefPlan {
 export interface SimSettings {
   seed: number;
   workerCount: number;        // 1..12 connected workers (rest of desks stay empty/dark)
-  codexShare: number;         // 0..1 share of workers that are Codex (rest Claude)
+  /** Relative weight per tool (Claude Code, Codex, Copilot, Gemini CLI, Cursor, other). 0 = none of that tool. */
+  fleetMix: FleetMix;
   simSpeed: number;           // 0..8 time multiplier (0 = paused)
   ticketsPerMinute: number;   // orchestrator ticket creation rate 0..6
   meanDifficulty: number;     // 1..5 average difficulty of new tickets
@@ -405,7 +408,7 @@ export interface SimSettings {
 export const DEFAULT_SETTINGS: SimSettings = {
   seed: 7,
   workerCount: 6,
-  codexShare: 0.4,
+  fleetMix: { claude: 3, codex: 2, copilot: 0, gemini: 0, cursor: 0, other: 0 },
   simSpeed: 1,
   ticketsPerMinute: 2,
   meanDifficulty: 3,

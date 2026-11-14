@@ -5,7 +5,7 @@ import { copyText, fmtClock, flash, h, setAttr, setText, toggleClass } from './d
 import { icon } from './icons';
 
 export const ROOM_CODE = 'PIXEL-7FK2';
-export const INVITE_TEXT = `Join the Agent Board room ${ROOM_CODE}: run "npx agent-board join ${ROOM_CODE}" and follow the prompts. Contribute 3 agents (2 Claude, 1 Codex)`;
+export const INVITE_TEXT = `Join the Agent Board room ${ROOM_CODE}: run "npx agent-board join ${ROOM_CODE}" and follow the prompts. Works with Claude Code, Codex, GitHub Copilot, Gemini CLI, Cursor or any MCP tool.`;
 
 const PALETTES: { id: VisualSettings['palette']; label: string }[] = [
   { id: 'dusk', label: 'Dusk' }, { id: 'day', label: 'Day' }, { id: 'night', label: 'Night' }, { id: 'terminal', label: 'Terminal' },
@@ -21,7 +21,7 @@ export function createTopbar(ctx: UICtx, actions: { about(): void; togglePanels(
   const copyInvite = h('button', { type: 'button', class: 'btn', onClick: async () => { flash(copyInvite, (await copyText(INVITE_TEXT)) ? 'Copied' : 'Select + copy'); } }, 'Copy prompt');
   const pop = h('div', { class: 'popover', id: 'invite-pop', role: 'dialog', 'aria-label': 'Invite teammates' },
     h('div', { class: 'pop-head' }, h('b', {}, 'Invite with one prompt'), h('span', { class: 'chip warn', title: 'Nothing is actually listening yet' }, 'MOCK')),
-    h('p', { class: 'note' }, 'Paste this into Claude Code (or Codex) on any machine to bring that person\'s agents into this room:'),
+    h('p', { class: 'note' }, 'Paste this into your coding agent (Claude Code, Codex, Copilot, Gemini CLI, Cursor or any MCP tool) on any machine to bring that person\'s agents into this room:'),
     h('pre', { class: 'invite-text', tabIndex: 0 }, INVITE_TEXT),
     h('div', { class: 'btn-row' }, copyInvite),
     h('p', { class: 'note' }, 'Demo only: the command does not exist yet and no agent will actually connect.'));

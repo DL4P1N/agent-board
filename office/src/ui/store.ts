@@ -46,6 +46,11 @@ export function load(): Persisted {
   try { const s = localStorage.getItem(KEY); if (s) raw = JSON.parse(s); } catch { /* ignore */ }
   const r = (raw ?? {}) as Record<string, unknown>;
   const settings = pick(DEFAULT_SETTINGS, r.settings);
+  // older saves had a single Codex share (0..1); turn it into a Claude/Codex mix
+  const oldShare = (r.settings as { codexShare?: unknown } | undefined)?.codexShare;
+  if (typeof oldShare === 'number' && !(r.settings as { fleetMix?: unknown }).fleetMix) {
+    settings.fleetMix = { ...DEFAULT_SETTINGS.fleetMix, claude: Math.round((1 - oldShare) * 10), codex: Math.round(oldShare * 10) };
+  }
   if (settings.simSpeed <= 0) settings.simSpeed = 1; // never boot paused
   const prefsRaw = (r.prefs ?? {}) as Partial<Prefs>;
   const prefs: Prefs = {

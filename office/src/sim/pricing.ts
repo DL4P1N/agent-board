@@ -1,11 +1,12 @@
 /**
  * ILLUSTRATIVE price table - PLACEHOLDER ESTIMATES, not real prices. Edit freely.
  * USD per million tokens. Real pricing differs by plan/date; this only has to make the relative trade-offs visible
- * (haiku < sonnet < opus < fable; codex-mini < codex < codex-max).
+ * (haiku < sonnet < opus < fable; codex-mini < codex < codex-max; and so on for each tool's ladder).
  */
 import type { AgentConfig, Usage } from '../types';
 import { fillTotal, modelInfo, reviewBaseSeconds, speedOf, subagentFactor, tierInfo, workBaseSeconds, EFFORT_SPEED } from './difficulty';
 import { configForDifficulty } from './difficulty';
+import { PROVIDER_IDS, mixShares, type FleetMix } from '../providers';
 
 export interface Price { input: number; output: number; cacheRead: number }
 
@@ -18,6 +19,17 @@ export const PRICE_TABLE: Record<string, Price> = {
   mini:     { input: 0.4,  output: 1.6, cacheRead: 0.04 },
   standard: { input: 2,    output: 10,  cacheRead: 0.2 },
   max:      { input: 10,   output: 40,  cacheRead: 1 },
+  // GitHub Copilot, Gemini CLI, Cursor and other MCP tools: placeholder ladders too
+  base:     { input: 0.5,  output: 2,   cacheRead: 0.05 },
+  premium:  { input: 3,    output: 15,  cacheRead: 0.3 },
+  flash:    { input: 0.3,  output: 2.5, cacheRead: 0.03 },
+  pro:      { input: 2.5,  output: 15,  cacheRead: 0.25 },
+  deep:     { input: 8,    output: 40,  cacheRead: 0.8 },
+  auto:     { input: 1,    output: 5,   cacheRead: 0.1 },
+  frontier: { input: 5,    output: 25,  cacheRead: 0.5 },
+  small:    { input: 0.5,  output: 2,   cacheRead: 0.05 },
+  medium:   { input: 2,    output: 10,  cacheRead: 0.2 },
+  large:    { input: 6,    output: 30,  cacheRead: 0.6 },
 };
 const FALLBACK: Price = PRICE_TABLE.sonnet;
 
@@ -82,11 +94,12 @@ export function estimateTicketCost(difficulty: number, cfg: AgentConfig, rejectR
   return 1.2 * ((main + subs + comp) * (1 + rej * 0.55) + skill + review * (1 + rej));   // 1.2 = calibration (jitter, waits, spawn ramps)
 }
 
-/** Convenience: blended estimate for a Codex share (orchestrator doesn't know who will pick the ticket up). */
-export function estimateForDifficulty(difficulty: number, codexShare: number, rejectRate: number): number {
-  const c = estimateTicketCost(difficulty, configForDifficulty('claude', difficulty), rejectRate);
-  const x = estimateTicketCost(difficulty, configForDifficulty('codex', difficulty), rejectRate);
-  return c * (1 - codexShare) + x * codexShare;
+/** Blended estimate over the fleet mix (the orchestrator doesn't know which tool will pick the ticket up). */
+export function estimateForDifficulty(difficulty: number, mix: Partial<FleetMix>, rejectRate: number): number {
+  const shares = mixShares(mix);
+  let sum = 0;
+  for (const id of PROVIDER_IDS) if (shares[id] > 0) sum += shares[id] * estimateTicketCost(difficulty, configForDifficulty(id, difficulty), rejectRate);
+  return sum;
 }
 
 export { tierInfo, subagentFactor, EFFORT_SPEED };

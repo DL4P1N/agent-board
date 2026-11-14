@@ -143,7 +143,7 @@ class Run {
     if (Math.abs(sumAgents + sim.retiredCostUsd - m.totalCostUsd) > 0.01) fail(n, `agent usage ${sumAgents.toFixed(3)} + retired ${sim.retiredCostUsd.toFixed(3)} != total ${m.totalCostUsd.toFixed(3)}`);
     if (sumTickets > m.totalCostUsd + 0.01) fail(n, `ticket usage ${sumTickets.toFixed(3)} > total ${m.totalCostUsd.toFixed(3)}`);
     const tier = Object.values(m.costByTier).reduce((x, y) => x + y, 0);
-    const prov = m.costByProvider.claude + m.costByProvider.codex;
+    const prov = Object.values(m.costByProvider).reduce((x, y) => x + y, 0);
     if (Math.abs(tier - m.totalCostUsd) > 0.01 || Math.abs(prov - m.totalCostUsd) > 0.01) fail(n, 'costByTier/Provider do not sum to total');
     for (const k of ['merged', 'open', 'throughputPerMin', 'avgCycleSec', 'utilization', 'scopeDone', 'burnUsdPerMin', 'avgCostPerMergedUsd', 'wasteUsd', 'projectedScopeCostUsd', 'budgetUsedPct', 'orchestrationCostUsd', 'helpTotal', 'helpOpen'] as const) {
       const v = m[k];
@@ -283,9 +283,13 @@ results.push((() => { const r = mk('1 worker', { workerCount: 1 }); r.minutes(20
 {
   const r = mk('settings churn', { totalScope: 12 });
   r.minutes(3);
-  r.sim.setSettings({ workerCount: 12, ticketsPerMinute: 4, codexShare: 0.8 });
+  r.sim.setSettings({ workerCount: 12, ticketsPerMinute: 4, fleetMix: { claude: 1, codex: 4, copilot: 2, gemini: 2, cursor: 1, other: 1 } });
   r.minutes(3);
-  r.sim.setSettings({ workerCount: 2, codexShare: 0, blockRate: 0.5, rejectRate: 0.6 });
+  { // every tool in the mix gets agents, and each one that worked shows up in the cost breakdown
+    const tools = new Set(r.sim.state.agents.filter((a) => a.role === 'worker').map((a) => a.provider));
+    for (const id of ['claude', 'codex', 'copilot', 'gemini', 'cursor', 'other'] as const) if (!tools.has(id)) fail('settings churn', `no ${id} agent with a six-tool mix`);
+  }
+  r.sim.setSettings({ workerCount: 2, fleetMix: { claude: 0, codex: 0, copilot: 0, gemini: 0, cursor: 0, other: 0 }, blockRate: 0.5, rejectRate: 0.6 });
   r.minutes(2);
   r.sim.setSettings({ workerCount: 8, configMode: 'manual', walkSpeed: 2.5, totalScope: 30 });
   r.minutes(2);

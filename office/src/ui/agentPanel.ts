@@ -8,6 +8,7 @@ import { dock } from './hud';
 import { setSkillChips, setSkillSlots, skillChip, skillById } from './chips';
 import { EFFORTS, allModels, findModel } from './models';
 import { phaseInfo, tokens, usd, STATUS_LABEL } from './format';
+import { PROVIDERS, PROVIDER_IDS } from '../providers';
 
 const ROLE_ICON: Record<string, IconName> = { worker: 'worker', orchestrator: 'orchestrator', integrator: 'integrator' };
 const ROLE_LABEL: Record<string, string> = { worker: 'Worker', orchestrator: 'Orchestrator', integrator: 'Integrator' };
@@ -132,20 +133,20 @@ export function createAgentPanel(ctx: UICtx): Panel {
     ctx.refresh();
   };
   const oModel = selectRow('Model', [], '', (v) => { const m = findModel(v); send({ model: v, tier: m?.tier }); }, 'ovmodel');
-  fillSelect(oModel.select, allModels().map((m) => ({ value: m.model, label: `${m.model} (${m.tier})`, group: m.provider === 'claude' ? 'Claude' : 'Codex' })));
+  fillSelect(oModel.select, allModels().map((m) => ({ value: m.model, label: `${m.model} (${m.tier})`, group: PROVIDERS[m.provider].name })));
   const oBuf = sliderRow({ label: 'Autocompact buffer', min: 5, max: 50, step: 1, unit: '%', value: 20, def: 20, idPrefix: 'ovbuf', onInput: (v) => send({ autocompactBuffer: v }), hint: 'Share of context kept free before compaction.' });
   const oSub = sliderRow({ label: 'Subagents', min: 0, max: 8, step: 1, value: 2, def: 2, idPrefix: 'ovsub', onInput: (v) => send({ subagents: v }) });
   const oEff = selectRow('Effort', EFFORTS.map((e) => ({ value: e, label: e })), 'medium', (v) => send({ effort: v as AgentConfig['effort'] }), 'oveff');
-  const oProv = segmented<Provider>([{ value: 'claude', label: 'Claude' }, { value: 'codex', label: 'Codex' }], 'claude', (v) => {
+  const oProv = selectRow('Tool', PROVIDER_IDS.map((id) => ({ value: id, label: PROVIDERS[id].name })), 'claude', (v) => {
     if (!curId) return;
     const cur = { ...(ov.get(curId) ?? {}) }; delete cur.model; delete cur.tier; ov.set(curId, cur);
-    send({ provider: v });
-  }, 'Provider');
+    send({ provider: v as Provider });
+  }, 'ovprov');
   const oOff = switchRow('Offline (send home)', false, (v) => send({ offline: v }), 'Takes the agent offline: it goes home and sleeps.', 'ovoff');
   const oAuto = h('button', { type: 'button', class: 'btn', title: 'Remove every override on this agent and return to auto-by-difficulty', onClick: () => { if (!curId) return; ov.delete(curId); ctx.sim.setAgentOverride(curId, null); ctx.refresh(); } }, icon('undo'), ' Auto');
   const ovBadge = h('span', { class: 'chip warn' }, 'OVERRIDDEN');
   const overrides = h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Overrides', ovBadge, oAuto),
-    h('div', { class: 'se-row' }, h('span', { class: 'se-label' }, 'Provider'), oProv.el), oModel.el, oBuf.el, oSub.el, oEff.el, oOff.el);
+    oProv.el, oModel.el, oBuf.el, oSub.el, oEff.el, oOff.el);
 
   // stats
   const sDone = kv('Tickets done'); const sMerged = kv('Merged'); const sRework = kv('Reworks'); const sWalk = kv('Metres walked');
@@ -196,7 +197,7 @@ export function createAgentPanel(ctx: UICtx): Panel {
     // ---- inspector
     const cfg = sel.config;
     setText(iName, sel.name);
-    setText(iProv, sel.provider === 'claude' ? 'Claude Code' : 'Codex'); iProv.className = `prov ${sel.provider}`;
+    setText(iProv, PROVIDERS[sel.provider]?.name ?? sel.provider); iProv.className = `prov ${sel.provider}`;
     setText(iRole, ROLE_LABEL[sel.role] ?? sel.role);
     setStyle(iSwatch, 'background', sel.ownerColor || 'var(--muted)');
     setText(iOwner, sel.owner);

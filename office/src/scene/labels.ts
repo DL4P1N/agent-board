@@ -1,9 +1,10 @@
+import { PROVIDERS, type ProviderId } from '../providers';
 import type { SkillFn } from './skillLookup';
 
 export interface FlightTagItem { key: string; text: string; color: string; x: number; y: number }
 
 export interface LabelItem {
-  id: string; name: string; provider: 'claude' | 'codex'; tier: string; model: string; owner: string; ownerColor: string;
+  id: string; name: string; provider: ProviderId; tier: string; model: string; owner: string; ownerColor: string;
   skills: string[]; phase: string; ticketId: string | null; cost: number; burn: number; bubble: string | null;
   x: number; y: number; visible: boolean; selected: boolean;
 }
@@ -104,7 +105,7 @@ export class LabelLayer {
       if (t !== e.lastT) { e.lastT = t; e.root.style.transform = t; e.root.style.zIndex = String(Math.round(it.y) + (it.selected ? 1000 : 0)); }
       this.set(e, 'cardv', showLabels ? '1' : '0', () => { e.card.style.display = showLabels ? 'flex' : 'none'; });
       if (showLabels) {
-        const pc = it.provider === 'claude' ? '#d97757' : '#2dd4bf';
+        const pc = PROVIDERS[it.provider]?.color ?? '#94a3b8';
         this.set(e, 'pc', pc, () => { e.card.style.setProperty('--pc', pc); });
         const hq = it.phase === 'asking_help' || it.phase === 'awaiting_help' ? '1' : '0';
         this.set(e, 'q', hq, () => { e.q.style.display = hq === '1' ? 'inline-block' : 'none'; });

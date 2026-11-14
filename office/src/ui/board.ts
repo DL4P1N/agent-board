@@ -7,6 +7,7 @@ import { hudWindow, type HudWin } from './hud';
 import { icon } from './icons';
 import { setSkillChips, skillById, skillChip } from './chips';
 import { usd } from './format';
+import { providerName } from '../providers';
 
 const COLS: { id: string; title: string; statuses: string[]; limit: number; fsLimit: number }[] = [
   { id: 'backlog', title: 'Backlog', statuses: ['backlog'], limit: 10, fsLimit: 60 },
@@ -234,7 +235,7 @@ export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): b
     // pin + milestone selects
     const workers = st.agents.filter((a) => a.role === 'worker');
     const pSig = workers.map((a) => a.id + a.name).join(',');
-    if (pSig !== pinSig) { pinSig = pSig; fPin.replaceChildren(h('option', { value: '' }, 'anyone'), ...workers.map((a) => h('option', { value: a.id }, `${a.name} (${a.provider})`))); }
+    if (pSig !== pinSig) { pinSig = pSig; fPin.replaceChildren(h('option', { value: '' }, 'anyone'), ...workers.map((a) => h('option', { value: a.id }, `${a.name} (${providerName(a.provider)})`))); }
     if (document.activeElement !== fPin) fPin.value = src.pinnedTo ?? '';
     const ms = st.hack?.milestones ?? [];
     const mSig = ms.map((m) => m.id).join(',');

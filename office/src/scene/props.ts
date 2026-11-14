@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { BoxBuilder, rng } from './builder';
 
-export const ACCENT = { claude: 0xd97757, codex: 0x2dd4bf } as const;
+import { PROVIDERS, perProvider } from '../providers';
+/** Main accent per tool (from the provider registry). */
+export const ACCENT = perProvider((id) => PROVIDERS[id].accent.main);
 export const DIFF_COLORS = ['#5ad17a', '#b9e04a', '#f2c94c', '#f08a3c', '#e5484d'];
 
 export type B = BoxBuilder;

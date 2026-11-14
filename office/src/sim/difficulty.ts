@@ -3,7 +3,9 @@
  * Harder tickets get a stronger model, more subagents, and an earlier autocompact (bigger free buffer) because
  * long hard tasks produce big tool outputs. In configMode 'manual' every ticket uses settings.manualConfig instead.
  *
- * NOTE: Codex model names below are PLACEHOLDERS ('codex-mini' / 'codex' / 'codex-max'); the real names are configurable.
+ * NOTE: every non-Claude model name below is a PLACEHOLDER ('codex-mini', 'copilot-premium', 'gemini-pro', ...).
+ * Copilot and Cursor really let the user pick the underlying model; here each tool just gets a cheap -> strong ladder.
+ * Tier labels must be unique across tools (they key the price table).
  */
 import type { AgentConfig, Difficulty, Provider } from '../types';
 
@@ -28,6 +30,16 @@ export const MODEL_LIST: ModelInfo[] = [
   { model: 'codex-mini',        tier: 'mini',     provider: 'codex',  label: 'Codex Mini', rank: 0, capability: 1.5, speed: 1.3 },
   { model: 'codex',             tier: 'standard', provider: 'codex',  label: 'Codex',      rank: 1, capability: 3.5, speed: 1.05 },
   { model: 'codex-max',         tier: 'max',      provider: 'codex',  label: 'Codex Max',  rank: 2, capability: 5,   speed: 0.95 },
+  { model: 'copilot-base',      tier: 'base',     provider: 'copilot', label: 'Copilot base',    rank: 0, capability: 1.5, speed: 1.3 },
+  { model: 'copilot-premium',   tier: 'premium',  provider: 'copilot', label: 'Copilot premium', rank: 1, capability: 4,   speed: 1.0 },
+  { model: 'gemini-flash',      tier: 'flash',    provider: 'gemini', label: 'Gemini Flash', rank: 0, capability: 1.5, speed: 1.4 },
+  { model: 'gemini-pro',        tier: 'pro',      provider: 'gemini', label: 'Gemini Pro',   rank: 1, capability: 3.5, speed: 1.05 },
+  { model: 'gemini-deep',       tier: 'deep',     provider: 'gemini', label: 'Gemini Deep',  rank: 2, capability: 4.8, speed: 0.9 },
+  { model: 'cursor-auto',       tier: 'auto',     provider: 'cursor', label: 'Cursor Auto',     rank: 0, capability: 2,   speed: 1.25 },
+  { model: 'cursor-frontier',   tier: 'frontier', provider: 'cursor', label: 'Cursor frontier', rank: 1, capability: 4.5, speed: 1.0 },
+  { model: 'mcp-small',         tier: 'small',    provider: 'other',  label: 'Small model',  rank: 0, capability: 1.5, speed: 1.2 },
+  { model: 'mcp-medium',        tier: 'medium',   provider: 'other',  label: 'Medium model', rank: 1, capability: 3,   speed: 1.0 },
+  { model: 'mcp-large',         tier: 'large',    provider: 'other',  label: 'Large model',  rank: 2, capability: 4.5, speed: 0.9 },
 ];
 
 const BY_MODEL = new Map(MODEL_LIST.map((m) => [m.model, m]));
@@ -59,6 +71,34 @@ export const MODEL_TABLE: Record<Provider, Record<Difficulty, AgentConfig>> = {
     3: mk('codex', 'standard', 3, 'medium'),
     4: mk('codex', 'standard', 4, 'high'),
     5: mk('codex-max', 'max', 5, 'max'),
+  },
+  copilot: {
+    1: mk('copilot-base', 'base', 1, 'low'),
+    2: mk('copilot-base', 'base', 2, 'medium'),
+    3: mk('copilot-premium', 'premium', 3, 'medium'),
+    4: mk('copilot-premium', 'premium', 4, 'high'),
+    5: mk('copilot-premium', 'premium', 5, 'max'),
+  },
+  gemini: {
+    1: mk('gemini-flash', 'flash', 1, 'low'),
+    2: mk('gemini-flash', 'flash', 2, 'medium'),
+    3: mk('gemini-pro', 'pro', 3, 'medium'),
+    4: mk('gemini-pro', 'pro', 4, 'high'),
+    5: mk('gemini-deep', 'deep', 5, 'max'),
+  },
+  cursor: {
+    1: mk('cursor-auto', 'auto', 1, 'low'),
+    2: mk('cursor-auto', 'auto', 2, 'medium'),
+    3: mk('cursor-auto', 'auto', 3, 'high'),
+    4: mk('cursor-frontier', 'frontier', 4, 'high'),
+    5: mk('cursor-frontier', 'frontier', 5, 'max'),
+  },
+  other: {
+    1: mk('mcp-small', 'small', 1, 'low'),
+    2: mk('mcp-medium', 'medium', 2, 'medium'),
+    3: mk('mcp-medium', 'medium', 3, 'high'),
+    4: mk('mcp-large', 'large', 4, 'high'),
+    5: mk('mcp-large', 'large', 5, 'max'),
   },
 };
 
