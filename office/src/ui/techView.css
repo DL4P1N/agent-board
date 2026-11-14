@@ -12,6 +12,8 @@ html[data-view="board"] .tech {
   overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--border) transparent;
   font-size: 0.78rem;
 }
+/* First switch to 3D: a note while three.js and the scene load. */
+#scene.loading::after { content: "Loading the 3D office..."; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-family: var(--font); font-size: 0.85rem; letter-spacing: 0.08em; text-transform: uppercase; }
 /* The board view has its own tickets, activity and metrics, so those floating windows (and their chips) step aside. */
 html[data-view="board"] :is([data-win="board"], [data-win="log"], [data-win="metrics"]) { display: none !important; }
 /* Grid backdrop instead of the 3D room. */

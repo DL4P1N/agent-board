@@ -13,6 +13,8 @@ npm run test:sim   # headless simulation invariants
 ## What you are looking at
 
 - **Two views, same room.** Switch in the top bar (or press `V`, or open `?view=board` / `?view=office`); the choice is remembered.
+  - **Board** is the default. **3D office** is created on the first switch: three.js and the scene load as a separate
+    chunk then, so the board view never downloads them or starts WebGL.
   - **3D office**: the pixel office below, with the ticket board, activity and metrics as floating windows.
   - **Board**: a technical 2D dashboard in the same style, with no WebGL rendering. Stat tiles, a "needs attention" list
     (blocked agents, open help, sent-back or over-budget tickets), tickets as columns or a sortable table, activity with

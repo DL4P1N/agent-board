@@ -1,6 +1,6 @@
 import './styles.css';
 import { Simulation } from './sim';
-import { OfficeScene } from './scene/OfficeScene';
+import { LazyScene } from './scene/LazyScene';
 import { UI } from './ui/UI';
 import { load } from './ui/store';
 
@@ -11,14 +11,12 @@ const sceneHost = document.getElementById('scene') as HTMLElement;
 const uiRoot = document.getElementById('ui') as HTMLElement;
 
 const sim = new Simulation(loaded.settings);
-const scene = new OfficeScene(sceneHost, { ...loaded.visual });
+const scene = new LazyScene(sceneHost, { ...loaded.visual }); // WebGL is only created when the 3D office is first shown
 const ui = new UI(uiRoot, sim, scene, loaded);
 
 scene.onPick((id) => ui.pick(id));
 
-const onResize = (): void => scene.resize();
-window.addEventListener('resize', onResize);
-if (typeof ResizeObserver !== 'undefined') new ResizeObserver(onResize).observe(sceneHost);
+window.addEventListener('resize', () => scene.resize());
 
 let last = performance.now();
 function frame(now: number): void {

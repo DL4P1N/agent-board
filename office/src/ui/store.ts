@@ -24,7 +24,7 @@ export const DEFAULT_PREFS: Prefs = {
   rects: {},
   dockW: {},
   boardMode: 'cards',
-  view: 'office',
+  view: 'board',
   techTickets: 'columns',
 };
 
@@ -55,7 +55,7 @@ export function load(): Persisted {
     rects: { ...(prefsRaw.rects ?? {}) },
     dockW: { ...(prefsRaw.dockW ?? {}) },
     boardMode: prefsRaw.boardMode === 'list' ? 'list' : 'cards',
-    view: prefsRaw.view === 'board' ? 'board' : 'office',
+    view: prefsRaw.view === 'office' ? 'office' : 'board',
     techTickets: prefsRaw.techTickets === 'table' ? 'table' : 'columns',
   };
   // ?view=board / ?view=office in the URL wins (shareable link to either view)

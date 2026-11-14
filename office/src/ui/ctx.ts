@@ -1,11 +1,11 @@
 import type { BoardCommands, AgentState, SimSettings, SimState, VisualSettings } from '../types';
 import type { Simulation } from '../sim';
-import type { OfficeScene } from '../scene/OfficeScene';
+import type { LazyScene } from '../scene/LazyScene';
 import type { Prefs } from './store';
 
 export interface UICtx {
   sim: Simulation;
-  scene: OfficeScene;
+  scene: LazyScene;
   visual: VisualSettings;
   prefs: Prefs;
   state: SimState;

@@ -1,7 +1,7 @@
 // UI controller: builds the HUD once, then diffs it at ~9 Hz. Implements UICtx for all panels.
 import { type BoardCommands, DEFAULT_SETTINGS, DEFAULT_VISUAL, type AgentState, type SimEvent, type SimSettings, type SimState, type VisualSettings } from '../types';
 import type { Simulation } from '../sim';
-import type { OfficeScene } from '../scene/OfficeScene';
+import type { LazyScene } from '../scene/LazyScene';
 import type { Panel, UICtx } from './ctx';
 import { clear, h, toggleClass } from './dom';
 import { saveSoon, clearSaved, type Persisted, type Prefs } from './store';
@@ -43,12 +43,14 @@ export class UI implements UICtx {
   private selectCb: ((id: string | null) => void) | null = null;
   private mtab: 'none' | 'controls' | 'agents' | 'stats' = 'none';
 
-  constructor(private root: HTMLElement, public sim: Simulation, public scene: OfficeScene, loaded: Persisted) {
+  constructor(private root: HTMLElement, public sim: Simulation, public scene: LazyScene, loaded: Persisted) {
     this.visual = { ...loaded.visual };
     this.prefs = loaded.prefs;
     this.state = sim.state;
     this.applyPalette();
     document.documentElement.dataset.view = this.prefs.view;
+    this.scene.whenReady(() => document.getElementById('scene')?.classList.remove('loading'));
+    if (this.prefs.view === 'office') this.show3d();
 
     const topbar = createTopbar(this, { about: () => this.about.open(), togglePanels: () => this.togglePanels(), resetLayout: () => this.resetLayout() });
     const controls = createControlPanel(this);
@@ -120,10 +122,23 @@ export class UI implements UICtx {
     document.documentElement.dataset.view = v;
     if (v === 'board' && this.mtab === 'stats') this.setMobileTab('none');
     this.placeDrawer();
-    if (v === 'office') requestAnimationFrame(() => this.scene.resize());
+    if (v === 'office') this.show3d();
     relayoutHud();
     this.persist(); this.refresh();
     try { const u = new URL(location.href); if (u.searchParams.has('view')) { u.searchParams.set('view', v); history.replaceState(null, '', u); } } catch { /* ignore */ }
+  }
+  /** Create the WebGL office on first use. If its code can't load, fall back to the board view. */
+  private show3d(): void {
+    if (!this.scene.ready) document.getElementById('scene')?.classList.add('loading');
+    void this.scene.ensure().then((s) => {
+      if (!s) {
+        document.getElementById('scene')?.classList.remove('loading');
+        this.toasts.push('webgl', '3D office did not load', 'Its code could not be fetched (offline?). Staying on the board view', 'warn', 1000);
+        this.setView('board');
+        return;
+      }
+      requestAnimationFrame(() => s.resize());
+    });
   }
   openTicket(id: string): void { this.boardPanel.openTicket(id); }
   openNewTicket(): void { this.boardPanel.openNew(); }
