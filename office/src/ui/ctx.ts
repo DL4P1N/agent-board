@@ -23,6 +23,13 @@ export interface UICtx {
   restart(): void;
   resetVisuals(): void;
   agent(id: string | null): AgentState | undefined;
+  /** Current main view and a way to switch it (3D office or technical board). */
+  view: 'office' | 'board';
+  setView(v: 'office' | 'board'): void;
+  /** Open the ticket editor drawer for a ticket (works in both views). */
+  openTicket(id: string): void;
+  /** Open the ticket creator drawer. */
+  openNewTicket(): void;
 }
 
 export interface Panel {

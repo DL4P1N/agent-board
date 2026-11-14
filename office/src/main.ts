@@ -25,7 +25,7 @@ function frame(now: number): void {
   const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
   last = now;
   sim.step(dt);
-  scene.update(sim.state, dt);
+  if (ui.view === 'office') scene.update(sim.state, dt); // the board view shows no 3D, so skip rendering entirely
   ui.update(sim.state, now);
   requestAnimationFrame(frame);
 }

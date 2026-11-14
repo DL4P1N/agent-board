@@ -10,6 +10,10 @@ export interface Prefs {
   rects: Record<string, { x: number; y: number; w: number; h: number }>; // user-saved HUD window geometry (px)
   dockW: Record<string, number>;      // user-saved dock widths (px)
   boardMode: 'cards' | 'list';
+  /** Main view: the 3D office, or the technical 2D board (no WebGL rendering). */
+  view: 'office' | 'board';
+  /** How the board view lays out tickets. */
+  techTickets: 'columns' | 'table';
 }
 export interface Persisted { settings: SimSettings; visual: VisualSettings; prefs: Prefs; hadSaved: boolean }
 
@@ -20,6 +24,8 @@ export const DEFAULT_PREFS: Prefs = {
   rects: {},
   dockW: {},
   boardMode: 'cards',
+  view: 'office',
+  techTickets: 'columns',
 };
 
 function pick<T extends object>(defaults: T, saved: unknown): T {
@@ -49,7 +55,11 @@ export function load(): Persisted {
     rects: { ...(prefsRaw.rects ?? {}) },
     dockW: { ...(prefsRaw.dockW ?? {}) },
     boardMode: prefsRaw.boardMode === 'list' ? 'list' : 'cards',
+    view: prefsRaw.view === 'board' ? 'board' : 'office',
+    techTickets: prefsRaw.techTickets === 'table' ? 'table' : 'columns',
   };
+  // ?view=board / ?view=office in the URL wins (shareable link to either view)
+  try { const v = new URLSearchParams(location.search).get('view'); if (v === 'board' || v === 'office') prefs.view = v; } catch { /* ignore */ }
   return { settings, visual: pick(DEFAULT_VISUAL, r.visual), prefs, hadSaved: raw !== null };
 }
 

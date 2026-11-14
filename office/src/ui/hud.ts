@@ -184,6 +184,8 @@ class HudManager {
     const doc = document.documentElement;
     const l = this.measure();
     doc.style.setProperty('--top-h', `${Math.ceil(l.topY - l.gap * 2)}px`);
+    const ct = this.chipsTop.children.length ? this.chipsTop.getBoundingClientRect() : null;
+    doc.style.setProperty('--chips-top-b', ct && ct.height > 0 ? `${Math.ceil(ct.bottom)}px` : '0px'); // the board view starts below the top chip row
     if (this.mobile) {
       for (const w of this.wins.values()) { w.el.style.left = w.el.style.top = w.el.style.width = w.el.style.height = ''; }
       doc.style.setProperty('--hud-b', '0px');
@@ -197,6 +199,7 @@ class HudManager {
       const r = this.currentRect(w, l, isGeneric ? generic++ : 0);
       this.apply(w, r);
       w.refreshAria();
+      if (doc.dataset.view === 'board' && BOARD_VIEW_HIDDEN.has(w.id)) continue; // replaced by the board view, so it takes no room
       if (w.zone === 'bottom' && !w.rect && !w.fs && r.y + r.h >= l.bottomY - 2) top = Math.min(top, r.y); // only windows sitting in the bottom band push the docks up
     }
     doc.style.setProperty('--hud-b', `${Math.ceil(l.vh - top)}px`);
@@ -226,6 +229,8 @@ const mgr = new HudManager();
 
 /** Attach the HUD layers to the UI root. Call once, BEFORE creating windows is ideal (windows created earlier are mounted on attach). */
 export function attachHud(ctx: UICtx, root: HTMLElement): void { mgr.attach(ctx, root); }
+/** HUD windows the board view replaces with its own sections (hidden there, CSS: html[data-view="board"]). */
+export const BOARD_VIEW_HIDDEN = new Set(['board', 'log', 'metrics']);
 export function resetHudLayout(): void { mgr.resetLayout(); }
 export function exitHudFullscreen(): boolean { return mgr.exitFullscreen(); }
 export function relayoutHud(): void { mgr.relayout(); }

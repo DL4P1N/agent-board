@@ -8,14 +8,14 @@ import { usd } from './format';
 
 const TIER_COLORS: Record<string, string> = { haiku: '#4ade80', sonnet: '#38bdf8', opus: '#c084fc', fable: '#f472b6', mini: '#5eead4', standard: '#fbbf24', max: '#fb7185' };
 const FALLBACK = ['#94a3b8', '#fb923c', '#a3e635', '#22d3ee'];
-const tierColor = (t: string, i: number): string => TIER_COLORS[t] ?? FALLBACK[i % FALLBACK.length];
+export const tierColor = (t: string, i: number): string => TIER_COLORS[t] ?? FALLBACK[i % FALLBACK.length];
 
 function kv(label: string, title?: string): { row: HTMLElement; v: HTMLElement } {
   const v = h('b', {});
   return { row: h('div', { class: 'kv', title: title ?? '' }, h('span', {}, label), v), v };
 }
 
-function stack(): { el: HTMLElement; legend: HTMLElement; bar: HTMLElement; set(items: { key: string; value: number; color: string }[]): void } {
+export function stack(): { el: HTMLElement; legend: HTMLElement; bar: HTMLElement; set(items: { key: string; value: number; color: string }[]): void } {
   const bar = h('div', { class: 'stack' });
   const legend = h('div', { class: 'stack-legend' });
   let sig = '';

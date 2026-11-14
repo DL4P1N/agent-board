@@ -25,7 +25,7 @@ interface Card {
 
 interface Filters { q: string; assignee: string; skill: string; milestone: string; diff: string }
 
-export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): boolean; openNew(): void } {
+export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): boolean; openNew(): void; openTicket(id: string): void; drawer: HTMLElement } {
   let wrap!: HTMLElement;
   let fsBtn!: HTMLButtonElement;
   const win = hudWindow(ctx, 'board', 'Ticket board', false, 'board-win', {
@@ -258,7 +258,7 @@ export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): b
     (m === 'new' ? fTitle : drClose).focus();
   }
   function openTicket(id: string): void { openDrawer('edit', id); }
-  function openNew(): void { if (win.isMin()) win.setMin(false); openDrawer('new', null); }
+  function openNew(): void { if (win.isMin() && ctx.view === 'office') win.setMin(false); openDrawer('new', null); }
   function closeDrawer(): boolean {
     if (!drawerOpen) return false;
     drawerOpen = false; drawer.hidden = true; confirming = false; editId = null; return true;
@@ -282,9 +282,9 @@ export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): b
       if (ci >= 0) buckets[ci].push(t);
     }
     win.setChip(`${open} open - ${review} review - ${merged} merged - ${usd(state.metrics.totalCostUsd)}`);
-    if (win.isMin()) return;
+    syncDrawer(); // the drawer also serves the board view, so keep it live even when this window is minimized or hidden
+    if (win.isMin() || ctx.view === 'board') return;
     if (fs) { syncFilterSelects(); const n = buckets.reduce((s, b, i) => s + (cols[i].id === 'cancelled' && !showCancelled ? 0 : b.length), 0); setText(count, `${n} shown`); }
-    syncDrawer();
 
     const live = new Set<string>();
     cols.forEach((c, ci) => {
@@ -336,5 +336,5 @@ export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): b
     for (const [id, k] of cards) if (!live.has(id)) { k.el.remove(); cards.delete(id); }
     void cancelColChk;
   };
-  return { el: win.el, update, win, closeDrawer, openNew };
+  return { el: win.el, update, win, closeDrawer, openNew, openTicket, drawer };
 }

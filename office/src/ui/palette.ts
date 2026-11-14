@@ -9,6 +9,9 @@ import './palette.css';
 export interface PaletteHooks {
   togglePanels(): void;
   openAbout(): void;
+  /** Main view: 3D office or technical board. */
+  setView?(v: 'office' | 'board'): void;
+  getView?(): 'office' | 'board';
   /** Toggle a HUD window by id ('board' | 'log' | 'metrics' | 'plan' | 'skills' | 'comms' | 'hack'). */
   toggleWindow(id: string): void;
   openComms(to?: string): void;
@@ -144,6 +147,11 @@ export function createPalette(ctx: UICtx, hooks: PaletteHooks): Palette {
     }
 
     // view
+    if (hooks.setView) {
+      const cur = hooks.getView?.() ?? 'office';
+      add({ id: 'view-board', group: 'View', label: 'Board view (technical, no 3D)', sub: cur === 'board' ? 'current' : undefined, hint: 'V', ico: 'panels', keywords: 'board table kanban 2d technical dashboard view switch flat', run: () => { hooks.setView?.('board'); } });
+      add({ id: 'view-office', group: 'View', label: '3D office view', sub: cur === 'office' ? 'current' : undefined, hint: 'V', ico: 'users', keywords: 'office 3d room pixel scene view switch', run: () => { hooks.setView?.('office'); } });
+    }
     add({ id: 'overlays', group: 'View', label: 'Toggle overlays', ico: 'panels', hint: 'P', keywords: 'hide show panels ui hud', run: () => { hooks.togglePanels(); } });
     for (const [id, title, key] of [['comms', 'Comms', 'C'], ['hack', 'Hackathon', 'H'], ['board', 'Ticket board', 'T'], ['log', 'Activity log', 'L'], ['metrics', 'Metrics', 'M'], ['plan', 'Plan', ''], ['skills', 'Skill library', '']] as const) {
       add({ id: `win-${id}`, group: 'View', bulk: true, label: `Toggle ${title} window`, hint: key, ico: 'panels', keywords: 'show hide window minimize', run: () => { hooks.toggleWindow(id); } });

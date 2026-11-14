@@ -15,7 +15,8 @@ import { createPlan, createSkillLibrary } from './planSkills';
 import { createAbout } from './about';
 import { Toasts } from './toasts';
 import { setCatalog } from './chips';
-import { attachHud, exitHudFullscreen, resetHudLayout, type HudWin } from './hud';
+import { attachHud, exitHudFullscreen, relayoutHud, resetHudLayout, type HudWin } from './hud';
+import { createTechView } from './techView';
 import { createComms, type CommsPanel } from './comms';
 import { createHackathon, type HackPanel } from './hackathon';
 import { createPalette } from './palette';
@@ -37,7 +38,8 @@ export class UI implements UICtx {
   private wins: Record<string, HudWin> = {};
   private comms!: CommsPanel;
   private hack!: HackPanel;
-  private boardPanel!: { closeDrawer(): boolean; openNew(): void };
+  private boardPanel!: { closeDrawer(): boolean; openNew(): void; openTicket(id: string): void; drawer: HTMLElement };
+  private tech!: Panel;
   private selectCb: ((id: string | null) => void) | null = null;
   private mtab: 'none' | 'controls' | 'agents' | 'stats' = 'none';
 
@@ -46,6 +48,7 @@ export class UI implements UICtx {
     this.prefs = loaded.prefs;
     this.state = sim.state;
     this.applyPalette();
+    document.documentElement.dataset.view = this.prefs.view;
 
     const topbar = createTopbar(this, { about: () => this.about.open(), togglePanels: () => this.togglePanels(), resetLayout: () => this.resetLayout() });
     const controls = createControlPanel(this);
@@ -60,9 +63,12 @@ export class UI implements UICtx {
     const hack = createHackathon(this);
     this.comms = comms; this.hack = hack;
     this.wins = { metrics: metrics.win, board: board.win, log: log.win, plan: plan.win, skills: skills.win, comms: comms.win, hack: hack.win };
-    this.panels = [topbar, controls, agents, metrics, board, log, plan, skills, comms, hack];
+    const tech = createTechView(this);
+    this.tech = tech;
+    this.panels = [topbar, controls, agents, metrics, board, log, plan, skills, comms, hack, tech];
     const palette = createPalette(this, {
       togglePanels: () => this.togglePanels(), openAbout: () => this.about.open(), resetLayout: () => this.resetLayout(),
+      setView: (v) => this.setView(v), getView: () => this.view,
       toggleWindow: (id) => { if (id === 'comms') comms.toggle(); else if (id === 'hack') hack.toggle(); else this.wins[id]?.toggle(); },
       openComms: (to) => comms.open(to), openHack: (focusBrief) => (focusBrief ? hack.focusBrief() : hack.open()),
       toast: (title, text, tone = 'info') => this.toasts.push(`pal-${title}`, title, text, tone, 200),
@@ -74,9 +80,10 @@ export class UI implements UICtx {
     const showPill = h('button', { type: 'button', class: 'btn show-panels', onClick: () => this.togglePanels() }, 'Panels hidden - press P');
 
     clear(root);
-    root.append(topbar.el, controls.el, agents.el, tabbar, showPill, this.toasts.el, this.about.el, palette.el);
+    root.append(tech.el, topbar.el, controls.el, agents.el, tabbar, showPill, this.toasts.el, this.about.el, palette.el);
     // windows mount themselves (free-floating layer + chip rows + mobile sheet) and keep the docks' insets in sync
     attachHud(this, root);
+    this.placeDrawer();
 
     sim.on((e) => this.onSimEvent(e));
     window.addEventListener('keydown', (e) => this.onKey(e));
@@ -105,6 +112,21 @@ export class UI implements UICtx {
     this.refresh();
   }
   pick(id: string | null): void { this.select(id, true); }
+  get view(): 'office' | 'board' { return this.prefs.view; }
+  /** Switch between the 3D office and the technical board view. The 3D scene stops rendering in the board view. */
+  setView(v: 'office' | 'board'): void {
+    if (v === this.prefs.view) return;
+    this.prefs.view = v;
+    document.documentElement.dataset.view = v;
+    if (v === 'board' && this.mtab === 'stats') this.setMobileTab('none');
+    this.placeDrawer();
+    if (v === 'office') requestAnimationFrame(() => this.scene.resize());
+    relayoutHud();
+    this.persist(); this.refresh();
+    try { const u = new URL(location.href); if (u.searchParams.has('view')) { u.searchParams.set('view', v); history.replaceState(null, '', u); } } catch { /* ignore */ }
+  }
+  openTicket(id: string): void { this.boardPanel.openTicket(id); }
+  openNewTicket(): void { this.boardPanel.openNew(); }
   onSelect(cb: (id: string | null) => void): void { this.selectCb = cb; }
   togglePause(): void {
     const s = this.sim.settings.simSpeed;
@@ -130,6 +152,13 @@ export class UI implements UICtx {
   // ------------------------------------------------------------------ internals
   private persist(): void {
     saveSoon(() => ({ settings: this.sim.settings, visual: this.visual, prefs: this.prefs }));
+  }
+  /** The ticket drawer lives in the ticket window in the office view and in the board view's page otherwise. */
+  private placeDrawer(): void {
+    const d = this.boardPanel.drawer;
+    const host = this.prefs.view === 'board' ? this.tech.el.parentElement ?? this.root : this.wins.board.el.querySelector('.win-full') ?? this.wins.board.el;
+    if (d.parentElement !== host) host.appendChild(d);
+    d.classList.toggle('tv-drawer', this.prefs.view === 'board');
   }
   private applyPalette(): void { document.documentElement.dataset.palette = this.visual.palette; }
 
@@ -192,6 +221,8 @@ export class UI implements UICtx {
     } else if (k === '[') this.bumpSpeed(-1);
     else if (k === ']') this.bumpSpeed(1);
     else if (k === 'a' || k === 'A') { this.sim.addTicket(); this.refresh(); }
+    else if (k === 'v' || k === 'V') this.setView(this.view === 'office' ? 'board' : 'office');
+    else if (this.view === 'board' && 'fFtTlLmM'.includes(k)) return; // those windows are part of the board view itself
     else if (k === 'f' || k === 'F') this.wins.board.setFullscreen(!this.wins.board.isFullscreen());
     else if (k === 'R') this.resetLayout();
     else if (k === 'p' || k === 'P') this.togglePanels();

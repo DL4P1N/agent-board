@@ -48,10 +48,21 @@ export function createTopbar(ctx: UICtx, actions: { about(): void; togglePanels(
   const resetBtn = h('button', { type: 'button', class: 'btn icon-btn', title: 'Reset layout: panel and window positions (Shift+R)', 'aria-label': 'Reset layout', onClick: () => actions.resetLayout() }, icon('undo'));
   const helpBtn = h('button', { type: 'button', class: 'btn icon-btn', title: 'About this demo', 'aria-label': 'About this demo', onClick: () => actions.about() }, icon('help'));
 
-  const el = h('header', { class: 'topbar' }, logo, room, inviteWrap, h('span', { class: 'grow' }), conn, speed, h('div', { class: 'speed-ctl' }, slower, pause, faster), swatches, panelsBtn, resetBtn, helpBtn);
+  // main view switch: the 3D office or the technical board (V)
+  const viewBtn = (v: 'office' | 'board', ico: 'users' | 'panels', label: string, title: string): HTMLButtonElement =>
+    h('button', { type: 'button', role: 'radio', title, 'aria-label': label, 'aria-checked': 'false', onClick: () => ctx.setView(v) }, icon(ico), h('span', { class: 'lbl' }, label));
+  const viewOffice = viewBtn('office', 'users', '3D office', 'The 3D pixel office (V switches)');
+  const viewBoard = viewBtn('board', 'panels', 'Board', 'Technical board: stats, tickets, activity and costs, no 3D (V switches)');
+  const viewSeg = h('div', { class: 'seg view-seg', role: 'radiogroup', 'aria-label': 'View' }, viewOffice, viewBoard);
 
-  let lastPaused: boolean | null = null, lastPal = '';
+  const el = h('header', { class: 'topbar' }, logo, viewSeg, room, inviteWrap, h('span', { class: 'grow' }), conn, speed, h('div', { class: 'speed-ctl' }, slower, pause, faster), swatches, panelsBtn, resetBtn, helpBtn);
+
+  let lastPaused: boolean | null = null, lastPal = '', lastView = '';
   const update = (state: SimState): void => {
+    if (lastView !== ctx.view) {
+      lastView = ctx.view;
+      for (const [b, v] of [[viewOffice, 'office'], [viewBoard, 'board']] as const) { toggleClass(b, 'on', ctx.view === v); b.setAttribute('aria-checked', String(ctx.view === v)); }
+    }
     const online = state.agents.filter((a) => a.phase !== 'offline');
     const humans = new Set(online.map((a) => a.owner)).size;
     setText(connText, `${online.length} agents - ${humans} humans online`);

@@ -12,6 +12,12 @@ npm run test:sim   # headless simulation invariants
 
 ## What you are looking at
 
+- **Two views, same room.** Switch in the top bar (or press `V`, or open `?view=board` / `?view=office`); the choice is remembered.
+  - **3D office**: the pixel office below, with the ticket board, activity and metrics as floating windows.
+  - **Board**: a technical 2D dashboard in the same style, with no WebGL rendering. Stat tiles, a "needs attention" list
+    (blocked agents, open help, sent-back or over-budget tickets), tickets as columns or a sortable table, activity with
+    filters, open help requests and a cost breakdown. The agents dock, ticket editor, comms and hackathon windows are shared.
+
 - **Hackathon mode (default).** Give the Orchestrator a project name and brief (Hack window, key `H`). It plans epics,
   milestones (MVP, features, polish, demo), ~20-30 tickets with difficulty and skills, a demo checklist and a live
   preview deploy. A countdown scoreboard hangs on the office wall. If the team falls behind it cuts scope (polish first)
