@@ -16,6 +16,11 @@ npm run test:sim   # headless simulation invariants
   sliders (Control room > Fleet) set the mix; each tool has its own colour, model ladder and cost line. All tools live in
   one registry, `src/providers.ts`. Model names and prices other than Claude's are placeholders.
 - **Two views, same room.** Switch in the top bar (or press `V`, or open `?view=board` / `?view=office`); the choice is remembered.
+  - **Board** leads with what a team lead needs: a deadline verdict ("On track" / "Behind by ~N"), **What needs you**
+    (stuck agents, unanswered questions, budget, deadline) with the fix right there (reply inline, send a teammate,
+    cut scope, add time, raise the budget), and **Who's doing what** per person. A top-bar badge counts what needs you.
+  - Keyboard: skip links, one Tab stop for the task columns (arrow keys inside), Esc closes the top window. Single-key
+    shortcuts can be switched off in the command palette (Ctrl+K). Text is 12px minimum; Day palette colours pass 4.5:1.
   - **Board** is the default. **3D office** is created on the first switch: three.js and the scene load as a separate
     chunk then, so the board view never downloads them or starts WebGL.
   - **3D office**: the pixel office below, with the ticket board, activity and metrics as floating windows.

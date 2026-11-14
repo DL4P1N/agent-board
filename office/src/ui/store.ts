@@ -14,18 +14,24 @@ export interface Prefs {
   view: 'office' | 'board';
   /** How the board view lays out tickets. */
   techTickets: 'columns' | 'table';
+  /** Single-key shortcuts (V, C, H, P, ...). Can be switched off (WCAG 2.1.4); Ctrl+K always works. */
+  keys: boolean;
+  /** The "this is a simulation" banner was dismissed. */
+  introSeen: boolean;
 }
 export interface Persisted { settings: SimSettings; visual: VisualSettings; prefs: Prefs; hadSaved: boolean }
 
 export const DEFAULT_PREFS: Prefs = {
   open: { scenarios: true, fleet: true, workload: true, behaviour: false, time: true, config: true, visuals: false },
   min: { plan: true, skills: true },
-  collapse: {},
+  collapse: { controls: true }, // the demo's simulation controls start folded away so the board gets the room
   rects: {},
   dockW: {},
   boardMode: 'cards',
   view: 'board',
   techTickets: 'columns',
+  keys: true,
+  introSeen: false,
 };
 
 function pick<T extends object>(defaults: T, saved: unknown): T {
@@ -56,12 +62,14 @@ export function load(): Persisted {
   const prefs: Prefs = {
     open: { ...DEFAULT_PREFS.open, ...(prefsRaw.open ?? {}) },
     min: { ...DEFAULT_PREFS.min, ...(prefsRaw.min ?? {}) },
-    collapse: { ...(prefsRaw.collapse ?? {}) },
+    collapse: { ...DEFAULT_PREFS.collapse, ...(prefsRaw.collapse ?? {}) },
     rects: { ...(prefsRaw.rects ?? {}) },
     dockW: { ...(prefsRaw.dockW ?? {}) },
     boardMode: prefsRaw.boardMode === 'list' ? 'list' : 'cards',
     view: prefsRaw.view === 'office' ? 'office' : 'board',
     techTickets: prefsRaw.techTickets === 'table' ? 'table' : 'columns',
+    keys: prefsRaw.keys !== false,
+    introSeen: prefsRaw.introSeen === true,
   };
   // ?view=board / ?view=office in the URL wins (shareable link to either view)
   try { const v = new URLSearchParams(location.search).get('view'); if (v === 'board' || v === 'office') prefs.view = v; } catch { /* ignore */ }

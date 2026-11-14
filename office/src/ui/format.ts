@@ -42,9 +42,10 @@ export function tokens(n: number | undefined | null): string {
   if (v >= 1e3) return `${(v / 1e3).toFixed(1)}k`;
   return String(Math.round(v));
 }
+/** One set of status names for every view (matches the real board's wording). */
 export const STATUS_LABEL: Record<string, string> = {
-  backlog: 'Backlog', assigned: 'Assigned', in_progress: 'In progress', in_review: 'In review', changes_requested: 'Changes requested', merged: 'Merged',
+  backlog: 'To do', assigned: 'Claimed', in_progress: 'In progress', in_review: 'In review', changes_requested: 'Sent back', merged: 'Done', cancelled: 'Cancelled',
 };
 export const KIND_LABEL: Record<string, string> = {
-  info: 'INFO', help: 'HELP', chat: 'CHAT', skill: 'SKILL', ticket: 'TICKET', review: 'REVIEW', merge: 'MERGE', reject: 'REJECT', plan: 'PLAN', block: 'BLOCK', compact: 'COMPACT', cost: 'COST',
+  info: 'INFO', help: 'HELP', chat: 'CHAT', skill: 'SKILL', ticket: 'TASK', review: 'REVIEW', merge: 'MERGE', reject: 'REJECT', plan: 'PLAN', block: 'BLOCK', compact: 'COMPACT', cost: 'COST',
 };

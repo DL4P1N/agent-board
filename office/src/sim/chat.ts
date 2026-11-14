@@ -63,25 +63,25 @@ function apply(w: World, it: Intent): void {
     }
     case 'cancel_ticket': {
       const t = w.tickets.get(it.id);
-      if (!open(t)) { act(w, `No open ticket ${it.id}`, 'system'); return; }
+      if (!open(t)) { act(w, `No open task ${it.id}`, 'system'); return; }
       cancelTicket(w, it.id);
       act(w, `Cancelled ${it.id} "${t.title}"`);
       return;
     }
     case 'set_difficulty': {
-      if (!open(w.tickets.get(it.id))) { act(w, `No open ticket ${it.id}`, 'system'); return; }
+      if (!open(w.tickets.get(it.id))) { act(w, `No open task ${it.id}`, 'system'); return; }
       updateTicket(w, it.id, { difficulty: it.difficulty });
       act(w, `Re-rated ${it.id} to difficulty ${it.difficulty}`);
       return;
     }
     case 'prioritize': {
-      if (!open(w.tickets.get(it.id))) { act(w, `No open ticket ${it.id}`, 'system'); return; }
+      if (!open(w.tickets.get(it.id))) { act(w, `No open task ${it.id}`, 'system'); return; }
       updateTicket(w, it.id, { priority: it.priority });
       act(w, `Set ${it.id} priority to ${it.priority}`);
       return;
     }
     case 'pin_ticket': {
-      if (!open(w.tickets.get(it.id))) { act(w, `No open ticket ${it.id}`, 'system'); return; }
+      if (!open(w.tickets.get(it.id))) { act(w, `No open task ${it.id}`, 'system'); return; }
       if (it.agentId !== null && w.rts.get(it.agentId)?.a.role !== 'worker') { act(w, `Can't pin to ${it.agentId}`, 'system'); return; }
       updateTicket(w, it.id, { pinnedTo: it.agentId });
       act(w, it.agentId ? `Pinned ${it.id} to ${w.agentName(it.agentId)}` : `Unpinned ${it.id}`);

@@ -1,6 +1,6 @@
 // Thin wrapper so the UI has one place to get difficulty->config and the model catalogue.
 import type { AgentConfig, Provider } from '../types';
-import { MODEL_LIST, configForDifficulty } from '../sim/difficulty';
+import { MODEL_LIST, configForDifficulty, modelInfo } from '../sim/difficulty';
 
 export { configForDifficulty };
 
@@ -10,3 +10,6 @@ export const allModels = (): ModelOption[] => MODEL_LIST.map((m) => ({ model: m.
 export const modelsFor = (p: Provider): ModelOption[] => allModels().filter((m) => m.provider === p);
 export const findModel = (model: string): ModelOption | undefined => allModels().find((m) => m.model === model);
 export const EFFORTS: AgentConfig['effort'][] = ['low', 'medium', 'high', 'max'];
+
+/** Human name of a model ('Sonnet 5.5', 'Gemini Pro'), not its internal tier label. */
+export const modelLabel = (cfg: { model: string; tier: string }): string => (modelInfo(cfg.model) ?? modelInfo(cfg.tier))?.label ?? cfg.tier;

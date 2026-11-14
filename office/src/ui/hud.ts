@@ -217,6 +217,15 @@ class HudManager {
     this.layout();
   }
 
+  /** Minimise the open floating window that is on top (Esc). Returns false when none is open. */
+  closeTop(skip: Set<string>): boolean {
+    let top: WinInternal | null = null;
+    for (const w of this.wins.values()) if (!w.min && !skip.has(w.id) && w.el.offsetParent !== null && (!top || w.z > top.z)) top = w;
+    if (!top) return false;
+    top.setMinState(true);
+    return true;
+  }
+
   exitFullscreen(): boolean {
     let any = false;
     for (const w of this.wins.values()) if (w.fs) { w.fs = false; w.el.classList.remove('fs'); w.opts.onFullscreen?.(false); any = true; }
@@ -233,6 +242,8 @@ export function attachHud(ctx: UICtx, root: HTMLElement): void { mgr.attach(ctx,
 export const BOARD_VIEW_HIDDEN = new Set(['board', 'log', 'metrics']);
 export function resetHudLayout(): void { mgr.resetLayout(); }
 export function exitHudFullscreen(): boolean { return mgr.exitFullscreen(); }
+/** Minimise the top-most open window, ignoring the ids in `skip`. */
+export function closeTopHudWindow(skip: Iterable<string> = []): boolean { return mgr.closeTop(new Set(skip)); }
 export function relayoutHud(): void { mgr.relayout(); }
 
 const dragging = (on: boolean): void => { document.documentElement.classList.toggle('hud-dragging', on); };

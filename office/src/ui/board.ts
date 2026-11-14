@@ -6,15 +6,16 @@ import { DIFF_COLORS, DIFF_NAMES, clamp, h, pips, setHidden, setPips, setText, s
 import { hudWindow, type HudWin } from './hud';
 import { icon } from './icons';
 import { setSkillChips, skillById, skillChip } from './chips';
-import { usd } from './format';
+import { STATUS_LABEL, usd } from './format';
+import { modelLabel } from './models';
 import { providerName } from '../providers';
 
 const COLS: { id: string; title: string; statuses: string[]; limit: number; fsLimit: number }[] = [
-  { id: 'backlog', title: 'Backlog', statuses: ['backlog'], limit: 10, fsLimit: 60 },
+  { id: 'backlog', title: 'To do', statuses: ['backlog'], limit: 10, fsLimit: 60 },
   { id: 'progress', title: 'In progress', statuses: ['assigned', 'in_progress'], limit: 14, fsLimit: 60 },
   { id: 'review', title: 'In review', statuses: ['in_review'], limit: 14, fsLimit: 60 },
-  { id: 'changes', title: 'Changes requested', statuses: ['changes_requested'], limit: 14, fsLimit: 60 },
-  { id: 'merged', title: 'Merged', statuses: ['merged'], limit: 8, fsLimit: 40 },
+  { id: 'changes', title: 'Sent back', statuses: ['changes_requested'], limit: 14, fsLimit: 60 },
+  { id: 'merged', title: 'Done', statuses: ['merged'], limit: 8, fsLimit: 40 },
   { id: 'cancelled', title: 'Cancelled', statuses: ['cancelled'], limit: 8, fsLimit: 40 },
 ];
 
@@ -29,7 +30,7 @@ interface Filters { q: string; assignee: string; skill: string; milestone: strin
 export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): boolean; openNew(): void; openTicket(id: string): void; drawer: HTMLElement } {
   let wrap!: HTMLElement;
   let fsBtn!: HTMLButtonElement;
-  const win = hudWindow(ctx, 'board', 'Ticket board', false, 'board-win', {
+  const win = hudWindow(ctx, 'board', 'Tasks', false, 'board-win', {
     zone: 'bottom', minSize: { w: 22, h: 9 }, defaultSize: { w: 44, h: 12 },
     place: (l, size) => ({ x: l.leftX, y: l.bottomY - size.h, w: size.w, h: size.h }),
     onFullscreen: (on) => {
@@ -43,10 +44,10 @@ export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): b
   const modeBtn = h('button', { type: 'button', class: 'btn tiny', title: 'Switch between detailed cards and a compact list', onClick: () => {
     ctx.prefs.boardMode = ctx.prefs.boardMode === 'list' ? 'cards' : 'list';
     toggleClass(root, 'list', ctx.prefs.boardMode === 'list');
-    setText(modeBtn, ctx.prefs.boardMode === 'list' ? 'Cards' : 'List');
+    setText(modeBtn, ctx.prefs.boardMode === 'list' ? 'Cards' : 'Compact');
     ctx.savePrefs();
-  } }, ctx.prefs.boardMode === 'list' ? 'Cards' : 'List');
-  const newBtn = h('button', { type: 'button', class: 'btn tiny accent', title: 'Create a ticket', onClick: () => openNew() }, icon('plus'), ' New');
+  } }, ctx.prefs.boardMode === 'list' ? 'Cards' : 'Compact');
+  const newBtn = h('button', { type: 'button', class: 'btn tiny accent', title: 'Create a task', onClick: () => openNew() }, icon('plus'), ' New');
   fsBtn = h('button', { type: 'button', class: 'ibtn', title: 'Fullscreen board (F)', 'aria-label': 'Fullscreen board (F)', onClick: () => win.setFullscreen(!win.isFullscreen()) }, icon('expand'));
   win.extras.append(newBtn, modeBtn, fsBtn, h('span', { class: 'key-hint', title: 'Press T to toggle, F for fullscreen' }, 'T'));
 
@@ -57,7 +58,7 @@ export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): b
     const sel = h('select', { class: 'sel', 'aria-label': label, onChange: () => { filters[key] = sel.value; refresh(); } }) as HTMLSelectElement;
     return { el: h('label', { class: 'flt' }, h('span', { class: 'dim' }, label), sel), sel };
   };
-  const search = h('input', { type: 'search', class: 'sel flt-q', placeholder: 'Search tickets...', 'aria-label': 'Search tickets', onInput: () => { filters.q = search.value.trim().toLowerCase(); refresh(); } }) as HTMLInputElement;
+  const search = h('input', { type: 'search', class: 'sel flt-q', placeholder: 'Search tasks...', 'aria-label': 'Search tasks', onInput: () => { filters.q = search.value.trim().toLowerCase(); refresh(); } }) as HTMLInputElement;
   const fAssignee = mkSel('Assignee', 'assignee'), fSkill = mkSel('Skill', 'skill'), fMs = mkSel('Milestone', 'milestone'), fDiff = mkSel('Difficulty', 'diff');
   const cancelToggle = h('label', { class: 'flt flt-check' }, h('input', { type: 'checkbox', onChange: (e: Event) => { showCancelled = (e.target as HTMLInputElement).checked; refresh(); } }), h('span', {}, 'Show cancelled')) as HTMLElement;
   const clearBtn = h('button', { type: 'button', class: 'btn tiny', onClick: () => { Object.assign(filters, { q: '', assignee: '', skill: '', milestone: '', diff: '' }); search.value = ''; syncFilterSelects(true); refresh(); } }, 'Clear');
@@ -93,9 +94,9 @@ export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): b
     const prio = h('span', { class: 'chip warn tk-prio' });
     const whoDot = h('i', { class: 'pdot' }), whoName = h('b', {}), whoTier = h('span', { class: 'tier' }), whoSwatch = h('i', { class: 'swatch' }), whoOwner = h('span', { class: 'dim' });
     const who = h('span', { class: 'tk-who' }, whoDot, whoName, whoTier, whoSwatch, whoOwner);
-    const help = h('span', { class: 'chip warn', title: 'Help requests raised on this ticket' });
+    const help = h('span', { class: 'chip warn', title: 'Help requests raised on this task' });
     const ms = h('span', { class: 'chip violet' });
-    const el = h('button', { type: 'button', class: 'tk-card', onClick: () => openTicket(t.id), title: 'Click to edit this ticket' },
+    const el = h('button', { type: 'button', class: 'tk-card', onClick: () => openTicket(t.id), title: 'Click to edit this task' },
       h('span', { class: 'tk-top' }, id, pin, prio, p, rework, dot), title, desc, who,
       h('span', { class: 'bar thin' }, bar), h('span', { class: 'tk-cost-row' }, cost, help, ms), skills);
     return { el, id, title, desc, pips: p, dot, cost, skills, rework, bar, pin, prio, who, whoDot, whoName, whoTier, whoSwatch, whoOwner, help, ms };
@@ -139,7 +140,7 @@ export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): b
 
   const drTitle = h('h3', { class: 'dr-title' });
   const drClose = h('button', { type: 'button', class: 'ibtn', title: 'Close (Esc)', 'aria-label': 'Close editor', onClick: () => closeDrawer() }, icon('close'));
-  const fTitle = h('input', { type: 'text', class: 'sel', maxlength: '120', placeholder: 'Ticket title', id: 'dr-title-in' }) as HTMLInputElement;
+  const fTitle = h('input', { type: 'text', class: 'sel', maxlength: '120', placeholder: 'Task title', id: 'dr-title-in' }) as HTMLInputElement;
   const fDesc = h('textarea', { class: 'sel dr-desc', rows: 4, placeholder: 'Description / acceptance criteria', id: 'dr-desc-in' }) as HTMLTextAreaElement;
   const diffRow = h('div', { class: 'dr-diff', role: 'radiogroup', 'aria-label': 'Difficulty' });
   const diffBtns = ([1, 2, 3, 4, 5] as Difficulty[]).map((n) => {
@@ -157,13 +158,13 @@ export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): b
   const prioRow = h('div', { class: 'se-row' }, h('span', { class: 'se-label' }, 'Priority'), prioMinus, prioVal, prioPlus);
   const statusLine = h('p', { class: 'note dr-status' });
   const msg = h('p', { class: 'note dr-msg', role: 'status' });
-  const createBtn = h('button', { type: 'button', class: 'btn accent', onClick: () => doCreate() }, icon('plus'), ' Create ticket');
-  const cancelBtn = h('button', { type: 'button', class: 'btn warn', onClick: () => { confirming = true; syncConfirm(); (yesBtn as HTMLElement).focus(); } }, icon('trash'), ' Cancel ticket');
+  const createBtn = h('button', { type: 'button', class: 'btn accent', onClick: () => doCreate() }, icon('plus'), ' Create task');
+  const cancelBtn = h('button', { type: 'button', class: 'btn warn', onClick: () => { confirming = true; syncConfirm(); (yesBtn as HTMLElement).focus(); } }, icon('trash'), ' Cancel task');
   const yesBtn = h('button', { type: 'button', class: 'btn warn', onClick: () => { if (editId) ctx.cmd.cancelTicket?.(editId); ctx.refresh(); confirming = false; closeDrawer(); } }, 'Yes, cancel it');
   const keepBtn = h('button', { type: 'button', class: 'btn', onClick: () => { confirming = false; syncConfirm(); cancelBtn.focus(); } }, 'Keep');
-  const confirmBox = h('div', { class: 'dr-confirm', role: 'alert' }, h('span', {}, 'Really cancel this ticket?'), yesBtn, keepBtn);
+  const confirmBox = h('div', { class: 'dr-confirm', role: 'alert' }, h('span', {}, 'Really cancel this task?'), yesBtn, keepBtn);
   const lbl = (text: string, forId: string, ...kids: (Node | null)[]): HTMLElement => h('div', { class: 'dr-field' }, h('label', { class: 'dr-label', htmlFor: forId }, text), ...kids);
-  const drawer = h('aside', { class: 'drawer', role: 'dialog', 'aria-label': 'Ticket editor' },
+  const drawer = h('aside', { class: 'drawer', role: 'dialog', 'aria-label': 'Task editor' },
     h('header', { class: 'dr-head' }, drTitle, drClose),
     h('div', { class: 'dr-body' },
       lbl('Title', 'dr-title-in', fTitle), lbl('Description', 'dr-desc-in', fDesc),
@@ -180,7 +181,7 @@ export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): b
   const supports = (k: 'updateTicket' | 'createTicket' | 'cancelTicket'): boolean => typeof ctx.cmd[k] === 'function';
   const patch = (p: Partial<TicketSpec>): void => {
     if (!editId) return;
-    if (!supports('updateTicket')) { setText(msg, 'The simulation does not support editing tickets yet.'); return; }
+    if (!supports('updateTicket')) { setText(msg, 'The simulation does not support editing tasks yet.'); return; }
     ctx.cmd.updateTicket?.(editId, p);
     setText(msg, 'Saved'); ctx.refresh();
   };
@@ -200,8 +201,8 @@ export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): b
     if (mode === 'new') { draft.skills = next; syncDrawer(true); } else patch({ skills: next });
   }
   function doCreate(): void {
-    if (!draft.title.trim()) { setText(msg, 'Please give the ticket a title.'); fTitle.focus(); return; }
-    if (!supports('createTicket')) { setText(msg, 'The simulation does not support creating tickets yet.'); return; }
+    if (!draft.title.trim()) { setText(msg, 'Please give the task a title.'); fTitle.focus(); return; }
+    if (!supports('createTicket')) { setText(msg, 'The simulation does not support creating tasks yet.'); return; }
     ctx.cmd.createTicket?.({ title: draft.title.trim(), description: draft.description, difficulty: draft.difficulty, skills: [...draft.skills], pinnedTo: draft.pinnedTo || null, milestone: draft.milestone || null });
     ctx.refresh(); closeDrawer();
   }
@@ -215,7 +216,7 @@ export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): b
     const t = tk();
     if (mode === 'edit' && !t) { closeDrawer(); return; }
     const src = mode === 'new' ? { title: draft.title, description: draft.description, difficulty: draft.difficulty, skills: draft.skills, pinnedTo: draft.pinnedTo || null, milestone: draft.milestone || null, priority: 0 } : t!;
-    setText(drTitle, mode === 'new' ? 'New ticket' : `${t!.id} - ${t!.status.replace('_', ' ')}`);
+    setText(drTitle, mode === 'new' ? 'New task' : `${t!.id}: ${STATUS_LABEL[t!.status] ?? t!.status}`);
     if (document.activeElement !== fTitle && (force || fTitle.value !== src.title)) fTitle.value = src.title;
     if (document.activeElement !== fDesc && (force || fDesc.value !== (src.description ?? ''))) fDesc.value = src.description ?? '';
     diffBtns.forEach((b, i) => { const on = src.difficulty === i + 1; toggleClass(b, 'on', on); setAttr(b, 'aria-checked', String(on)); });
@@ -325,7 +326,7 @@ export function createBoard(ctx: UICtx): Panel & { win: HudWin; closeDrawer(): b
         setHidden(k.ms, !t.milestone); setText(k.ms, ms?.title ?? t.milestone ?? '');
         setHidden(k.who, !a);
         if (a) {
-          k.whoDot.className = `pdot ${a.provider}`; setText(k.whoName, a.name); setText(k.whoTier, a.config.tier); k.whoTier.className = `tier ${a.provider}`; k.whoTier.title = a.config.model;
+          k.whoDot.className = `pdot ${a.provider}`; setText(k.whoName, a.name); setText(k.whoTier, modelLabel(a.config)); k.whoTier.className = `tier ${a.provider}`; k.whoTier.title = a.config.model;
           k.whoSwatch.style.background = a.ownerColor; setText(k.whoOwner, a.owner);
         }
         toggleClass(k.el, 'mine', !!t.assignee && t.assignee === ctx.selectedId);

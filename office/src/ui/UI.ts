@@ -15,7 +15,7 @@ import { createPlan, createSkillLibrary } from './planSkills';
 import { createAbout } from './about';
 import { Toasts } from './toasts';
 import { setCatalog } from './chips';
-import { attachHud, exitHudFullscreen, relayoutHud, resetHudLayout, type HudWin } from './hud';
+import { attachHud, closeTopHudWindow, exitHudFullscreen, relayoutHud, resetHudLayout, BOARD_VIEW_HIDDEN, type HudWin } from './hud';
 import { createTechView } from './techView';
 import { createComms, type CommsPanel } from './comms';
 import { createHackathon, type HackPanel } from './hackathon';
@@ -71,6 +71,7 @@ export class UI implements UICtx {
     const palette = createPalette(this, {
       togglePanels: () => this.togglePanels(), openAbout: () => this.about.open(), resetLayout: () => this.resetLayout(),
       setView: (v) => this.setView(v), getView: () => this.view,
+      setKeys: (on) => this.setKeys(on), getKeys: () => this.prefs.keys,
       toggleWindow: (id) => { if (id === 'comms') comms.toggle(); else if (id === 'hack') hack.toggle(); else this.wins[id]?.toggle(); },
       openComms: (to) => comms.open(to), openHack: (focusBrief) => (focusBrief ? hack.focusBrief() : hack.open()),
       toast: (title, text, tone = 'info') => this.toasts.push(`pal-${title}`, title, text, tone, 200),
@@ -78,11 +79,18 @@ export class UI implements UICtx {
 
     const tab = (id: 'controls' | 'agents' | 'stats', label: string): HTMLButtonElement =>
       h('button', { type: 'button', class: 'tab', dataset: { tab: id }, onClick: () => this.setMobileTab(this.mtab === id ? 'none' : id) }, label);
-    const tabbar = h('nav', { class: 'tabbar', 'aria-label': 'Panels' }, tab('controls', 'Controls'), tab('agents', 'Agents'), tab('stats', 'Board'));
+    const tabbar = h('nav', { class: 'tabbar', 'aria-label': 'Panels' }, tab('controls', 'Controls'), tab('agents', 'Agents'), tab('stats', 'Stats'));
     const showPill = h('button', { type: 'button', class: 'btn show-panels', onClick: () => this.togglePanels() }, 'Panels hidden - press P');
 
     clear(root);
-    root.append(tech.el, topbar.el, controls.el, agents.el, tabbar, showPill, this.toasts.el, this.about.el, palette.el);
+    // DOM order = reading order: skip links, top bar, the page, then the docks (keyboard users reach the board first)
+    const skip = (href: string, label: string): HTMLElement => h('a', { class: 'skip-link', href, onClick: (e: Event) => {
+      e.preventDefault(); const t = document.querySelector<HTMLElement>(href); if (!t) return;
+      if (href === '#agents-dock' && t.classList.contains('collapsed')) (t.querySelector('.dock-pill') as HTMLElement | null)?.click();
+      const f = t.matches('[tabindex]') ? t : t.querySelector<HTMLElement>('h2, [tabindex], button') ?? t; if (!f.hasAttribute('tabindex')) f.tabIndex = -1; f.focus(); } }, label);
+    const skips = h('nav', { class: 'skip-links', 'aria-label': 'Skip links' }, skip('#tv-attn', 'Skip to What needs you'), skip('#tv-tickets', 'Skip to tasks'), skip('#agents-dock', 'Skip to agents'));
+    agents.el.id = 'agents-dock';
+    root.append(skips, topbar.el, tech.el, agents.el, controls.el, tabbar, showPill, this.toasts.el, this.toasts.live, this.about.el, palette.el);
     // windows mount themselves (free-floating layer + chip rows + mobile sheet) and keep the docks' insets in sync
     attachHud(this, root);
     this.placeDrawer();
@@ -140,7 +148,10 @@ export class UI implements UICtx {
       requestAnimationFrame(() => s.resize());
     });
   }
+  /** Turn single-key shortcuts on or off. */
+  setKeys(on: boolean): void { this.prefs.keys = on; this.persist(); this.toasts.push('keys', on ? 'Shortcuts on' : 'Shortcuts off', on ? 'Single-key shortcuts like V and C work again' : 'Only Ctrl+K and Esc respond now', 'info', 200); }
   openTicket(id: string): void { this.boardPanel.openTicket(id); }
+  openAbout(): void { this.about.open(); }
   openNewTicket(): void { this.boardPanel.openNew(); }
   onSelect(cb: (id: string | null) => void): void { this.selectCb = cb; }
   togglePause(): void {
@@ -226,7 +237,14 @@ export class UI implements UICtx {
     if (this.about.isOpen()) return;
     const t = e.target as HTMLElement | null;
     const tag = t?.tagName ?? '';
-    if (e.key === 'Escape') { if (this.boardPanel.closeDrawer()) return; if (exitHudFullscreen()) return; if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') { t?.blur(); return; } this.select(null); return; }
+    if (e.key === 'Escape') {
+      if (this.boardPanel.closeDrawer()) return;
+      if (exitHudFullscreen()) return;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') { t?.blur(); return; }
+      if (closeTopHudWindow(this.view === 'board' ? BOARD_VIEW_HIDDEN : [])) return; // Esc closes the window on top
+      this.select(null); return;
+    }
+    if (!this.prefs.keys) return; // single-key shortcuts switched off (Ctrl+K and Esc still work)
     if (tag === 'SELECT' || tag === 'TEXTAREA') return;
     if (tag === 'INPUT' && (t as HTMLInputElement).type !== 'range' && (t as HTMLInputElement).type !== 'checkbox') return;
     const k = e.key;
@@ -235,7 +253,6 @@ export class UI implements UICtx {
       e.preventDefault(); this.togglePause();
     } else if (k === '[') this.bumpSpeed(-1);
     else if (k === ']') this.bumpSpeed(1);
-    else if (k === 'a' || k === 'A') { this.sim.addTicket(); this.refresh(); }
     else if (k === 'v' || k === 'V') this.setView(this.view === 'office' ? 'board' : 'office');
     else if (this.view === 'board' && 'fFtTlLmM'.includes(k)) return; // those windows are part of the board view itself
     else if (k === 'f' || k === 'F') this.wins.board.setFullscreen(!this.wins.board.isFullscreen());

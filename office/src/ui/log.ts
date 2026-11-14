@@ -1,4 +1,5 @@
 // Activity log overlay: newest last, auto-scroll unless the user scrolled up. Key: L.
+import { whoAndText } from './interact';
 import type { LogEntry, SimState } from '../types';
 import type { Panel, UICtx } from './ctx';
 import { fmtClock, h, setText } from './dom';
@@ -26,7 +27,7 @@ export function createLog(ctx: UICtx): Panel & { win: HudWin } {
     list.appendChild(h('div', { class: `log-row k-${e.kind}` },
       h('span', { class: 't' }, fmtClock(e.t)),
       h('span', { class: `kind k-${e.kind}` }, KIND_LABEL[e.kind] ?? e.kind.toUpperCase()),
-      h('span', { class: 'msg' }, a ? h('b', { class: `who ${a.provider}` }, a.name) : null, a ? ' ' : null, e.text)));
+      h('span', { class: 'msg' }, ...whoAndText(a, e.text))));
   };
 
   const update = (state: SimState): void => {

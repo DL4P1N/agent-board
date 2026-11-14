@@ -110,7 +110,7 @@ export function createHackathon(ctx: UICtx): HackPanel {
   pitchCopy.addEventListener('click', async () => { const t = pitchText.dataset.text; if (t) flash(pitchCopy, (await copyText(t)) ? 'Copied' : 'Copy failed'); });
   const pitch = h('div', { class: 'card hk-card' }, h('div', { class: 'card-h' }, 'Pitch'), h('div', { class: 'pitch-line' }, pitchText, pitchCopy));
   const cuts = h('b', { class: 'hk-cuts' });
-  const cutBtn = h('button', { type: 'button', class: 'btn tiny', title: 'Ask the orchestrator to descope two tickets' }, 'Cut scope by 2');
+  const cutBtn = h('button', { type: 'button', class: 'btn tiny', title: 'Ask the orchestrator to descope two tasks' }, 'Cut scope by 2');
   cutBtn.addEventListener('click', () => { cmd(ctx, 'say', 'orch', 'cut scope by 2'); flash(cutBtn, 'Asked'); ctx.refresh(); });
   const scope = h('div', { class: 'hk-scope' }, h('span', { class: 'dim' }, 'Scope cuts'), cuts, h('span', { class: 'grow' }), cutBtn);
   const ship = sec('ship', 'Ship it', true, deploy, pitch, scope);
@@ -127,7 +127,7 @@ export function createHackathon(ctx: UICtx): HackPanel {
   const sample = h('select', { class: 'sel', 'aria-label': 'Load a sample brief' }, h('option', { value: '' }, 'Sample briefs...'),
     ...SAMPLE_BRIEFS.map((b, i) => h('option', { value: String(i) }, b.project))) as HTMLSelectElement;
   const kick = h('button', { type: 'button', class: 'btn accent', disabled: true }, icon('flag'), ' Kick off') as HTMLButtonElement;
-  const kickNote = h('p', { class: 'note' }, 'Orchestrator will replan and file tickets as the team frees up.');
+  const kickNote = h('p', { class: 'note' }, 'Orchestrator will replan and file tasks as the team frees up.');
   let touched = false;
   const syncKick = (): void => { kick.disabled = !briefIn.value.trim(); };
   nameIn.addEventListener('input', () => { touched = true; });

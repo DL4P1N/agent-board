@@ -30,6 +30,8 @@ export interface UICtx {
   openTicket(id: string): void;
   /** Open the ticket creator drawer. */
   openNewTicket(): void;
+  /** Open the About dialog. */
+  openAbout(): void;
 }
 
 export interface Panel {

@@ -131,7 +131,7 @@ export class World {
     this.reconcile();
     this.spawnSeated = false;
     this.cfgSig = this.sigOf();
-    this.log(null, 'plan', `${s.plan.name} kicked off - ${s.plan.totalTickets} tickets, ${this.settings.deadlineMinutes} min`);
+    this.log(null, 'plan', `${s.plan.name} kicked off - ${s.plan.totalTickets} tasks, ${this.settings.deadlineMinutes} min`);
   }
 
   rebuildSkillMap(): void {
@@ -445,7 +445,7 @@ export class World {
   createSprintTicket(): Ticket {
     const plan = this.state.plan;
     const seq = this.ticketSeq + 1;
-    const r = keyedRng(this.settings.seed, 'ticket:' + seq);
+    const r = keyedRng(this.settings.seed, 'task:' + seq);
     const epic = r.pick(plan.epics);
     const def = r.pick(EPIC_POOL.find((e) => e.name === epic)!.items);
     const d = this.sampleDifficulty(r);
@@ -611,7 +611,7 @@ export class World {
     else { this.beginSprint(false); }
     const orch = this.rts.get('orch');
     if (orch) this.say(orch, 'New project - planning...', 4);
-    this.log('orch', 'plan', `${this.state.plan.name} kicked off - ${this.state.plan.totalTickets} tickets, ${this.settings.deadlineMinutes} min`);
+    this.log('orch', 'plan', `${this.state.plan.name} kicked off - ${this.state.plan.totalTickets} tasks, ${this.settings.deadlineMinutes} min`);
     this.emit({ type: 'plan_updated', plan: this.state.plan });
   }
 

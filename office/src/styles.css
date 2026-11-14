@@ -27,8 +27,8 @@
   --bg: #cfe3f2; --panel: rgba(255, 247, 232, 0.86); --panel-2: rgba(80, 50, 10, 0.07); --panel-solid: #fff7e8;
   --border: #7a5f3d; --outline: #3a2a14; --hi: rgba(255, 255, 255, 0.7); --lo: rgba(80, 50, 10, 0.18);
   --text: #2c2114; --muted: #75634a; --field: #ead9bd; --grid: rgba(44, 33, 20, 0.14);
-  --accent: #d9702a; --accent-ink: #fff7e8;
-  --ok: #2f9e44; --warn: #b7791f; --bad: #d03b4a; --info: #1c7ed6; --gold: #b8860b; --violet: #7048c8;
+  --accent: #9a4a14; --accent-ink: #fff7e8;
+  --ok: #1a6e2d; --warn: #8a5a0c; --bad: #b42335; --info: #135fa8; --gold: #7d5c00; --violet: #6a40c0; /* all >= 4.5:1 on the panels */
 }
 :root[data-palette="night"] {
   --bg: #080c1a; --panel: rgba(8, 13, 30, 0.84); --panel-2: rgba(130, 170, 255, 0.07); --panel-solid: #0d1428;
@@ -610,3 +610,25 @@ html[data-panels="hidden"] .show-panels { display: inline-flex; position: absolu
 .hud-fs .win-chip { opacity: 0.35; }
 .win.fs .win-full { -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px); background: color-mix(in srgb, var(--panel-solid) 52%, transparent); }
 @media (prefers-reduced-motion: reduce) { .dock, .win:not(.fs), .win-chip { transition: none; } }
+
+/* skip links: hidden until focused */
+.skip-links a.skip-link { position: absolute; left: var(--gap); top: -4rem; z-index: 80; padding: 0.4rem 0.7rem; background: var(--accent); color: var(--accent-ink); font-weight: 700; text-decoration: none; border: 2px solid var(--outline); }
+.skip-links a.skip-link:focus { top: var(--gap); }
+.sim-chip { margin-left: 0.4rem; }
+.vh { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* top bar: presence opens "Who's doing what"; the badge counts what needs you */
+button.conn { background: transparent; border: 2px solid transparent; color: inherit; cursor: pointer; min-height: 24px; }
+button.conn:hover { border-color: var(--border); }
+.need-badge { display: inline-flex; align-items: center; min-height: 24px; padding: 0 0.6rem; font-size: 0.72rem; font-weight: 700; background: var(--warn); color: #1b1200; border: 2px solid var(--outline); cursor: pointer; }
+.need-badge.urgent { background: var(--bad); color: #fff; }
+.need-badge:hover { filter: brightness(1.08); }
+/* Reset asks first */
+.reset-ask { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+.need-badge { white-space: nowrap; }
+@media (max-width: 520px) { .need-badge .nb-word { display: none; } }
+/* readable floor everywhere (review: most labels were 8-10px): 12px for labels and chips */
+.chip, .tier, .prov { font-size: max(11.5px, 0.7rem); letter-spacing: 0.03em; }
+.r-owner, .r-cost, .r-ticket, .sec-desc, .note, .chip-title, .chip-text, .win-title, .key-hint, .cost, .kv { font-size: max(12px, 0.78rem); }
+.topbar .btn, .topbar .lbl, .topbar .conn, .topbar .speed { font-size: max(12px, 0.78rem); }
+.sl-label, .sl-val, .se-label, .sw-label { font-size: max(12px, 0.78rem); }
+.stack-legend, .toast b, .toast span, .dock-pill { font-size: max(12px, 0.78rem); }

@@ -92,5 +92,5 @@ export const HELP_ANSWERS = [
 export const SECRET_ANSWERS = [
   'grant approved - key is in the vault now',
   'approved: scoped test key added to the vault',
-  'secret granted for this ticket only',
+  'secret granted for this task only',
 ];

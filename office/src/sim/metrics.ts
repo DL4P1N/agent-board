@@ -72,7 +72,7 @@ export function updateMetrics(w: World): void {
     const over = pct > 100;
     if (over && !w.overBudget) {
       w.overBudget = true;
-      w.log('orch', 'cost', 'Over budget: downshifting new tickets to a cheaper tier with fewer subagents');
+      w.log('orch', 'cost', 'Over budget: downshifting new tasks to a cheaper tier with fewer subagents');
       if (orch) w.say(orch, 'Over budget - downshifting', 5);
     } else if (!over && w.overBudget) {
       w.overBudget = false;

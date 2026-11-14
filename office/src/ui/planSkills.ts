@@ -18,7 +18,7 @@ export function createPlan(ctx: UICtx): Panel & { win: HudWin } {
   const update = (state: SimState): void => {
     const p = state.plan;
     setText(name, p.name); setText(note, p.note ? `"${p.note}"` : 'The orchestrator is thinking...');
-    setText(meta, `${p.totalTickets} tickets - deadline ${p.deadlineMinutes} min`);
+    setText(meta, `${p.totalTickets} tasks - deadline ${p.deadlineMinutes} min`);
     win.setChip(p.name || 'no plan yet');
     const sig = p.epics.join('|');
     if (sig !== epicSig) { epicSig = sig; epics.replaceChildren(...p.epics.map((e) => h('span', { class: 'chip violet' }, e))); }
@@ -100,14 +100,14 @@ export function createSkillLibrary(ctx: UICtx): Panel & { win: HudWin } {
   const dNeed = h('div', { class: 'sk-d-list' });
   detail.append(h('div', { class: 'sk-d-head' }, dTitle, dClose),
     h('div', { class: 'dr-label' }, 'Equipped by'), dHave,
-    h('div', { class: 'dr-label' }, 'Open tickets that need it'), dNeed,
+    h('div', { class: 'dr-label' }, 'Open tasks that need it'), dNeed,
     h('div', { class: 'dr-label' }, 'Equip on an agent'),
     h('div', { class: 'sk-equip' }, equipSel, equipBtn),
     h('p', { class: 'note' }, `Agents keep ${SKILL_SLOTS} skills at once; the least recently used is swapped out.`));
 
   // ---- catalog grid
   const grid = h('div', { class: 'sk-cats' });
-  win.body.append(h('p', { class: 'sec-desc' }, 'Skills are packaged instructions an agent fetches from the library shelves for a ticket. Harder tickets are tagged with more of them. Click one for details.'), toolbar, form, msg, detail, grid);
+  win.body.append(h('p', { class: 'sec-desc' }, 'Skills are packaged instructions an agent fetches from the library shelves for a task. Harder tasks are tagged with more of them. Click one for details.'), toolbar, form, msg, detail, grid);
   win.body.classList.add('skills-body');
 
   const cardRefs = new Map<string, { row: HTMLElement; n: HTMLElement; confirm: HTMLElement }>();

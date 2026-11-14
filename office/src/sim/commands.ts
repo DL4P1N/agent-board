@@ -13,7 +13,7 @@ import type { World } from './world';
 const isTerminal = (t: Ticket): boolean => t.status === 'merged' || t.status === 'cancelled';
 
 export function createTicket(w: World, spec: TicketSpec): Ticket {
-  const title = (spec.title ?? '').trim() || 'Untitled ticket';
+  const title = (spec.title ?? '').trim() || 'Untitled task';
   const t = w.newTicket({ ...spec, title }, 'human');
   if (w.curMode === 'hackathon' && w.state.hack.active) { w.hackPlanned++; w.state.plan.totalTickets = w.hackPlanned; }
   return t;

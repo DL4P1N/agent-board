@@ -6,18 +6,18 @@ import type { AgentState, ChatContext, Difficulty, Intent, ParsedChat, Ticket, T
 import type { Skill, SkillCategory } from '../skills';
 
 export const CHAT_HELP: { cmd: string; example: string; blurb: string }[] = [
-  { cmd: '/ticket', example: '/ticket Login page d3 skills: auth, react-ui for pixel !high', blurb: 'File a ticket (difficulty, skills, pin to an agent, priority)' },
-  { cmd: 'add ticket', example: 'add a ticket for the stripe webhook handler, hard, needs payments', blurb: 'Natural language works too; difficulty and skills are inferred' },
-  { cmd: 'cancel', example: 'cancel T-4', blurb: 'Drop a ticket by id or by title' },
-  { cmd: 'make harder', example: 'make T-3 harder', blurb: 'Re-rate a ticket (or "T-3 is easy", "difficulty 4 for T-3")' },
-  { cmd: 'prioritize', example: 'prioritize T-5', blurb: 'Bump a ticket to the front of the queue (or "deprioritize T-5")' },
-  { cmd: 'pin', example: 'give T-5 to Pixel', blurb: 'Pin a ticket to one agent (or "unpin T-5")' },
+  { cmd: '/task', example: '/task Login page d3 skills: auth, react-ui for pixel !high', blurb: 'File a task (difficulty, skills, pin to an agent, priority)' },
+  { cmd: 'add task', example: 'add a task for the stripe webhook handler, hard, needs payments', blurb: 'Natural language works too; difficulty and skills are inferred' },
+  { cmd: 'cancel', example: 'cancel T-4', blurb: 'Drop a task by id or by title' },
+  { cmd: 'make harder', example: 'make T-3 harder', blurb: 'Re-rate a task (or "T-3 is easy", "difficulty 4 for T-3")' },
+  { cmd: 'prioritize', example: 'prioritize T-5', blurb: 'Bump a task to the front of the queue (or "deprioritize T-5")' },
+  { cmd: 'pin', example: 'give T-5 to Pixel', blurb: 'Pin a task to one agent (or "unpin T-5")' },
   { cmd: '/skill add', example: '/skill add Rust (orange, needs key RUST_TOKEN)', blurb: 'Add a skill to the library' },
   { cmd: 'equip', example: 'give Pixel the payments skill', blurb: 'Equip a skill on an agent' },
   { cmd: 'unequip', example: 'take auth away from Marlow', blurb: 'Remove a skill from an agent' },
   { cmd: 'remove skill', example: 'remove skill docs', blurb: 'Delete a skill from the library' },
   { cmd: 'deadline', example: 'deadline 30 min', blurb: 'Set, extend ("extend deadline by 10 minutes") or report time left' },
-  { cmd: 'cut scope', example: 'cut scope by 3', blurb: 'Descope the lowest-priority tickets' },
+  { cmd: 'cut scope', example: 'cut scope by 3', blurb: 'Descope the lowest-priority tasks' },
   { cmd: 'speed', example: 'speed 4x', blurb: 'Change sim speed; "pause" and "resume" too' },
   { cmd: '/brief', example: '/brief Foodie Map: a map app where friends rate street food with photos', blurb: 'Start a new project and replan' },
   { cmd: 'tell', example: 'tell Marlow to focus on the API', blurb: 'Relay a message to an agent by paper plane' },
@@ -29,7 +29,7 @@ export const CHAT_SUGGESTIONS: string[] = [
   'status',
   'are we going to make it?',
   'who is blocked?',
-  'add a ticket for dark mode, easy, css',
+  'add a task for dark mode, easy, css',
   'extend deadline by 10 minutes',
   'cut scope by 2',
   'tell Marlow to focus on the API',
@@ -396,7 +396,7 @@ function handleCreate(body: string, preDiff: Difficulty | undefined, plural: boo
   const raw = splitItems(body.trim(), plural, ctx);
   const capped = raw.length > 8;
   const items = raw.slice(0, 8).map((x) => parseItem(x, preDiff, ctx)).filter((x): x is ItemRes => !!x);
-  if (!items.length) return clarify(`What should the ticket say? Try: ${CHAT_HELP[0].example}`);
+  if (!items.length) return clarify(`What should the task say? Try: ${CHAT_HELP[0].example}`);
   const hi = maxPriority(ctx); const lo = minPriority(ctx);
   const intents: Intent[] = items.map((it) => {
     if (it.prio === 'high') it.spec.priority = hi + 1;
@@ -416,7 +416,7 @@ function handleCreate(body: string, preDiff: Difficulty | undefined, plural: boo
     ]) + tail;
   } else {
     const list = items.slice(0, 5).map(fmt).join(', ') + (items.length > 5 ? `, +${items.length - 5} more` : '');
-    reply = `Filed ${items.length} tickets: ${list}. Free hands pick them up in priority order.${capped ? ' Capped at 8 - send the rest separately.' : ''}`;
+    reply = `Filed ${items.length} tasks: ${list}. Free hands pick them up in priority order.${capped ? ' Capped at 8 - send the rest separately.' : ''}`;
   }
   return { kind: 'create', intents, reply };
 }
@@ -445,8 +445,8 @@ function handleEdit(t: string, ctx: ChatContext, self: AgentState | null): Res |
     const excl = new Set<string>(); for (const h of agentHits) for (const w of tokenize(t.slice(h.i, h.e))) excl.add(w.w.replace(/^@/, ''));
     const f = findTicketByTitle(l2, ctx, excl);
     if (f.ticket) targets = [f.ticket];
-    else if (f.ambiguous) return clarify('Which ticket? That matches more than one - give me an id like T-5.');
-    else if (hasTicketWord) return clarify(`Which ticket? Give me an id like ${(ctx.tickets ?? []).find((x) => x.status !== 'merged' && x.status !== 'cancelled')?.id ?? 'T-5'}.`);
+    else if (f.ambiguous) return clarify('Which task? That matches more than one - give me an id like T-5.');
+    else if (hasTicketWord) return clarify(`Which task? Give me an id like ${(ctx.tickets ?? []).find((x) => x.status !== 'merged' && x.status !== 'cancelled')?.id ?? 'T-5'}.`);
     else return null;
   }
   if (!targets.length) return clarify(`I don't see ${missing.map((n) => `T-${n}`).join(', ')} on the board.`);
@@ -535,13 +535,13 @@ function handleAddSkill(rest: string, ctx: ChatContext): Res {
   if (category) skill.category = category;
   if (blurb) skill.blurb = blurb;
   const bits = [color ? Object.entries(COLORS).find(([, v]) => v === color)?.[0] ?? color : '', category ?? '', needs ? `needs ${needs}` : ''].filter(Boolean);
-  return { kind: 'skill_add', intents: [{ type: 'add_skill', skill }], reply: `Added skill "${skill.name}" to the library${bits.length ? ` (${bits.join(', ')})` : ''}. Agents fetch it from the shelves when a ticket needs it.` };
+  return { kind: 'skill_add', intents: [{ type: 'add_skill', skill }], reply: `Added skill "${skill.name}" to the library${bits.length ? ` (${bits.join(', ')})` : ''}. Agents fetch it from the shelves when a task needs it.` };
 }
 function handleRemoveSkill(t: string, ctx: ChatContext): Res {
   const cleaned = t.replace(/\b(remove|delete|drop|retire|kill|ditch|get rid of|scrap)\b/gi, ' ').replace(/\b(the|skill|skills|library|from|please)\b/gi, ' ');
   const hit = findSkillMentions(cleaned, ctx)[0]?.skill ?? resolveSkill(cleaned.trim(), ctx.skills ?? [], true);
   if (!hit) return clarify(`No skill matching that. On the shelves: ${(ctx.skills ?? []).map((s) => s.id).join(', ')}.`);
-  return { kind: 'skill_remove', intents: [{ type: 'remove_skill', id: hit.id }], reply: `Removing ${hit.name} (${hit.id}) from the library - stripped from tickets and agents.` };
+  return { kind: 'skill_remove', intents: [{ type: 'remove_skill', id: hit.id }], reply: `Removing ${hit.name} (${hit.id}) from the library - stripped from tasks and agents.` };
 }
 function handleEquip(t: string, ctx: ChatContext, self: AgentState | null, un: boolean): Res | null {
   const agentHits = findAgents(t, ctx, true);
@@ -583,7 +583,7 @@ function handleCut(t: string, ctx: ChatContext): Res | null {
   if (!m || count === null) return null;
   const c = Math.max(1, Math.min(20, Math.round(count)));
   const left = Math.max(0, totalScope(ctx) - c);
-  return { kind: 'cut', intents: [{ type: 'cut_scope', count: c }], reply: pick([`Cutting ${c} from the bottom of the backlog, lowest priority first. Scope drops to ${left} tickets.`, `Descoping ${c} ticket${c > 1 ? 's' : ''} - lowest priority goes first. New scope: ${left}.`]) };
+  return { kind: 'cut', intents: [{ type: 'cut_scope', count: c }], reply: pick([`Cutting ${c} from the bottom of the backlog, lowest priority first. Scope drops to ${left} tasks.`, `Descoping ${c} task${c > 1 ? 's' : ''} - lowest priority goes first. New scope: ${left}.`]) };
 }
 function handleSpeed(t: string): Res | null {
   const l = t.toLowerCase().trim();
@@ -616,7 +616,7 @@ function handleBrief(rest: string, ctx: ChatContext): Res {
   }
   project = project.replace(/^["']|["']$/g, '').slice(0, 40);
   void ctx;
-  return { kind: 'brief', intents: [{ type: 'set_brief', project, brief: brief.slice(0, 600) }], reply: `New project: "${project}". Replanning the board - tickets land over the next minute, scope sized to the deadline.` };
+  return { kind: 'brief', intents: [{ type: 'set_brief', project, brief: brief.slice(0, 600) }], reply: `New project: "${project}". Replanning the board - tasks land over the next minute, scope sized to the deadline.` };
 }
 
 // ============================================================================ agents
@@ -711,7 +711,7 @@ function handleMessage(t: string, ctx: ChatContext, self: AgentState | null): Re
 // ============================================================================ status
 const PHASE_TEXT: Partial<Record<AgentState['phase'], string>> = {
   working: 'working on', reworking: 'reworking', waiting: 'parked on', blocked: 'blocked on', awaiting_review: 'waiting on review for', submitting: 'submitting',
-  asking_help: 'stuck on', awaiting_help: 'stuck on', helping: 'working on', celebrating: 'just merged', to_desk: 'carrying', to_depot: 'fetching a ticket for', picking_up: 'picking up', to_library: 'fetching skills for', picking_skills: 'fetching skills for',
+  asking_help: 'stuck on', awaiting_help: 'stuck on', helping: 'working on', celebrating: 'just merged', to_desk: 'carrying', to_depot: 'fetching a task for', picking_up: 'picking up', to_library: 'fetching skills for', picking_skills: 'fetching skills for',
 };
 function agentStatus(a: AgentState, ctx: ChatContext, self: boolean): string {
   const t = ticketOf(ctx, a.ticketId);
@@ -720,7 +720,7 @@ function agentStatus(a: AgentState, ctx: ChatContext, self: boolean): string {
   if (a.phase === 'offline') return self ? "I'm offline right now." : `${a.name} is offline.`;
   const parts: string[] = [];
   if (!t) {
-    parts.push(self ? `Idle at my desk - no ticket on me, ${a.stats?.merged ?? 0} merged so far.` : `${a.name} is idle with no ticket (${a.stats?.merged ?? 0} merged so far).`);
+    parts.push(self ? `Idle at my desk - no task on me, ${a.stats?.merged ?? 0} merged so far.` : `${a.name} is idle with no task (${a.stats?.merged ?? 0} merged so far).`);
   } else {
     const verb = PHASE_TEXT[a.phase] ?? 'on';
     const pct = Math.round(num(t.progress) * 100);
@@ -763,7 +763,7 @@ function statusReply(sub: StatusSub, ctx: ChatContext, agent?: AgentState, ticke
   switch (sub) {
     case 'agent': return agent ? agentStatus(agent, ctx, false) : 'Which agent? ' + workerNames(ctx);
     case 'ticket': {
-      if (!ticket) return 'Which ticket?';
+      if (!ticket) return 'Which task?';
       const who = ticket.assignee ? ` with ${nameOf(ctx, ticket.assignee)}` : ticket.pinnedTo ? ` pinned to ${nameOf(ctx, ticket.pinnedTo)}` : '';
       return `${ticket.id} "${short(ticket.title, 45)}" is ${ticket.status.replace('_', ' ')}${who}, ${Math.round(num(ticket.progress) * 100)}% done, d${ticket.difficulty}, ${ticket.reworks} rework${ticket.reworks === 1 ? '' : 's'}, est ${money(num(ticket.estimatedCostUsd))}.`;
     }
@@ -773,7 +773,7 @@ function statusReply(sub: StatusSub, ctx: ChatContext, agent?: AgentState, ticke
       const busy = workersOf(ctx).filter((a) => a.phase === 'working' || a.phase === 'reworking').length;
       return b.length ? `${b.join('; ')}. ${num(m?.helpOpen)} help request${num(m?.helpOpen) === 1 ? '' : 's'} open.` : `Nobody is blocked right now - ${busy} of ${workersOf(ctx).length} workers heads-down.`;
     }
-    case 'cost': return `Spend so far ${spend}, burning ${money(num(m?.burnUsdPerMin))}/min. ${merged ? `${money(num(m?.avgCostPerMergedUsd))} per merged ticket, ` : ''}${money(num(m?.wasteUsd))} wasted on rejects; forecast to finish scope ${money(num(m?.projectedScopeCostUsd))}.`;
+    case 'cost': return `Spend so far ${spend}, burning ${money(num(m?.burnUsdPerMin))}/min. ${merged ? `${money(num(m?.avgCostPerMergedUsd))} per merged task, ` : ''}${money(num(m?.wasteUsd))} wasted on rejects; forecast to finish scope ${money(num(m?.projectedScopeCostUsd))}.`;
     case 'left': {
       const next = (ctx.tickets ?? []).filter((t) => t.status === 'backlog').sort((a, b) => num(b.priority) - num(a.priority)).slice(0, 3).map((t) => `${t.id} "${short(t.title, 28)}"`);
       return `${merged}/${total} merged, ${num(m?.open)} open, ${num(m?.inReview)} in review.${next.length ? ` Next up: ${next.join(', ')}.` : ''} ${Math.round(v.rem)} min on the clock.`;
@@ -824,7 +824,7 @@ function handleSocial(t: string, ctx: ChatContext): Res | null {
   const l = t.toLowerCase().trim();
   const m = ctx.metrics; const total = totalScope(ctx);
   if (/^(hi|hey|hello|yo|sup|howdy|hola|gm|good (morning|afternoon|evening)|morning|evening)\b[\s!.,]*(atlas|team|everyone|all|there|boss|chief|folks|orchestrator)?[\s!.,]*$/.test(l)) {
-    return { kind: 'greet', intents: [], reply: pick([`Morning. Board is live - ${num(m?.merged)}/${total} merged, ${num(m?.open)} open. What do you need?`, `Hey. ${num(m?.open)} open tickets, ${Math.round(remainingMinutes(ctx))} min on the clock. What's the call?`, `Here. Team is heads-down; ${num(m?.merged)}/${total} merged so far. What next?`]) };
+    return { kind: 'greet', intents: [], reply: pick([`Morning. Board is live - ${num(m?.merged)}/${total} merged, ${num(m?.open)} open. What do you need?`, `Hey. ${num(m?.open)} open tasks, ${Math.round(remainingMinutes(ctx))} min on the clock. What's the call?`, `Here. Team is heads-down; ${num(m?.merged)}/${total} merged so far. What next?`]) };
   }
   if (/^how are you\b|^how'?s it going with you\b|^you good\b/.test(l)) return { kind: 'chit', intents: [], reply: `Running hot, in a good way. ${num(m?.merged)}/${total} merged.` };
   if (l.split(/\s+/).length <= 8 && /\b(thanks|thank you|thx|ty|cheers|appreciate it|nice|great (?:job|work)|good (?:job|work)|well done|awesome|love it|perfect|lgtm|sweet|legend)\b/.test(l)) return { kind: 'thanks', intents: [], reply: pick(['Anytime. Back to shipping.', 'Appreciate it - team is on it.', 'Noted. Keeping the pace up.']) };
@@ -859,16 +859,16 @@ function createFromStrong(t: string, ctx: ChatContext): Res {
 // ============================================================================ analyze
 function analyze(text: string, ctx: ChatContext, self: AgentState | null): Res {
   const t0 = text.trim();
-  if (!t0) return { kind: 'empty', intents: [], reply: 'What do you need? Try "status", "/ticket Login page d3" or "extend deadline by 10 minutes".' };
+  if (!t0) return { kind: 'empty', intents: [], reply: 'What do you need? Try "status", "/task Login page d3" or "extend deadline by 10 minutes".' };
 
   // slash commands
   const sl = /^\/([\p{L}-]+)\s*(.*)$/su.exec(t0);
   if (sl) {
     const cmd = sl[1].toLowerCase(); const rest = sl[2].trim();
     switch (cmd) {
-      case 'ticket': case 'tickets': case 't': case 'new': case 'add': case 'file': {
+      case 'task': case 'tasks': case 'ticket': case 'tickets': case 't': case 'new': case 'add': case 'file': {
         const dm = /^(easy|medium|hard|epic|trivial)\s+/i.exec(rest);
-        return handleCreate(dm ? rest.slice(dm[0].length) : rest, dm ? diffFromWord(dm[1]) : undefined, cmd === 'tickets', ctx);
+        return handleCreate(dm ? rest.slice(dm[0].length) : rest, dm ? diffFromWord(dm[1]) : undefined, cmd === 'tickets' || cmd === 'tasks', ctx);
       }
       case 'skill': case 'skills': {
         const sub = /^(add|new|create|install|remove|rm|delete|del|equip|give|unequip|take)\b\s*(.*)$/is.exec(rest);
@@ -886,11 +886,11 @@ function analyze(text: string, ctx: ChatContext, self: AgentState | null): Res {
       case 'pause': return handleSpeed('pause')!;
       case 'resume': case 'play': case 'unpause': return handleSpeed('resume')!;
       case 'status': case 's': case 'standup': case 'eta': return detectStatus('status ' + rest, ctx, self) ?? { kind: 'status', sub: 'generic', intents: [{ type: 'status' }], reply: statusReply('generic', ctx) };
-      case 'cancel': case 'kill': case 'drop': return handleEdit('cancel ' + rest, ctx, self) ?? clarify('Cancel which ticket? e.g. /cancel T-4');
-      case 'prio': case 'prioritize': case 'prioritise': case 'bump': return handleEdit('prioritize ' + rest, ctx, self) ?? clarify('Prioritize which ticket? e.g. /prio T-5');
-      case 'deprio': case 'deprioritize': return handleEdit('deprioritize ' + rest, ctx, self) ?? clarify('Deprioritize which ticket?');
-      case 'pin': case 'assign': return handleEdit('pin ' + rest, ctx, self) ?? clarify('Pin which ticket to whom? e.g. /pin T-5 pixel');
-      case 'unpin': return handleEdit('unpin ' + rest, ctx, self) ?? clarify('Unpin which ticket?');
+      case 'cancel': case 'kill': case 'drop': return handleEdit('cancel ' + rest, ctx, self) ?? clarify('Cancel which task? e.g. /cancel T-4');
+      case 'prio': case 'prioritize': case 'prioritise': case 'bump': return handleEdit('prioritize ' + rest, ctx, self) ?? clarify('Prioritize which task? e.g. /prio T-5');
+      case 'deprio': case 'deprioritize': return handleEdit('deprioritize ' + rest, ctx, self) ?? clarify('Deprioritize which task?');
+      case 'pin': case 'assign': return handleEdit('pin ' + rest, ctx, self) ?? clarify('Pin which task to whom? e.g. /pin T-5 pixel');
+      case 'unpin': return handleEdit('unpin ' + rest, ctx, self) ?? clarify('Unpin which task?');
       case 'difficulty': case 'rate': case 'd': return handleEdit('difficulty ' + rest, ctx, self) ?? clarify('e.g. /difficulty 4 for T-3');
       case 'tell': case 'msg': case 'say': case 'dm': return handleMessage('tell ' + rest, ctx, self) ?? clarify(`Tell who what? e.g. /tell marlow focus on the API. Workers: ${workerNames(ctx)}.`);
       case 'ask': return handleMessage('ask ' + rest, ctx, self) ?? clarify('e.g. /ask pixel to help marlow with auth');
@@ -959,7 +959,7 @@ function analyze(text: string, ctx: ChatContext, self: AgentState | null): Res {
 
   const social = handleSocial(t, ctx);
   if (social) return social;
-  if (DIRECTIVE.test(t)) return { kind: 'directive', intents: [], reply: pick(['Noted - steering the plan that way. If it needs tracking, file it: /ticket ...', 'Got it. I will weigh that on the next pickups; /ticket makes it official.']), text: t };
+  if (DIRECTIVE.test(t)) return { kind: 'directive', intents: [], reply: pick(['Noted - steering the plan that way. If it needs tracking, file it: /task ...', 'Got it. I will weigh that on the next pickups; /task makes it official.']), text: t };
   return { kind: 'unknown', intents: [], reply: unknownReply() };
 }
 
@@ -980,16 +980,16 @@ function workerVoice(res: Res, a: AgentState, ctx: ChatContext, text: string): P
   }
   if (ORCH_KINDS.has(res.kind)) return { intents: res.intents, reply: `${redirect} ${res.reply}` };
   if (res.kind === 'message' || res.kind === 'help_ask') return { intents: res.intents, reply: res.reply };
-  if (res.kind === 'greet') return { intents: [], reply: `Hey - ${a.name} here. ${a.ticketId ? `Heads down on ${a.ticketId}.` : 'Free for a ticket.'} What's up?` };
+  if (res.kind === 'greet') return { intents: [], reply: `Hey - ${a.name} here. ${a.ticketId ? `Heads down on ${a.ticketId}.` : 'Free for a task.'} What's up?` };
   if (res.kind === 'thanks' || res.kind === 'chit') return { intents: [], reply: pick(['Anytime.', 'Back to it.', 'Happy to help.']) };
   if (res.kind === 'bye') return { intents: [], reply: 'See you.' };
   if (res.kind === 'directive') {
     const d = short(text.replace(/\s+/g, ' ').replace(/[.!]+$/, ''), 70);
     const tk = ticketOf(ctx, a.ticketId);
-    return { intents: [], reply: `${pick(['Got it', 'On it', 'Understood'])}: ${d.charAt(0).toLowerCase() + d.slice(1)}.${tk ? ` I'll fold it into ${tk.id}.` : ' I will apply it on my next ticket.'}` };
+    return { intents: [], reply: `${pick(['Got it', 'On it', 'Understood'])}: ${d.charAt(0).toLowerCase() + d.slice(1)}.${tk ? ` I'll fold it into ${tk.id}.` : ' I will apply it on my next task.'}` };
   }
-  if (res.kind === 'help') return { intents: [], reply: `I can report status, take a directive like "focus on tests", or pass orchestration commands (tickets, skills, deadline) to the orchestrator.` };
-  if (res.kind === 'unknown') return { intents: [], reply: 'Not sure what you mean. Ask me for status, give me a directive like "focus on tests", or send tickets and deadlines via the orchestrator.' };
+  if (res.kind === 'help') return { intents: [], reply: `I can report status, take a directive like "focus on tests", or pass orchestration commands (tasks, skills, deadline) to the orchestrator.` };
+  if (res.kind === 'unknown') return { intents: [], reply: 'Not sure what you mean. Ask me for status, give me a directive like "focus on tests", or send tasks and deadlines via the orchestrator.' };
   return { intents: res.intents, reply: res.reply };
 }
 

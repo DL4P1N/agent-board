@@ -43,7 +43,7 @@ export function createMetrics(ctx: UICtx): Panel & { win: HudWin } {
   const spendVal = h('b', {}); const spendBadge = h('span', { class: 'chip' }); const spendFill = h('i', {});
   const spendBar = h('div', { class: 'bar budget', role: 'progressbar', 'aria-label': 'Budget used', 'aria-valuemin': '0', 'aria-valuemax': '100' }, spendFill,
     h('u', { class: 'tick t80', title: '80% warning' }), h('u', { class: 'tick t100', title: '100% cap' }));
-  const tput = kv('Throughput'); const cycle = kv('Avg cycle'); const util = kv('Utilization'); const queue = kv('Open/review/back', 'Open tickets / in review / sent back for changes');
+  const tput = kv('Throughput'); const cycle = kv('Avg cycle'); const util = kv('Utilization'); const queue = kv('Open/review/back', 'Open tasks / in review / sent back for changes');
   const burn = kv('Burn rate'); const avg = kv('Avg $/merged'); const proj = kv('To finish', 'Orchestrator forecast of the cost of the remaining scope');
   const waste = kv('Rework waste', 'Spend on attempts the integrator sent back'); const orch = kv('Orchestration', 'Orchestrator + integrator spend');
   const tier = stack(); const prov = stack();

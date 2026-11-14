@@ -53,7 +53,7 @@ export function updateOrchestrator(w: World, rt: Rt, h: number): void {
       }
       if (go) {
         w.orchSince = 0; rt.sub = 1; a.phase = 'planning'; a.pose = 'walk';
-        w.say(rt, hack ? (st.hack.stage === 'kickoff' ? 'Reading the brief' : 'Filing the next tickets') : 'Planning next batch');
+        w.say(rt, hack ? (st.hack.stage === 'kickoff' ? 'Reading the brief' : 'Filing the next tasks') : 'Planning next batch');
         walkTo(rt, { station: 'board' }, 'board');
       } else if (w.held.length > 0 && w.orchSince >= 3) {
         w.orchSince = 0;
@@ -98,7 +98,7 @@ export function updateOrchestrator(w: World, rt: Rt, h: number): void {
           return;
         }
         w.beginSprint(false);
-        w.log(a.id, 'plan', `${st.plan.name} kicked off - ${s.totalScope} tickets, ${s.deadlineMinutes} min window`);
+        w.log(a.id, 'plan', `${st.plan.name} kicked off - ${s.totalScope} tasks, ${s.deadlineMinutes} min window`);
         w.say(rt, 'Next sprint - planning...', 4);
         rt.sub = 0; a.phase = 'idle'; a.pose = 'wait';
       }
@@ -112,7 +112,7 @@ export function updateOrchestrator(w: World, rt: Rt, h: number): void {
         st.depotStacks += n;
         rt.carried.length = 0;
         a.carrying = null;
-        if (n > 0) { w.say(rt, `${n} ticket${n > 1 ? 's' : ''} at the depot`); w.log(a.id, 'ticket', `${a.name} stocked the depot with ${n} ticket${n > 1 ? 's' : ''}`); }
+        if (n > 0) { w.say(rt, `${n} task${n > 1 ? 's' : ''} at the depot`); w.log(a.id, 'ticket', `${a.name} stocked the depot with ${n} task${n > 1 ? 's' : ''}`); }
         rt.sub = 5; a.phase = 'idle';
         walkTo(rt, { station: 'orchSeat' }, 'home');
       }
@@ -247,7 +247,7 @@ function refreshNote(w: World, rt: Rt, atBoard: boolean): void {
     if (h.stage === 'submitted') return;
     if (w.atRisk) { setNote(w, 'Re-prioritising: deadline risk'); return; }
     switch (h.stage) {
-      case 'kickoff': setNote(w, `Kickoff: ${w.planQueue.length} tickets to file`); return;
+      case 'kickoff': setNote(w, `Kickoff: ${w.planQueue.length} tasks to file`); return;
       case 'build': setNote(w, `Building the core: ${w.sprintMerged}/${w.hackPlanned} merged`); return;
       case 'polish': setNote(w, 'Polish - cutting whatever will not fit'); return;
       case 'demo': setNote(w, 'Demo prep: README, script, live preview'); return;
@@ -272,7 +272,7 @@ function checkRisk(w: World, rt: Rt): void {
   const risk = w.atRisk ? (proj > t0 + (dl - t0) * 0.97 || st.time - w.riskSince < 120) : proj > t0 + (dl - t0) * 1.05;
   if (risk && !w.atRisk) {
     w.atRisk = true; w.lastRiskBubbleT = st.time; w.riskSince = st.time;
-    w.log('orch', 'plan', `ETA ${eta!.toFixed(0)} min is past the ${(dl - t0).toFixed(0)} min deadline - descoping low-priority tickets`);
+    w.log('orch', 'plan', `ETA ${eta!.toFixed(0)} min is past the ${(dl - t0).toFixed(0)} min deadline - descoping low-priority tasks`);
     w.say(rt, 'Deadline at risk - descoping', 4.5);
     setNote(w, 'Re-prioritising: deadline risk');
   } else if (risk && st.time - w.lastRiskBubbleT > 60) {

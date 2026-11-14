@@ -102,7 +102,7 @@ export function createComms(ctx: UICtx): CommsPanel {
     };
     const items: HTMLElement[] = [];
     const orch = agents.find((a) => a.role === 'orchestrator');
-    if (orch) items.push(opt(orch.id, orch, 'plans + files tickets'));
+    if (orch) items.push(opt(orch.id, orch, 'plans + files tasks'));
     items.push(opt('all', undefined, 'whole team'));
     const integ = agents.find((a) => a.role === 'integrator');
     if (integ) items.push(opt(integ.id, integ, 'reviews PRs'));
@@ -113,7 +113,7 @@ export function createComms(ctx: UICtx): CommsPanel {
   };
 
   // ---------------------------------------------------------------- message list
-  const empty = h('div', { class: 'chat-empty' }, h('p', {}, 'Talk to your team.'), h('p', { class: 'dim' }, 'Ask for status, file tickets, cut scope or send a note to one agent. Type / for commands.'));
+  const empty = h('div', { class: 'chat-empty' }, h('p', {}, 'Talk to your team.'), h('p', { class: 'dim' }, 'Ask for status, file tasks, cut scope or send a note to one agent. Type / for commands.'));
   const list = h('div', { class: 'chat-list', role: 'log', 'aria-live': 'polite', 'aria-label': 'Chat transcript', tabIndex: 0 }, empty);
   const jump = h('button', { type: 'button', class: 'btn tiny log-jump', hidden: true, onClick: () => { list.scrollTop = list.scrollHeight; stick = true; jump.hidden = true; } }, 'Jump to latest');
   let stick = true;

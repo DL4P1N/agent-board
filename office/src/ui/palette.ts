@@ -13,6 +13,8 @@ export interface PaletteHooks {
   /** Main view: 3D office or technical board. */
   setView?(v: 'office' | 'board'): void;
   getView?(): 'office' | 'board';
+  setKeys?(on: boolean): void;
+  getKeys?(): boolean;
   /** Toggle a HUD window by id ('board' | 'log' | 'metrics' | 'plan' | 'skills' | 'comms' | 'hack'). */
   toggleWindow(id: string): void;
   openComms(to?: string): void;
@@ -96,11 +98,11 @@ export function createPalette(ctx: UICtx, hooks: PaletteHooks): Palette {
     const items: Item[] = [];
     const add = (i: Item): void => { items.push(i); };
 
-    add({ id: 'ticket', group: 'Suggested', label: 'Add ticket...', ico: 'plus', keywords: 'new create file ticket task', run: () => ({ kind: 'ticket', crumb: 'Add ticket' }) });
+    add({ id: 'ticket', group: 'Suggested', label: 'Add task...', ico: 'plus', keywords: 'new create file task ticket', run: () => ({ kind: 'ticket', crumb: 'Add task' }) });
     add({ id: 'msg-orch', group: 'Suggested', label: 'Message orchestrator...', ico: 'chat', hint: 'C', keywords: 'chat say tell orch plan', run: () => messageMode(orch?.id ?? 'orch') });
     add({ id: 'status', group: 'Suggested', label: 'Ask orchestrator for status', ico: 'orchestrator', keywords: 'status report standup progress eta', run: () => { sendTo(orch?.id ?? 'orch', 'status'); } });
     add({ id: 'kickoff', group: 'Suggested', label: 'Kick off new project...', ico: 'flag', hint: 'H', keywords: 'hackathon brief new project start replan', run: () => { hooks.openHack(true); } });
-    add({ id: 'cut', group: 'Suggested', label: 'Cut scope by 2', ico: 'close', keywords: 'descope drop tickets reduce', run: () => { cmd(ctx, 'say', 'orch', 'cut scope by 2'); hooks.toast('Scope', 'Asked the orchestrator to cut scope by 2', 'info'); ctx.refresh(); } });
+    add({ id: 'cut', group: 'Suggested', label: 'Cut scope by 2', ico: 'close', keywords: 'descope drop tasks tickets reduce', run: () => { cmd(ctx, 'say', 'orch', 'cut scope by 2'); hooks.toast('Scope', 'Asked the orchestrator to cut scope by 2', 'info'); ctx.refresh(); } });
     add({ id: 'ext', group: 'Suggested', label: 'Extend deadline +10 min', ico: 'plus', keywords: 'deadline time longer more minutes', run: () => { shiftDeadline(10); } });
     add({ id: 'ext-', group: 'Time', bulk: true, label: 'Shorten deadline -5 min', ico: 'back', keywords: 'deadline time less minutes', run: () => { shiftDeadline(-5); } });
     add({ id: 'pause', group: 'Suggested', label: paused ? 'Resume' : 'Pause', ico: paused ? 'play' : 'pause', hint: 'Space', keywords: 'pause resume play stop freeze time', run: () => { ctx.togglePause(); } });
@@ -153,8 +155,12 @@ export function createPalette(ctx: UICtx, hooks: PaletteHooks): Palette {
       add({ id: 'view-board', group: 'View', label: 'Board view (technical, no 3D)', sub: cur === 'board' ? 'current' : undefined, hint: 'V', ico: 'panels', keywords: 'board table kanban 2d technical dashboard view switch flat', run: () => { hooks.setView?.('board'); } });
       add({ id: 'view-office', group: 'View', label: '3D office view', sub: cur === 'office' ? 'current' : undefined, hint: 'V', ico: 'users', keywords: 'office 3d room pixel scene view switch', run: () => { hooks.setView?.('office'); } });
     }
+    if (hooks.setKeys) {
+      const on = hooks.getKeys?.() ?? true;
+      add({ id: 'keys', group: 'View', label: on ? 'Turn off single-key shortcuts' : 'Turn on single-key shortcuts', ico: 'command', keywords: 'keyboard shortcuts hotkeys accessibility keys', run: () => { hooks.setKeys?.(!on); } });
+    }
     add({ id: 'overlays', group: 'View', label: 'Toggle overlays', ico: 'panels', hint: 'P', keywords: 'hide show panels ui hud', run: () => { hooks.togglePanels(); } });
-    for (const [id, title, key] of [['comms', 'Comms', 'C'], ['hack', 'Hackathon', 'H'], ['board', 'Ticket board', 'T'], ['log', 'Activity log', 'L'], ['metrics', 'Metrics', 'M'], ['plan', 'Plan', ''], ['skills', 'Skill library', '']] as const) {
+    for (const [id, title, key] of [['comms', 'Comms', 'C'], ['hack', 'Hackathon', 'H'], ['board', 'Task board', 'T'], ['log', 'Activity log', 'L'], ['metrics', 'Metrics', 'M'], ['plan', 'Plan', ''], ['skills', 'Skill library', '']] as const) {
       add({ id: `win-${id}`, group: 'View', bulk: true, label: `Toggle ${title} window`, hint: key, ico: 'panels', keywords: 'show hide window minimize', run: () => { hooks.toggleWindow(id); } });
     }
     add({ id: 'about', group: 'View', bulk: true, label: 'About / keyboard shortcuts', hint: '?', ico: 'help', keywords: 'help keys docs', run: () => { hooks.openAbout(); } });
@@ -249,7 +255,7 @@ export function createPalette(ctx: UICtx, hooks: PaletteHooks): Palette {
     stack.push(mode);
     input.value = '';
     active = 0;
-    if (mode.kind === 'ticket') { buildTicketForm(); input.placeholder = 'Ticket title...'; }
+    if (mode.kind === 'ticket') { buildTicketForm(); input.placeholder = 'Task title...'; }
     else input.placeholder = mode.placeholder;
     render();
     input.focus();
@@ -278,7 +284,7 @@ export function createPalette(ctx: UICtx, hooks: PaletteHooks): Palette {
     const title = input.value.trim();
     if (!title) return;
     const t = cmd(ctx, 'createTicket', { title, difficulty: state.difficulty, skills: [...state.skills] });
-    hooks.toast('Ticket filed', `${t?.id ?? ''} ${title}`.trim(), 'ok');
+    hooks.toast('Task filed', `${t?.id ?? ''} ${title}`.trim(), 'ok');
     close(); ctx.refresh();
   }
   function paintDiff(): void {
@@ -298,7 +304,7 @@ export function createPalette(ctx: UICtx, hooks: PaletteHooks): Palette {
       });
       return b;
     });
-    createBtn = h('button', { type: 'button', class: 'btn accent', disabled: true, onClick: createTicket }, icon('plus'), ' Create ticket');
+    createBtn = h('button', { type: 'button', class: 'btn accent', disabled: true, onClick: createTicket }, icon('plus'), ' Create task');
     ticketTitleOk = false;
     formEl.replaceChildren(
       h('div', { class: 'pf-row' }, h('span', { class: 'pf-label' }, 'Difficulty'), h('span', { class: 'pf-diffs', role: 'radiogroup', 'aria-label': 'Difficulty' }, ...diffBtns)),

@@ -5,7 +5,9 @@ import { iconSvg } from './icons';
 export type ToastTone = 'ok' | 'bad' | 'info' | 'warn' | 'gold';
 
 export class Toasts {
-  readonly el = h('div', { class: 'toasts', role: 'status', 'aria-live': 'polite' });
+  readonly el = h('div', { class: 'toasts', 'aria-hidden': 'true' });
+  /** Only warnings and problems are read out; merges and chatter would be noise for screen readers. */
+  readonly live = h('div', { class: 'vh', role: 'status', 'aria-live': 'polite' });
   private lastByKey = new Map<string, number>();
   private lastAny = 0;
 
@@ -18,6 +20,7 @@ export class Toasts {
     if (star_) star_.innerHTML = iconSvg('star');
     const t = h('div', { class: `toast ${tone}` }, star_, h('div', {}, h('b', {}, title), h('span', {}, text)));
     this.el.appendChild(t);
+    if (tone === 'warn' || tone === 'bad') this.live.textContent = `${title}: ${text}`;
     while (this.el.children.length > 3) this.el.firstElementChild!.remove();
     window.setTimeout(() => { t.classList.add('out'); window.setTimeout(() => t.remove(), 350); }, 3600);
   }

@@ -6,7 +6,7 @@ import { clamp, fillSelect, h, pips, segmented, selectRow, setAttr, setHidden, s
 import { icon, type IconName } from './icons';
 import { dock } from './hud';
 import { setSkillChips, setSkillSlots, skillChip, skillById } from './chips';
-import { EFFORTS, allModels, findModel } from './models';
+import { EFFORTS, allModels, findModel, modelLabel } from './models';
 import { phaseInfo, tokens, usd, STATUS_LABEL } from './format';
 import { PROVIDERS, PROVIDER_IDS } from '../providers';
 
@@ -75,12 +75,12 @@ export function createAgentPanel(ctx: UICtx): Panel {
   const tSkills = h('span', { class: 'skill-row' });
   const tProgFill = h('i', {});
   const ticketCard = h('div', { class: 'card ticket-card' },
-    h('div', { class: 'card-h' }, 'Current ticket'),
+    h('div', { class: 'card-h' }, 'Current task'),
     h('div', { class: 'tk-line' }, tId, tTitle),
     h('div', { class: 'tk-line' }, tPips, tStatus, tRework),
     h('div', { class: 'bar thin' }, tProgFill),
     h('div', { class: 'tk-line' }, tCost), h('div', { class: 'tk-line' }, tSkills));
-  const noTicket = h('div', { class: 'card muted-card' }, h('div', { class: 'card-h' }, 'Current ticket'), h('p', { class: 'note' }, 'No ticket right now.'));
+  const noTicket = h('div', { class: 'card muted-card' }, h('div', { class: 'card-h' }, 'Current task'), h('p', { class: 'note' }, 'No task right now.'));
 
   // config card
   const cModel = kv('Model'); const cEffort = kv('Effort');
@@ -149,7 +149,7 @@ export function createAgentPanel(ctx: UICtx): Panel {
     oProv.el, oModel.el, oBuf.el, oSub.el, oEff.el, oOff.el);
 
   // stats
-  const sDone = kv('Tickets done'); const sMerged = kv('Merged'); const sRework = kv('Reworks'); const sWalk = kv('Metres walked');
+  const sDone = kv('Tasks done'); const sMerged = kv('Merged'); const sRework = kv('Reworks'); const sWalk = kv('Metres walked');
   const statsCard = h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Stats'), sDone.row, sMerged.row, sRework.row, sWalk.row);
 
   const inspector = h('div', { class: 'inspector' }, back, header, ticketCard, noTicket, configCard, skillsCard, costCard, overrides, statsCard);
@@ -173,7 +173,7 @@ export function createAgentPanel(ctx: UICtx): Panel {
       r.dot.className = `pdot ${a.provider}${a.phase === 'offline' ? ' off' : ''}`;
       setStyle(r.swatch, 'background', a.ownerColor || 'var(--muted)');
       setText(r.owner, a.owner);
-      setText(r.tier, a.config.tier); r.tier.className = `tier ${a.provider}`; r.tier.title = a.config.model;
+      setText(r.tier, modelLabel(a.config)); r.tier.className = `tier ${a.provider}`; r.tier.title = a.config.model;
       setText(r.cost, usd(a.usage?.costUsd));
       setText(r.ticket, a.ticketId ?? '-');
       if (a.role === 'worker') setSkillSlots(r.skills, a.skills, 'sm');
@@ -201,7 +201,7 @@ export function createAgentPanel(ctx: UICtx): Panel {
     setText(iRole, ROLE_LABEL[sel.role] ?? sel.role);
     setStyle(iSwatch, 'background', sel.ownerColor || 'var(--muted)');
     setText(iOwner, sel.owner);
-    setText(iModel, cfg.model); setText(iTier, cfg.tier); iTier.className = `tier ${sel.provider}`;
+    setText(iModel, cfg.model); setText(iTier, modelLabel(cfg)); iTier.className = `tier ${sel.provider}`;
     const pi = phaseInfo(sel.phase);
     setText(iPhase, pi.label); iPhase.className = `chip ${pi.tone}`;
     const nm = (id: string | null): string => (id ? state.agents.find((x) => x.id === id)?.name ?? id : '');

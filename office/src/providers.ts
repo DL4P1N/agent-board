@@ -24,11 +24,11 @@ export interface ProviderInfo {
 }
 
 export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
-  claude: { id: 'claude', name: 'Claude Code', short: 'Claude', color: '#d97757', accent: { main: 0xd97757, dark: 0xa4522f, light: 0xf6d2c0, glow: 0xff9d78 } },
-  codex: { id: 'codex', name: 'Codex', short: 'Codex', color: '#2dd4bf', dayColor: '#0f8f84', accent: { main: 0x2dd4bf, dark: 0x16897b, light: 0xc0f6ee, glow: 0x7dfff0 } },
+  claude: { id: 'claude', name: 'Claude Code', short: 'Claude', color: '#d97757', dayColor: '#a8492a', accent: { main: 0xd97757, dark: 0xa4522f, light: 0xf6d2c0, glow: 0xff9d78 } },
+  codex: { id: 'codex', name: 'Codex', short: 'Codex', color: '#2dd4bf', dayColor: '#0b6e65', accent: { main: 0x2dd4bf, dark: 0x16897b, light: 0xc0f6ee, glow: 0x7dfff0 } },
   copilot: { id: 'copilot', name: 'GitHub Copilot', short: 'Copilot', color: '#a78bfa', dayColor: '#6d3fd6', accent: { main: 0xa78bfa, dark: 0x6d4fc7, light: 0xe2d8ff, glow: 0xc9b6ff } },
   gemini: { id: 'gemini', name: 'Gemini CLI', short: 'Gemini', color: '#f472b6', dayColor: '#c2185b', accent: { main: 0xf472b6, dark: 0xbe3a85, light: 0xfdd5ea, glow: 0xff9fd2 } },
-  cursor: { id: 'cursor', name: 'Cursor', short: 'Cursor', color: '#facc15', dayColor: '#9a6b00', accent: { main: 0xfacc15, dark: 0xb08a06, light: 0xfff1b0, glow: 0xffe36b } },
+  cursor: { id: 'cursor', name: 'Cursor', short: 'Cursor', color: '#facc15', dayColor: '#7a5500', accent: { main: 0xfacc15, dark: 0xb08a06, light: 0xfff1b0, glow: 0xffe36b } },
   other: { id: 'other', name: 'Other MCP tool', short: 'Other', color: '#e5e7eb', dayColor: '#52525b', accent: { main: 0xe5e7eb, dark: 0x8a8f99, light: 0xffffff, glow: 0xf5f5f5 } },
 };
 

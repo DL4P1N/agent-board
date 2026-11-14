@@ -59,7 +59,7 @@ export function beginHackathon(w: World, first: boolean): void {
   });
   Object.assign(st.plan, {
     name: `Hackathon: ${s.projectName}`, totalTickets: w.hackPlanned, deadlineMinutes: h.endsAt / 60,
-    epics: plan.epics.length ? plan.epics.slice() : ['Core'], note: `Kickoff: breaking the brief into ${w.hackPlanned} tickets`,
+    epics: plan.epics.length ? plan.epics.slice() : ['Core'], note: `Kickoff: breaking the brief into ${w.hackPlanned} tasks`,
   });
   s.totalScope = Math.min(60, Math.max(4, w.hackPlanned));
   w.emit({ type: 'hack_stage', stage: 'kickoff' });
@@ -213,7 +213,7 @@ export function cutScope(w: World, count: number, who: 'auto' | 'human' | 'freez
   w.hackLastCut = w.state.time;
   const more = cutTitles.length > 1 ? ` (+${cutTitles.length - 1} more)` : '';
   w.log('orch', 'plan', `Scope cut${who === 'freeze' ? ' (code freeze)' : who === 'auto' ? ' to protect the demo' : ''}: ${cutTitles.join(', ')}`);
-  w.postChat('orch', 'you', `Cut ${cutTitles.length} ticket${cutTitles.length > 1 ? 's' : ''}: ${cutTitles.slice(0, 3).join(', ')}${cutTitles.length > 3 ? '...' : ''}`, 'action');
+  w.postChat('orch', 'you', `Cut ${cutTitles.length} task${cutTitles.length > 1 ? 's' : ''}: ${cutTitles.slice(0, 3).join(', ')}${cutTitles.length > 3 ? '...' : ''}`, 'action');
   const orch = w.rts.get('orch');
   if (orch) { w.say(orch, `Cutting ${cutTitles[0]}${more}`, 4.5); orch.throwT = 0.9; }
   broadcast(w, 'scope trimmed', 'cut');
@@ -357,8 +357,8 @@ function submitHack(w: World): void {
   w.submitFx = 3;
   const mins = (st.time - h.startedAt) / 60;
   st.plan.note = `Submitted! ${w.sprintMerged} shipped, ${h.scopeCuts} cut`;
-  w.log('orch', 'plan', `Submitted ${h.project}: ${w.sprintMerged} tickets shipped, ${h.scopeCuts} cut, ${mins.toFixed(0)}m, $${w.sprintCostUsd.toFixed(0)}${h.deployUrl ? ', live at ' + h.deployUrl : ''}`);
-  w.postChat('orch', 'you', `Submitted ${h.project}! ${w.sprintMerged} tickets shipped, ${h.scopeCuts} cut${h.deployUrl ? ' - ' + h.deployUrl : ''}`, 'action');
+  w.log('orch', 'plan', `Submitted ${h.project}: ${w.sprintMerged} tasks shipped, ${h.scopeCuts} cut, ${mins.toFixed(0)}m, $${w.sprintCostUsd.toFixed(0)}${h.deployUrl ? ', live at ' + h.deployUrl : ''}`);
+  w.postChat('orch', 'you', `Submitted ${h.project}! ${w.sprintMerged} tasks shipped, ${h.scopeCuts} cut${h.deployUrl ? ' - ' + h.deployUrl : ''}`, 'action');
   const orch = w.rts.get('orch');
   if (orch) w.say(orch, 'Submitted!', 5);
   // everyone who is free cheers

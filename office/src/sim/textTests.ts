@@ -94,6 +94,8 @@ const create = (i?: Intent) => (i && i.type === 'create_ticket' ? i.spec : null)
   check('create: dark mode', !!s3 && /dark mode/i.test(s3.title) && !!s3.skills?.includes('css-pixel'), s3);
   const s4 = create(one('/ticket Login page d3 skills: auth, react-ui for pixel !high'));
   check('create: slash full', !!s4 && s4.title === 'Login page' && s4.difficulty === 3 && s4.skills?.join() === 'auth,react-ui' && s4.pinnedTo === 'a1' && (s4.priority ?? 0) > 10, s4);
+  const s4b = create(one('/task Login page d3 skills: auth, react-ui for pixel !high'));
+  check('create: /task is the same as /ticket', !!s4b && s4b.title === 'Login page' && s4b.difficulty === 3 && s4b.pinnedTo === 'a1', s4b);
   const s5 = create(one('/ticket fix flaky tests easy @marlow !low'));
   check('create: slash @ + low + easy', !!s5 && s5.difficulty === 2 && s5.pinnedTo === 'a2' && (s5.priority ?? 0) < 0 && !!s5.skills?.includes('unit-tests'), s5);
   const multi = chat('add tickets: login page; signup flow, hard; password reset d2');

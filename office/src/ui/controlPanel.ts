@@ -17,13 +17,13 @@ export const speedIndex = (v: number): number => {
 export { SPEED_STEPS };
 
 const PRESETS: { id: string; label: string; hint: string; patch: Partial<SimSettings> }[] = [
-  { id: 'calm', label: 'Calm morning', hint: '4 agents, a trickle of easy tickets, friendly reviews.',
+  { id: 'calm', label: 'Calm morning', hint: '4 agents, a trickle of easy tasks, friendly reviews.',
     patch: { workerCount: 4, ticketsPerMinute: 0.8, meanDifficulty: 2, difficultySpread: 0.6, rejectRate: 0.1, blockRate: 0.03, totalScope: 16, deadlineMinutes: 60, workSpeed: 1, budgetUsd: 80 } },
-  { id: 'sprint', label: 'Sprint crunch', hint: '12 agents, 5 tickets a minute, hard tickets, tight deadline.',
+  { id: 'sprint', label: 'Sprint crunch', hint: '12 agents, 5 tasks a minute, hard tasks, tight deadline.',
     patch: { workerCount: 12, ticketsPerMinute: 5, meanDifficulty: 3.8, difficultySpread: 1.2, totalScope: 48, deadlineMinutes: 30, rejectRate: 0.3, blockRate: 0.15, workSpeed: 1.2, budgetUsd: 300 } },
   { id: 'review', label: 'Review bottleneck', hint: 'Strict integrator (60% rejected): watch rework pile up at one desk.',
     patch: { workerCount: 10, ticketsPerMinute: 3, meanDifficulty: 3, difficultySpread: 1, rejectRate: 0.6, blockRate: 0.1, totalScope: 30, deadlineMinutes: 45 } },
-  { id: 'flaky', label: 'Flaky CI & missing keys', hint: '40% of tickets hit a blocker: agents sit BLOCKED waiting for secrets or CI.',
+  { id: 'flaky', label: 'Flaky CI & missing keys', hint: '40% of tasks hit a blocker: agents sit BLOCKED waiting for secrets or CI.',
     patch: { workerCount: 6, ticketsPerMinute: 2, meanDifficulty: 3, rejectRate: 0.2, blockRate: 0.4, totalScope: 24, deadlineMinutes: 50 } },
   { id: 'tiny', label: 'Tiny team', hint: 'Just 2 agents working a small scope.',
     patch: { workerCount: 2, ticketsPerMinute: 1, meanDifficulty: 2.5, difficultySpread: 0.8, rejectRate: 0.2, blockRate: 0.08, totalScope: 10, deadlineMinutes: 30, budgetUsd: 40 } },
@@ -46,12 +46,17 @@ export function createControlPanel(ctx: UICtx): Panel {
   };
 
   // --- Scenarios ------------------------------------------------------------------------------
+  const resetBtn = h('button', { type: 'button', class: 'btn warn', title: 'Restore all sliders to their defaults and restart', onClick: () => askReset(true) }, 'Reset');
+  const resetYes = h('button', { type: 'button', class: 'btn warn', onClick: () => { askReset(false); ctx.resetAll(); } }, 'Yes, reset everything');
+  const resetAsk = h('span', { class: 'reset-ask', role: 'alert' }, h('span', {}, 'Reset all settings?'), resetYes, h('button', { type: 'button', class: 'btn', onClick: () => askReset(false) }, 'Keep'));
+  resetAsk.hidden = true;
   const presetBtns = PRESETS.map((p) => h('button', { type: 'button', class: 'btn preset', title: p.hint, onClick: () => { ctx.setSettings(p.patch); } }, p.label));
   const scenarios = sec('scenarios', 'Scenarios', 'One click sets a whole situation. Then tweak any slider below.',
     h('div', { class: 'preset-grid' }, ...presetBtns),
     h('div', { class: 'btn-row' },
       h('button', { type: 'button', class: 'btn', title: 'Restart the simulation with the current settings', onClick: () => ctx.restart() }, 'Restart'),
-      h('button', { type: 'button', class: 'btn warn', title: 'Restore all sliders to their defaults and restart', onClick: () => ctx.resetAll() }, 'Reset')));
+      resetBtn, resetAsk));
+  function askReset(on: boolean): void { resetBtn.hidden = on; resetAsk.hidden = !on; (on ? resetYes : resetBtn).focus(); }
 
   // --- Fleet ----------------------------------------------------------------------------------
   const wc = numRow('workerCount', { label: 'Agents (cubicles)', min: 1, max: 12, step: 1, unit: 'agents', hint: 'How many agents are connected to the room.' });
@@ -73,16 +78,16 @@ export function createControlPanel(ctx: UICtx): Panel {
   const fleet = sec('fleet', 'Fleet', 'Each contributor brings their own agents, in whatever tool they use: Claude Code, Codex, GitHub Copilot, Gemini CLI, Cursor or any MCP tool.', wc.el, mixBox, legend);
 
   // --- Workload -------------------------------------------------------------------------------
-  const chips = ([1, 2, 3, 4, 5] as Difficulty[]).map((n) => h('button', { type: 'button', class: 'dchip', style: `--c:${DIFF_COLORS[n]}`, title: `Add a ${DIFF_NAMES[n]} ticket (difficulty ${n})`, 'aria-label': `Add difficulty ${n} ticket`, onClick: () => { ctx.sim.addTicket(n); ctx.refresh(); } }, String(n)));
+  const chips = ([1, 2, 3, 4, 5] as Difficulty[]).map((n) => h('button', { type: 'button', class: 'dchip', style: `--c:${DIFF_COLORS[n]}`, title: `Add a ${DIFF_NAMES[n]} task (difficulty ${n})`, 'aria-label': `Add difficulty ${n} task`, onClick: () => { ctx.sim.addTicket(n); ctx.refresh(); } }, String(n)));
   const addRow = h('div', { class: 'add-ticket' },
-    h('span', { class: 'at-label' }, '+ ticket'), ...chips,
-    h('button', { type: 'button', class: 'btn tiny', title: 'Add a ticket with a random difficulty', onClick: () => { ctx.sim.addTicket(); ctx.refresh(); } }, 'any'));
+    h('span', { class: 'at-label' }, '+ task'), ...chips,
+    h('button', { type: 'button', class: 'btn tiny', title: 'Add a task with a random difficulty', onClick: () => { ctx.sim.addTicket(); ctx.refresh(); } }, 'any'));
   const budget = numRow('budgetUsd', { label: 'Budget (est.)', min: 0, max: 500, step: 5, hint: 'Soft cap on estimated spend. The orchestrator warns at 80% and downshifts models above 100%. 0 = unlimited.', fmt: (v) => (v === 0 ? 'unlimited' : usd(v)) });
-  const workload = sec('workload', 'Workload', 'What the Orchestrator plans: how fast tickets arrive, how hard they are and how much money and time there is.',
-    numRow('ticketsPerMinute', { label: 'Ticket rate', min: 0, max: 6, step: 0.1, unit: '/ min', hint: 'New tickets the orchestrator files per minute.' }).el,
+  const workload = sec('workload', 'Workload', 'What the Orchestrator plans: how fast tasks arrive, how hard they are and how much money and time there is.',
+    numRow('ticketsPerMinute', { label: 'Task rate', min: 0, max: 6, step: 0.1, unit: '/ min', hint: 'New tasks the orchestrator files per minute.' }).el,
     numRow('meanDifficulty', { label: 'Mean difficulty', min: 1, max: 5, step: 0.1, hint: 'Average difficulty 1 (trivial) .. 5 (epic).' }).el,
-    numRow('difficultySpread', { label: 'Difficulty spread', min: 0, max: 2, step: 0.1, hint: 'How varied the tickets are.' }).el,
-    numRow('totalScope', { label: 'Total scope', min: 4, max: 60, step: 1, unit: 'tickets', hint: 'Tickets in the plan.' }).el,
+    numRow('difficultySpread', { label: 'Difficulty spread', min: 0, max: 2, step: 0.1, hint: 'How varied the tasks are.' }).el,
+    numRow('totalScope', { label: 'Total scope', min: 4, max: 60, step: 1, unit: 'tickets', hint: 'Tasks in the plan.' }).el,
     numRow('deadlineMinutes', { label: 'Deadline', min: 5, max: 120, step: 1, unit: 'min', hint: 'Sim minutes from the start.' }).el,
     budget.el, addRow);
 
@@ -92,7 +97,7 @@ export function createControlPanel(ctx: UICtx): Panel {
     numRow('walkSpeed', { label: 'Walk speed', min: 0.5, max: 3, step: 0.1, unit: 'x', hint: 'How fast agents walk between stations.' }).el,
     numRow('helpRate', { label: 'Peer help', min: 0, max: 1, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%`, hint: 'How often stuck agents throw a paper airplane to a teammate.' }).el,
     numRow('rejectRate', { label: 'Integrator strictness', min: 0, max: 0.7, step: 0.01, fmt: (v) => `${Math.round(v * 100)}% sent back`, hint: 'Chance a PR is sent back for changes.' }).el,
-    numRow('blockRate', { label: 'Blocker chance', min: 0, max: 0.5, step: 0.01, fmt: (v) => `${Math.round(v * 100)}%`, hint: 'Missing secrets / flaky CI: a ticket gets stuck.' }).el);
+    numRow('blockRate', { label: 'Blocker chance', min: 0, max: 0.5, step: 0.01, fmt: (v) => `${Math.round(v * 100)}%`, hint: 'Missing secrets / flaky CI: a task gets stuck.' }).el);
 
   // --- Time -----------------------------------------------------------------------------------
   const speed = sliderRow({
@@ -127,7 +132,7 @@ export function createControlPanel(ctx: UICtx): Panel {
     cfgRows.push(row); tbl.appendChild(row);
   }
   const autoBox = h('div', { class: 'auto-box' }, tbl,
-    h('p', { class: 'note' }, 'Harder tickets get a stronger model, a bigger autocompact buffer and more subagents. They also get tagged with more skills the agent must fetch from the Skill Library.'),
+    h('p', { class: 'note' }, 'Harder tasks get a stronger model, a bigger autocompact buffer and more subagents. They also get tagged with more skills the agent must fetch from the Skill Library.'),
     h('p', { class: 'note hl-note' }, 'Highlighted row: the difficulty most agents are working on right now.'));
 
   const mc = (): AgentConfig => st().manualConfig;
@@ -138,9 +143,9 @@ export function createControlPanel(ctx: UICtx): Panel {
   const mBuf = sliderRow({ label: 'Autocompact buffer', min: 5, max: 50, step: 1, unit: '%', value: mc().autocompactBuffer, def: DEFAULT_SETTINGS.manualConfig.autocompactBuffer, idPrefix: 'mcbuf', hint: 'Share of the context window kept free before auto-compaction.', onInput: (v) => mcPatch({ autocompactBuffer: v }) });
   const mSub = sliderRow({ label: 'Subagents', min: 0, max: 8, step: 1, value: mc().subagents, def: DEFAULT_SETTINGS.manualConfig.subagents, idPrefix: 'mcsub', hint: 'Max parallel subagents each agent may spawn.', onInput: (v) => mcPatch({ subagents: v }) });
   const mEff = selectRow('Effort', EFFORTS.map((e) => ({ value: e, label: e })), mc().effort, (v) => mcPatch({ effort: v as AgentConfig['effort'] }), 'mceff');
-  const manualBox = h('div', { class: 'manual-box' }, mModel.el, mBuf.el, mSub.el, mEff.el, h('p', { class: 'note' }, 'Applies to every agent, regardless of ticket difficulty.'));
+  const manualBox = h('div', { class: 'manual-box' }, mModel.el, mBuf.el, mSub.el, mEff.el, h('p', { class: 'note' }, 'Applies to every agent, regardless of task difficulty.'));
 
-  const config = sec('config', 'Agent config policy', 'Does each ticket pick its own model, autocompact buffer and subagents, or do you pin one config for everybody?', mode.el, autoBox, manualBox);
+  const config = sec('config', 'Agent config policy', 'Does each task pick its own model, autocompact buffer and subagents, or do you pin one config for everybody?', mode.el, autoBox, manualBox);
 
   // --- Visuals --------------------------------------------------------------------------------
   const vrows: { set: (v: VisualSettings) => void }[] = [];

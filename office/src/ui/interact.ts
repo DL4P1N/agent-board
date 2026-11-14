@@ -94,21 +94,21 @@ export interface SampleBrief { project: string; brief: string }
 
 export const FALLBACK_CHAT_HELP: ChatHelpEntry[] = [
   { cmd: 'status', example: 'status', blurb: 'Orchestrator summarises progress, ETA and risks.' },
-  { cmd: 'add ticket', example: 'add a ticket: password reset email (hard)', blurb: 'File a ticket; add a difficulty word to rate it.' },
-  { cmd: 'cancel ticket', example: 'cancel T-12', blurb: 'Drop a ticket from the plan.' },
-  { cmd: 'set difficulty', example: 'make T-12 epic', blurb: 'Re-rate a ticket (trivial..epic).' },
-  { cmd: 'prioritize', example: 'prioritize T-12', blurb: 'Bump a ticket to the front of the queue.' },
-  { cmd: 'assign', example: 'give T-12 to Pixel', blurb: 'Pin a ticket to one agent.' },
+  { cmd: 'add task', example: 'add a task: password reset email (hard)', blurb: 'File a task; add a difficulty word to rate it.' },
+  { cmd: 'cancel task', example: 'cancel T-12', blurb: 'Drop a task from the plan.' },
+  { cmd: 'set difficulty', example: 'make T-12 epic', blurb: 'Re-rate a task (trivial..epic).' },
+  { cmd: 'prioritize', example: 'prioritize T-12', blurb: 'Bump a task to the front of the queue.' },
+  { cmd: 'assign', example: 'give T-12 to Pixel', blurb: 'Pin a task to one agent.' },
   { cmd: 'tell agent', example: 'tell Pixel to write the README', blurb: 'Orchestrator relays by paper plane.' },
   { cmd: 'ask for help', example: 'ask Marlow to help Pixel', blurb: 'Send a help request between two agents.' },
   { cmd: 'add skill', example: 'add skill Stripe Webhooks', blurb: 'Create a custom skill in the library.' },
   { cmd: 'equip skill', example: 'equip Playwright on Pixel', blurb: 'Hand a skill to an agent.' },
-  { cmd: 'cut scope', example: 'cut scope by 2', blurb: 'Descope the lowest-value tickets.' },
+  { cmd: 'cut scope', example: 'cut scope by 2', blurb: 'Descope the lowest-value tasks.' },
   { cmd: 'deadline', example: 'extend deadline by 10 minutes', blurb: 'Move the submission deadline.' },
   { cmd: 'speed', example: 'speed 4x', blurb: 'Change the simulation speed.' },
   { cmd: 'kick off', example: 'kick off: Sticky Wall - a realtime whiteboard with share links', blurb: 'Replan from a new project brief.' },
 ];
-export const FALLBACK_CHAT_SUGGESTIONS: string[] = ['status', 'cut scope by 2', 'who is blocked?', 'extend deadline by 10 minutes', 'prioritize the deploy ticket'];
+export const FALLBACK_CHAT_SUGGESTIONS: string[] = ['status', 'cut scope by 2', 'who is blocked?', 'extend deadline by 10 minutes', 'prioritize the deploy task'];
 export const FALLBACK_BRIEFS: SampleBrief[] = [
   { project: 'Sticky Wall', brief: 'A realtime collaborative whiteboard with AI-generated sticky notes, login, and a public share link. Deploy a live demo.' },
   { project: 'Standup Bot', brief: 'A Slack-style standup collector that summarises the team update each morning, with a web dashboard and a one-click deploy.' },
@@ -121,3 +121,10 @@ const intentMods = import.meta.glob('../sim/intents.ts', { eager: true }) as Rec
 const intents = Object.values(intentMods)[0];
 export const CHAT_HELP: ChatHelpEntry[] = intents?.CHAT_HELP?.length ? intents.CHAT_HELP : FALLBACK_CHAT_HELP;
 export const CHAT_SUGGESTIONS: string[] = intents?.CHAT_SUGGESTIONS?.length ? intents.CHAT_SUGGESTIONS : FALLBACK_CHAT_SUGGESTIONS;
+
+/** "<b>Name</b> text" for activity rows, without doubling the name when the text already starts with it. */
+export function whoAndText(a: { name: string; provider: string } | undefined, text: string): (HTMLElement | string)[] {
+  if (!a) return [text];
+  const rest = text.startsWith(a.name + ' ') ? text.slice(a.name.length + 1) : text;
+  return [h('b', { class: `who ${a.provider}` }, a.name), ' ', rest];
+}

@@ -1,8 +1,9 @@
 // TOP BAR: product, room code + invite popover, connection pill, speed readout, pause, palette switcher.
 import type { SimState, VisualSettings } from '../types';
 import type { Panel, UICtx } from './ctx';
-import { copyText, fmtClock, flash, h, setAttr, setText, toggleClass } from './dom';
+import { copyText, fmtClock, flash, h, setAttr, setHidden, setText, toggleClass } from './dom';
 import { icon } from './icons';
+import { attentionItems } from './attention';
 
 export const ROOM_CODE = 'PIXEL-7FK2';
 export const INVITE_TEXT = `Join the Agent Board room ${ROOM_CODE}: run "npx agent-board join ${ROOM_CODE}" and follow the prompts. Works with Claude Code, Codex, GitHub Copilot, Gemini CLI, Cursor or any MCP tool.`;
@@ -12,7 +13,7 @@ const PALETTES: { id: VisualSettings['palette']; label: string }[] = [
 ];
 
 export function createTopbar(ctx: UICtx, actions: { about(): void; togglePanels(): void; resetLayout(): void }): Panel {
-  const logo = h('div', { class: 'brand' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, icon('orchestrator')), h('span', { class: 'brand-name' }, 'Agent Board'));
+  const logo = h('div', { class: 'brand' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, icon('orchestrator')), h('span', { class: 'brand-name' }, 'Claude Board'), h('span', { class: 'chip warn sim-chip', title: 'Everything here is simulated: no real agents, tasks or bills' }, 'Demo'));
 
   const copyRoom = h('button', { type: 'button', class: 'btn tiny', title: 'Copy room code', 'aria-label': 'Copy room code', onClick: async () => { flash(copyRoom, (await copyText(ROOM_CODE)) ? 'Copied' : 'Press Ctrl+C'); } }, 'Copy');
   const room = h('div', { class: 'room-chip', title: 'Shared room code (mock)' }, h('span', { class: 'dim' }, 'ROOM'), h('code', {}, ROOM_CODE), copyRoom);
@@ -33,7 +34,12 @@ export function createTopbar(ctx: UICtx, actions: { about(): void; togglePanels(
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) { setPop(false); inviteBtn.focus(); e.stopImmediatePropagation(); } }, true);
   const inviteWrap = h('div', { class: 'invite-wrap' }, inviteBtn, pop);
 
-  const conn = h('div', { class: 'conn', title: 'Live presence in this room (mock)' }, h('i', { class: 'live-dot' }), h('span', { class: 'conn-text' }));
+  const goBoard = (id: string): void => {
+    if (ctx.view !== 'board') ctx.setView('board');
+    requestAnimationFrame(() => { const t = document.getElementById(id); t?.scrollIntoView({ block: 'start' }); (t?.querySelector('h2') as HTMLElement | null)?.focus(); });
+  };
+  const conn = h('button', { type: 'button', class: 'conn', title: 'Who is here: open "Who\'s doing what"', onClick: () => goBoard('tv-people') }, h('i', { class: 'live-dot', 'aria-hidden': 'true' }), h('span', { class: 'conn-text' }));
+  const need = h('button', { type: 'button', class: 'need-badge', title: 'Things waiting for you: open "What needs you"', onClick: () => goBoard('tv-attn') });
   const connText = conn.querySelector('.conn-text') as HTMLElement;
   const speed = h('div', { class: 'speed', title: 'Simulated time and speed' }, h('span', { class: 'sim-clock' }), h('b', { class: 'sim-mult' }));
   const clockEl = speed.querySelector('.sim-clock') as HTMLElement;
@@ -52,10 +58,10 @@ export function createTopbar(ctx: UICtx, actions: { about(): void; togglePanels(
   const viewBtn = (v: 'office' | 'board', ico: 'users' | 'panels', label: string, title: string): HTMLButtonElement =>
     h('button', { type: 'button', role: 'radio', title, 'aria-label': label, 'aria-checked': 'false', onClick: () => ctx.setView(v) }, icon(ico), h('span', { class: 'lbl' }, label));
   const viewOffice = viewBtn('office', 'users', '3D office', 'The 3D pixel office (V switches)');
-  const viewBoard = viewBtn('board', 'panels', 'Board', 'Technical board: stats, tickets, activity and costs, no 3D (V switches)');
+  const viewBoard = viewBtn('board', 'panels', 'Board', 'Technical board: stats, tasks, activity and costs, no 3D (V switches)');
   const viewSeg = h('div', { class: 'seg view-seg', role: 'radiogroup', 'aria-label': 'View' }, viewOffice, viewBoard);
 
-  const el = h('header', { class: 'topbar' }, logo, viewSeg, room, inviteWrap, h('span', { class: 'grow' }), conn, speed, h('div', { class: 'speed-ctl' }, slower, pause, faster), swatches, panelsBtn, resetBtn, helpBtn);
+  const el = h('header', { class: 'topbar' }, logo, viewSeg, room, inviteWrap, h('span', { class: 'grow' }), need, conn, speed, h('div', { class: 'speed-ctl' }, slower, pause, faster), swatches, panelsBtn, resetBtn, helpBtn);
 
   let lastPaused: boolean | null = null, lastPal = '', lastView = '';
   const update = (state: SimState): void => {
@@ -65,7 +71,12 @@ export function createTopbar(ctx: UICtx, actions: { about(): void; togglePanels(
     }
     const online = state.agents.filter((a) => a.phase !== 'offline');
     const humans = new Set(online.map((a) => a.owner)).size;
-    setText(connText, `${online.length} agents - ${humans} humans online`);
+    setText(connText, `${humans} people, ${online.length} agents`);
+    const n = attentionItems(ctx, state).length;
+    const needSig = String(n);
+    if (need.dataset.n !== needSig) { need.dataset.n = needSig; need.replaceChildren(String(n), h('span', { class: 'nb-word' }, ` need${n === 1 ? 's' : ''} you`)); need.setAttribute('aria-label', `${n} thing${n === 1 ? '' : 's'} need you`); }
+    setHidden(need, !n);
+    toggleClass(need, 'urgent', attentionItems(ctx, state).some((i) => i.tone === 'bad'));
     setText(clockEl, `sim ${fmtClock(state.time)}`);
     const sp = ctx.sim.settings.simSpeed;
     setText(multEl, sp === 0 ? 'PAUSED' : `${sp}x`);
