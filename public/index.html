@@ -173,6 +173,8 @@
   @media (max-width: 1600px) {
     header:has(#clock:not([hidden])) :is(#link-btn, #present-link) .lt { display: none; }
     header:has(#clock:not([hidden])) :is(#link-btn, #present-link) { min-width: var(--ctl); padding: 0 var(--s3); justify-content: center; }
+    /* Wider fonts (Linux has no Segoe UI) need more room: drop the filter's label and the badges' wordy tails too. */
+    header:has(#clock:not([hidden])) :is(.filter > span, .needs .lt) { display: none; }
   }
   /* Server lost: the header turns red too, so it shows wherever you've scrolled. */
   header.down { border-bottom: 2px solid var(--bad); }
@@ -1519,7 +1521,7 @@ function renderNeeds(qOpen, unread) {
     ci?.status === 'fail' ? `<button class="b" data-go="ci" data-fk="n-ci" title="${esc(`The latest CI run on main failed${ci.failing?.length ? ': ' + ci.failing.join(', ') : ''}`)}">main is failing</button>` : '',
     clash.length ? `<button class="b" data-go="conflict" data-fk="n-c" title="${esc(clash.map(conflictText).join(' '))}">${clash.length === 1 ? `${esc(clash[0].name)} on 2 laptops` : `${clash.length} names on 2 laptops`}</button>` : '',
     props ? `<button class="st" data-go="proposed" data-fk="n-p" title="Tasks agents proposed: approve or reject them (the planner can too)">${props} proposed</button>` : '',
-    qOpen.length ? `<button class="q" data-go="questions" data-fk="n-q">${qOpen.length} question${qOpen.length > 1 ? 's' : ''} waiting on you</button>` : '',
+    qOpen.length ? `<button class="q" data-go="questions" data-fk="n-q" title="Agents are waiting for your answer">${qOpen.length} question${qOpen.length > 1 ? 's' : ''}<span class="lt"> waiting on you</span></button>` : '',
     unread.length ? `<button class="m" data-go="mentions" data-fk="n-m">${unread.length} new mention${unread.length > 1 ? 's' : ''}</button>` : '',
     blocked ? `<button class="b" data-go="blocked" data-fk="n-b" title="Show the Blocked column">${blocked} blocked</button>` : '',
     stale ? `<button class="st" data-go="stale" data-fk="n-s" title="Claimed or in progress with no update for 15+ min">${stale} stale</button>` : '',
