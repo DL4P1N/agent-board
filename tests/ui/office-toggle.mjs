@@ -277,9 +277,9 @@ try {
     check('a tile in the chooser switches the theme and the room (Night), and the chooser closes', await until(page, () => document.documentElement.dataset.theme === 'night' && office.mod.palette === 'night' && document.querySelector('#theme-pop [data-theme-set="night"]').getAttribute('aria-checked') === 'true' && document.getElementById('theme-pop').hidden));
     await page.screenshot({ path: path.join(out, 'office-night-1440.png') });
     await page.click('#theme-btn'); await page.keyboard.press('ArrowRight');
-    check('arrow keys move through the grid (Night -> Terminal), the room follows', await until(page, () => document.documentElement.dataset.theme === 'terminal' && office.mod.palette === 'terminal' && document.activeElement?.dataset.themeSet === 'terminal'));
+    check('arrow keys move through the grid (Night -> Paper), the room follows', await until(page, () => document.documentElement.dataset.theme === 'paper' && office.mod.palette === 'paper' && document.activeElement?.dataset.themeSet === 'paper'));
     await page.keyboard.press('ArrowDown');
-    check('down a row (Terminal -> Sunset), the room follows', await until(page, () => document.documentElement.dataset.theme === 'sunset' && office.mod.palette === 'sunset' && document.activeElement?.dataset.themeSet === 'sunset'));
+    check('down a row (Paper -> Cotton Candy), the room follows', await until(page, () => document.documentElement.dataset.theme === 'candy' && office.mod.palette === 'candy' && document.activeElement?.dataset.themeSet === 'candy'));
     await page.keyboard.press('Escape');
     check('Esc closes the picker, focus back on the theme button (still in 3D)', await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn')) && await view(page) === 'office');
     await page.evaluate(() => setTheme('auto'));
