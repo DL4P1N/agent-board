@@ -115,7 +115,7 @@ Keep the web board open. The line at the top always says the one thing that need
 - **Keyboard.** `Ctrl`+`K` (`⌘K` on a Mac) opens the command palette: jump to a task or person, add a task, answer a question, set the demo time, switch the filter or theme. `n` new task, `/` write a message, `?` help, `Esc` closes dialogs. On a focused card, `Enter` opens it, the arrow keys move between cards and columns, and `Home`/`End` jump to the first or last card. You can turn the single-key shortcuts off in the Help dialog (useful with speech input).
 - **The feed** starts with the latest 200 events. **Load earlier activity** pages back 200 at a time.
 - **Find tasks.** The search box filters by title, `#id` or person; *Columns* / *Table* switches the view (the table sorts by any column). The feed has *Problems* and *Merges* tabs next to All, Chat and @me.
-- **Colours and theme.** Each person keeps the same colour, worked out from their name. *Auto* / *Light* / *Dark* is in the Help dialog and is saved per browser.
+- **Colours and theme.** Each person keeps the same colour, worked out from their name. Fifteen themes (Dark, Light, Dusk, Day, Night, Terminal, High Contrast, Paper, Synthwave, Ocean, Sticky Note, Coral, Candy, Sunset, Forest) or *Auto* (Dark or Light, following the device): pick one with the swatch button in the header. Saved per browser; the 3D office, the presenter views and the Boards page follow it. The tokens come from `scripts/themes.mjs`.
 - **On a phone**, a **Chat** button jumps down to the chat.
 - **QR code.** *Start here* step 1 can show a QR code for the board link, to watch on a phone. To connect a laptop, copy the join command or send the invite message.
 
@@ -260,7 +260,8 @@ Each suite starts its own throwaway board on a free port with an empty data fold
 | `tests/ui/verdict.mjs` | The deadline verdict in the clock pill and the extra *What to do now* signals (P3 tasks that won't make it, review backlog, sent back twice, out of usage). |
 | `tests/ui/tasks-view.mjs` | Task search, the Columns / Table view, and the Problems / Merges feed tabs. |
 | `tests/ui/cancel.mjs` | Cancelling a task from its dialog (human-only), and the tool colour dots. |
-| `tests/ui/palette-theme.mjs` | The Auto / Light / Dark theme switch and the Ctrl+K command palette. |
+| `tests/ui/palette-theme.mjs` | The themes and the theme chooser (keyboard grid, Auto by the OS, old saved values), a contrast scan of every visible text in every theme, and the Ctrl+K command palette. |
+| `tests/themes.mjs` | The generated theme blocks are current on every page, each theme has a room, base colours pass 4.5:1. |
 | `tests/ui/present.mjs` | The classic (2D) presenter view. |
 | `tests/ui/office-present.mjs` | The 3D presenter view: live overlay and adapted office state, live updates, themes, reduced motion, the WebGL fallback. |
 | `tests/ui/office-toggle.mjs` | The board's Board / 3D office switch: Board by default with nothing 3D loaded, the office loading on first switch, live state in the scene, answering from it, the agent card, saved choice and `?view=`, phones, no WebGL, the header staying one row. |

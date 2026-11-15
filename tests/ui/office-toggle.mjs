@@ -200,7 +200,7 @@ try {
     // command palette and the task dialog are top-layer dialogs.
     const above = (sel) => page.evaluate((s) => { const e = document.querySelector(s); const r = e.getBoundingClientRect(); const at = document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(r.height / 2, 20)); return r.width > 0 && e.contains(at); }, sel);
     await page.click('#theme-btn');
-    check('maximised Tasks: the theme picker opens above it', await above('#theme-pop'));
+    check('maximised Tasks: the theme chooser opens above it, whole', await above('#theme-pop') && await page.evaluate(() => { const r = $('theme-pop').getBoundingClientRect(); return [[r.left + 8, r.top + 8], [r.right - 8, r.bottom - 8], [r.left + 8, r.bottom - 8]].every(([x, y]) => $('theme-pop').contains(document.elementFromPoint(x, y))); }));
     await page.keyboard.press('Escape');
     await page.click('#goal-btn');
     check('maximised Tasks: the goal popover opens above it', await above('#o-goal'));
@@ -260,14 +260,16 @@ try {
     check('sending a message works from the office', await until(page, () => /hello from the office/.test(document.getElementById('feed').innerText)));
 
     // The theme: the header's swatch button, the same control as on the Board view (no theme chip in the room).
-    check('one theme control: the header button, also in 3D', await page.evaluate(() => !document.querySelector('#o-theme-chip, #o-theme') && !!$('theme-btn').offsetWidth && document.querySelectorAll('[data-theme-set]').length === 5));
+    check('one theme control: the header button, also in 3D', await page.evaluate(() => !document.querySelector('#o-theme-chip, #o-theme') && !!$('theme-btn').offsetWidth && document.querySelectorAll('[data-theme-set]').length === 16));
     await page.click('#theme-btn');
-    check('the theme button opens the picker over the room, focus on the current palette (a radio group)', await page.evaluate(() => { const r = $('theme-pop').getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !$('theme-pop').hidden && $('theme-pop').contains(e) && $('theme-pop').getAttribute('role') === 'radiogroup' && document.activeElement?.getAttribute('aria-checked') === 'true' && $('theme-pop').querySelectorAll('[role="radio"][tabindex="0"]').length === 1; }));
+    check('the theme button opens the chooser over the room, focus on the current theme (a radio group of tiles)', await page.evaluate(() => { const r = $('theme-pop').getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !$('theme-pop').hidden && $('theme-pop').contains(e) && $('theme-pop').getAttribute('role') === 'radiogroup' && document.activeElement?.getAttribute('aria-checked') === 'true' && $('theme-pop').querySelectorAll('[role="radio"][tabindex="0"]').length === 1; }));
     await page.click('#theme-pop [data-theme-set="night"]');
-    check('a palette in the picker switches the theme and the room (Night), and the picker closes', await until(page, () => document.documentElement.dataset.theme === 'night' && office.mod.palette === 'night' && document.querySelector('#theme-pop [data-theme-set="night"]').getAttribute('aria-checked') === 'true' && document.getElementById('theme-pop').hidden));
+    check('a tile in the chooser switches the theme and the room (Night), and the chooser closes', await until(page, () => document.documentElement.dataset.theme === 'night' && office.mod.palette === 'night' && document.querySelector('#theme-pop [data-theme-set="night"]').getAttribute('aria-checked') === 'true' && document.getElementById('theme-pop').hidden));
     await page.screenshot({ path: path.join(out, 'office-night-1440.png') });
     await page.click('#theme-btn'); await page.keyboard.press('ArrowRight');
-    check('arrow keys move through the palettes (Night -> Terminal)', await until(page, () => document.documentElement.dataset.theme === 'terminal' && office.mod.palette === 'terminal' && document.activeElement?.dataset.themeSet === 'terminal'));
+    check('arrow keys move through the grid (Night -> Terminal), the room follows', await until(page, () => document.documentElement.dataset.theme === 'terminal' && office.mod.palette === 'terminal' && document.activeElement?.dataset.themeSet === 'terminal'));
+    await page.keyboard.press('ArrowDown');
+    check('down a row (Terminal -> Ocean), the room follows', await until(page, () => document.documentElement.dataset.theme === 'ocean' && office.mod.palette === 'ocean' && document.activeElement?.dataset.themeSet === 'ocean'));
     await page.keyboard.press('Escape');
     check('Esc closes the picker, focus back on the theme button (still in 3D)', await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn')) && await view(page) === 'office');
     await page.evaluate(() => setTheme('auto'));
@@ -338,21 +340,23 @@ try {
     const v2 = await open('/?view=office');
     check('?view=office opens the office (nothing saved)', await view(v2.page) === 'office' && await until(v2.page, () => !!document.querySelector('#office-scene canvas'), null, 20000) && await v2.page.evaluate(() => localStorage.getItem('board-view-mode') === null));
 
-    // Theme: the office follows the board's light / dark choice.
-    // Theme: the room is drawn in the board's palette (each of the four), and Auto follows the OS.
-    for (const t of ['day', 'night', 'terminal', 'dusk']) {
-      await v2.page.evaluate((x) => setTheme(x), t); await sleep(150);
-      check(`theme ${t}: the office draws the ${t} palette`, await v2.page.evaluate((x) => office.mod?.palette === x && scenePalette() === x && window.__officeState?.agents.length > 0, t));
+    // Theme: every theme has its own room (the scene palette with the theme's id), and Auto follows the OS: Dark or Light.
+    const ids = await v2.page.evaluate(() => Object.keys(window.THEMES));
+    const rooms = [];
+    for (const t of ids) {
+      await v2.page.evaluate((x) => setTheme(x), t); await sleep(120);
+      if (!(await v2.page.evaluate((x) => office.mod?.palette === x && scenePalette() === x && window.__officeState?.agents.length > 0, t))) rooms.push(t);
     }
+    check(`each of the ${ids.length} themes draws its own room (the scene palette follows)`, ids.length === 15 && !rooms.length, rooms.join());
     await v2.page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
     await v2.page.evaluate(() => setTheme('auto'));
-    check('Auto on a light OS: the Day room', await until(v2.page, () => office.mod?.palette === 'day'));
+    check('Auto on a light OS: the Light room', await until(v2.page, () => office.mod?.palette === 'light'));
     await v2.page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
     // Chrome fires media-query 'change' events on a rendering frame, which a headless test tab doesn't reliably get.
     // The page must see the dark OS; if the browser hasn't delivered the event yet, fire it on the page's own listener.
-    check('Auto: the page sees the OS switch to dark', await until(v2.page, () => darkMq.matches && scenePalette() === 'dusk'));
-    if (!(await until(v2.page, () => office.mod?.palette === 'dusk', null, 2000))) await v2.page.evaluate(() => darkMq.dispatchEvent(new Event('change')));
-    check('Auto follows the OS switching to dark: the Dusk room', await until(v2.page, () => office.mod?.palette === 'dusk'));
+    check('Auto: the page sees the OS switch to dark', await until(v2.page, () => darkMq.matches && scenePalette() === 'dark'));
+    if (!(await until(v2.page, () => office.mod?.palette === 'dark', null, 2000))) await v2.page.evaluate(() => darkMq.dispatchEvent(new Event('change')));
+    check('Auto follows the OS switching to dark: the Dark room', await until(v2.page, () => office.mod?.palette === 'dark'));
     // A column with more cards than fit says how many more; a helper shows under its agent with its own state; a person
     // whose only agent has their name is one row.
     for (let i = 0; i < 7; i++) await ana('create_task', { title: `Extra task ${i + 1}`, size: 'S' });
@@ -364,7 +368,7 @@ try {
     check('an overflowing Tasks column says "+N more" (N = the cards out of view)', await until(v2.page, () => { const c = document.querySelector('#o-cols .o-col[data-s="open"]'); const m = c?.querySelector('.o-more'); if (!m || m.hidden) return false; const ul = c.querySelector('ul').getBoundingClientRect(); const out = [...c.querySelectorAll('.o-card')].filter((x) => x.getBoundingClientRect().bottom > ul.bottom + 1).length; return out > 0 && m.textContent === `+${out} more`; }), await v2.page.evaluate(() => document.querySelector('#o-cols .o-col[data-s="open"] .o-more')?.textContent));
     check('a helper shows under its agent, with its own state and task', await until(v2.page, () => { const h = document.querySelector('[data-o-agent="ana-claude"]')?.closest('li')?.querySelector('.o-helpers'); return !!h && /ui-worker/.test(h.innerText) && /working/.test(h.innerText) && /Helper task/.test(h.innerText); }));
     check('a person whose one agent has their name: their line, then that agent\'s row (as on the Board view)', await until(v2.page, () => !!document.querySelector('[data-person-row="carol"] [data-o-agent="carol"]') && !!document.querySelector('[data-person-row="carol"] .o-pn')));
-    for (const [w, h, theme] of [[1440, 900, 'dusk'], [1440, 900, 'day'], [1366, 768, 'dusk']]) {
+    for (const [w, h, theme] of [[1440, 900, 'dusk'], [1440, 900, 'light'], [1440, 900, 'sticky'], [1366, 768, 'dark']]) {
       await v2.page.evaluate((t) => setTheme(t), theme);
       await v2.page.setViewport({ width: w, height: h }); await sleep(800);
       await v2.page.screenshot({ path: path.join(out, `office-${w}-${theme}.png`) });

@@ -6,25 +6,25 @@
  * Unlike the presenter (main.ts) it reads nothing by itself: the board passes the GET /api/state object it already
  * loads on every reload to update(). Same adapter (LiveWorld) and OfficeScene as the presenter.
  *
- *   const office = (await import('./office/embed.js')).mount(el, { theme: 'dusk', reducedMotion: false, onPick });
+ *   const office = (await import('./office/embed.js')).mount(el, { theme: 'dark', reducedMotion: false, onPick });
  *   office.update(state); office.setTheme('night'); office.select('ana-claude'); office.setActive(false); office.destroy();
  */
 import { OfficeScene } from '../scene/OfficeScene';
 import { DEFAULT_VISUAL, type SimState, type VisualSettings } from '../types';
 
+import { THEMES, themeOf } from '../themes';
+
 type Palette = VisualSettings['palette'];
-const PALETTES: readonly Palette[] = ['dusk', 'day', 'night', 'terminal'];
-/** The board's theme, as a scene palette. Older values: light = Day, dark = Dusk. Anything else: Dusk. */
+/** The board's theme (one of its fifteen, Auto already resolved) as a scene palette: each has its own room. Anything else: Dark. */
 export function paletteOf(t: string | null | undefined): Palette {
-  const v = t === 'light' ? 'day' : t === 'dark' ? 'dusk' : t;
-  return (PALETTES as readonly string[]).includes(v ?? '') ? (v as Palette) : 'dusk';
+  return themeOf(t) ?? 'dark';
 }
 import { LiveWorld } from './adapter';
 import type { BoardState } from './board';
 
 export interface EmbedOptions {
-  /** The board's palette right now (the demo's four: dusk, day, night, terminal), so the room matches the page. */
-  theme: Palette | 'light' | 'dark';
+  /** The board's theme right now (Auto resolved to Dark or Light), so the room matches the page. */
+  theme: Palette;
   /** prefers-reduced-motion: no paper planes or cheers; the office only moves for a moment after a change. */
   reducedMotion: boolean;
   /** An agent was clicked in the office (its agent name, e.g. "ana-claude"), or empty space (null). */
@@ -36,7 +36,7 @@ export interface OfficeEmbed {
   readonly usable: boolean;
   /** A fresh board state (the /api/state object). Cheap: call it on every reload. */
   update(state: BoardState): void;
-  setTheme(theme: Palette | 'light' | 'dark'): void;
+  setTheme(theme: Palette): void;
   /** Pause rendering while the office is hidden (the board view), resume when it is shown again. */
   setActive(on: boolean): void;
   /** Where the page's panels cover the view, as fractions of its width (left, right) and height (top, bottom): the room
@@ -58,8 +58,8 @@ export function mount(container: HTMLElement, opts: EmbedOptions): OfficeEmbed {
   let palette = paletteOf(opts.theme);
   let selected: string | null = null;
   const reduced = !!opts.reducedMotion;
-  // Owner colours are a little darker on the light Day palette, like the board's own person colours.
-  const world = new LiveWorld({ motion: !reduced, light: palette === 'day' });
+  // Owner colours are a little darker in a light room, like the board's own person colours in a light theme.
+  const world = new LiveWorld({ motion: !reduced, light: THEMES[palette].light });
   const visual = (): VisualSettings => ({ ...DEFAULT_VISUAL, palette, live: true, showLabels: true, showBubbles: true, autoOrbit: false, focus: 0 });
   const scene = new OfficeScene(container, visual());
   let board: BoardState | null = null;
@@ -117,7 +117,7 @@ export function mount(container: HTMLElement, opts: EmbedOptions): OfficeEmbed {
       const p = paletteOf(t);
       if (p === palette || dead) return;
       palette = p;
-      world.setOptions({ light: p === 'day' });
+      world.setOptions({ light: THEMES[p].light });
       scene.setVisual(visual());
       sig = ''; apply();
     },

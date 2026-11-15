@@ -9,6 +9,7 @@
 
 import type { StationId } from './layout';
 import type { Skill } from './skills';
+import type { ThemeId } from './themes';
 
 import type { FleetMix, ProviderId } from './providers';
 /** Which coding-agent tool runs an agent. The full list (names, colours) lives in providers.ts. */
@@ -438,7 +439,7 @@ export type AgentOverride = Partial<Pick<AgentConfig, 'model' | 'tier' | 'autoco
 export interface VisualSettings {
   pixelSize: number;          // 1..8 render pixel size in screen px (low-res upscaled with nearest)
   dither: number;             // 0..1 Bayer dither strength
-  palette: 'dusk' | 'day' | 'night' | 'terminal';
+  palette: ThemeId;           // the board's theme (the demo offers dusk, day, night, terminal)
   autoOrbit: boolean;
   orbitSpeed: number;         // 0..2
   showLabels: boolean;        // floating name tags

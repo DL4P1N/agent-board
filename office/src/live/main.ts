@@ -11,21 +11,16 @@ import { LiveWorld } from './adapter';
 import type { BoardState } from './board';
 import { connect, SLUG, viewToken } from './connection';
 import { Overlay } from './overlay';
+import { AUTO_THEME, THEMES, themeOf } from '../themes';
 
 const root = document.documentElement;
 const mq = (q: string): boolean => { try { return matchMedia(q).matches; } catch { return false; } };
 const reduced = mq('(prefers-reduced-motion: reduce)');
-// The board's theme choice (Auto / Dusk / Day / Night / Terminal, per browser) picks the office palette. Auto (no
-// html[data-theme]) follows the OS: Dusk on a dark one, Day on a light one. Older saved values: light = Day, dark = Dusk.
+// The board's theme choice (one of its fifteen, or Auto, per browser) picks the office palette: each theme has its own
+// room. Auto (no html[data-theme]) follows the OS: Dark on a dark one, Light on a light one.
 type Palette = VisualSettings['palette'];
-const PALETTES: readonly Palette[] = ['dusk', 'day', 'night', 'terminal'];
-const BARS: Record<Palette, string> = { dusk: '#1b1530', day: '#efe4cf', night: '#080c1a', terminal: '#020a04' };
-const themeOf = (t: string | null | undefined): Palette | null => {
-  const v = t === 'light' ? 'day' : t === 'dark' ? 'dusk' : t;
-  return (PALETTES as readonly string[]).includes(v ?? '') ? (v as Palette) : null;
-};
-const palette = (): Palette => themeOf(root.dataset.theme) ?? (mq('(prefers-color-scheme: dark)') ? 'dusk' : 'day');
-const light = (): boolean => palette() === 'day';
+const palette = (): Palette => themeOf(root.dataset.theme) ?? (mq('(prefers-color-scheme: dark)') ? AUTO_THEME.dark : AUTO_THEME.light);
+const light = (): boolean => THEMES[palette()].light;
 const classicHref = (): string => 'present-classic.html' + (viewToken() ? '?token=' + encodeURIComponent(viewToken()) : '');
 
 let fellBack = false;
@@ -80,11 +75,12 @@ addEventListener('storage', (e) => {
   if (t) root.dataset.theme = t; else delete root.dataset.theme;
   // The page's own tags follow (the pre-paint script in present.html set them for the first paint).
   const meta = (id: string, attr: string, v: string): void => document.getElementById(id)?.setAttribute(attr, v);
-  const dark = t !== null && t !== 'day';
-  meta('m-scheme', 'content', t === null ? 'light dark' : dark ? 'dark' : 'light');
-  meta('m-tc-light', 'media', t === null ? '(prefers-color-scheme: light)' : t === 'day' ? 'all' : 'not all');
-  meta('m-tc-dark', 'media', t === null ? '(prefers-color-scheme: dark)' : dark ? 'all' : 'not all');
-  meta('m-tc-dark', 'content', t && dark ? BARS[t] : BARS.dusk);
+  const lt = t !== null && THEMES[t].light;
+  meta('m-scheme', 'content', t === null ? 'light dark' : lt ? 'light' : 'dark');
+  meta('m-tc-light', 'media', t === null ? '(prefers-color-scheme: light)' : lt ? 'all' : 'not all');
+  meta('m-tc-light', 'content', THEMES[t && lt ? t : AUTO_THEME.light].bg);
+  meta('m-tc-dark', 'media', t === null ? '(prefers-color-scheme: dark)' : lt ? 'not all' : 'all');
+  meta('m-tc-dark', 'content', THEMES[t && !lt ? t : AUTO_THEME.dark].bg);
   themeChanged();
 });
 // Keep the MediaQueryList: a temporary one can be garbage-collected and take its listener with it.
