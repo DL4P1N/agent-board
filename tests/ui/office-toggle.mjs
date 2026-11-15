@@ -81,26 +81,29 @@ try {
     check('the switch is announced politely', await until(page, () => /Showing the 3D office/.test(document.getElementById('announcer').textContent)));
     check('first switch loads the office chunk and draws a canvas', await until(page, () => !!document.querySelector('#office-scene canvas'), null, 20000) && officeReqs(reqs).some((u) => /embed\.js/.test(u)) && officeReqs(reqs).some((u) => /OfficeScene-/.test(u)), officeReqs(reqs).map((u) => u.split('/').pop()).join(' '));
     check('loading note gone once it is ready', await until(page, () => !document.getElementById('office-view').classList.contains('loading')));
-    check('the Tasks window starts folded into the Progress chip on a 900px-tall screen (the room needs the height)', await page.evaluate(() => $('o-tasks').hidden && $('o-prog-chip').getAttribute('aria-expanded') === 'false'));
+    check('the Tasks window starts folded to its title bar (with the progress) on a 900px-tall screen (the room needs the height)', await page.evaluate(() => $('o-tasks').classList.contains('folded') && !$('o-cols').offsetHeight && $('o-tasks-fold').getAttribute('aria-expanded') === 'false' && /\d+ of \d+ done/.test($('o-prog-x').textContent)));
     const share = await page.evaluate(() => {
       const v = $('office-view').getBoundingClientRect(); let n = 0, hit = 0;
       for (let x = 0.02; x < 1; x += 0.04) for (let y = 0.02; y < 1; y += 0.04) { n++; if (document.elementFromPoint(v.left + v.width * x, v.top + v.height * y)?.closest('#office-scene')) hit++; }
       return hit / n;
     });
     check('the room gets at least half of the 3D view by default (was 38%)', share >= 0.5, share.toFixed(2));
-    await page.click('#o-prog-chip');
-    check('the Progress chip opens the Tasks window', await page.evaluate(() => !$('o-tasks').hidden && $('o-prog-chip').getAttribute('aria-expanded') === 'true'));
+    check('no Progress toggle: no bottom chips at all', await page.evaluate(() => !document.querySelector('.o-bot, #o-prog-chip, #o-act-chip, #o-chat-chip')));
+    await page.click('#o-tasks-fold');
+    check('the button in the Tasks title bar opens the window', await page.evaluate(() => !$('o-tasks').classList.contains('folded') && $('o-cols').offsetHeight > 50 && $('o-tasks-fold').getAttribute('aria-expanded') === 'true'));
     check('the room fills the window under the header; the task columns are hidden; no scrolling', await page.evaluate(() => { const r = $('office-view').getBoundingClientRect(); const h = document.querySelector('#app > header').getBoundingClientRect(); return Math.abs(r.top - h.bottom) < 3 && Math.abs(r.bottom - innerHeight) < 2 && r.width === innerWidth && !$('board').offsetWidth && document.documentElement.scrollHeight <= innerHeight + 1; }));
     const lay = await page.evaluate(() => {
       const R = (id) => { const e = document.getElementById(id); return e && !e.hidden && e.offsetWidth ? e.getBoundingClientRect() : null; };
       const hit = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-      const [l, r, t, top, bot] = [R('o-left'), R('o-right'), R('o-tasks'), document.querySelector('.o-top').getBoundingClientRect(), document.querySelector('.o-bot').getBoundingClientRect()];
+      const [l, r, a, t, top] = [R('o-left'), R('o-right'), R('o-act'), R('o-tasks'), document.querySelector('.o-top').getBoundingClientRect()];
       const v = $('office-view').getBoundingClientRect();
       // The middle of the room is clear: nothing but the scene at the centre, and a third of the width around it.
       const mid = [[0.5, 0.42], [0.4, 0.42], [0.6, 0.42], [0.5, 0.3]].every(([x, y]) => !!document.elementFromPoint(v.left + v.width * x, v.top + v.height * y)?.closest('#office-scene'));
-      return { docks: !!(l && r && t), apart: !hit(l, t) && !hit(r, t) && !hit(l, r) && !hit(l, bot) && !hit(r, bot) && !hit(t, bot) && !hit(top, l) && !hit(top, r), mid, inside: [l, r, t].every((x) => x && x.left >= v.left && x.right <= v.right && x.top >= v.top && x.bottom <= v.bottom) };
+      // Activity sits in the right column under Agents: same width, below it.
+      const col = r && a && Math.abs(r.left - a.left) < 2 && Math.abs(r.right - a.right) < 2 && a.top >= r.bottom;
+      return { docks: !!(l && r && a && t), col, apart: !hit(l, t) && !hit(r, t) && !hit(a, t) && !hit(l, r) && !hit(l, a) && !hit(r, a) && !hit(top, l) && !hit(top, r), mid, inside: [l, r, a, t].every((x) => x && x.left >= v.left && x.right <= v.right && x.top >= v.top && x.bottom <= v.bottom) };
     });
-    check('docks and the Tasks window are there, apart from each other and the chips, inside the room, the middle clear', lay.docks && lay.apart && lay.mid && lay.inside, JSON.stringify(lay));
+    check('docks, Activity under Agents and the Tasks window are there, apart from each other and the chips, inside the room, the middle clear', lay.docks && lay.col && lay.apart && lay.mid && lay.inside, JSON.stringify(lay));
     check('Needs you (left dock) holds What to do now and the questions, with Answer', await page.evaluate(() => !!$('o-left').contains($('now')) && $('o-left').contains($('q-panel'))) && await shown(page, '#now') && await shown(page, '#q-panel textarea') && /Which login provider/.test(await page.$eval('#q-panel', (e) => e.innerText)));
     const dock = await page.evaluate(() => { const f = $('questions').querySelector('form'); const ta = f.querySelector('textarea').getBoundingClientRect(); const b = f.querySelector('button').getBoundingClientRect(); return { sub: $('o-left-sub').textContent, badge: $('needs').querySelector('button')?.title, phases: !!$('o-left').querySelector('.phases')?.offsetWidth, row: Math.abs(ta.top - b.top) < 12 && b.left > ta.right - 2 }; });
     check('Needs you: its counts in the title bar (the same words and count as the need-you badge of the Board view), no phase track, the answer box and Answer on one row', /1 question/.test(dock.sub) && dock.sub === dock.badge && !dock.phases && dock.row, JSON.stringify(dock));
@@ -124,7 +127,7 @@ try {
     check('saving it closes the popover, back on the chip, still in 3D; the board has the new freeze', await until(page, () => document.getElementById('o-dl').hidden && document.activeElement?.id === 'o-dl-chip' && String(state.settings.freeze_minutes) === '45') && await view(page) === 'office');
     await page.click('#o-dl-chip'); await page.keyboard.press('Escape');
     check('Esc closes the demo time popover, focus back on its chip', await page.evaluate(() => $('o-dl').hidden && document.activeElement === $('o-dl-chip')));
-    check('bottom chips: Progress (x of y done, bar) and Activity (the latest event); chat lives in Activity, no separate Chat chip', await page.evaluate(() => /0 of 2 done/.test($('o-prog-chip').innerText) && !!$('o-prog-bar') && $('o-act-x').textContent.length > 3 && !$('o-chat-chip')));
+    check('progress (x of y done, bar) in the Tasks title bar; chat lives in Activity, no separate Chat chip', await page.evaluate(() => /0 of 2 done/.test($('o-prog-x').textContent) && $('o-tasks').querySelector('.o-head').contains($('o-prog-bar')) && !$('o-chat-chip')));
     const small = await page.evaluate(() => {
       const out = [];
       for (const b of $('office-view').querySelectorAll('button, textarea, select')) { const r = b.getBoundingClientRect(); if (r.width && r.height && (r.height < 24 || r.width < 24) && !b.matches('.link, .o-card')) out.push(`${b.id || b.dataset.fk || b.className || b.textContent} ${Math.round(r.width)}x${Math.round(r.height)}`); }
@@ -168,27 +171,29 @@ try {
     await page.keyboard.press('Escape'); await until(page, () => !document.getElementById('task-dlg').open);
     check('closing the dialog leaves the office as it was', await view(page) === 'office');
 
-    // Folding: docks fold to chips, Tasks into the Progress chip, maximise; remembered; Esc restores the maximised window.
+    // Folding: docks fold to chips, Tasks and Activity to their title bars, maximise; remembered; Esc restores the
+    // maximised window.
     await page.click('#o-left [data-o-fold]');
     check('Needs you folds to a chip, focus on the chip', await page.evaluate(() => $('o-left').hidden && !$('o-left-pill').hidden && document.activeElement === $('o-left-pill') && $('o-left-pill').getAttribute('aria-expanded') === 'false'));
     await page.click('#o-right [data-o-fold]');
-    await page.click('#o-prog-chip');
-    check('Agents folds; the Progress chip folds the Tasks window', await page.evaluate(() => $('o-right').hidden && !$('o-right-pill').hidden && $('o-tasks').hidden && $('o-prog-chip').getAttribute('aria-expanded') === 'false'));
+    await page.click('#o-tasks-fold');
+    check('Agents folds (Activity takes the column); the Tasks window folds to its title bar, focus stays on its button', await page.evaluate(() => $('o-right').hidden && !$('o-right-pill').hidden && $('o-tasks').classList.contains('folded') && document.activeElement === $('o-tasks-fold') && $('o-act').getBoundingClientRect().height > $('office-view').getBoundingClientRect().height * 0.7));
+    await page.click('#o-act-fold');
+    check('Activity folds to its title bar at the foot of the column, with the latest event in it', await page.evaluate(() => $('o-act').classList.contains('folded') && !$('feed').offsetHeight && $('o-act-fold').getAttribute('aria-expanded') === 'false' && $('o-act-x').textContent.length > 3 && Math.abs($('o-act').getBoundingClientRect().bottom - $('office-view').getBoundingClientRect().bottom) < 12));
     await page.reload(); await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 8000 }); await sleep(300);
-    check('folded panels stay folded after a reload', await page.evaluate(() => $('o-left').hidden && $('o-right').hidden && $('o-tasks').hidden && !$('o-left-pill').hidden));
-    await page.click('#o-left-pill'); await page.click('#o-right-pill'); await page.click('#o-prog-chip');
-    check('the chips open them again', await page.evaluate(() => !$('o-left').hidden && !$('o-right').hidden && !$('o-tasks').hidden && $('o-left-pill').hidden));
+    check('folded panels stay folded after a reload', await page.evaluate(() => $('o-left').hidden && $('o-right').hidden && $('o-tasks').classList.contains('folded') && $('o-act').classList.contains('folded') && !$('o-left-pill').hidden));
+    await page.click('#o-left-pill'); await page.click('#o-right-pill'); await page.click('#o-tasks-fold'); await page.click('#o-act-fold');
+    check('the chips and title-bar buttons open them again', await page.evaluate(() => !$('o-left').hidden && !$('o-right').hidden && !$('o-tasks').classList.contains('folded') && !$('o-act').classList.contains('folded') && $('feed').offsetHeight > 50 && $('o-left-pill').hidden));
     await page.click('#o-tasks-max');
     check('maximise: the Tasks window covers the room', await page.evaluate(() => { const r = $('o-tasks').getBoundingClientRect(); const v = $('office-view').getBoundingClientRect(); return $('o-tasks').classList.contains('max') && r.height > v.height * 0.8 && $('o-tasks-max').getAttribute('aria-pressed') === 'true'; }));
     await page.keyboard.press('Escape');
     check('Esc restores it', await page.evaluate(() => !$('o-tasks').classList.contains('max')));
 
-    // Activity: the board's own feed (with its filters) and chat, in a window; Esc closes it.
-    await page.click('#o-act-chip');
-    check('the Activity chip opens the feed with its filters', await page.evaluate(() => !$('o-act').hidden && $('o-act').contains($('feed')) && $('o-act').contains($('tabs')) && $('feed').offsetHeight > 150 && /vote API is up/.test($('feed').innerText)));
+    // Activity: the board's own feed (with its filters) and chat, in the right column under Agents.
+    check('Activity, under Agents, has the feed with its filters', await page.evaluate(() => $('o-rcol').contains($('o-act')) && $('o-act').contains($('feed')) && $('o-act').contains($('tabs')) && $('feed').offsetHeight > 150 && /vote API is up/.test($('feed').innerText)), await page.evaluate(() => $('feed').offsetHeight));
     // Its filters are clickable: the feed doesn't cover them, and the room's name tags never paint over the window.
     const corners = await page.evaluate(() => { const r = $('o-act').getBoundingClientRect(); return [[r.left + 4, r.top + 4], [r.right - 4, r.top + 4], [r.left + 4, r.bottom - 4], [r.right - 4, r.bottom - 4], [r.left + r.width / 2, r.top + r.height / 2]].filter(([x, y]) => !$('o-act').contains(document.elementFromPoint(x, y))).length; });
-    check('nothing from the room covers the Activity window (its corners and middle are its own)', corners === 0, String(corners));
+    check('nothing from the room covers Activity (its corners and middle are its own)', corners === 0, String(corners));
     check('the room\'s name tags sit under every panel (the scene is its own stacking layer)', await page.evaluate(() => { const s = getComputedStyle($('office-scene')); return s.zIndex === '0' && s.isolation === 'isolate'; }));
     for (const tab of ['chat', 'me', 'problems', 'merges', 'all']) {
       const pos = await page.$eval(`#tabs [data-tab="${tab}"]`, (b) => { const r = b.getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { x: r.left + r.width / 2, y: r.top + r.height / 2, own: e === b || b.contains(e) }; });
@@ -196,15 +201,10 @@ try {
       const r = await page.evaluate((t) => ({ pressed: document.querySelector(`#tabs [data-tab="${t}"]`).getAttribute('aria-pressed'), dlg: document.getElementById('task-dlg').open, focusOk: !document.activeElement?.matches?.('textarea[id^="tdqa"]') }), tab);
       check(`3D Activity: a click on the "${tab}" filter selects it (and opens nothing else)`, pos.own && r.pressed === 'true' && !r.dlg && r.focusOk, JSON.stringify({ ...pos, ...r }));
     }
-    await page.keyboard.press('Escape');
-    check('Esc closes it, focus back on the chip', await page.evaluate(() => $('o-act').hidden && document.activeElement === $('o-act-chip')));
-    await page.click('#o-act-chip');
-    check('the Activity window has the chat composer', await page.evaluate(() => !$('o-act').hidden && $('o-act').contains($('msg'))));
+    check('Activity has the chat composer', await page.evaluate(() => $('o-act').contains($('msg')) && $('msg').offsetHeight > 0));
     await page.focus('#msg');
     await page.type('#msg', 'hello from the office'); await page.keyboard.press('Enter');
     check('sending a message works from the office', await until(page, () => /hello from the office/.test(document.getElementById('feed').innerText)));
-    await page.keyboard.press('Escape');
-    check('Esc in the composer closes the window', await page.evaluate(() => $('o-act').hidden));
 
     // The theme: the header's swatch button, the same control as on the Board view (no theme chip in the room).
     check('one theme control: the header button, also in 3D', await page.evaluate(() => !document.querySelector('#o-theme-chip, #o-theme') && !!$('theme-btn').offsetWidth && document.querySelectorAll('[data-theme-set]').length === 5));
@@ -297,7 +297,7 @@ try {
     await ana('claim_task', { id: helperTask.id, as: 'ui-worker' }); await ana('update_task', { id: helperTask.id, status: 'in_progress', as: 'ui-worker' });
     const carol = await agent(board, 'carol'); await carol('board_status');
     await v2.page.setViewport({ width: 1366, height: 768 });
-    await v2.page.evaluate(() => { if (document.getElementById('o-tasks').hidden) document.getElementById('o-prog-chip').click(); });
+    await v2.page.evaluate(() => { if (document.getElementById('o-tasks').classList.contains('folded')) document.getElementById('o-tasks-fold').click(); });
     check('an overflowing Tasks column says "+N more" (N = the cards out of view)', await until(v2.page, () => { const c = document.querySelector('#o-cols .o-col[data-s="open"]'); const m = c?.querySelector('.o-more'); if (!m || m.hidden) return false; const ul = c.querySelector('ul').getBoundingClientRect(); const out = [...c.querySelectorAll('.o-card')].filter((x) => x.getBoundingClientRect().bottom > ul.bottom + 1).length; return out > 0 && m.textContent === `+${out} more`; }), await v2.page.evaluate(() => document.querySelector('#o-cols .o-col[data-s="open"] .o-more')?.textContent));
     check('a helper shows under its agent, with its own state and task', await until(v2.page, () => { const h = document.querySelector('[data-o-agent="ana-claude"]')?.closest('li')?.querySelector('.o-helpers'); return !!h && /ui-worker/.test(h.innerText) && /working/.test(h.innerText) && /Helper task/.test(h.innerText); }));
     check('a person whose one agent has their name is a single row (no heading)', await until(v2.page, () => !!document.querySelector('[data-o-agent="carol"]') && ![...document.querySelectorAll('#o-agents .o-pn')].some((p) => /carol/.test(p.textContent))));

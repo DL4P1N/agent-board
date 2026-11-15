@@ -803,15 +803,16 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .vseg button[aria-pressed="true"] { color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--ink); }
   @media (max-width: 760px) { .vseg { display: none !important; } }
   /* 3D office: the demo's office view. The room fills the window under the header; translucent pixel panels float
-     over it: Needs you (left dock), Agents (right dock), Tasks (bottom window), Goal and demo time chips on top,
-     Progress / Activity (feed + chat) chips along the bottom. Docks and windows fold to chips (remembered per board). */
+     over it: Needs you (left dock), Agents with Activity (feed + chat) under it (right column), Tasks (bottom window,
+     progress in its title bar), Goal and demo time chips on top. Docks fold to chips, Tasks and Activity to their title
+     bars (remembered per board). The theme is the header's, as on the Board view. */
   .office-view { display: none; }
   html[data-board-view="office"] body { overflow: hidden; }
   html[data-board-view="office"] #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
   html[data-board-view="office"] main { display: flex; flex-direction: column; align-items: stretch; flex: 1 1 auto; min-height: 0; width: 100%; max-width: none; padding: 0; }
   html[data-board-view="office"] main > :not(.office-view), html[data-board-view="office"] :is(.skip:not([data-skip="now"]), .tochat, header .needs, header #clock) { display: none !important; }
   html[data-board-view="office"] .office-view { display: block; position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: var(--bg);
-    --o-gap: 8px; --o-dock: clamp(280px, 22vw, 360px); --o-chip: 34px; --o-bottom: calc(var(--o-chip) + var(--o-gap) * 2); --o-tasks-h: clamp(176px, 27%, 270px);
+    --o-gap: 8px; --o-dock: clamp(272px, 20vw, 340px); --o-chip: 34px; --o-bottom: var(--o-gap); --o-tasks-h: clamp(176px, 27%, 270px);
     --glass: color-mix(in srgb, var(--panel) 92%, transparent); }
   .office-scene { position: absolute; inset: 0; z-index: 0; isolation: isolate; } /* its name tags stack among themselves, under every panel */
   /* The office draws its name tags at 9-10px: larger here (12px and up, the board's floor for labels). */
@@ -840,7 +841,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-pill .o-n:empty { display: none; }
   .o-pill .o-ar { color: var(--muted); font-family: var(--mono); }
 
-  /* Docks: full height between the top and the bottom chips. */
+  /* Docks: full height. */
   .o-dock { top: var(--o-gap); bottom: var(--o-bottom); width: var(--o-dock); }
   .o-left { left: var(--o-gap); } .o-right { right: var(--o-gap); }
   #o-left-pill { left: var(--o-gap); } #o-right-pill { right: var(--o-gap); }
@@ -938,13 +939,27 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-card .o-cw.bad { color: var(--bad); }
 
   /* Activity: the board's own feed and chat, in a window above its chip (over the Agents dock). */
-  .o-act { right: var(--o-gap); bottom: var(--o-bottom); width: min(460px, calc(100% - 2 * var(--o-gap))); height: min(620px, calc(100% - var(--o-bottom) - var(--o-gap))); z-index: 7; }
+  /* The right column: Agents over Activity (the board's own feed, filters and chat), each scrolling on its own and each
+     folding (Agents to its chip at the top, Activity to its title bar at the foot). */
+  .o-rcol { position: absolute; z-index: 3; top: var(--o-gap); bottom: var(--o-bottom); right: var(--o-gap); width: var(--o-dock); display: flex; flex-direction: column; gap: calc(var(--o-gap) + 4px); pointer-events: none; }
+  .o-rcol > * { pointer-events: auto; }
+  .o-rcol > .o-panel { position: relative; top: auto; bottom: auto; left: auto; right: auto; width: auto; min-height: 0; }
+  .o-rcol > .o-right { flex: 1 1 0; min-height: 120px; }
+  .o-rcol > .o-act { flex: 1.3 1 0; min-height: 0; }
+  .o-rcol > #o-right-pill { position: static; align-self: flex-end; }
+  .o-act.folded, .o-tasks.folded { flex: 0 0 auto; height: auto; }
+  .o-act.folded { margin-top: auto; }
+  /* Folded, the Tasks window is just its title bar (Tasks, the progress, the button to show it), centred at the foot. */
+  .o-tasks.folded { left: 50%; right: auto; translate: -50% 0; width: max-content; max-width: calc(100% - 2 * var(--o-dock) - 4 * var(--o-gap)); }
+  .o-tasks.folded > .o-head { border-bottom: 0; gap: var(--s5); }
+  .o-act.folded > .o-body, .o-tasks.folded > .o-body, .o-tasks.folded #o-tasks-max { display: none; }
   .o-act > .o-body { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
   .o-act .panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin: 0; border: 0; box-shadow: none; background: transparent; padding: var(--s3) var(--s5) var(--s4); }
   .o-act .panel > .sec-h:first-child { flex: 0 0 auto; margin: 0 0 var(--s3); padding: 0; border: 0; min-height: var(--ctl-xs); }
   .o-act .panel > .sec-h h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .o-act .feedwrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   .o-act .feed { max-height: none; flex: 1 1 auto; min-height: 0; }
+  .o-act .tabs button { padding: 0 var(--s2); min-width: var(--ctl-xs); }
 
   /* Popovers under the top chips: the goal and the demo time (each edited in place) and the theme picker. */
   .o-pop { top: calc(var(--o-gap) * 2 + var(--o-chip)); left: 50%; translate: -50% 0; width: min(560px, calc(100% - 2 * var(--o-dock) - 6 * var(--o-gap))); max-height: calc(100% - var(--o-chip) * 2 - var(--o-gap) * 4); z-index: 7; }
@@ -961,8 +976,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-chips { position: absolute; z-index: 4; display: flex; gap: var(--o-gap); align-items: center; min-width: 0; pointer-events: none; }
   .o-chips > * { pointer-events: auto; }
   .o-top { top: var(--o-gap); left: calc(var(--o-dock) + var(--o-gap) * 2); right: calc(var(--o-dock) + var(--o-gap) * 2); justify-content: center; }
-  .o-bot { bottom: var(--o-gap); left: var(--o-gap); right: var(--o-gap); }
-  .o-bot .sp { flex: 1 1 auto; }
   .o-chip { display: inline-flex; align-items: center; gap: var(--s4); min-height: var(--o-chip); max-width: 100%; min-width: 0; padding: 0 var(--s5); font-size: var(--fs-sm); font-weight: 400; white-space: nowrap; }
   button.o-chip:hover { background: var(--panel); }
   button.o-chip:active { transform: translate(1px, 1px); }
@@ -976,7 +989,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   #o-dl-chip .fz { display: none; } /* the freeze time is in its tooltip; the countdown never gets cut */
   #o-dl-chip .vd.ok { color: var(--ok); } #o-dl-chip .vd.tight, #o-dl-chip .vd.behind { color: var(--warn); }
   #o-dl-chip.warn .o-x, #o-dl-chip.frozen .o-x { color: var(--warn); }
-  #o-act-chip { flex: 0 1 26rem; }
+  /* Progress (x of y done, a bar) in the Tasks title bar, also when the window is folded to it. */
+  .o-prog { display: inline-flex; align-items: center; gap: var(--s4); min-width: 0; flex: 0 1 auto; }
   .o-bar { display: inline-flex; width: 72px; height: 10px; flex: 0 0 auto; background: var(--field); box-shadow: 0 0 0 2px var(--line-strong); overflow: hidden; }
   .o-bar i { display: block; height: 100%; background: var(--ok); }
   /* Narrow laptops: the docks get a little narrower. */
@@ -1176,25 +1190,23 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       </aside>
       <button type="button" class="o-pill" id="o-left-pill" data-o-fold="left" aria-expanded="false" aria-controls="o-left" hidden><span class="o-t">Needs you</span><span class="o-n" id="o-left-n"></span><span class="o-ar" aria-hidden="true">›</span></button>
 
-      <aside class="o-panel o-dock o-right" id="o-right" aria-labelledby="o-right-h">
-        <div class="o-head"><h2 id="o-right-h">Agents</h2><span class="o-sub" id="o-right-sub"></span><button type="button" class="o-ib" data-o-fold="right" aria-expanded="true" aria-controls="o-right" aria-label="Fold Agents to a chip" title="Fold">›</button></div>
-        <div class="o-body" id="o-agents"></div>
-      </aside>
-      <button type="button" class="o-pill" id="o-right-pill" data-o-fold="right" aria-expanded="false" aria-controls="o-right" hidden><span class="o-ar" aria-hidden="true">‹</span><span class="o-t">Agents</span><span class="o-sub o-n" id="o-right-n"></span></button>
 
       <section class="o-panel o-tasks" id="o-tasks" aria-labelledby="o-tasks-h">
-        <div class="o-head"><h2 id="o-tasks-h">Tasks</h2><button type="button" class="o-ib" id="o-tasks-max" data-o-max aria-pressed="false" aria-label="Maximise the tasks" title="Maximise">□</button><button type="button" class="o-ib" data-o-fold="tasks" aria-expanded="true" aria-controls="o-tasks" aria-label="Fold the tasks into the Progress chip" title="Fold">▾</button></div>
-        <div class="o-body"><div class="o-cols" id="o-cols"></div></div>
+        <div class="o-head"><h2 id="o-tasks-h">Tasks</h2><span class="o-prog" id="o-prog" title="Tasks merged into main (proposals not counted)"><span class="o-sub" id="o-prog-x"></span><span class="o-bar" aria-hidden="true"><i id="o-prog-bar"></i></span></span><button type="button" class="o-ib" id="o-tasks-max" data-o-max aria-pressed="false" aria-label="Maximise the tasks" title="Maximise">□</button><button type="button" class="o-ib" id="o-tasks-fold" data-o-fold="tasks" aria-expanded="true" aria-controls="o-tasks-b" aria-label="Fold the tasks to their title bar" title="Fold">▾</button></div>
+        <div class="o-body" id="o-tasks-b"><div class="o-cols" id="o-cols"></div></div>
       </section>
 
-      <section class="o-panel o-act" id="o-act" aria-label="Activity and chat" hidden>
-        <div class="o-head"><h2>Activity</h2><button type="button" class="o-ib" data-o-close="act" aria-label="Close activity" title="Close (Esc)">×</button></div>
-        <div class="o-body" id="o-act-b"></div>
-      </section>
-
-      <div class="o-chips o-bot" role="group" aria-label="Progress and activity">
-        <button type="button" class="o-chip" id="o-prog-chip" data-o-fold="tasks" aria-expanded="true" aria-controls="o-tasks"><span class="o-t">Progress</span><span class="o-x" id="o-prog-x"></span><span class="o-bar" aria-hidden="true"><i id="o-prog-bar"></i></span><span class="o-ar" aria-hidden="true">▾</span></button>
-        <span class="sp"></span><button type="button" class="o-chip" id="o-act-chip" aria-expanded="false" aria-controls="o-act"><span class="o-t">Activity</span><span class="o-x" id="o-act-x"></span><span class="o-ar" aria-hidden="true">▴</span></button>
+      <!-- The right column: Agents, and under it Activity (the board's own feed, filters and chat). Each folds. -->
+      <div class="o-rcol" id="o-rcol">
+        <aside class="o-panel o-dock o-right" id="o-right" aria-labelledby="o-right-h">
+          <div class="o-head"><h2 id="o-right-h">Agents</h2><span class="o-sub" id="o-right-sub"></span><button type="button" class="o-ib" data-o-fold="right" aria-expanded="true" aria-controls="o-right" aria-label="Fold Agents to a chip" title="Fold">›</button></div>
+          <div class="o-body" id="o-agents"></div>
+        </aside>
+        <button type="button" class="o-pill" id="o-right-pill" data-o-fold="right" aria-expanded="false" aria-controls="o-right" hidden><span class="o-ar" aria-hidden="true">‹</span><span class="o-t">Agents</span><span class="o-sub o-n" id="o-right-n"></span></button>
+        <section class="o-panel o-act" id="o-act" aria-labelledby="o-act-h">
+          <div class="o-head"><h2 id="o-act-h">Activity</h2><span class="o-sub" id="o-act-x"></span><button type="button" class="o-ib" id="o-act-fold" data-o-fold="act" aria-expanded="true" aria-controls="o-act-b" aria-label="Fold Activity to its title bar" title="Fold">▾</button></div>
+          <div class="o-body" id="o-act-b"></div>
+        </section>
       </div>
     </section>
 
@@ -1344,7 +1356,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dt>Plan approval</dt>
     <dd>Optional (Start here, step 4). When it's on, agents wait after the planner writes the task list until a human checks it and presses <b>Approve plan &amp; start</b>. You can edit and add tasks before approving.</dd>
     <dt>3D office and presenter view</dt>
-    <dd><b>3D office</b> (header, next to <b>Board</b>) shows the team's agents as characters in a pixel office, like the office demo: <b>Needs you</b> on the left (What to do now, the agents' questions with Answer, what's blocked), <b>Agents</b> on the right (click one, or a character, to see what it's doing; only a question, a blocked task or out of usage gets a badge), <b>Tasks</b> at the bottom (folded into the Progress chip on screens up to 900px tall), and chips for the goal and the demo time (both edited in place), the theme, progress, and activity (the feed and chat in one window). Panels fold into chips and stay that way in this browser; <code>Esc</code> closes the window on top. Not on phones. The <b>presenter view</b> is the same office, read-only and large, for the room's big screen.
+    <dd><b>3D office</b> (header, next to <b>Board</b>) shows the team's agents as characters in a pixel office, like the office demo: <b>Needs you</b> on the left (What to do now, the agents' questions with Answer, what's blocked), <b>Agents</b> on the right (click one, or a character, to see what it's doing; only a question, a blocked task or out of usage gets a badge) with <b>Activity</b> (the feed and chat) under it, the same sides as the Board view, <b>Tasks</b> at the bottom with the progress in its title bar (folded to that bar on screens up to 900px tall), and chips for the goal and the demo time (both edited in place). Panels fold and stay that way in this browser; <code>Esc</code> closes the window on top. Not on phones. The <b>presenter view</b> is the same office, read-only and large, for the room's big screen.
       <div class="xacts" id="present-row" hidden><a id="present-link" class="plink" href="present.html" hidden target="_blank" rel="noopener" title="Read-only, for the room's big screen (opens in a new tab)" aria-label="Open the presenter view (opens in a new tab)"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 11v2.5M5 13.5h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Open the presenter view</a></div></dd>
     <dt>Desktop notifications</dt>
     <dd>Press the bell in the header to get a desktop notification while this tab is in the background: a new question for the humans, a message that @mentions you, a task that gets blocked, and the feature-freeze reminders. Click a notification to jump to it. Nothing is sent for your own actions.</dd>
@@ -4133,10 +4145,10 @@ document.addEventListener('click', (ev) => {
     }
     return;
   }
-  // Chat and mentions open the office's Activity window instead.
+  // Chat and mentions go to the office's Activity (under Agents) instead.
   if (go === 'compose' || go === 'mentions') {
     ev.preventDefault(); ev.stopPropagation();
-    if (go === 'mentions') { ui.tab = 'me'; store.set('board-tab', 'me'); markMentionsSeen(); $('feed')._html = undefined; render(); return oAct(true); }
+    if (go === 'mentions') { ui.tab = 'me'; store.set('board-tab', 'me'); markMentionsSeen(); $('feed')._html = undefined; render(); return oAct(); }
     return oChat();
   }
   setBoardView('board');
@@ -4156,12 +4168,12 @@ function officeMount(on) {
     else if (oHome[k] && !oHome[k].nextSibling?.isSameNode?.(el)) oHome[k].after(el);
   }
 }
-// The Tasks window folds into the Progress chip by default on screens up to 900px tall (the room needs the height) and
+// The Tasks window folds to its title bar (with the progress) by default on screens up to 900px tall (the room needs the height) and
 // is open above that; folding or unfolding it yourself is remembered.
 const oTasksOff = () => (typeof oUi.tasks === 'boolean' ? oUi.tasks : innerHeight <= 900);
-const oOff = (w) => (w === 'tasks' ? oTasksOff() : !!oUi[w]);
-// Fold state: left / right docks, the tasks window (folds into the Progress chip), maximised tasks, Activity open, the
-// goal and demo time popovers, the theme picker.
+const oOff = (w) => (w === 'tasks' ? oTasksOff() : w === 'act' ? !!oUi.actOff : !!oUi[w]);
+// Fold state: the Needs you and Agents docks (to chips), the Tasks window and Activity (to their title bars), maximised
+// tasks, the goal and demo time popovers.
 function oApply() {
   const v = $('office-view');
   for (const s of ['left', 'right']) {
@@ -4169,12 +4181,13 @@ function oApply() {
     v.classList.toggle(s[0] + '-off', !!oUi[s]);
   }
   const tOff = oTasksOff();
-  $('o-tasks').hidden = tOff;
   $('o-tasks').classList.toggle('max', !!oUi.max && !tOff);
   $('o-tasks-max').setAttribute('aria-pressed', String(!!oUi.max)); $('o-tasks-max').setAttribute('aria-label', oUi.max ? 'Restore the tasks window' : 'Maximise the tasks'); $('o-tasks-max').title = oUi.max ? 'Restore (Esc)' : 'Maximise';
   $('o-tasks-max').textContent = oUi.max ? '❐' : '□';
-  $('o-prog-chip').setAttribute('aria-expanded', String(!tOff));
-  $('o-act').hidden = !oUi.act; $('o-act-chip').setAttribute('aria-expanded', String(!!oUi.act));
+  for (const [box, b, off, what] of [[$('o-tasks'), $('o-tasks-fold'), tOff, 'the tasks'], [$('o-act'), $('o-act-fold'), !!oUi.actOff, 'Activity']]) {
+    box.classList.toggle('folded', off); b.setAttribute('aria-expanded', String(!off)); b.textContent = off ? '▴' : '▾';
+    b.title = off ? 'Show' : 'Fold'; b.setAttribute('aria-label', off ? `Show ${what}` : `Fold ${what} to ${what === 'Activity' ? 'its' : 'their'} title bar`);
+  }
   $('o-goal').hidden = !ui.oGoal; $('o-goal-chip').setAttribute('aria-expanded', String(!!ui.oGoal));
   $('o-dl').hidden = !ui.oDl; $('o-dl-chip').setAttribute('aria-expanded', String(!!ui.oDl));
   oFrame();
@@ -4185,7 +4198,7 @@ function oFrame() {
   if (!office.mod?.setInsets || boardView !== 'office') return;
   const v = $('office-view').getBoundingClientRect(); if (!v.width || !v.height) return;
   const R = (id) => { const e = $(id); return e && !e.hidden && e.offsetWidth ? e.getBoundingClientRect() : null; };
-  const l = R('o-left'), r = R('o-right'), t = R('o-tasks'), top = document.querySelector('.o-top').getBoundingClientRect(), bot = document.querySelector('.o-bot').getBoundingClientRect();
+  const l = R('o-left'), r = R('o-right') || R('o-act'), t = R('o-tasks'), top = document.querySelector('.o-top').getBoundingClientRect();
   const maxed = t && $('o-tasks').classList.contains('max');
   office.mod.setInsets({
     left: l ? (l.right - v.left) / v.width : 0,
@@ -4196,23 +4209,21 @@ function oFrame() {
 }
 function oFold(which, folded = !oOff(which)) {
   const from = document.activeElement;
-  oUi[which] = folded; oSave(); oApply(); office.mod?.resize?.();
-  // Focus stays on the control you used; if that just went away, it moves to its counterpart (fold button <-> chip).
-  if (from && from !== document.body && !from.offsetParent) {
-    const box = which === 'tasks' ? $('o-tasks') : $('o-' + which);
-    (folded ? (which === 'tasks' ? $('o-prog-chip') : $('o-' + which + '-pill')) : box.querySelector('[data-o-fold]')).focus({ preventScroll: true });
-  }
+  oUi[which === 'act' ? 'actOff' : which] = folded; oSave(); oApply(); renderOffice(); office.mod?.resize?.();
+  // Focus stays on the control you used (Tasks and Activity fold to their title bars, which keep the button); if that
+  // just went away, it moves to its counterpart (a dock's fold button <-> its chip).
+  if (from && from !== document.body && !from.offsetParent) (folded ? $('o-' + which + '-pill') : $('o-' + which).querySelector('[data-o-fold]')).focus({ preventScroll: true });
   if (which === 'tasks' && !folded) oMore();
   if (which === 'act' && !folded) { const f = $('feed'); f.scrollTop = f.scrollHeight; }
 }
-function oAct(open, focus = true) {
-  oUi.act = open; oSave(); oApply();
-  if (open) { const f = $('feed'); f.scrollTop = f.scrollHeight; if (focus) f.focus({ preventScroll: true }); }
-  else if (focus) $('o-act-chip').focus({ preventScroll: true });
+// Show Activity (unfolded), at its latest event; focus the feed.
+function oAct(focus = true) {
+  if (oUi.actOff) oFold('act', false);
+  const f = $('feed'); f.scrollTop = f.scrollHeight; if (focus) f.focus({ preventScroll: true });
 }
 function oChat() {
   if (ui.tab !== 'chat' && ui.tab !== 'all') { ui.tab = 'chat'; store.set('board-tab', 'chat'); $('feed')._html = undefined; render(); }
-  oAct(true, false); $('msg').focus({ preventScroll: true });
+  oAct(false); $('msg').focus({ preventScroll: true });
 }
 // The goal and the demo time open in place, under their chips (one at a time), and are edited there.
 function oGoal(open, { edit = false } = {}) {
@@ -4329,16 +4340,15 @@ function renderOffice() {
   }).join(''))) oRove();
   requestAnimationFrame(oMore);
 
-  // Progress chip: done of all tasks (proposals don't count), like the board and the presenter.
+  // Progress, in the Tasks title bar: done of all tasks (proposals don't count), like the board and the presenter.
   const real = tasks.filter((t) => t.status !== 'proposed'); const done = real.filter((t) => t.status === 'done').length;
   $('o-prog-x').textContent = real.length ? `${done} of ${real.length} done` : 'no tasks yet';
   $('o-prog-bar').style.width = real.length ? `${Math.round((done / real.length) * 100)}%` : '0';
-  $('o-prog-chip').setAttribute('aria-label', `Progress: ${real.length ? `${done} of ${real.length} tasks done` : 'no tasks yet'}. ${oTasksOff() ? 'Show' : 'Fold'} the tasks`);
-  // Activity chip: the latest event.
+  $('o-prog').setAttribute('aria-label', `Progress: ${real.length ? `${done} of ${real.length} tasks done` : 'no tasks yet'}`);
+  // Folded Activity: its title bar says the latest event.
   const last = state.events.reduce((m, e) => (!m || e.id > m.id ? e : m), null);
   const lt = last ? `${last.author}: ${last.kind === 'settings' ? settingsText(last) : last.text}` : 'Nothing yet';
-  $('o-act-x').textContent = short(lt, 80); $('o-act-chip').title = lt;
-  $('o-act-chip').setAttribute('aria-label', `Activity: ${short(lt, 120)}. ${oUi.act ? 'Close' : 'Open'} the feed`);
+  $('o-act-x').textContent = oUi.actOff ? short(lt, 80) : ''; $('o-act-x').title = oUi.actOff ? lt : '';
   // Goal chip and its popover: the full goal, edited in place.
   const goal = String(state.settings.goal || '').trim();
   const head = goal.split('\n').find((l) => l.trim()) || '';
@@ -4419,10 +4429,8 @@ $('office-view').addEventListener('click', (ev) => {
   const d = t.dataset;
   if (d.oFold) return oFold(d.oFold);
   if ('oMax' in d) { oUi.max = !oUi.max; oSave(); oApply(); requestAnimationFrame(oMore); return office.mod?.resize(); }
-  if (d.oClose === 'act') return oAct(false);
   if (d.oClose === 'goal') return oGoal(false);
   if (d.oClose === 'dl') return oDl(false);
-  if (t.id === 'o-act-chip') return oAct(!oUi.act);
   if (t.id === 'o-goal-chip') return oGoal(!ui.oGoal);
   if (t.id === 'o-dl-chip') return oDl(!ui.oDl);
   if (d.oAgent) { const n = d.oAgent; pickAgent(office.picked === n ? null : n, true); return document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }
@@ -4437,11 +4445,10 @@ $('office-view').addEventListener('click', (ev) => {
 // then the selected agent.
 document.addEventListener('keydown', (ev) => {
   if (ev.key !== 'Escape' || boardView !== 'office' || ev.defaultPrevented || ev.target.closest?.('dialog')) return;
-  if (ev.target.matches?.('input, textarea, select') && !ev.target.closest('#o-act, #o-goal, #o-dl')) return;
+  if (ev.target.matches?.('input, textarea, select') && !ev.target.closest('#o-goal, #o-dl')) return;
   if (ac.open) return;
   if (ui.oDl) return oDl(false);
   if (ui.oGoal) return oGoal(false);
-  if (oUi.act) return oAct(false);
   if (oUi.max && !oTasksOff()) { oUi.max = false; oSave(); oApply(); office.mod?.resize(); return $('o-tasks-max').focus({ preventScroll: true }); }
   if (office.picked) { const n = office.picked; pickAgent(null, true); document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }
 });
