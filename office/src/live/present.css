@@ -203,6 +203,15 @@ ul.list .what { flex: 1 1 100%; min-width: 0; overflow: hidden; display: -webkit
 
 /* Name tags and speech bubbles over the agents: the scene draws them at 9-10 px; scale them up for the room. */
 #scene .ab-tagin { transform: translate(-50%, -100%) scale(var(--label-scale)); transform-origin: 50% 100%; }
+/* In the theme's own panel, text and border colours, as on the board's 3D view. */
+#scene .ab-card { background: color-mix(in srgb, var(--panel) 92%, transparent); color: var(--ink); box-shadow: 0 0 0 1px var(--line), 2px 2px 0 rgba(0, 0, 0, .3); }
+#scene .ab-card.sel { background: var(--panel); box-shadow: 0 0 0 1px var(--line), 0 0 0 2px var(--pc), 2px 3px 0 2px rgba(0, 0, 0, .35); }
+#scene .ab-name { text-shadow: none; }
+#scene .ab-model, #scene .ab-more { color: var(--muted); }
+#scene .ab-owner { color: var(--ink); }
+#scene .ab-more { border-top-color: var(--line); }
+#scene .ab-bub { background: var(--panel); color: var(--ink); border-color: var(--ink); }
+#scene .ab-bub:after { border-top-color: var(--ink); }
 
 @media (max-width: 760px) {
   body { overflow: auto; }

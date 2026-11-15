@@ -108,7 +108,8 @@ export class LabelLayer {
       if (showLabels) {
         const pc = PROVIDERS[it.provider]?.color ?? '#94a3b8';
         this.set(e, 'pc', pc, () => { e.card.style.setProperty('--pc', pc); });
-        const hq = it.phase === 'asking_help' || it.phase === 'awaiting_help' ? '1' : '0';
+        // The "?" badge only when no bubble says it already (the live office's bubble reads "Question").
+        const hq = (it.phase === 'asking_help' || it.phase === 'awaiting_help') && !(showBubbles && it.bubble) ? '1' : '0';
         this.set(e, 'q', hq, () => { e.q.style.display = hq === '1' ? 'inline-block' : 'none'; });
         this.set(e, 'name', it.name, () => { e.name.textContent = it.name; });
         const tc = tierColor(it.tier);
@@ -129,7 +130,9 @@ export class LabelLayer {
         this.set(e, 'sel', it.selected ? '1' : '0', () => { e.card.classList.toggle('sel', it.selected); e.more.style.display = it.selected ? 'flex' : 'none'; });
         if (it.selected) {
           this.set(e, 'l1', `${it.ticketId ?? '--'} ${it.phase}`, () => { e.l1.textContent = `${it.ticketId ?? 'no task'} · ${it.phase.replace(/_/g, ' ')}`; });
-          this.set(e, 'l2', fmtMoney(it.cost) + '|' + (it.burn > 0.005 ? it.burn.toFixed(2) : ''), () => { e.l2.textContent = fmtMoney(it.cost) + (it.burn > 0.005 ? `  $${it.burn.toFixed(2)}/min` : ''); });
+          // No cost line when nothing is known (the live office doesn't track spend): never a "$0.00".
+          const paid = it.cost > 0.005 || it.burn > 0.005;
+          this.set(e, 'l2', paid ? fmtMoney(it.cost) + '|' + (it.burn > 0.005 ? it.burn.toFixed(2) : '') : '-', () => { e.l2.style.display = paid ? '' : 'none'; e.l2.textContent = paid ? fmtMoney(it.cost) + (it.burn > 0.005 ? `  $${it.burn.toFixed(2)}/min` : '') : ''; });
         }
       }
       const bt = showBubbles && it.bubble ? it.bubble : '';

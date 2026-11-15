@@ -1107,6 +1107,15 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .office-scene { position: absolute; inset: 0; z-index: 0; isolation: isolate; } /* its name tags stack among themselves, under every panel */
   /* The office draws its name tags at 9-10px: larger here (12px and up, the board's floor for labels). */
   .office-scene .ab-tagin { transform: translate(-50%, -100%) scale(1.35); transform-origin: 50% 100%; }
+  /* The name tags and bubbles in the theme's own panel, text and border colours (the scene draws them navy). */
+  .office-scene .ab-card { background: color-mix(in srgb, var(--panel) 92%, transparent); color: var(--ink); box-shadow: 0 0 0 1px var(--border), 2px 2px 0 rgba(0, 0, 0, .3); }
+  .office-scene .ab-card.sel { background: var(--panel); box-shadow: 0 0 0 1px var(--border), 0 0 0 2px var(--pc), 2px 3px 0 2px rgba(0, 0, 0, .35); }
+  .office-scene .ab-name { text-shadow: none; }
+  .office-scene .ab-model, .office-scene .ab-more { color: var(--muted); }
+  .office-scene .ab-owner { color: var(--ink); }
+  .office-scene .ab-more { border-top-color: var(--border); }
+  .office-scene .ab-bub { background: var(--panel); color: var(--ink); border-color: var(--ink); }
+  .office-scene .ab-bub:after { border-top-color: var(--ink); }
   .office-load { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; margin: 0; color: var(--muted); font: var(--fs-sm) var(--mono); }
   .office-view.loading .office-load { display: flex; }
   html[data-board-view="office"] #o-left { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); width: var(--o-w); max-height: calc(100% - var(--o-y) - var(--o-bottom)); } /* as tall as its content, like on the Board view */
