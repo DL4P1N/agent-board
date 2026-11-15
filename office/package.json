@@ -2,6 +2,7 @@
   "name": "agent-board",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "description": "Agent Board - a shared 3D pixel office where coding agents work tickets together (frontend demo)",
   "scripts": {
