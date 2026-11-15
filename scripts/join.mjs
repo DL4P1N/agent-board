@@ -67,7 +67,7 @@ const CODEX_GH_ALLOW = [['pr'], ['run']];
 const FORCE_PUSH = ['--force', '-f', '--force-with-lease'];
 // What older join versions pre-approved for Claude Code: far broader than needed, so removed on re-run.
 const LEGACY_ALLOW = ['Bash(git:*)', 'Bash(gh:*)'];
-const FORCE_NOTE = 'force pushes are discouraged, not prevented: protect main on GitHub (README: "Protect main")';
+const FORCE_NOTE = 'force pushes are discouraged, not prevented: protect main on GitHub (docs/hosting.md: "Protect main")';
 
 const args = parseArgs(process.argv.slice(2));
 const gitAllow = !args['no-git-allow'];
