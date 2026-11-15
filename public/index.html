@@ -1139,7 +1139,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-tasks .taskbar { flex: 1 1 auto; min-width: 0; margin: 0; flex-wrap: nowrap; gap: var(--s4); }
   .o-tasks .taskbar .tsearch { flex: 0 1 240px; }
   .o-tasks .taskbar .filter select { max-width: 150px; }
-  .o-tasks .taskbar .tabs { margin-left: auto; }
+  .o-tasks .taskbar .tabs { margin-left: auto; flex: none; flex-wrap: nowrap; }
+  .o-tasks .taskbar .tabs button { white-space: nowrap; }
+  /* Open, the window is at least about two cards tall, so a short screen still shows whole cards. */
+  .o-tasks:not(.folded, .max) { min-height: min(50vh, 360px); }
   .o-tasks.folded .taskbar > #new-task-btn { display: none; }
   .o-tasks.folded .taskbar > :not(h2) { display: none; }
   /* Folded, the Tasks window is just its title bar, centred at the foot. */
@@ -1168,9 +1171,11 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-col.s-blocked.has h3 .o-c { color: var(--bad); font-weight: 700; }
   .o-col ul { list-style: none; margin: 0; padding: var(--s2); display: flex; flex-direction: column; gap: var(--s2); overflow-y: auto; min-height: 0; flex: 1 1 auto; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
   .o-col .o-none { color: var(--muted); font-size: var(--fs-meta); padding: var(--s2); }
-  .o-col ul.cut { padding-bottom: 22px; } /* scroll room, so the last card can come out from under the "+N more" strip */
-  /* A solid strip over the end of the list (absolute, so it never shrinks the list it counts). */
-  .o-col .o-more { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 1px var(--s3) 2px; background: var(--sunken); border-top: 1px solid var(--line); color: var(--muted); font: var(--fs-micro)/1.4 var(--mono); text-align: center; pointer-events: none; }
+  .o-col ul { scroll-snap-type: y proximity; } .o-col li { scroll-snap-align: start; }
+  /* "Show N more" right under the last whole card (the list is cut there, so no card shows half); a click scrolls to them. */
+  .o-col .o-more { flex: none; display: block; width: 100%; min-height: 0; margin: 0; padding: 1px var(--s3) 2px; background: var(--sunken); border: 0; border-top: 1px solid var(--line); box-shadow: none; border-radius: 0; color: var(--muted); font: var(--fs-micro)/1.4 var(--mono); text-align: center; }
+  .o-col .o-more:hover { background: var(--sunken); color: var(--ink); }
+  .o-col .o-more[hidden] { display: none; }
   .o-card { display: block; width: 100%; min-height: 0; padding: var(--s2) var(--s3); text-align: left; white-space: normal; font-size: var(--fs-sm); font-weight: 400; line-height: 1.3;
     background: color-mix(in srgb, var(--raised) 88%, transparent); color: var(--ink); border: 0; border-left: 4px solid var(--line-strong); box-shadow: none; }
   .o-card:hover { background: var(--raised); box-shadow: inset 0 0 0 2px var(--line-strong); }
@@ -1390,8 +1395,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         <div class="filterbar" id="filterbar" hidden></div>
         <div class="taskbar" id="taskbar">
           <h2 id="b-h" class="o-h">Tasks</h2>
-          <label class="tsearch"><span class="vh">Search tasks</span><input type="search" id="tsearch" autocomplete="off" placeholder="Search tasks: title, #id, person" aria-label="Search tasks by title, number, assignee or reviewer"></label>
-          <label class="filter"><span>Show</span><select id="filter" aria-label="Show tasks for"></select></label>
+          <label class="tsearch"><span class="vh">Search tasks</span><input type="search" id="tsearch" autocomplete="off" placeholder="Search tasks" aria-label="Search tasks by title, number, assignee or reviewer"></label>
+          <label class="filter"><select id="filter" aria-label="Show tasks for"></select></label>
           <div class="tabs" id="viewtog" role="group" aria-label="Task view"><button type="button" data-view="columns" aria-pressed="true">Columns</button><button type="button" data-view="table" aria-pressed="false">Table</button></div>
           <button type="button" id="new-task-btn" class="ghost sm" title="New task (N)">+ New task</button>
         </div>
@@ -4563,7 +4568,7 @@ function renderOffice() {
     let list = tasks.filter((t) => colOf(t) === k);
     list = k === 'open' ? list.sort((a, b) => (b.status === 'proposed') - (a.status === 'proposed') || a.priority - b.priority || a.id - b.id) : list.sort((a, b) => b.updated_at - a.updated_at);
     if (k === 'done' && !dOpen) return `<section class="o-col s-done collapsed" data-s="done" aria-label="Done, ${plural(list.length, 'task')}"><h3><button type="button" class="dtog" data-act="done-toggle" data-fk="o-done-tog" aria-expanded="false" aria-label="Done, ${plural(list.length, 'task')}: show the column" title="Show the Done column (tasks merged into main)"><i class="ok-mk" aria-hidden="true">✓</i><span>${label}</span> <span class="o-c">${list.length}</span> ${CHEV}</button></h3></section>`;
-    return `<section class="o-col s-${k}${list.length ? ' has' : ''}" data-s="${k}" aria-label="${label}, ${plural(list.length, 'task')}"><h3 title="${COL_DESC[k]}"><span>${label}</span><span class="o-c">${list.length}</span>${k === 'done' ? `<button type="button" class="dclose" data-act="done-toggle" data-fk="o-done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse">${CHEV}</button>` : ''}</h3>${list.length ? `<ul>${list.map(oCard).join('')}</ul><p class="o-more" aria-hidden="true" hidden></p>` : `<p class="o-none">${filterRoot() ? `None for ${esc(filterRoot())}` : 'None'}</p>`}</section>`;
+    return `<section class="o-col s-${k}${list.length ? ' has' : ''}" data-s="${k}" aria-label="${label}, ${plural(list.length, 'task')}"><h3 title="${COL_DESC[k]}"><span>${label}</span><span class="o-c">${list.length}</span>${k === 'done' ? `<button type="button" class="dclose" data-act="done-toggle" data-fk="o-done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse">${CHEV}</button>` : ''}</h3>${list.length ? `<ul>${list.map(oCard).join('')}</ul><button type="button" class="o-more" tabindex="-1" aria-hidden="true" data-o-more hidden></button>` : `<p class="o-none">${filterRoot() ? `None for ${esc(filterRoot())}` : 'None'}</p>`}</section>`;
   }).join(''))) oRove();
   requestAnimationFrame(oMore);
   oFrame();
@@ -4580,7 +4585,6 @@ function oCard(t) {
   const facts = [
     t.priority === 1 ? '<span class="pill bad">P1</span>' : t.priority >= 3 ? '<span class="pill">P3</span>' : '',
     ['S', 'L'].includes(t.size) ? `<span class="pill size ${t.size}"><span class="vh">size </span>${t.size}</span>` : '',
-    prop ? `<span class="pill flag">proposed by ${esc(t.created_by)}</span>` : '',
     t.status === 'review' && t.reviewer ? `<span class="pill role">merging: ${esc(t.reviewer)}</span>` : '',
     t.assignee ? `<span class="pc" ${hs(t.assignee)}>${esc(t.assignee)}</span>` : '',
     waiting.length ? `<span class="pill flag">waits on ${waiting.map((d) => '#' + d).join(' ')}</span>` : '',
@@ -4623,16 +4627,30 @@ $('o-cols').addEventListener('keydown', (ev) => {
   ev.preventDefault();
   if (n) { n.focus(); n.scrollIntoView({ block: 'nearest' }); }
 });
-// A column with more cards than fit: "+N more" at its foot, so 3 visible cards never read as 3 tasks.
+// A column with more cards than fit: "Show N more" at its foot (as on the Board view), so 3 visible cards never read as
+// 3 tasks. The list is cut under its last whole card, and N counts every card below that, the half-visible one too.
 function oMore() {
-  if (boardView !== 'office' || $('o-tasks').hidden) return;
+  if (boardView !== 'office' || $('o-tasks').hidden || $('o-tasks').classList.contains('folded')) return;
   for (const col of $('o-cols').querySelectorAll('.o-col')) {
     const ul = col.querySelector('ul'); const m = col.querySelector('.o-more'); if (!ul || !m) continue;
-    const b = ul.getBoundingClientRect().bottom;
-    const n = [...ul.querySelectorAll('.o-card')].filter((c) => c.getBoundingClientRect().bottom > b + 1).length;
-    m.hidden = !n; m.textContent = n ? `+${n} more` : ''; ul.classList.toggle('cut', !!n);
+    ul.style.maxHeight = ''; m.hidden = true;
+    const items = [...ul.children]; const bottom = () => ul.getBoundingClientRect().bottom - parseFloat(getComputedStyle(ul).paddingBottom);
+    if (!items.some((li) => li.getBoundingClientRect().bottom > bottom() + 1)) continue;
+    m.hidden = false; // the strip takes its room from the list, then the list ends on its last whole card
+    const b = bottom(), top = ul.getBoundingClientRect().top;
+    const whole = items.filter((li) => { const r = li.getBoundingClientRect(); return r.bottom <= b + 1 && r.top >= top - 1; });
+    const last = whole[whole.length - 1];
+    if (last) ul.style.maxHeight = `${Math.ceil(last.getBoundingClientRect().bottom - top + parseFloat(getComputedStyle(ul).paddingBottom))}px`;
+    const cut = last ? last.getBoundingClientRect().bottom : top;
+    const n = items.filter((li) => li.getBoundingClientRect().bottom > cut + 1).length;
+    m.hidden = !n; m.textContent = n ? `Show ${n} more` : ''; m._next = items.find((li) => li.getBoundingClientRect().bottom > cut + 1);
   }
 }
+$('o-cols').addEventListener('click', (ev) => {
+  const m = ev.target.closest('[data-o-more]'); if (!m) return;
+  const ul = m.previousElementSibling; const li = m._next;
+  if (ul && li) ul.scrollTo({ top: ul.scrollTop + li.getBoundingClientRect().top - ul.getBoundingClientRect().top - parseFloat(getComputedStyle(ul).paddingTop) });
+});
 $('o-cols').addEventListener('scroll', () => requestAnimationFrame(oMore), true);
 addEventListener('resize', () => { oApply(); if (boardView === 'office') requestAnimationFrame(oMore); });
 // Select an agent (its row, or its character in the room); again: unselect. The selection is the same in both views.
