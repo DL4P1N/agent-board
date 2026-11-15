@@ -467,7 +467,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     max-width: calc(100vw - 16px); max-height: var(--tp-max, calc(100vh - 76px)); overflow-y: auto; overscroll-behavior: contain; padding: var(--s4);
     background: var(--panel); border: 2px solid var(--border); box-shadow: var(--e2); scrollbar-width: thin; }
   .theme-pop[hidden] { display: none; }
-  .tp-h { font: 700 var(--fs-micro) var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+  .tp-h { font: 700 var(--fs-micro) var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
   .tp-grid { display: grid; grid-template-columns: repeat(4, 8.75rem); gap: var(--s3); }
   button.tile { display: flex; flex-direction: column; align-items: stretch; gap: var(--s2); padding: var(--s2); min-height: 0; white-space: normal; text-align: left;
     background: var(--raised); color: var(--ink); border: 2px solid var(--line); box-shadow: none; font-weight: 400; }
@@ -498,7 +498,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   }
   .hpair { display: inline-flex; gap: var(--s3); align-items: center; flex-wrap: nowrap; }
   a.plink { display: inline-flex; align-items: center; gap: var(--s3); text-decoration: none; color: var(--ink); background: var(--raised); border: 2px solid var(--line-strong); border-radius: var(--r-sm); padding: 0 var(--s5); font-size: var(--fs-ctl); min-height: var(--ctl); transition: background-color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
-  .bname { font-size: var(--fs-sm); font-weight: 700; color: var(--accent); background: var(--sunken); border: 2px solid var(--border); border-radius: var(--r-sm); padding: 1px var(--s3); max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bname { font-size: var(--fs-sm); font-weight: 700; color: var(--ink); background: var(--sunken); border: 2px solid var(--border); border-radius: var(--r-sm); padding: 1px var(--s3); max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   a.plink:hover { background: var(--chip); border-color: var(--field-line); }
   button.bell[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
   button.bell .slash { display: none; }
@@ -513,7 +513,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .sec-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s1) var(--s4); margin-bottom: var(--s4); font-size: var(--fs-meta); }
   .panel > .sec-h:first-child { margin: calc(-1 * var(--s4)) calc(-1 * var(--s5)) var(--s5); padding: var(--s3) var(--s5); border-bottom: 2px solid var(--line); align-items: center; min-height: 32px; }
   .panel > h2, .sec-h h2, .sec-h { font-weight: 700; }
-  .panel > h2, .sec-h h2 { font-size: .8125rem; line-height: var(--lh-tight); text-transform: uppercase; letter-spacing: .1em; color: var(--accent); }
+  .panel > h2, .sec-h h2 { font-size: .8125rem; line-height: var(--lh-tight); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
   .sec-h .muted { font-weight: 400; }
   .panel-hint { font-size: var(--fs-meta); color: var(--muted); margin: calc(-1 * var(--s2)) 0 var(--s4); }
   .step, .panel, .col, #now, .nyou { scroll-margin-top: calc(var(--hdr, 54px) + 14px); }
@@ -522,7 +522,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .nyou { background: var(--panel); border: 2px solid var(--border); box-shadow: var(--e2); margin: 2px; min-width: 0; transition: border-color var(--t-slow) var(--ease); }
   .now { display: flex; align-items: center; gap: var(--s3) var(--s5); flex-wrap: wrap; padding: 0 var(--s5) var(--s5); }
   /* Title bar: "What to do now" on the left, the phase track on the right. */
-  .now .nl { order: -3; flex: 1 0 auto; align-self: stretch; display: inline-flex; align-items: center; gap: var(--s4); margin: 0 0 var(--s1) calc(-1 * var(--s5)); padding: var(--s2) var(--s5); min-height: 32px; border-bottom: 2px solid var(--line); font-size: .8125rem; color: var(--accent); text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
+  .now .nl { order: -3; flex: 1 0 auto; align-self: stretch; display: inline-flex; align-items: center; gap: var(--s4); margin: 0 0 var(--s1) calc(-1 * var(--s5)); padding: var(--s2) var(--s5); min-height: 32px; border-bottom: 2px solid var(--line); font-size: .8125rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
   .now .phases { order: -2; align-self: stretch; margin: 0 calc(-1 * var(--s5)) var(--s1) calc(-1 * var(--s5)); padding: var(--s2) var(--s5) var(--s2) 0; border-bottom: 2px solid var(--line); }
   .now::after { content: ""; order: -1; flex: 0 0 100%; height: 0; margin-bottom: calc(-1 * var(--s3)); }
   /* The lead: the demo's first "needs you" row, bigger, with a status flag. */
@@ -564,7 +564,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 
   /* ---------- Start here ---------- */
   .setup > .sh { display: flex; align-items: center; gap: var(--s3) 10px; flex-wrap: wrap; margin: calc(-1 * var(--s4)) calc(-1 * var(--s5)) 0; padding: var(--s3) var(--s5); border-bottom: 2px solid var(--line); min-height: 32px; }
-  .setup > .sh h2 { font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); }
+  .setup > .sh h2 { font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
   .setup > .sh .muted { font-size: var(--fs-meta); }
   .setup .intro { margin: var(--s3) 0 0; max-width: 820px; }
   .steps { list-style: none; margin: 10px 0 0; padding: 0; }
@@ -576,7 +576,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .step-h:active { transform: none; box-shadow: none; }
   .mk { flex: 0 0 22px; width: 22px; height: 22px; border-radius: var(--r-full); border: 2px solid var(--line-strong); display: inline-flex; align-items: center; justify-content: center; font-size: var(--fs-meta); font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
   .step.done .mk { background: var(--ok); border-color: var(--ok); color: var(--panel); }
-  .step.cur .mk { border-color: var(--accent); color: var(--accent); }
+  .step.cur .mk { border-color: var(--ink); color: var(--ink); }
   .step.ongoing .mk { border-color: var(--muted); color: var(--muted); }
   .step-t { font-weight: 600; flex: 1 1 200px; min-width: 0; }
   .step.done .step-t, .step.ongoing .step-t { font-weight: 400; }
@@ -759,7 +759,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .ttable th button:active { transform: none; box-shadow: none; }
   .ttable th[aria-sort="ascending"] button::after { content: " \25B2"; font-size: .8em; }
   .ttable th[aria-sort="descending"] button::after { content: " \25BC"; font-size: .8em; }
-  .ttable th[aria-sort] button { color: var(--accent); }
+  .ttable th[aria-sort]:not([aria-sort="none"]) button { color: var(--ink); }
   .ttable tbody tr { cursor: pointer; }
   .ttable tbody tr:hover { background: var(--chip); }
   .ttable td.tt { max-width: 340px; overflow-wrap: anywhere; }
@@ -789,7 +789,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .ev.long:not(.open) .eb { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
   .ev .evmore, .older button { font-size: var(--fs-micro); }
   .older { text-align: center; padding: var(--s1) 0; }
-  .ev .at { color: var(--accent); font-weight: 700; }
+  .ev .at { color: var(--ink); font-weight: 700; }
+  .ev .at.me { color: var(--accent); }
   .ev .at.me { background: var(--mention); border-radius: 0; padding: 0 var(--s1); }
   .tref { color: var(--accent); font-variant-numeric: tabular-nums; }
   .jump { position: absolute; bottom: var(--s4); left: 50%; translate: -50% 0; font-size: var(--fs-meta); padding: 0 var(--s5); min-height: var(--ctl-sm); border-radius: var(--r-full); box-shadow: var(--e2); }
@@ -852,7 +853,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .discard .sp { min-width: var(--s4); }
   .discard button { min-height: var(--ctl-sm); font-size: var(--fs-meta); }
   .gloss { margin: var(--s4) 0 0; max-height: 70vh; overflow-y: auto; padding-right: var(--s2); scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
-  .gloss dt { font-weight: 700; margin-top: var(--s5); color: var(--accent); }
+  .gloss dt { font-weight: 700; margin-top: var(--s5); color: var(--ink); }
   .gloss dt:first-child { margin-top: 0; }
   .gloss dd { margin: var(--s1) 0 0; font-size: var(--fs-sm); }
   .gloss dd b { color: var(--ink); }
@@ -877,9 +878,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-panel, .o-pill { background: var(--panel); border: 2px solid var(--border); box-shadow: 4px 4px 0 rgba(0, 0, 0, .18); color: var(--ink); }
   .o-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
   .o-head { display: flex; align-items: center; gap: var(--s4); min-height: 34px; padding: 2px var(--s2) 2px var(--s5); border-bottom: 2px solid var(--border); flex: 0 0 auto; min-width: 0; }
-  /* Section titles, the same everywhere (panels, sections, the top bar's chip labels): small uppercase mono in the accent,
-     so they stand out from the content (the one use of the accent that isn't "needs you"). */
-  .o-head h2, .o-h, .o-pill .o-t { font: 700 var(--fs-meta)/1.2 var(--mono); text-transform: uppercase; letter-spacing: .12em; text-shadow: var(--shade); color: var(--accent); }
+  /* Section titles, the same everywhere (panels, sections, the top bar's chip labels): small uppercase mono, muted. The
+     accent is kept for what needs you (the need-you count, Answer, Approve, @me, "question waiting"). */
+  .o-head h2, .o-h, .o-pill .o-t { font: 700 var(--fs-meta)/1.2 var(--mono); text-transform: uppercase; letter-spacing: .12em; text-shadow: var(--shade); color: var(--muted); }
   .o-head h2 { flex: 0 0 auto; white-space: nowrap; }
   .o-head .o-sub { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font: var(--fs-meta) var(--mono); white-space: nowrap; }
   .o-head .o-ib:first-of-type { margin-left: auto; }
@@ -911,7 +912,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   html[data-board-view="office"] .tbc { background: var(--glass); }
   button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
   button.tbc:active { transform: translate(1px, 1px); }
-  .tbc .tbl { font: 700 var(--fs-micro)/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); flex: 0 0 auto; text-shadow: var(--shade); }
+  .tbc .tbl { font: 700 var(--fs-micro)/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); flex: 0 0 auto; text-shadow: var(--shade); }
   .tbc .o-x { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .tbc .o-ar { color: var(--muted); font-family: var(--mono); flex: 0 0 auto; }
   .tbc[aria-expanded="true"] .o-ar { transform: rotate(180deg); }
@@ -964,7 +965,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-left .qcard .qt { margin: var(--s1) 0 var(--s2); }
   .o-left .qcard textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .o-sec { margin-top: var(--s5); padding-top: var(--s4); border-top: 2px dashed var(--line); }
-  .o-sec h3 { font: 700 var(--fs-meta)/1.3 var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--accent); margin: 0 0 var(--s3); }
+  .o-sec h3 { font: 700 var(--fs-meta)/1.3 var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin: 0 0 var(--s3); }
   .o-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s3); }
   .o-list li { font-size: var(--fs-sm); min-width: 0; }
   .o-list .o-why { display: block; color: var(--muted); overflow-wrap: anywhere; }
@@ -1388,7 +1389,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
             <select id="chan" aria-label="Channel"><option>general</option><option>help</option><option>review</option><option>humans</option></select>
             <textarea id="msg" rows="1" autocomplete="off" spellcheck="true" aria-label="Message" aria-describedby="chat-hint" title="Agents read this chat: @name for one agent, @all for everyone. Enter sends, Shift+Enter adds a line" placeholder="Message, @ to mention" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="msg-ac"></textarea>
             <ul id="msg-ac" class="ac" role="listbox" aria-label="Names to mention" hidden></ul>
-            <button type="submit" id="send">Send</button>
+            <button type="submit" id="send" class="ghost">Send</button>
           </form>
           <p class="hint" id="chat-hint">Agents read this chat: <code>@alice</code> for alice's agent, <code>@all</code> for everyone. Enter sends, Shift+Enter adds a line<span id="slash-hint"> · press / to focus</span></p>
         </div>
@@ -2506,7 +2507,7 @@ function stepInvite(si) {
   const [best, ...rest] = su.join_commands;
   const onlyLocal = best.ip === 'localhost';
   return `<p>Everyone who'll run an AI agent (you too) connects their laptop once, in a terminal. It takes about a minute.</p>
-    <div class="inl mt-2"><button type="button" data-act="copy-invite" data-fk="s-invite">Copy invite message</button><span class="muted t-meta">One message for your team chat with every step below${state.settings.repo ? ' and the project repo' : ''}.</span></div>
+    <div class="inl mt-2"><button type="button" class="ghost" data-act="copy-invite" data-fk="s-invite">Copy invite message</button><span class="muted t-meta">One message for your team chat with every step below${state.settings.repo ? ' and the project repo' : ''}.</span></div>
     <div class="sub"><b>First time on this laptop?</b> Get the board tool first. Skip this if you already have an <code>agent-board</code> folder (or an older <code>claude-board</code> one) (then run <code>git pull</code> in it, so it's up to date).</div>${cmdBox(su.clone_command, 'clone', 'download command')}
     <div class="sub"><b>Connect to this board:</b> run it inside the <code>agent-board</code> folder. It asks your name, which AI tool(s) you use and where your project is, then tests the connection.</div>${cmdBox(best.command, 'join', 'join command')}
     ${onlyLocal ? '<p class="note">No network address found, so teammates can\'t reach this laptop yet. Join the same wifi, start Tailscale, or restart the board with <code>npm run tunnel</code>.</p>' : `<p class="hint" title="${esc(best.label)}">${esc(addrText(best))}.</p>`}
