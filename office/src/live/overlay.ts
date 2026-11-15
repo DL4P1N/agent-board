@@ -5,8 +5,8 @@
 import { agentRoot, clock, columnCounts, countdown, goalHead, hueOf, needsOf, outlook, personOf, plain, plural, timeNow, type BoardState } from './board';
 
 const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-// The board's mark, in the board's accent (amber / burnt orange), not the presenter's blue.
-const MARK = '<svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" fill="var(--mark)"/><rect x="3" y="4" width="2.6" height="8" fill="var(--mark-ink)"/><rect x="6.7" y="4" width="2.6" height="5" fill="var(--mark-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" fill="var(--mark-ink)"/></svg>';
+// The board's logo (three agents), in the board's accent (amber / burnt orange), not the presenter's blue.
+const MARK = '<svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><g transform="translate(-.5 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(18.7 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(6.1 6.8) scale(.76)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="mi"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="mi"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g></svg>';
 const NEEDS_MAX = 4; // rows under the questions line: blocked, stale, out of usage
 
 export interface OverlayEls { top: HTMLElement; bottom: HTMLElement; msg: HTMLElement; root: HTMLElement }

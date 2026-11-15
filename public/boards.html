@@ -7,6 +7,7 @@
 <meta name="color-scheme" content="light dark" id="m-scheme">
 <meta name="theme-color" content="#f1f2f4" media="(prefers-color-scheme: light)" id="m-tc-light">
 <meta name="theme-color" content="#060607" media="(prefers-color-scheme: dark)" id="m-tc-dark">
+<link rel="icon" id="m-icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2032%2032'%3E%3Cstyle%3E.ma%7Bfill%3A%232b5bcc%7D.mi%7Bfill%3A%231b1d21%7D.me%7Bfill%3A%23ffffff%7D%40media%20(prefers-color-scheme%3Adark)%7B.ma%7Bfill%3A%237aa7ff%7D.mi%7Bfill%3A%23e6e7ea%7D.me%7Bfill%3A%230c0d0f%7D%7D%3C%2Fstyle%3E%3Crect%20class%3D'me'%20width%3D'32'%20height%3D'32'%20rx%3D'7'%2F%3E%3Cg%20transform%3D'translate(2%202.4)%20scale(.875)'%3E%3Cg%20transform%3D'translate(-.5%203.5)%20scale(.53)'%3E%3Crect%20x%3D'12'%20width%3D'2.6'%20height%3D'6'%20rx%3D'1.3'%20class%3D'ma'%2F%3E%3Ccircle%20cx%3D'13.3'%20cy%3D'1.6'%20r%3D'2.4'%20class%3D'ma'%2F%3E%3Crect%20y%3D'7'%20width%3D'26'%20height%3D'21'%20rx%3D'8'%20class%3D'ma'%2F%3E%3Crect%20x%3D'6'%20y%3D'14'%20width%3D'4'%20height%3D'7'%20rx%3D'2'%20class%3D'me'%2F%3E%3Crect%20x%3D'16'%20y%3D'14'%20width%3D'4'%20height%3D'7'%20rx%3D'2'%20class%3D'me'%2F%3E%3C%2Fg%3E%3Cg%20transform%3D'translate(18.7%203.5)%20scale(.53)'%3E%3Crect%20x%3D'12'%20width%3D'2.6'%20height%3D'6'%20rx%3D'1.3'%20class%3D'ma'%2F%3E%3Ccircle%20cx%3D'13.3'%20cy%3D'1.6'%20r%3D'2.4'%20class%3D'ma'%2F%3E%3Crect%20y%3D'7'%20width%3D'26'%20height%3D'21'%20rx%3D'8'%20class%3D'ma'%2F%3E%3Crect%20x%3D'6'%20y%3D'14'%20width%3D'4'%20height%3D'7'%20rx%3D'2'%20class%3D'me'%2F%3E%3Crect%20x%3D'16'%20y%3D'14'%20width%3D'4'%20height%3D'7'%20rx%3D'2'%20class%3D'me'%2F%3E%3C%2Fg%3E%3Cg%20transform%3D'translate(6.1%206.8)%20scale(.76)'%3E%3Crect%20x%3D'12'%20width%3D'2.6'%20height%3D'6'%20rx%3D'1.3'%20class%3D'mi'%2F%3E%3Ccircle%20cx%3D'13.3'%20cy%3D'1.6'%20r%3D'2.4'%20class%3D'ma'%2F%3E%3Crect%20y%3D'7'%20width%3D'26'%20height%3D'21'%20rx%3D'8'%20class%3D'mi'%2F%3E%3Crect%20x%3D'6'%20y%3D'14'%20width%3D'4'%20height%3D'7'%20rx%3D'2'%20class%3D'me'%2F%3E%3Crect%20x%3D'16'%20y%3D'14'%20width%3D'4'%20height%3D'7'%20rx%3D'2'%20class%3D'me'%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E">
 <script>
 // Theme: the board's choice (one of its fifteen themes, or Auto, per browser, 'board-theme'), applied before first paint.
 // Auto leaves html[data-theme] off and follows the OS (Dark or Light). Unknown values read as Auto.
@@ -29,6 +30,32 @@
     sunset: ["Sunset", '#1c0d14'],
     forest: ["Forest", '#0e1912']
   };
+  // The favicon's colours per theme: accent, text, panel.
+  var THEME_ICON = {
+    dark: ['#7aa7ff', '#e6e7ea', '#0c0d0f'],
+    light: ['#2b5bcc', '#1b1d21', '#ffffff'],
+    dusk: ['#ffb86b', '#f1e9ff', '#241c40'],
+    day: ['#9a4a14', '#2c2114', '#fff7e8'],
+    night: ['#ffb86b', '#dce7ff', '#0f1730'],
+    terminal: ['#ffb547', '#a4ffb5', '#04140a'],
+    contrast: ['#ffe600', '#ffffff', '#0b0b0b'],
+    paper: ['#1d4ea3', '#1d1b18', '#faf8f2'],
+    synthwave: ['#ff4fa8', '#fbeeff', '#1e0e37'],
+    ocean: ['#ff8a65', '#e2f4f8', '#0a2230'],
+    sticky: ['#a23500', '#2b1d05', '#fff7cc'],
+    coral: ['#b3261e', '#2e0f08', '#fff3ee'],
+    candy: ['#c4127a', '#2a1640', '#fff4fa'],
+    sunset: ['#ff9e45', '#ffeee8', '#28131d'],
+    forest: ['#f2b84b', '#e8f1e3', '#15251a']
+  };
+  window.themeIcon = function (t) {
+    var I = THEME_ICON, c = function (id) { return '.ma{fill:' + I[id][0] + '}.mi{fill:' + I[id][1] + '}.me{fill:' + I[id][2] + '}'; };
+    var h = function (k) { return "<rect x='12' width='2.6' height='6' rx='1.3' class='" + k + "'/><circle cx='13.3' cy='1.6' r='2.4' class='ma'/><rect y='7' width='26' height='21' rx='8' class='" + k + "'/><rect x='6' y='14' width='4' height='7' rx='2' class='me'/><rect x='16' y='14' width='4' height='7' rx='2' class='me'/>"; };
+    var css = Object.prototype.hasOwnProperty.call(I, t) ? c(t) : c('light') + '@media (prefers-color-scheme:dark){' + c('dark') + '}';
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><style>" + css + "</style><rect class='me' width='32' height='32' rx='7'/><g transform='translate(2 2.4) scale(.875)'><g transform='translate(-.5 3.5) scale(.53)'>" + h('ma') + "</g><g transform='translate(18.7 3.5) scale(.53)'>" + h('ma') + "</g><g transform='translate(6.1 6.8) scale(.76)'>" + h('mi') + '</g></g></svg>';
+    var l = document.getElementById('m-icon');
+    if (l) l.setAttribute('href', 'data:image/svg+xml,' + encodeURIComponent(svg));
+  };
   // themes:end
   function themeOf(t) { return Object.prototype.hasOwnProperty.call(THEMES, t) ? t : 'auto'; }
   function apply(t) {
@@ -41,13 +68,13 @@
     g('m-tc-light').setAttribute('content', THEMES[light ? t : 'light'][1]);
     g('m-tc-dark').setAttribute('media', auto ? '(prefers-color-scheme: dark)' : light ? 'not all' : 'all');
     g('m-tc-dark').setAttribute('content', THEMES[auto || light ? 'dark' : t][1]);
+    window.themeIcon(t);
   }
   try { apply(localStorage.getItem('board-theme')); } catch (e) {}
   addEventListener('storage', function (e) { if (e.key === 'board-theme') apply(e.newValue); });
 })();
 </script>
 <title>Boards · Agent Board</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23ffb86b'/><rect x='3' y='4' width='3' height='8' fill='%232a1600'/><rect x='7' y='4' width='3' height='5' fill='%232a1600'/><rect x='11' y='4' width='2' height='6' fill='%232a1600'/></svg>">
 <style>
   /* Same tokens as the board (index.html): change them there first, then here. The office demo's pixel look:
      the same fifteen themes (generated by scripts/themes.mjs), square corners, 2px borders, bevelled panels; monospace for titles and ids. */
@@ -235,7 +262,9 @@
   .wrap { max-width: 960px; margin: 0 auto; padding: var(--s7) var(--s6) var(--s8); }
   header { display: flex; align-items: center; gap: var(--s5); flex-wrap: wrap; margin-bottom: var(--s7); }
   header h1 { font-size: var(--fs-lead); font-weight: 700; text-transform: uppercase; letter-spacing: .12em; text-shadow: var(--shade); display: flex; align-items: center; gap: var(--s4); }
-  .mark { width: 22px; height: 22px; box-shadow: 0 0 0 2px var(--outline); }
+  /* The logo: three agents, two in the accent behind one in the text colour; the eyes are cut out in the page colour. */
+  .mark { width: 28px; height: 28px; flex: 0 0 auto; }
+  .mark .ma { fill: var(--accent); } .mark .mi { fill: var(--ink); } .mark .me { fill: var(--bg); }
   header .sp { flex: 1; }
   .panel { background: var(--panel); border: 2px solid var(--border); border-radius: var(--r-lg); padding: var(--s6); box-shadow: var(--e1); }
   .sec-h { display: flex; align-items: baseline; gap: var(--s4); margin: var(--s7) 0 var(--s5); }
@@ -283,7 +312,7 @@
 <body>
 <div class="wrap">
   <header>
-    <h1><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" rx=".6" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" rx=".6" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6" rx=".6" fill="var(--accent-ink)"/></svg>Boards</h1>
+    <h1><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><g transform="translate(-.5 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(18.7 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(6.1 6.8) scale(.76)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="mi"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="mi"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g></svg>Boards</h1>
     <span class="muted" style="font-size:var(--fs-sm)">Every board on this server. Each has its own token, people and tasks.</span>
     <span class="sp"></span>
     <button type="button" class="ghost sm" id="signout" hidden>Forget admin token</button>

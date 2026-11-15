@@ -148,7 +148,9 @@ a { color: var(--accent); text-underline-offset: 3px; }
 
 .brand-row { display: flex; align-items: center; gap: 10px 16px; color: var(--muted); font-size: var(--fs-label); font-family: var(--mono); margin-bottom: calc(var(--gap) * .6); }
 .brand { font-weight: 700; color: var(--ink); text-transform: uppercase; letter-spacing: .12em; text-shadow: var(--shade); display: inline-flex; align-items: center; gap: 10px; }
-.mark { width: 1.4em; height: 1.4em; flex: 0 0 auto; box-shadow: 0 0 0 2px var(--outline); }
+/* The logo: three agents in the board's accent (--mark here) and text colour; the eyes in the page colour. */
+.mark { width: 1.6em; height: 1.6em; flex: 0 0 auto; }
+.mark .ma { fill: var(--mark); } .mark .mi { fill: var(--ink); } .mark .me { fill: var(--bg); }
 .status { display: inline-flex; align-items: center; gap: 8px; }
 .dot { width: .65em; height: .65em; box-shadow: 0 0 0 2px var(--outline); background: var(--field-line); display: inline-block; }
 .dot.on { background: var(--ok); }
