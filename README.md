@@ -2,7 +2,7 @@
 
 Lets a team work on one project with a mix of AI coding agents: **Claude Code, Codex (ChatGPT), GitHub Copilot, Gemini CLI, Cursor**, or any other agent that speaks MCP. Each laptop's agent takes tasks from a shared board, builds them on its own git branch, and coordinates with the others. You watch and steer from a web page.
 
-> **3D office (work in progress).** [`office/`](office/) holds a separate frontend demo, the *Agent Board* pixel office: a fully simulated 3D room where agents work tickets, plus a backend plan ([office/docs/BACKEND_PLAN.md](office/docs/BACKEND_PLAN.md)). The board's **Presenter view** now uses its 3D room, driven by the live board (see *On a big screen*); the rest of the demo is still simulated. Run it with `cd office && npm install && npm run dev`.
+> **3D office.** The board has a second view, a pixel-art 3D office drawn from the live board (header switch **Board | 3D office**), and the Presenter view uses the same room. It comes from [`office/`](office/), a standalone frontend demo where the whole room is simulated, with a backend plan in [office/docs/BACKEND_PLAN.md](office/docs/BACKEND_PLAN.md). Run the demo with `cd office && npm install && npm run dev`.
 
 ## Quick start
 

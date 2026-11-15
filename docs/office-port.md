@@ -1,7 +1,7 @@
 # Port plan: demo ideas into the real board
 
 Source: the UI/UX review of the `office/` demo (carry / leave-behind list) and a read of what
-`public/index.html` and the server already do. Written 2026-11-14. Status: slices 1-8 below are all done (each has its own suite in `tests/ui/`), and the 3D presenter is done too.
+`public/index.html` and the server already do. Written 2026-11-14. Status: slices 1-8 below are all done (each has its own suite in `tests/ui/`), and so are the 3D presenter and the 3D office view on the board.
 
 ## What the real board already has
 
@@ -63,11 +63,11 @@ existing ids/classes/text kept stable (tests assert on `#filter`, `.qcard`, `.ca
 - **Difficulty and skills on tasks.** Not in the schema. `size` already covers most of difficulty.
 - **3D office as a presenter screen.** Done: `public/present.html` is the 3D office over `/api/state`
   (built by `npm run build:present` from `office/present.html` + `office/src/live/`, committed, CI-checked), with the
-  2D page kept as `public/present-classic.html` for browsers without WebGL.
+  2D page kept as `public/present-classic.html` for browsers without WebGL. Later the same scene became a second view on the board itself (`public/office/embed.js`, see `office/README.md`).
 
 ## Leave behind
 
-The demo control room (scenarios, sliders, sim clock, Restart/Reset), four palettes,
+The demo control room (scenarios, sliders, sim clock, Restart/Reset), its four fixed palettes (the board got its own theme set instead),
 floating draggable windows and minimised chips, single-key shortcuts beyond the existing three,
-the 3D office as a working view (it is only the read-only presenter), the room-code invite (keep link + `/board`), 8–10 px uppercase
+the room-code invite (keep link + `/board`), 8–10 px uppercase
 monospace body text, illustrative pricing.
