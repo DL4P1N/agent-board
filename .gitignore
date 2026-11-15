@@ -3,3 +3,5 @@ data/
 tests/ui/shots/
 test-data/
 .claude/worktrees/
+.env
+.env.*
