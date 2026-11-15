@@ -1,6 +1,6 @@
 // Tiny DOM helpers shared by every UI panel. No framework: elements are built once and then
 // diffed in place (setText / setAttr / toggleClass) so slider drags never lose focus.
-import { icon, type IconName } from './icons';
+import { icon } from './icons';
 
 export type Child = Node | string | number | null | undefined | false;
 export type Props = {
@@ -229,10 +229,6 @@ export function section(title: string, desc: string | null, open: boolean, onTog
   btn.addEventListener('click', () => { const o = !el.classList.contains('open'); setOpen(o); onToggle(o); });
   setOpen(open);
   return { el, body: bodyEl, setOpen };
-}
-
-export function iconButton(name: IconName, label: string, onClick: (e: MouseEvent) => void, cls = ''): HTMLButtonElement {
-  return h('button', { type: 'button', class: `ibtn ${cls}`.trim(), title: label, 'aria-label': label, onClick }, icon(name));
 }
 
 // ---------------------------------------------------------------------------------------------

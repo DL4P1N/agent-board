@@ -42,7 +42,6 @@ export function perProvider<T>(fill: (id: ProviderId) => T): Record<ProviderId, 
 
 /** Fleet mix: relative weight per tool (0 = none). Normalised when agents are assigned. */
 export type FleetMix = Record<ProviderId, number>;
-export const DEFAULT_MIX: FleetMix = { claude: 3, codex: 2, copilot: 0, gemini: 0, cursor: 0, other: 0 };
 
 /** Weights -> shares that sum to 1 (all-zero falls back to Claude Code only). */
 export function mixShares(mix: Partial<FleetMix>): Record<ProviderId, number> {

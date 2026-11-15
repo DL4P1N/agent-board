@@ -3,7 +3,7 @@ import { isProvider } from '../providers';
 import type { AgentState, BoardCommands, SimState } from '../types';
 import type { UICtx } from './ctx';
 import { h } from './dom';
-import { icon, type IconName } from './icons';
+import type { IconName } from './icons';
 
 export const EMPTY: readonly never[] = [];
 
@@ -36,16 +36,6 @@ export function dot(provider: string | null | undefined, ownerColor?: string | n
   const el = h('i', { class: `pdot ${isProvider(provider) ? provider : ''}`.trim() });
   if (ownerColor) el.style.setProperty('--oc', ownerColor);
   return el;
-}
-
-/** "[dot] Name" tag for an agent (or a plain name for 'you' / 'all'). */
-export function whoTag(state: SimState, id: string): HTMLElement {
-  const a = agentOf(state, id);
-  const kids: (Node | string)[] = [];
-  if (a) kids.push(dot(a.provider, a.ownerColor));
-  else if (id === 'all') kids.push(icon('users'));
-  kids.push(h('span', { class: 'wt-name' }, nameOf(state, id)));
-  return h('span', { class: 'who-tag', title: a ? `${a.name} (${a.provider}, ${a.role})` : '' }, ...kids);
 }
 
 export function snippet(s: string, n: number): string {
@@ -87,10 +77,9 @@ export function fuzzy(query: string, text: string): number {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Sim-owned content with local fallbacks (sim/intents.ts and sim/briefs.ts are being written in parallel).
+// Sim-owned content with a local fallback (sim/intents.ts owns the real one).
 
 export interface ChatHelpEntry { cmd: string; example: string; blurb: string }
-export interface SampleBrief { project: string; brief: string }
 
 export const FALLBACK_CHAT_HELP: ChatHelpEntry[] = [
   { cmd: 'status', example: 'status', blurb: 'Orchestrator summarises progress, ETA and risks.' },
@@ -109,11 +98,6 @@ export const FALLBACK_CHAT_HELP: ChatHelpEntry[] = [
   { cmd: 'kick off', example: 'kick off: Sticky Wall - a realtime whiteboard with share links', blurb: 'Replan from a new project brief.' },
 ];
 export const FALLBACK_CHAT_SUGGESTIONS: string[] = ['status', 'cut scope by 2', 'who is blocked?', 'extend deadline by 10 minutes', 'prioritize the deploy task'];
-export const FALLBACK_BRIEFS: SampleBrief[] = [
-  { project: 'Sticky Wall', brief: 'A realtime collaborative whiteboard with AI-generated sticky notes, login, and a public share link. Deploy a live demo.' },
-  { project: 'Standup Bot', brief: 'A Slack-style standup collector that summarises the team update each morning, with a web dashboard and a one-click deploy.' },
-  { project: 'Recipe Radar', brief: 'Paste a fridge photo description, get recipes ranked by what you already have, with a shareable shopping list.' },
-];
 
 // sim/intents.ts owns the real command help + suggestions. import.meta.glob resolves to {} when the module is absent,
 // so the HUD works (with the local fallbacks above) whichever order the files land in.

@@ -1,4 +1,4 @@
-// Paper planes: the help-request feed (inside Comms) + a small per-agent card for the inspector.
+// Paper planes: the help-request feed (inside Comms).
 import type { AgentState, HelpRequest, SimState } from '../types';
 import type { UICtx } from './ctx';
 import { fillSelect, h, setHidden, setText, toggleClass, fmtClock } from './dom';
@@ -51,13 +51,6 @@ function createHelpRow(req: HelpRequest, state: SimState): HelpRow {
   };
   update(req, state);
   return { el, update };
-}
-
-/** Last help request that involves an agent (as asker or helper), newest first. */
-export function lastHelpFor(state: SimState, agentId: string): HelpRequest | undefined {
-  const list = state.help ?? EMPTY;
-  for (let i = list.length - 1; i >= 0; i--) if (list[i].fromAgent === agentId || list[i].toAgent === agentId) return list[i];
-  return undefined;
 }
 
 export interface HelpFeed { el: HTMLElement; update(state: SimState, visible?: boolean): void }
@@ -142,23 +135,4 @@ export function createHelpFeed(ctx: UICtx): HelpFeed {
     for (const [id, row] of rows) if (!seen.has(id)) { row.el.remove(); rows.delete(id); }
   };
   return { el, update };
-}
-
-/** Small card for the agent inspector: the last help request involving `agentId`. */
-export function createAgentHelpCard(_ctx: UICtx): { el: HTMLElement; set(state: SimState, agentId: string | null): void } {
-  const empty = h('p', { class: 'dim ahc-empty' }, 'No help requests yet.');
-  const list = h('ul', { class: 'help-list', hidden: true });
-  const el = h('div', { class: 'card help-card' }, h('div', { class: 'card-h' }, icon('plane'), 'Last paper plane'), empty, list);
-  let cur: { id: string; row: HelpRow } | null = null;
-  const set = (state: SimState, agentId: string | null): void => {
-    const req = agentId ? lastHelpFor(state, agentId) : undefined;
-    setHidden(empty, !!req);
-    setHidden(list, !req);
-    if (!req) { cur = null; list.replaceChildren(); return; }
-    if (!cur || cur.id !== req.id) {
-      cur = { id: req.id, row: createHelpRow(req, state) };
-      list.replaceChildren(cur.row.el);
-    } else cur.row.update(req, state);
-  };
-  return { el, set };
 }

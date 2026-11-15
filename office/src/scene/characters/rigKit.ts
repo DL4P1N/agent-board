@@ -162,7 +162,6 @@ export function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 // ---------------------------------------------------------------- shared materials
 export const matBody = new THREE.MeshLambertMaterial({ vertexColors: true });
 export const matGlow = new THREE.MeshBasicMaterial({ vertexColors: true });
-export const matGlowSide = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
 export const matParticle = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
 // ---------------------------------------------------------------- per-rig body geometry

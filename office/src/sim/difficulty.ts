@@ -102,8 +102,6 @@ export const MODEL_TABLE: Record<Provider, Record<Difficulty, AgentConfig>> = {
   },
 };
 
-export const DIFFICULTY_LABELS: Record<Difficulty, string> = { 1: 'Trivial', 2: 'Easy', 3: 'Moderate', 4: 'Hard', 5: 'Epic' };
-
 export function clampDifficulty(d: number): Difficulty {
   const r = Math.round(Number.isFinite(d) ? d : 3);
   return Math.min(5, Math.max(1, r)) as Difficulty;
