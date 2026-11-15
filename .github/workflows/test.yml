@@ -42,3 +42,14 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run test:sim
+      # public/present.html and public/office/ are committed build output of office/: a source change without a rebuild
+      # (or a stale hashed file left behind) fails here. Fix: run `npm run build:present` at the repo root and commit.
+      - run: npm run build:present
+      - name: Committed presenter build is up to date
+        working-directory: .
+        run: |
+          if [ -n "$(git status --porcelain public/)" ]; then
+            git status --short public/
+            echo "::error::public/ is out of date with office/. Run 'npm run build:present' and commit the result."
+            exit 1
+          fi
