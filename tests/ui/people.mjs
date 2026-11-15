@@ -78,7 +78,8 @@ try {
 
   // ---- WB-10: two agents with the same tool ----
   const emilRow = await row('emil');
-  check('emil\'s two Claude Code agents are told apart', /\(claude\)/.test(emilRow) && /\(claude2\)/.test(emilRow), emilRow);
+  // One line per person: the pills name the two agents (the tool is their dot, tooltip and screen-reader text).
+  check('emil\'s two Claude Code agents are told apart', /\bclaude · 0\/2/.test(emilRow) && /\bclaude2 · 0\/2/.test(emilRow), emilRow);
 
   // ---- WB-12: pill legend ----
   check('legend explains the pill colours', /has room/.test(await txt('#p-legend')) && /full/.test(await txt('#p-legend')) && /offline/.test(await txt('#p-legend')), await txt('#p-legend'));

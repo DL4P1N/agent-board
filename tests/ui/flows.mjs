@@ -44,11 +44,16 @@ check('document title counts what needs me', (await page.title()).startsWith('('
 // One "N need you" header badge, hidden while What to do now (the home of these facts) is on screen. The blocked task
 // waits on one of the questions, so it is counted once, as the question.
 check('header: no needs badge while What to do now is on screen', await page.$eval('#needs', (e) => e.hidden));
+// On a laptop What to do now stays on screen in its rail while the board scrolls, so the badge stays away.
 await page.evaluate(() => window.scrollTo(0, 900)); await sleep(400);
+check('laptop: What to do now stays in view in its rail when the board scrolls, no badge', await page.evaluate(() => { const r = $('now').getBoundingClientRect(); return scrollY > 0 && r.top >= 0 && r.top < 120 && $('needs').hidden; }));
+// One column (narrow window): What to do now scrolls away, and the badge takes over.
+await page.setViewport({ width: 960, height: 1000 }); await page.evaluate(() => window.scrollTo(0, 1600)); await sleep(400);
 const needs = await page.$eval('#needs', (e) => ({ hidden: e.hidden, t: e.innerText.replace(/\s+/g, ' '), label: e.querySelector('button')?.getAttribute('aria-label') || '' }));
 check('header need-you badge when scrolled: questions and the mention, the blocked-on-a-question task not counted twice', !needs.hidden && /^3 need you/.test(needs.t) && /2 questions/.test(needs.label) && /1 new mention/.test(needs.label) && !/blocked/.test(needs.label), JSON.stringify(needs));
 await page.click('#needs button'); await sleep(600);
 check('the badge goes back up to What to do now', await page.evaluate(() => !!document.activeElement?.closest('#now') && $('needs').hidden));
+await page.setViewport({ width: 1440, height: 1000 });
 await page.evaluate(() => window.scrollTo(0, 0));
 check('XSS text rendered as text', await page.evaluate(() => [...document.querySelectorAll('.ev .eb')].some((e) => e.textContent.includes('<script>alert(1)</script>'))));
 await sleep(300);
@@ -241,6 +246,10 @@ await page.evaluate(() => document.getElementById('toasts').replaceChildren());
 
 // locks: release with inline confirm
 const lockCount = await page.$$eval('#locks .lock', (l) => l.length);
+// File locks fold to their title bar (with the count); open them to release one. Open is remembered.
+check('file locks start folded, with the count in their title bar', await page.evaluate((n) => $('l-body').hidden && new RegExp(`${n} held`).test($('l-tog').textContent) && $('l-tog').getAttribute('aria-expanded') === 'false', lockCount));
+await page.click('#l-tog');
+check('the title bar opens the locks', await page.evaluate(() => !$('l-body').hidden && $('l-tog').getAttribute('aria-expanded') === 'true' && localStorage.getItem('board-locks') === 'open'));
 await page.$eval('[data-unlock="package.json"]', (b) => b.scrollIntoView({ block: 'center' })); await sleep(300); const hit = await page.evaluate(() => { const b = document.querySelector('[data-unlock="package.json"]').getBoundingClientRect(); const el = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return el.outerHTML.slice(0, 120); }); console.log('debug: element at release button = ' + hit);
 await page.click('[data-unlock="package.json"]');
 check('release asks inline confirmation (focus on Keep)', await page.evaluate(() => document.activeElement?.dataset.unlockNo !== undefined && !!document.querySelector('[data-unlock-yes="package.json"]')));

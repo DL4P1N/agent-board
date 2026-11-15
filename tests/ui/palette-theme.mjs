@@ -31,11 +31,22 @@ try {
   check('auto: follows the OS (dark)', (await attr()) === null && (await bg()) === 'rgb(27, 21, 48)', await bg());
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
 
-  await page.click('#help-btn'); await page.waitForSelector('#help-dlg[open]');
-  check('help offers Auto and the four palettes, each with a swatch', await page.evaluate(() => [...document.querySelectorAll('#help-dlg [data-theme-set]')].map((b) => b.dataset.themeSet + (b.querySelector('.sw') ? '+' : '')).join()) === 'auto+,dusk+,day+,night+,terminal+');
-  await page.click('#help-dlg [data-theme-set="dusk"]'); await sleep(100);
-  check('Dusk button sets data-theme=dusk and the Dusk tokens, even with an OS in light', (await attr()) === 'dusk' && (await bg()) === 'rgb(27, 21, 48)', `${await attr()} ${await bg()}`);
-  check('Dusk button is pressed, the others are not', await page.evaluate(() => [...document.querySelectorAll('#help-dlg [data-theme-set]')].map((b) => b.getAttribute('aria-pressed')).join()) === 'false,true,false,false,false');
+  // One theme control, in the header in both views: a swatch button that opens the five palettes as a radio group.
+  const pick = async (t) => { if (await page.$eval('#theme-pop', (e) => e.hidden)) await page.click('#theme-btn'); await page.click(`#theme-pop [data-theme-set="${t}"]`); await sleep(100); };
+  check('one theme control on the page (in the header), none left in the help', await page.evaluate(() => document.querySelectorAll('[data-theme-set]').length === 5 && !!$('theme-btn').closest('header') && !document.querySelector('#help-dlg [data-theme-set]')));
+  await page.click('#theme-btn');
+  check('the theme button in the header opens Auto and the four palettes, each with a swatch, as a radio group; focus on the current one', await page.evaluate(() => !$('theme-pop').hidden && $('theme-btn').getAttribute('aria-expanded') === 'true' && $('theme-pop').getAttribute('role') === 'radiogroup'
+    && [...document.querySelectorAll('#theme-pop [data-theme-set]')].map((b) => b.dataset.themeSet + (b.querySelector('.sw') ? '+' : '')).join() === 'auto+,dusk+,day+,night+,terminal+' && document.activeElement?.dataset.themeSet === 'auto'));
+  await page.click('#theme-pop [data-theme-set="dusk"]'); await sleep(100);
+  check('Dusk sets data-theme=dusk and the Dusk tokens, even with an OS in light; the picker closes', (await attr()) === 'dusk' && (await bg()) === 'rgb(27, 21, 48)' && await page.$eval('#theme-pop', (e) => e.hidden), `${await attr()} ${await bg()}`);
+  check('Dusk is checked, the others are not; the button shows its swatch', await page.evaluate(() => [...document.querySelectorAll('#theme-pop [data-theme-set]')].map((b) => b.getAttribute('aria-checked')).join() === 'false,true,false,false,false' && $('theme-sw').classList.contains('sw-dusk') && /Dusk/.test($('theme-btn').getAttribute('aria-label'))));
+  await page.click('#theme-btn'); await page.keyboard.press('ArrowDown'); await sleep(80);
+  check('arrow keys choose a palette (one Tab stop) and keep the picker open', (await attr()) === 'day' && await page.evaluate(() => !$('theme-pop').hidden && document.activeElement?.dataset.themeSet === 'day' && [...document.querySelectorAll('#theme-pop [role="radio"]')].filter((b) => b.tabIndex === 0).length === 1));
+  await page.keyboard.press('Escape'); await sleep(80);
+  check('Esc closes the picker, focus back on the theme button', await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn') && $('theme-btn').getAttribute('aria-expanded') === 'false'));
+  await page.click('#theme-btn'); await page.mouse.click(700, 500); await sleep(80);
+  check('a click elsewhere closes the picker', await page.$eval('#theme-pop', (e) => e.hidden));
+  await pick('dusk');
   const m = await metas();
   check('color-scheme and theme-color metas follow the chosen theme', m.scheme === 'dark' && m.dark === 'all' && m.light === 'not all', JSON.stringify(m));
   check('saved in localStorage', await page.evaluate(() => localStorage.getItem('board-theme')) === 'dusk');
@@ -43,7 +54,7 @@ try {
   const PAL = { night: ['rgb(8, 12, 26)', 'dark', '#080c1a'], terminal: ['rgb(2, 10, 4)', 'dark', '#020a04'], day: ['rgb(239, 228, 207)', 'light', null], dusk: ['rgb(27, 21, 48)', 'dark', '#1b1530'] };
   const inks = new Set();
   for (const [t, [want, scheme, bar]] of Object.entries(PAL)) {
-    await page.click(`#help-dlg [data-theme-set="${t}"]`); await sleep(80);
+    await pick(t);
     const v = await page.evaluate(() => { const cs = getComputedStyle(document.documentElement); return { cs: cs.colorScheme, ink: cs.getPropertyValue('--ink').trim(), tool: cs.getPropertyValue('--tool-claude').trim(), scheme: document.getElementById('m-scheme').content, bar: document.getElementById(document.getElementById('m-tc-dark').media === 'all' ? 'm-tc-dark' : 'm-tc-light').content }; });
     inks.add(v.ink);
     check(`${t}: data-theme, page colour, color-scheme and theme-color`, (await attr()) === t && (await bg()) === want && v.cs === scheme && v.scheme === scheme && (!bar || v.bar === bar) && !!v.tool, JSON.stringify({ bg: await bg(), ...v }));
@@ -60,12 +71,11 @@ try {
       probe.remove(); return out;
     });
     check(`${t}: all text colours >= 4.5:1 on their surfaces`, !low.length, low.join(', '));
-    await page.screenshot({ path: `${out}/${t}-help.png` });
+    await page.screenshot({ path: `${out}/${t}-board.png` });
   }
   check('four palettes, four different ink colours', inks.size === 4, [...inks].join(' '));
-  await page.click('#help-dlg [data-theme-set="dusk"]'); await sleep(80);
-  await page.screenshot({ path: `${out}/dark-help.png` });
-  await page.keyboard.press('Escape');
+  await pick('dusk');
+  await page.screenshot({ path: `${out}/dark-board.png` });
 
   await page.reload(); await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 8000 });
   check('after a reload the theme is still Dusk', (await attr()) === 'dusk' && (await bg()) === 'rgb(27, 21, 48)', `${await attr()} ${await bg()}`);
@@ -87,14 +97,12 @@ try {
   await page.evaluate(() => localStorage.setItem('board-theme', 'dusk')); // the pages above shared this storage
 
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
-  await page.click('#help-btn'); await page.waitForSelector('#help-dlg[open]');
-  await page.click('#help-dlg [data-theme-set="day"]'); await sleep(100);
+  await pick('day');
   check('Day wins over an OS in dark', (await attr()) === 'day' && (await bg()) === 'rgb(239, 228, 207)', `${await attr()} ${await bg()}`);
-  await page.screenshot({ path: `${out}/light-help.png` });
-  await page.click('#help-dlg [data-theme-set="auto"]'); await sleep(100);
+  await page.screenshot({ path: `${out}/light-board.png` });
+  await pick('auto');
   check('Auto removes data-theme and follows the OS again', (await attr()) === null && (await bg()) === 'rgb(27, 21, 48)' && (await metas()).scheme === 'light dark', `${await attr()} ${await bg()}`);
   check('Auto is saved', await page.evaluate(() => localStorage.getItem('board-theme')) === 'auto');
-  await page.keyboard.press('Escape');
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
 
   // ---- palette: opens from the task list, and from inside an input ----

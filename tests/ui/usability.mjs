@@ -187,10 +187,11 @@ try {
   await p.goto(BASE + '/');
   await p.waitForFunction(() => document.getElementById('conn').classList.contains('live') && document.querySelectorAll('.card').length > 20, { timeout: 8000 });
   await sleep(400);
-  const lay = await p.evaluate(() => ({ board: $('board').getBoundingClientRect().top + scrollY, card: document.querySelector('#board .card').getBoundingClientRect().top + scrollY, colW: $('col-open').offsetWidth, people: $('people').closest('.panel').offsetHeight, persons: document.querySelectorAll('#people .person').length }));
-  check('B busy: 5 people, compact people panel', lay.persons === 5 && lay.people < 200, JSON.stringify(lay));
+  const lay = await p.evaluate(() => ({ board: $('board').getBoundingClientRect().top + scrollY, card: document.querySelector('#board .card').getBoundingClientRect().top + scrollY, colW: $('col-open').offsetWidth, people: $('people').closest('.panel').offsetHeight, persons: document.querySelectorAll('#people .person').length, rows: [...document.querySelectorAll('#people .person')].map((e) => e.offsetHeight), beside: $('people').closest('.rail').getBoundingClientRect().left > $('board').getBoundingClientRect().right - 2 }));
+  // Who's doing what: one line per person, in the right rail beside the board (it no longer sits above it).
+  check('B busy: 5 people, one line each, beside the board', lay.persons === 5 && lay.rows.every((h) => h <= 48) && lay.beside, JSON.stringify(lay));
   check('B 1366×768: kanban starts in the first viewport', lay.board < 768 && lay.card < 768 - 40, JSON.stringify(lay));
-  check('B columns at least 170px wide', lay.colW >= 170, lay.colW + 'px');
+  check('B columns at least 120px wide (between the rails)', lay.colW >= 120, lay.colW + 'px');
   const doneTxt = await p.$eval('#col-done', (e) => e.textContent.trim());
   check('B Done collapsed to "Done 6" (the column\'s own name, as in every view)', /Done 6/.test(doneTxt) && !/Merged/.test(doneTxt), doneTxt);
   await p.screenshot({ path: `${out}/r-busy-1366-dark.png` });
@@ -328,7 +329,7 @@ try {
     check(`B ${s}: @me badge, danger button, error toast ≥ 4.5:1`, c.badge >= 4.5 && c.danger >= 4.5 && c.tb >= 4.5, [c.badge, c.danger, c.tb].map((x) => x.toFixed(2)).join(' / '));
     check(`B ${s}: person names ≥ 4.5:1 on panel/chip/stale card`, c.worst >= 4.5, c.worst.toFixed(2));
   }
-  check('B targets: feed tabs and needs buttons ≥ 24px', await p.evaluate(() => [...document.querySelectorAll('.tabs button, #needs button')].every((b) => b.getBoundingClientRect().height >= 24)));
+  check('B targets: feed tabs and needs buttons ≥ 24px', await p.evaluate(() => [...document.querySelectorAll('.tabs button, #needs button')].filter((b) => b.offsetParent).every((b) => b.getBoundingClientRect().height >= 24)));
 
   // Phone
   for (const s of ['dark', 'light']) {

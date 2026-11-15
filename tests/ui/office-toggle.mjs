@@ -58,15 +58,18 @@ try {
   }));
   check('no three.js or office code requested on load', officeReqs(reqs).length === 0 && !(await page.$('canvas')), officeReqs(reqs).join(' '));
 
-  // ---- Header stays on one row with the switch (ONB-9 widths), also scrolled down, where the "need you" badge shows ----
+  // ---- Header stays on one row with the switch and the theme button (ONB-9 widths), also with the "need you" badge ----
+  // On a laptop What to do now stays in view in its rail, so the badge only shows once it's scrolled out of view (a
+  // long rail, or one column): show it here as it is then.
   for (const w of [1366, 1440, 1600, 1920]) {
     await page.setViewport({ width: w, height: 900 }); await sleep(300);
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await sleep(400);
-    const hd = await page.evaluate(() => { const h = document.querySelector('#app > header'); const v = $('vseg').getBoundingClientRect(); const b = $('help-btn').getBoundingClientRect(); const n = $('needs'); return { h: h.offsetHeight, same: Math.abs(v.top - b.top) < 12, vis: v.width > 0, badge: !n.hidden && n.offsetWidth > 0 && /question/.test(n.querySelector('button')?.getAttribute('aria-label') || '') && !$('clock').hidden }; });
-    check(`${w}px: header on one row with the view switch, the clock and the need-you badge`, hd.vis && hd.same && hd.h < 70 && hd.badge, JSON.stringify(hd));
+    await page.evaluate(() => { nowSeen = false; syncNeeds(); }); await sleep(100);
+    const hd = await page.evaluate(() => { const h = document.querySelector('#app > header'); const v = $('vseg').getBoundingClientRect(); const b = $('help-btn').getBoundingClientRect(); const n = $('needs'); return { h: h.offsetHeight, same: Math.abs(v.top - b.top) < 12, vis: v.width > 0, badge: !n.hidden && n.offsetWidth > 0 && /question/.test(n.querySelector('button')?.getAttribute('aria-label') || '') && !$('clock').hidden && Math.abs($('theme-btn').getBoundingClientRect().top - b.top) < 2 }; });
+    check(`${w}px: header on one row with the view switch, the clock, the theme button and the need-you badge`, hd.vis && hd.same && hd.h < 70 && hd.badge, JSON.stringify(hd));
   }
-  await page.evaluate(() => window.scrollTo(0, 0)); await sleep(300);
-  check('the need-you badge hides while What to do now is on screen', await page.$eval('#needs', (n) => n.hidden));
+  await page.reload(); await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 8000 }); await sleep(300);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await sleep(300);
+  check('the need-you badge hides while What to do now is on screen (in its rail, also with the board scrolled)', await page.$eval('#needs', (n) => n.hidden));
   await page.setViewport({ width: 1440, height: 900 }); await sleep(200);
 
   // ---- Switch to the office ----
@@ -203,23 +206,24 @@ try {
     await page.keyboard.press('Escape');
     check('Esc in the composer closes the window', await page.evaluate(() => $('o-act').hidden));
 
-    // The theme chip (one swatch) opens the picker: a radio group, one Tab stop, arrow keys choose.
-    await page.click('#o-theme-chip');
-    check('the theme chip opens the picker, focus on the current palette (a radio group)', await page.evaluate(() => !$('o-theme').hidden && $('o-theme').getAttribute('role') === 'radiogroup' && document.activeElement?.getAttribute('aria-checked') === 'true' && $('o-theme').querySelectorAll('[role="radio"][tabindex="0"]').length === 1));
-    await page.click('#o-theme [data-theme-set="night"]');
-    check('a palette in the picker switches the theme and the room (Night), and the picker closes', await until(page, () => document.documentElement.dataset.theme === 'night' && office.mod.palette === 'night' && document.querySelector('#o-theme [data-theme-set="night"]').getAttribute('aria-checked') === 'true' && document.getElementById('o-theme').hidden));
+    // The theme: the header's swatch button, the same control as on the Board view (no theme chip in the room).
+    check('one theme control: the header button, also in 3D', await page.evaluate(() => !document.querySelector('#o-theme-chip, #o-theme') && !!$('theme-btn').offsetWidth && document.querySelectorAll('[data-theme-set]').length === 5));
+    await page.click('#theme-btn');
+    check('the theme button opens the picker over the room, focus on the current palette (a radio group)', await page.evaluate(() => { const r = $('theme-pop').getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !$('theme-pop').hidden && $('theme-pop').contains(e) && $('theme-pop').getAttribute('role') === 'radiogroup' && document.activeElement?.getAttribute('aria-checked') === 'true' && $('theme-pop').querySelectorAll('[role="radio"][tabindex="0"]').length === 1; }));
+    await page.click('#theme-pop [data-theme-set="night"]');
+    check('a palette in the picker switches the theme and the room (Night), and the picker closes', await until(page, () => document.documentElement.dataset.theme === 'night' && office.mod.palette === 'night' && document.querySelector('#theme-pop [data-theme-set="night"]').getAttribute('aria-checked') === 'true' && document.getElementById('theme-pop').hidden));
     await page.screenshot({ path: path.join(out, 'office-night-1440.png') });
-    await page.click('#o-theme-chip'); await page.keyboard.press('ArrowRight');
-    check('arrow keys move through the palettes (Night -> Terminal)', await until(page, () => document.documentElement.dataset.theme === 'terminal' && document.activeElement?.dataset.themeSet === 'terminal'));
+    await page.click('#theme-btn'); await page.keyboard.press('ArrowRight');
+    check('arrow keys move through the palettes (Night -> Terminal)', await until(page, () => document.documentElement.dataset.theme === 'terminal' && office.mod.palette === 'terminal' && document.activeElement?.dataset.themeSet === 'terminal'));
     await page.keyboard.press('Escape');
-    check('Esc closes the picker, focus back on the chip', await page.evaluate(() => $('o-theme').hidden && document.activeElement === $('o-theme-chip')));
+    check('Esc closes the picker, focus back on the theme button (still in 3D)', await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn')) && await view(page) === 'office');
     await page.evaluate(() => setTheme('auto'));
 
     // "Show in People" (selected agent) opens that person on the board; the moved blocks go home.
     await page.evaluate(() => pickAgent('ana-claude'));
     await page.click('#o-det [data-office-person]');
     check('"Show in People" switches to the board with that person open', await until(page, () => document.documentElement.dataset.boardView === 'board' && document.activeElement?.dataset.fk === 'ptog-ana'), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
-    check('back on the board, What to do now and Activity are back in place', await page.evaluate(() => $('nyou').parentElement.tagName === 'MAIN' && $('nyou').nextElementSibling?.id === 'office-view' && !!$('f-h').closest('.side') && $('feed').offsetHeight > 50));
+    check('back on the board, What to do now and Activity are back in place (left and right rails)', await page.evaluate(() => $('nyou').parentElement.id === 'rail-l' && $('f-h').closest('.panel').parentElement.id === 'rail-r' && !!$('f-h').closest('.panel').nextElementSibling?.classList.contains('locksp') && $('feed').offsetHeight > 50));
 
     // Keyboard: the buttons work from the keyboard; the palette has the command.
     await page.focus('#vseg [data-vset="office"]'); await page.keyboard.press('Enter');

@@ -275,7 +275,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   @media (max-width: 1600px) {
     #link-btn .lt { display: none; }
     #link-btn { min-width: var(--ctl); padding: 0 var(--s3); justify-content: center; }
-    .filter > span { display: none; }
   }
   /* Server lost: the header turns red too, so it shows wherever you've scrolled. */
   header.down { border-bottom-color: var(--bad); }
@@ -310,8 +309,18 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   @media (max-width: 1440px) { .vseg .lt { display: none; } }
   .now .cut-list { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
   .now .cut-list .n { color: var(--muted); }
+  /* Show tasks for: on the task bar, beside search (it filters the board). */
   .filter { display: flex; align-items: center; gap: var(--s3); margin: 0; font-weight: 400; color: var(--muted); font-size: var(--fs-sm); }
-  .filter select { width: auto; max-width: 160px; font-size: var(--fs-ctl); }
+  .filter select { width: auto; max-width: 180px; min-height: var(--ctl-sm); padding-top: 2px; padding-bottom: 2px; font-size: var(--fs-ctl); }
+  /* Theme: one button with the current palette's swatch, in the header in both views; it opens the five palettes as a
+     radio group under it (arrow keys choose, Esc closes, focus goes back to the button). */
+  .themew { position: relative; display: inline-flex; }
+  #theme-btn .sw { width: 16px; height: 16px; }
+  .theme-pop { position: absolute; top: calc(100% + var(--s4)); right: 0; z-index: 30; display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3); min-width: 9.5rem;
+    background: var(--panel); border: 2px solid var(--border); box-shadow: 0 0 0 2px var(--outline), var(--e2); }
+  .theme-pop[hidden] { display: none; }
+  .theme-pop [role="radio"] { display: flex; align-items: center; gap: var(--s4); justify-content: flex-start; min-height: var(--ctl-sm); font-size: var(--fs-sm); }
+  .theme-pop [role="radio"][aria-checked="true"] { background: var(--accent-soft); border-color: var(--accent); font-weight: 700; }
   #me-btn b { font-weight: 700; }
   .hacts { display: flex; align-items: center; gap: var(--s3); flex-wrap: nowrap; justify-content: flex-end; }
   /* Laptop widths and up: the sticky header never wraps to a second row (a jump when a badge arrives reads as the page
@@ -335,7 +344,43 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .downbar { background: var(--bad); color: var(--on-fill); font-size: var(--fs-sm); font-weight: 700; padding: var(--s3) var(--s6); text-align: center; position: sticky; top: var(--hdr-h, 0px); z-index: 5; }
 
   /* ---------- page ---------- */
-  main { padding: var(--s5) var(--s5) var(--s6); display: flex; flex-direction: column; gap: var(--gap); max-width: 1800px; margin: 0 auto; }
+  /* Board view: three regions, the 3D view's spatial model. Left rail: what needs you (What to do now, the questions).
+     Centre: the goal bar and the task board, from the top of the page. Right rail: who's doing what, Activity (feed and
+     chat), file locks. The rails stick under the header and scroll on their own, so the board never leaves the screen.
+     The rails are not boxes themselves: page > panel > row, two levels. */
+  main { --rail-l: clamp(256px, 20vw, 340px); --rail-r: clamp(272px, 22vw, 400px); --top: calc(var(--hdr, 54px) + var(--s4));
+    display: grid; grid-template-columns: var(--rail-l) minmax(0, 1fr) var(--rail-r); grid-template-areas: "left centre right"; gap: var(--s5); align-items: start;
+    padding: var(--s4) var(--s5) var(--s5); max-width: 2400px; margin: 0 auto; }
+  .rail-l { grid-area: left; } .centre { grid-area: centre; } .rail-r { grid-area: right; }
+  .centre { display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
+  .rail { position: sticky; top: var(--top); max-height: calc(100vh - var(--top) - var(--s5)); display: flex; flex-direction: column; gap: var(--gap); min-width: 0;
+    overflow-y: auto; overscroll-behavior: contain; padding: 0 6px 6px 0; margin-right: -6px; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  .rail > * { flex: 0 0 auto; }
+  /* The right rail is exactly as tall as the screen: who's doing what takes what it needs (up to 40%), Activity the rest,
+     its feed scrolling inside, the composer at the foot. */
+  .rail-r { height: calc(100vh - var(--top) - var(--s5)); overflow: hidden; }
+  .rail-r > .ppl { flex: 0 0 auto; max-height: 36%; display: flex; flex-direction: column; min-height: 0; }
+  .rail-r > .ppl > .people { overflow-y: auto; min-height: 0; margin-right: calc(-1 * var(--s3)); padding-right: var(--s3); scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  .rail-r > .act { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .rail-r > .act .feedwrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin-top: var(--s2); }
+  .rail-r > .act .feed { max-height: none; flex: 1 1 auto; min-height: 96px; }
+  /* Short laptop screens: the chat hint is the composer's description (read out, and its tooltip), so the feed keeps
+     the room. */
+  @media (min-width: 1101px) and (max-height: 900px) { .rail-r > .act > .hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
+  /* Narrow laptops: slimmer rails. */
+  @media (max-width: 1279px) { main { --rail-l: 240px; --rail-r: 260px; gap: var(--s4); } }
+  /* Up to 1100px: two columns. The rails stack on the left (what needs you, then people and Activity), the board takes
+     the rest; the page scrolls as one. */
+  @media (max-width: 1100px) {
+    main { grid-template-columns: 264px minmax(0, 1fr); grid-template-areas: "left centre" "right centre"; grid-template-rows: auto 1fr; }
+    .rail { position: static; max-height: none; height: auto; overflow: visible; padding: 0; margin: 0; }
+    .rail-r > .ppl { max-height: none; }
+    .rail-r > .act .feed { max-height: 50vh; }
+  }
+  /* Tablets and phones: one column, in order of what matters: what needs you, the board, people, Activity. */
+  @media (max-width: 1000px) {
+    main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "left" "centre" "right"; grid-template-rows: none; }
+  }
   /* Panels: the demo's pixel window chrome. Their first heading row is the window's title bar. */
   .panel { background: var(--panel); border: 2px solid var(--border); border-radius: var(--r-lg); padding: var(--s4) var(--s5) var(--s5); box-shadow: var(--e2); min-width: 0; margin: 2px; }
   .sec-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s1) var(--s4); margin-bottom: var(--s4); font-size: var(--fs-meta); }
@@ -344,7 +389,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .panel > h2, .sec-h h2 { font-size: .8125rem; line-height: var(--lh-tight); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
   .sec-h .muted { font-weight: 400; }
   .panel-hint { font-size: var(--fs-meta); color: var(--muted); margin: calc(-1 * var(--s2)) 0 var(--s4); }
-  .step, .panel, .col, #now, .nyou { scroll-margin-top: 68px; }
+  .step, .panel, .col, #now, .nyou { scroll-margin-top: calc(var(--hdr, 54px) + 14px); }
 
   /* What needs you: one pixel window with the line that leads the page, what's next, and the agents' questions. */
   .nyou { background: var(--panel); border: 2px solid var(--border); box-shadow: var(--e2); margin: 2px; min-width: 0; transition: border-color var(--t-slow) var(--ease); }
@@ -378,6 +423,21 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .phases ol { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1); list-style: none; margin: 0; padding: 0; flex: 1 1 0; min-width: 0; }
   .phases li { display: inline-flex; align-items: center; gap: var(--s1); }
 
+  /* In the Board view's left rail (as in the 3D view's Needs you dock): the lead, then the rest, stacked. */
+  .rail-l .now { flex-direction: column; align-items: stretch; gap: var(--s4); }
+  .rail-l .now::after { display: none; }
+  .rail-l .now .nl { flex: 0 0 auto; margin: 0 calc(-1 * var(--s5)); }
+  .rail-l .now .phases { margin: calc(-1 * var(--s2)) 0 0; padding: 0; border: 0; }
+  .rail-l .now .phases .ph-l { display: none; }
+  .rail-l .now .na { flex: 0 0 auto; }
+  .rail-l .now .appr { align-self: flex-start; }
+  .rail-l .now .also { flex-direction: column; align-items: flex-start; gap: 0; }
+  .rail-l .now .also .link + .link::before { display: none; }
+  .rail-l .now .also .link { padding: 2px 0; }
+  .rail-l .qs { grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
+  .rail-l .qcard textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* A long question shows 4 lines until you answer it (its whole text is read out either way). */
+  .rail-l .qcard:not(:focus-within) .qt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
   /* Questions: the one thing that must not be missed. Inside the same window, under a dashed rule. */
   .nyou > .attn { margin: 0; border: 0; box-shadow: none; background: transparent; padding: 0 var(--s5) var(--s4); }
   /* With questions below it, the lead row sits closer to them (every pixel here pushes the board down). */
@@ -468,12 +528,18 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .ci-pill { margin-left: var(--s3); }
 
   /* ---------- people ---------- */
-  .people { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap: var(--s3) var(--s4); align-items: start; }
-  .person { border-radius: var(--r-md); padding: 1px var(--s4); min-width: 0; background: var(--raised); transition: box-shadow var(--t-fast) var(--ease); }
+  /* Who's doing what: one line per person (name, then a dot and x/y per agent, roles, and only the exceptions), the
+     team's line above. Open a row for its agents, tasks, controls and the filter. */
+  .psum { display: flex; flex-direction: column; gap: 0; flex: 1 1 100%; font-size: var(--fs-meta); line-height: var(--lh-tight); }
+  .psum:empty { display: none; }
+  .ppl > .sec-h:first-child { flex: 0 0 auto; flex-wrap: wrap; row-gap: var(--s2); padding-block: var(--s3); }
+  .people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
+  .person { border-radius: var(--r-md); padding: 1px var(--s3); min-width: 0; background: var(--raised); transition: box-shadow var(--t-fast) var(--ease); }
+  .person .capw { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .person:hover { box-shadow: inset 0 0 0 2px var(--line); }
   .person.sel { box-shadow: inset 0 0 0 2px hsl(var(--h) 60% var(--dl)); }
   .person .ph { display: flex; align-items: center; gap: var(--s3); min-height: 26px; min-width: 0; cursor: pointer; }
-  .person .ptog { display: inline-flex; align-items: center; gap: var(--s3); background: none; border: 0; box-shadow: none; padding: var(--s1); min-height: 26px; color: var(--ink); flex: 0 0 auto; min-width: 0; max-width: 45%; border-radius: var(--r-xs); }
+  .person .ptog { display: inline-flex; align-items: center; gap: var(--s3); background: none; border: 0; box-shadow: none; padding: var(--s1); min-height: 26px; color: var(--ink); flex: 0 0 auto; min-width: 0; max-width: 60%; border-radius: var(--r-xs); }
   .person .ptog:hover { background: none; }
   .person .ptog:active { transform: none; box-shadow: none; }
   .person .ptog .chev { color: var(--accent); font-size: 12px; width: 10px; display: inline-block; }
@@ -482,11 +548,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .person .ptog .pc { font-size: var(--fs-body); overflow: hidden; text-overflow: ellipsis; }
   .person .pcap { font-size: var(--fs-meta); color: var(--muted); }
   /* Chips wrap to a second line rather than being cut off (a chip cut to "1" reads as a bug). */
-  .person .pchips { display: flex; gap: 0 var(--s2); align-items: center; min-width: 0; min-height: 26px; flex: 1 1 auto; flex-wrap: wrap; }
+  .person .pchips { display: flex; gap: 0 var(--s3); align-items: center; min-width: 0; min-height: 26px; flex: 1 1 auto; flex-wrap: wrap; }
   .person .pchips > * { flex: 0 1 auto; max-width: 100%; }
   .person .pchips > .pill { white-space: normal; }
-  .person .pwhen { color: var(--muted); font-size: var(--fs-micro); line-height: 26px; white-space: nowrap; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
-  .person .pd { border-top: 2px dashed var(--line); margin-top: 3px; padding: var(--s3) 0 var(--s3) 18px; }
+  .person .pd { border-top: 2px dashed var(--line); margin-top: 3px; padding: var(--s3) 0 var(--s3) var(--s2); }
   .person .pd .inl { margin-top: var(--s2); }
   .person ul { list-style: none; margin: var(--s2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--s3); }
   .person li { font-size: var(--fs-sm); min-width: 0; }
@@ -505,12 +570,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .lim-f button, .actl button { min-height: var(--ctl-sm); padding: 0 10px; font-size: var(--fs-meta); }
 
   /* ---------- board ---------- */
-  .work { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--gap); align-items: start; }
-  @media (max-width: 1100px) { .work { grid-template-columns: minmax(0, 1fr); } }
   .boardwrap { min-width: 0; }
   .boardwrap > .hint { margin-top: var(--s4); }
   .filterbar { font-size: var(--fs-sm); display: flex; gap: var(--s4); align-items: center; flex-wrap: wrap; margin-bottom: var(--s4); }
-  .board { display: grid; grid-template-columns: repeat(5, minmax(170px, 1fr)) var(--done-w, minmax(170px, 1fr)); gap: var(--s4); overflow-x: auto; align-items: start; padding: 2px 2px var(--s2); position: relative; }
+  .board { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)) var(--done-w, minmax(120px, 1fr)); gap: var(--s4); overflow-x: auto; align-items: start; padding: 2px 2px var(--s2); position: relative; }
   .board.done-closed { --done-w: 48px; }
   @media (max-width: 760px) { .board, .board.done-closed { grid-template-columns: minmax(0, 1fr); overflow: visible; } .board.none { display: none; } }
   /* Columns: the demo's .tv-col, a sunken box whose heading is a title bar. */
@@ -567,6 +630,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .card.held .ct { color: var(--muted); font-weight: 400; }
   .col .cd.fz-note { color: var(--warn); white-space: normal; } /* the freeze note wraps: it says what can still start */
   .card .ct { font-size: var(--fs-sm); font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+  .card .cm .pill { white-space: normal; max-width: 100%; }
+  .card .ca button { max-width: 100%; white-space: normal; text-align: left; line-height: 1.2; padding-block: 2px; } /* narrow columns: a label wraps, never cut */
   .card .ct .id { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
   .card .bn { font-size: var(--fs-meta); color: var(--bad); margin-top: var(--s2); white-space: pre-wrap; }
   .card .cm { color: var(--muted); font-size: var(--fs-meta); margin-top: var(--s3); display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); align-items: center; font-variant-numeric: tabular-nums; }
@@ -594,7 +659,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .mvmenu .ml { font-size: var(--fs-micro); color: var(--muted); width: 100%; }
 
   /* ---------- activity ---------- */
-  .side { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
   /* Toggle buttons, the demo's .seg: the pressed one is filled with the accent. Separate boxes, so a long row wraps cleanly. */
   .tabs { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); margin-left: auto; padding: 0; }
   .tabs button { font-size: var(--fs-meta); font-weight: 400; padding: 0 var(--s3); min-height: var(--ctl-xs); background: transparent; color: var(--muted); border: 0; box-shadow: none; border-radius: var(--r-sm); }
@@ -624,7 +688,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 
   .feedwrap { position: relative; }
   .feed { position: relative; max-height: min(64vh, 640px); overflow-y: auto; overflow-anchor: none; display: flex; flex-direction: column; gap: var(--s1); padding-right: var(--s1); scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
-  @media (max-width: 1100px) { .feed { max-height: 50vh; } }
   #feed.more-above { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 28px); mask-image: linear-gradient(to bottom, transparent, #000 28px); }
   .ev { font-size: var(--fs-sm); padding: var(--s2) var(--s3); border-radius: var(--r-sm); overflow-wrap: anywhere; border-left: 2px solid transparent; }
   .ev .eh { display: flex; gap: var(--s3); align-items: baseline; flex-wrap: wrap; }
@@ -659,6 +722,16 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .ac li[aria-selected="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
   .ac .ak { margin-left: auto; font-size: var(--fs-micro); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ac .ak.on { width: auto; height: auto; border-radius: 0; background: none; color: var(--ok); }
+  /* File locks fold to their title bar. */
+  .locksp:has(#l-body[hidden]) { padding-bottom: 0; }
+  .locksp:has(#l-body[hidden]) > .sec-h:first-child { margin-bottom: 0; border-bottom: 0; }
+  .ltog { display: inline-flex; align-items: center; gap: var(--s3); background: none; border: 0; box-shadow: none; padding: 0; min-height: var(--ctl-xs); color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; }
+  .ltog:hover { background: none; color: var(--ink); }
+  .ltog:active { transform: none; box-shadow: none; }
+  .ltog .chev { font-size: 12px; width: 10px; }
+  .ltog .chev::before { content: "▸"; }
+  .ltog[aria-expanded="true"] .chev::before { content: "▾"; }
+  .ltog .muted { text-transform: none; letter-spacing: 0; }
   .locks { list-style: none; margin: 0; padding: 0; }
   .lock { display: flex; justify-content: space-between; align-items: center; gap: var(--s4); font-size: var(--fs-meta); padding: var(--s3) 0; border-top: 1px solid var(--line); }
   .lock:first-child { border-top: 0; }
@@ -712,9 +785,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .gloss dd { margin: var(--s1) 0 0; font-size: var(--fs-sm); }
   .gloss dd b { color: var(--ink); }
   .gloss .keys input { flex: 0 0 auto; }
-  .themesw { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s3); }
-  .themesw button { display: inline-flex; align-items: center; gap: var(--s3); }
-  .themesw button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); font-weight: 700; }
   /* The demo's palette swatches: each theme's page colour and accent, split on the diagonal. Fixed colours on purpose. */
   .sw { display: inline-block; width: 14px; height: 14px; flex: 0 0 auto; box-shadow: 0 0 0 2px var(--outline); }
   .sw-dusk { background: linear-gradient(135deg, #3a2a66 50%, #ffb86b 50%); }
@@ -738,8 +808,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .office-view { display: none; }
   html[data-board-view="office"] body { overflow: hidden; }
   html[data-board-view="office"] #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
-  html[data-board-view="office"] main { flex: 1 1 auto; min-height: 0; width: 100%; max-width: none; padding: 0; }
-  html[data-board-view="office"] main > :not(.office-view), html[data-board-view="office"] :is(.skip:not([data-skip="now"]), .tochat, header .filter, header .needs, header #clock) { display: none !important; }
+  html[data-board-view="office"] main { display: flex; flex-direction: column; align-items: stretch; flex: 1 1 auto; min-height: 0; width: 100%; max-width: none; padding: 0; }
+  html[data-board-view="office"] main > :not(.office-view), html[data-board-view="office"] :is(.skip:not([data-skip="now"]), .tochat, header .needs, header #clock) { display: none !important; }
   html[data-board-view="office"] .office-view { display: block; position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: var(--bg);
     --o-gap: 8px; --o-dock: clamp(280px, 22vw, 360px); --o-chip: 34px; --o-bottom: calc(var(--o-chip) + var(--o-gap) * 2); --o-tasks-h: clamp(176px, 27%, 270px);
     --glass: color-mix(in srgb, var(--panel) 92%, transparent); }
@@ -886,11 +956,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-form .o-in { display: flex; align-items: center; gap: var(--s3); }
   .o-form input[type="number"] { width: 5.5em; }
   .o-form textarea { min-height: 96px; }
-  .o-themes { left: auto; right: calc(var(--o-dock) + var(--o-gap) * 2); translate: none; width: auto; flex-direction: row; flex-wrap: wrap; gap: var(--s2); padding: var(--s3); }
-  .o-themes [role="radio"][aria-checked="true"] { background: var(--accent-soft); border-color: var(--accent); font-weight: 700; }
-  .o-themes [role="radio"] { display: inline-flex; align-items: center; gap: var(--s3); }
 
-  /* Chips: Goal, demo time and the theme on top (between the docks); Progress, Activity and Chat along the bottom. */
+  /* Chips: the goal and the demo time, on top between the docks. */
   .o-chips { position: absolute; z-index: 4; display: flex; gap: var(--o-gap); align-items: center; min-width: 0; pointer-events: none; }
   .o-chips > * { pointer-events: auto; }
   .o-top { top: var(--o-gap); left: calc(var(--o-dock) + var(--o-gap) * 2); right: calc(var(--o-dock) + var(--o-gap) * 2); justify-content: center; }
@@ -912,11 +979,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   #o-act-chip { flex: 0 1 26rem; }
   .o-bar { display: inline-flex; width: 72px; height: 10px; flex: 0 0 auto; background: var(--field); box-shadow: 0 0 0 2px var(--line-strong); overflow: hidden; }
   .o-bar i { display: block; height: 100%; background: var(--ok); }
-  /* The theme: one chip with the current palette's swatch; it opens the picker. */
-  .o-theme { flex: 0 0 auto; width: var(--o-chip); padding: 0; justify-content: center; }
-  .o-theme .sw { width: 16px; height: 16px; }
-  /* Narrow laptops: the docks get a little narrower, the Activity chip text goes first. */
-  @media (max-width: 1400px) { html[data-board-view="office"] .office-view { --o-dock: clamp(264px, 22vw, 300px); } }
+  /* Narrow laptops: the docks get a little narrower. */
+  @media (max-width: 1400px) { html[data-board-view="office"] .office-view { --o-dock: clamp(256px, 20vw, 280px); } }
 
   /* ---------- command palette (Ctrl+K) ---------- */
   #pal-dlg { width: min(560px, calc(100vw - 24px)); margin: 12vh auto auto; padding: var(--s4); }
@@ -964,15 +1028,17 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     header > .sp { display: none; }
     .hpair { order: 1; margin-left: auto; }
     .clock { order: 2; }
-    .filter, #new-task-btn, #link-btn { order: 3; }
-    .filter { flex: 1 1 140px; min-width: 0; }
+    #new-task-btn, #link-btn, .themew { order: 3; }
+    #new-task-btn { flex: 1 1 auto; }
+    .theme-pop { right: auto; left: 0; }
     .conn { font-size: 0; gap: 0; border: 0; padding: 0; background: none; min-height: 0; }
     #me-btn { max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
-    .filter select { width: 100%; max-width: none; }
     #link-btn .lt { display: none; }
     #link-btn { width: var(--ctl); padding: 0; justify-content: center; }
     main { padding: var(--s4) var(--s4) 72px; gap: var(--gap); } /* room under the last item for the Chat button */
-    .filter span, .person .last, .person .pwhen { display: none; }
+    .filter span, .person .last { display: none; }
+    .filter { flex: 1 1 140px; min-width: 0; } .filter select { width: 100%; max-width: none; }
+    .sumbar .goal { flex-basis: 100%; white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
     .person .pchips { flex-wrap: wrap; padding: var(--s1) 0; }
     .now .also { flex-direction: column; align-items: flex-start; gap: 0; }
     .now .also .link + .link::before { display: none; }
@@ -1058,10 +1124,11 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <div class="needs" id="needs"></div>
     <span class="sp"></span>
     <div class="hacts">
-      <label class="filter"><span>Show</span><select id="filter" aria-label="Show tasks for"></select></label>
       <button id="new-task-btn" class="ghost" title="New task (N)">+ New task</button>
       <a id="boards-link" class="plink" href="/boards" hidden title="All boards on this server: create, open, archive (host only)">Boards</a>
       <button id="link-btn" class="ghost" title="Copy this board's link (it includes the token) to send to a teammate" aria-label="Copy board link"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 9.5l3-3M7 4.5l1.2-1.2a2.8 2.8 0 014 4L11 8.5M9 11.5l-1.2 1.2a2.8 2.8 0 01-4-4L5 7.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="lt"> Copy link</span></button>
+      <span class="themew"><button type="button" id="theme-btn" class="ghost icon" aria-expanded="false" aria-controls="theme-pop" title="Theme"><i class="sw" id="theme-sw" aria-hidden="true"></i></button>
+        <span class="theme-pop" id="theme-pop" role="radiogroup" aria-label="Theme" hidden><button type="button" class="ghost sm" role="radio" data-theme-set="auto" aria-checked="false" tabindex="-1" title="Dusk or Day, following the device"><i class="sw sw-auto" aria-hidden="true"></i>Auto</button><button type="button" class="ghost sm" role="radio" data-theme-set="dusk" aria-checked="false" tabindex="-1"><i class="sw sw-dusk" aria-hidden="true"></i>Dusk</button><button type="button" class="ghost sm" role="radio" data-theme-set="day" aria-checked="false" tabindex="-1"><i class="sw sw-day" aria-hidden="true"></i>Day</button><button type="button" class="ghost sm" role="radio" data-theme-set="night" aria-checked="false" tabindex="-1"><i class="sw sw-night" aria-hidden="true"></i>Night</button><button type="button" class="ghost sm" role="radio" data-theme-set="terminal" aria-checked="false" tabindex="-1"><i class="sw sw-terminal" aria-hidden="true"></i>Terminal</button></span></span>
       <span class="hpair">
         <button id="notify-btn" class="ghost icon bell" type="button" aria-pressed="false" aria-label="Desktop notifications" title="Notify me when this tab is in the background"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.5V7a4 4 0 018 0v4.5l1.2 1.2H2.8zM6.5 13.5a1.6 1.6 0 003 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><path class="slash" d="M2.5 2.5l11 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
         <button id="me-btn" class="ghost" title="Change your name or token">you: <b id="me"></b></button>
@@ -1073,22 +1140,26 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   <div id="announcer" class="vh" aria-live="polite"></div>
   <div id="activity-live" class="vh" aria-live="polite" aria-atomic="true"></div>
   <a class="tochat" id="tochat" href="#f-h">Chat</a>
-  <main>
-    <div class="nyou" id="nyou">
-      <section id="now" class="now" aria-labelledby="now-h"></section>
-      <section id="q-panel" class="panel attn" aria-labelledby="q-h" hidden>
-        <h2 id="q-h" class="vh"></h2>
-        <div class="qs" id="questions"></div>
-      </section>
+  <main id="main">
+    <!-- Board view: three regions, like the 3D view's docks. Left: what needs you. Centre: the goal bar and the task
+         board. Right: who's doing what, Activity (feed and chat), file locks. The rails stay in view while the board
+         scrolls; on a phone everything stacks in this order. -->
+    <div class="rail rail-l" id="rail-l">
+      <div class="nyou" id="nyou">
+        <section id="now" class="now" aria-labelledby="now-h"></section>
+        <section id="q-panel" class="panel attn" aria-labelledby="q-h" hidden>
+          <h2 id="q-h" class="vh"></h2>
+          <div class="qs" id="questions"></div>
+        </section>
+      </div>
     </div>
 
     <section id="office-view" class="office-view" aria-label="3D office">
       <div id="office-scene" class="office-scene" role="img" aria-label="The team's agents in a 3D office, one character per online agent. The Agents panel lists the same agents"></div>
       <p class="office-load" aria-hidden="true">Loading the 3D office…</p>
-      <div class="o-chips o-top" role="group" aria-label="Goal, demo time and theme">
+      <div class="o-chips o-top" role="group" aria-label="Goal and demo time">
         <button type="button" class="o-chip" id="o-goal-chip" aria-expanded="false" aria-controls="o-goal"><span class="o-t">Goal</span><span class="o-x" id="o-goal-x"></span><span class="o-ar" aria-hidden="true">▾</span></button>
         <button type="button" class="o-chip" id="o-dl-chip" aria-expanded="false" aria-controls="o-dl"><span class="o-t">Demo</span><span class="o-x" id="o-dl-x"></span><span class="o-ar" aria-hidden="true">▾</span></button>
-        <button type="button" class="o-chip o-theme" id="o-theme-chip" aria-expanded="false" aria-controls="o-theme" title="Theme"><i class="sw" id="o-theme-sw" aria-hidden="true"></i><span class="vh" id="o-theme-l">Theme</span></button>
       </div>
       <section class="o-panel o-pop o-goal" id="o-goal" aria-labelledby="o-goal-h" hidden>
         <div class="o-head"><h2 id="o-goal-h">Goal</h2><button type="button" class="o-ib" data-o-close="goal" aria-label="Close the goal">×</button></div>
@@ -1098,7 +1169,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         <div class="o-head"><h2 id="o-dl-h">Demo time</h2><button type="button" class="o-ib" data-o-close="dl" aria-label="Close the demo time">×</button></div>
         <div class="o-body" id="o-dl-b"></div>
       </section>
-      <div class="o-panel o-pop o-themes" id="o-theme" role="radiogroup" aria-label="Theme" hidden><button type="button" class="ghost sm" role="radio" data-theme-set="auto" aria-checked="false" tabindex="-1" title="Dusk or Day, following the device"><i class="sw sw-auto" aria-hidden="true"></i>Auto</button><button type="button" class="ghost sm" role="radio" data-theme-set="dusk" aria-checked="false" tabindex="-1"><i class="sw sw-dusk" aria-hidden="true"></i>Dusk</button><button type="button" class="ghost sm" role="radio" data-theme-set="day" aria-checked="false" tabindex="-1"><i class="sw sw-day" aria-hidden="true"></i>Day</button><button type="button" class="ghost sm" role="radio" data-theme-set="night" aria-checked="false" tabindex="-1"><i class="sw sw-night" aria-hidden="true"></i>Night</button><button type="button" class="ghost sm" role="radio" data-theme-set="terminal" aria-checked="false" tabindex="-1"><i class="sw sw-terminal" aria-hidden="true"></i>Terminal</button></div>
 
       <aside class="o-panel o-dock o-left" id="o-left" aria-labelledby="o-left-h">
         <div class="o-head"><h2 id="o-left-h">Needs you</h2><span class="o-sub" id="o-left-sub"></span><button type="button" class="o-ib" data-o-fold="left" aria-expanded="true" aria-controls="o-left" aria-label="Fold Needs you to a chip" title="Fold">‹</button></div>
@@ -1128,20 +1198,14 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       </div>
     </section>
 
-    <section id="setup" class="panel setup" aria-label="Team setup guide"></section>
-
-    <section class="panel" aria-labelledby="p-h">
-      <div class="sec-h"><h2 id="p-h">Who's doing what</h2><span class="muted" title="Each tool line: x/y = tasks it holds / tasks it may hold at once. Green: has room. Blue: full. Amber: not started or out of usage. Grey: offline.">one row per person and their AI tools · click a row for their agents, tasks and filter</span>
-        <span class="plegend" id="p-legend" title="Agent pills: x/y = tasks it holds / tasks it may hold at once"><span class="muted">Pills:</span> <span class="pill ok">has room</span> <span class="pill full">full</span> <span class="pill warn">not started or out of usage</span> <span class="pill">offline</span></span></div>
-      <ul class="people" id="people"></ul>
-    </section>
-
-    <div class="work">
+    <div class="centre" id="centre">
+      <section id="setup" class="panel setup" aria-label="Goal and team setup"></section>
       <section aria-labelledby="b-h" class="boardwrap">
         <h2 id="b-h" class="vh">Tasks</h2>
         <div class="filterbar" id="filterbar" hidden></div>
         <div class="taskbar" id="taskbar">
           <label class="tsearch"><span class="vh">Search tasks</span><input type="search" id="tsearch" autocomplete="off" placeholder="Search tasks: title, #id, person" aria-label="Search tasks by title, number, assignee or reviewer"></label>
+          <label class="filter"><span>Show</span><select id="filter" aria-label="Show tasks for"></select></label>
           <div class="tabs" id="viewtog" role="group" aria-label="Task view"><button type="button" data-view="columns" aria-pressed="true">Columns</button><button type="button" data-view="table" aria-pressed="false">Table</button></div>
         </div>
         <div class="bnote k-ci" id="ci-note" tabindex="-1" role="status" hidden></div>
@@ -1151,35 +1215,43 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         <div class="ttable" id="tasktable" hidden></div>
         <p class="hint" id="cols-hint">Drag a card to another column, or use its <b>Move…</b> button, to change its status. Open a card (click / Enter) to edit it. Cards flag priority (P1, P3) and size (S, L) only when it isn't the usual P2 and M.</p>
       </section>
-      <div class="side">
-        <section class="panel" aria-labelledby="f-h">
-          <div class="sec-h"><h2 id="f-h">Activity</h2>
-            <div class="tabs" id="tabs">
-              <button data-tab="all" aria-pressed="true">All</button>
-              <button data-tab="chat" aria-pressed="false">Chat</button>
-              <button data-tab="me" aria-pressed="false" aria-label="@me">@me</button>
-              <button data-tab="problems" aria-pressed="false" title="Blocked or sent-back tasks, usage limits, name clashes">Problems</button>
-              <button data-tab="merges" aria-pressed="false" title="Merges and reviews: tasks going to review, and merged into main">Merges</button>
-            </div>
+    </div>
+
+    <div class="rail rail-r side" id="rail-r">
+      <section class="panel ppl" id="p-panel" aria-labelledby="p-h">
+        <div class="sec-h"><h2 id="p-h">Who's doing what</h2><span class="muted psum" id="p-sum"></span>
+          <span class="plegend" id="p-legend" title="Agent pills: x/y = tasks it holds / tasks it may hold at once"><span class="muted">Pills:</span> <span class="pill ok">has room</span> <span class="pill full">full</span> <span class="pill warn">not started or out of usage</span> <span class="pill">offline</span></span></div>
+        <ul class="people" id="people"></ul>
+      </section>
+      <section class="panel act" id="f-panel" aria-labelledby="f-h">
+        <div class="sec-h"><h2 id="f-h">Activity</h2>
+          <div class="tabs" id="tabs">
+            <button data-tab="all" aria-pressed="true">All</button>
+            <button data-tab="chat" aria-pressed="false">Chat</button>
+            <button data-tab="me" aria-pressed="false" aria-label="@me">@me</button>
+            <button data-tab="problems" aria-pressed="false" title="Blocked or sent-back tasks, usage limits, name clashes">Problems</button>
+            <button data-tab="merges" aria-pressed="false" title="Merges and reviews: tasks going to review, and merged into main">Merges</button>
           </div>
-          <div class="feedwrap">
-            <div class="feed" id="feed" role="log" aria-live="off" tabindex="0" aria-label="Activity feed"></div>
-            <button class="jump" id="jump" hidden>New activity ↓</button>
-          </div>
-          <form class="composer" id="composer">
-            <select id="chan" aria-label="Channel"><option>general</option><option>help</option><option>review</option><option>humans</option></select>
-            <textarea id="msg" rows="1" autocomplete="off" spellcheck="true" aria-label="Message" placeholder="Message, @ to mention" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="msg-ac"></textarea>
-            <ul id="msg-ac" class="ac" role="listbox" aria-label="Names to mention" hidden></ul>
-            <button type="submit" id="send">Send</button>
-          </form>
-          <p class="hint">Agents read this chat. Write <code>@alice</code> to talk to alice's agent, <code>@all</code> for everyone · type @ to pick a name · Enter sends, Shift+Enter adds a line<span id="slash-hint"> · press / to focus</span></p>
-        </section>
-        <section class="panel" aria-labelledby="l-h">
-          <div class="sec-h"><h2 id="l-h">File locks</h2><span class="muted" id="l-count"></span></div>
+        </div>
+        <div class="feedwrap">
+          <div class="feed" id="feed" role="log" aria-live="off" tabindex="0" aria-label="Activity feed"></div>
+          <button class="jump" id="jump" hidden>New activity ↓</button>
+        </div>
+        <form class="composer" id="composer">
+          <select id="chan" aria-label="Channel"><option>general</option><option>help</option><option>review</option><option>humans</option></select>
+          <textarea id="msg" rows="1" autocomplete="off" spellcheck="true" aria-label="Message" aria-describedby="chat-hint" title="Agents read this chat: @name for one agent, @all for everyone. Enter sends, Shift+Enter adds a line" placeholder="Message, @ to mention" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="msg-ac"></textarea>
+          <ul id="msg-ac" class="ac" role="listbox" aria-label="Names to mention" hidden></ul>
+          <button type="submit" id="send">Send</button>
+        </form>
+        <p class="hint" id="chat-hint">Agents read this chat: <code>@alice</code> for alice's agent, <code>@all</code> for everyone. Enter sends, Shift+Enter adds a line<span id="slash-hint"> · press / to focus</span></p>
+      </section>
+      <section class="panel locksp" aria-labelledby="l-h">
+        <div class="sec-h"><h2 id="l-h"><button type="button" class="ltog" id="l-tog" aria-expanded="false" aria-controls="l-body"><span class="chev" aria-hidden="true"></span>File locks <span class="muted fw-normal" id="l-count"></span></button></h2></div>
+        <div id="l-body" hidden>
           <p class="panel-hint">"I'm editing this shared file, don't touch it." Agents set these themselves; they expire on their own.</p>
           <ul class="locks" id="locks"></ul>
-        </section>
-      </div>
+        </div>
+      </section>
     </div>
   </main>
 </div>
@@ -1280,8 +1352,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dd>A markdown summary of the day (goal, who built what, decisions, what's unfinished) for your submission, and a JSON backup of everything on the board.
       <div class="xacts"><button type="button" class="ghost" data-act="export-md">Download summary (.md)</button><button type="button" class="ghost" data-act="export-copy">Copy summary</button><button type="button" class="ghost" data-act="export-json">Download backup (JSON)</button></div></dd>
     <dt>Theme</dt>
-    <dd>The office demo's four palettes: <b>Dusk</b>, <b>Day</b> (light), <b>Night</b> and <b>Terminal</b>, or <b>Auto</b> (Dusk or Day, following the device). The 3D office and the presenter view follow it. Saved in this browser.
-      <div class="themesw" role="group" aria-label="Theme"><button type="button" class="ghost sm" data-theme-set="auto" aria-pressed="false" title="Dusk or Day, following the device"><i class="sw sw-auto" aria-hidden="true"></i>Auto</button><button type="button" class="ghost sm" data-theme-set="dusk" aria-pressed="false"><i class="sw sw-dusk" aria-hidden="true"></i>Dusk</button><button type="button" class="ghost sm" data-theme-set="day" aria-pressed="false"><i class="sw sw-day" aria-hidden="true"></i>Day</button><button type="button" class="ghost sm" data-theme-set="night" aria-pressed="false"><i class="sw sw-night" aria-hidden="true"></i>Night</button><button type="button" class="ghost sm" data-theme-set="terminal" aria-pressed="false"><i class="sw sw-terminal" aria-hidden="true"></i>Terminal</button></div></dd>
+    <dd>The office demo's four palettes: <b>Dusk</b>, <b>Day</b> (light), <b>Night</b> and <b>Terminal</b>, or <b>Auto</b> (Dusk or Day, following the device). Pick it with the swatch button in the header (or <code>Ctrl</code>+<code>K</code>). The 3D office and the presenter view follow it. Saved in this browser.
+</dd>
     <dt>Keyboard</dt>
     <dd><code>Ctrl</code>+<code>K</code> (<code>⌘K</code> on a Mac) opens the command palette, even while you type: jump to a task or a person, add a task, answer a question, set the demo time, switch the filter or theme. <code>n</code> new task · <code>/</code> write a message · <code>?</code> this help · <code>Esc</code> closes dialogs. On a focused card: <code>Enter</code> opens it; its <b>Move…</b> button changes its status.
       <label class="keys"><input type="checkbox" id="keys-on"> Single-key shortcuts (<code>n</code>, <code>/</code>, <code>?</code>) on</label>
@@ -2034,7 +2106,7 @@ function render() {
   renderBoardEmpty(si);
   renderBoardNote(); renderCi();
   renderQuestions(qOpen);
-  renderPeople();
+  renderPeople(si);
   renderFilter();
   if (!ui.dragging) renderBoard();
   renderFeed(unread.length);
@@ -2078,6 +2150,8 @@ function renderNeeds(qOpen, unread) {
 let nowSeen = true;
 function syncNeeds() { $('needs').hidden = nowSeen; }
 if ('IntersectionObserver' in window) new IntersectionObserver(([e]) => { nowSeen = e.isIntersecting; syncNeeds(); }, { rootMargin: '-56px 0px 0px 0px' }).observe($('now'));
+// The Board view's rails stick right under the header, whatever its height.
+if ('ResizeObserver' in window) new ResizeObserver(([e]) => document.documentElement.style.setProperty('--hdr', Math.round(e.target.offsetHeight) + 'px')).observe(document.querySelector('#app > header'));
 
 const plural = (n, w, ws = w + 's') => `${n} ${n === 1 ? w : ws}`;
 const cmdBox = (text, key, what) => `<div class="cmd"><code>${esc(text)}</code><button type="button" class="ghost" data-copy="${esc(text)}" data-fk="cp-${key}" aria-label="Copy ${esc(what)}">Copy</button></div>`;
@@ -2198,8 +2272,6 @@ function renderSetup(si) {
       ${T.length ? `<span class="stat" id="done-count" title="${done} of ${T.length} tasks merged into main (${pct}%)"><b>${done} of ${T.length} done</b><span class="mbar" aria-hidden="true"><i style="width:${pct}%"></i></span></span>` : ''}
       ${S.repo ? `<span class="goal repo-s" title="Project repo: ${esc(S.repo)}"><b>Repo:</b> ${esc(S.repo)}</span>` : ''}
       <span title="The person whose agent merges finished branches into main">Merges to main: ${S.integrator === '*' ? 'whoever is free' : S.integrator ? `${nameTag(S.integrator)}${ownerOffline({ assignee: S.integrator }) || agentLimited(S.integrator) ? ' <span class="muted">(away: whoever is free merges meanwhile)</span>' : ''}` : '<span class="muted">not picked yet</span>'}${ciPill()}</span>
-      <span title="Online = an agent someone started with /board, seen in the last 10 min and not out of usage. Not started = its tool is connected but nobody typed /board yet. Out of usage = hit its plan's limit. Offline = not seen for 10 min. Watching = people with this page open." class="stat" id="online-count"><span class="on ${si.onlineA.length ? 'y' : si.waitingA.length ? 'w' : ''}"></span>${agentsLine(si)} · ${si.watchers.length} watching</span>
-      ${teamCapHtml()}
       <span class="acts"><button type="button" class="ghost" data-act="invite" data-fk="s-inv">Connect a laptop</button><button type="button" class="ghost" data-act="setup-open" data-fk="s-open" aria-expanded="false" ${left ? `aria-label="Open the setup guide. Left to do: ${esc(left.left)}"` : ''}>Setup${left ? `: ${esc(left.left)}` : ''}</button></span></div>`);
     return;
   }
@@ -2520,19 +2592,20 @@ function renderQuestions(qOpen) {
 }
 
 // One compact line per person; click it for their agents, tasks and the filter.
+// Compact (one line per person): each agent is its tool's dot and x/y; its tool and plan are in the tooltip, the
+// screen-reader text and the open row. A name only when the dot alone can't say which agent it is, and words only for
+// what needs someone: not started, out of usage, offline, a name clash.
 function toolChip(a, person, all = []) {
-  const own = a.name.startsWith(person + '-') ? a.name.slice(person.length + 1) : a.name !== person ? a.name : '';
-  const lbl = a.client || own || 'agent';
   const st = agentState(a);
   const warn = a.conflict ? `<span class="pill bad" title="${esc(conflictText(a))}">${esc(a.name)} · ${a.conflict.laptops || 2} laptops</span>` : '';
-  return warn + toolChipState(a, st, chipName(a, person, all, lbl), chipName(a, person, all, a.plan || lbl));
+  return warn + toolChipState(a, st, pillName(a, person, all));
 }
-// Say which agent a pill is about when the tool alone doesn't: an agent not named <person>-<tool>
-// ("dave · omp-agent", grouped under carol), or two agents with the same tool ("Claude Code (claude2)").
-function chipName(a, person, all, base) {
-  if (a.name !== person && !a.name.startsWith(person + '-')) return base === a.name ? base : `${a.name} · ${base}`;
+// The agent's name in its pill: its own name when it isn't <person>-<tool> ("dave", grouped under carol), the part
+// after the person's name for two agents with the same tool ("claude", "claude2"); otherwise none.
+function pillName(a, person, all) {
+  if (a.name !== person && !a.name.startsWith(person + '-')) return a.name;
   const twin = a.client && all.some((x) => x.name !== a.name && x.client === a.client);
-  return twin && a.name !== person ? `${base} (${a.name.slice(person.length + 1)})` : base;
+  return twin ? (a.name === person ? a.name : a.name.slice(person.length + 1)) : '';
 }
 // Same name used from two laptops at once: almost always two people who picked the same name in join.
 const conflictText = (a) => `${a.name} is connected from ${a.conflict?.laptops || 2} laptops: two people may be using the same name. One of them should re-run join with another name.`;
@@ -2543,15 +2616,16 @@ function toolDot(a) {
   const k = c.includes('claude') ? 'claude' : c.includes('codex') ? 'codex' : c.includes('copilot') ? 'copilot' : c.includes('gemini') ? 'gemini' : c.includes('cursor') ? 'cursor' : 'other';
   return `<span class="tdot ${k}" data-tool="${k}" aria-hidden="true"></span>`;
 }
-function toolChipState(a, st, lbl, onLbl = a.plan || lbl) {
-  const D = toolDot(a);
-  if (st === 'limited') return `<span class="pill warn" title="${esc(a.name)} hit its usage limit${a.limited.by === 'agent' ? ' (reported by the agent)' : ''}${a.limited.note ? `: ${esc(a.limited.note)}` : ''}. Other agents may take over its tasks.">${D}${esc(lbl)} · ${esc(limitText(a))}</span>`;
+function toolChipState(a, st, nm) {
+  const D = toolDot(a); const N = nm ? `${esc(nm)} · ` : '';
+  const sr = `<span class="vh">${esc([a.client || 'agent', a.plan].filter(Boolean).join(' on '))}: </span>`;
+  if (st === 'limited') return `<span class="pill warn" title="${esc(a.name)} hit its usage limit${a.limited.by === 'agent' ? ' (reported by the agent)' : ''}${a.limited.note ? `: ${esc(a.limited.note)}` : ''}. Other agents may take over its tasks.">${D}${sr}${N}${esc(limitText(a))}</span>`;
   if (st === 'online') {
     const full = a.active >= a.slots;
-    return `<span class="pill ${full ? 'full' : 'ok'}" title="${esc(capTip(a))} Running on the board.">${D}${esc(onLbl)} · <span class="cap">${capText(a)}</span><span class="capw"> tasks</span></span>`;
+    return `<span class="pill ${full ? 'full' : 'ok'}" title="${esc(capTip(a))} Running on the board.">${D}${sr}${N}<span class="cap">${capText(a)}</span><span class="capw"> tasks</span></span>`;
   }
-  if (st === 'waiting') return `<span class="pill ns" title="${esc(a.name)}: ${esc(notStartedText(a))}">${D}${esc(lbl)} · not started — type ${esc(startCmd(a.client))}</span>`;
-  return `<span class="pill" title="${esc(a.name)}: no contact for 10+ minutes (last seen ${a.last ? ago(a.last) : 'never'})">${D}${esc(lbl)} · offline</span>`;
+  if (st === 'waiting') return `<span class="pill ns" title="${esc(a.name)}: ${esc(notStartedText(a))}">${D}${sr}${N}not started — type ${esc(startCmd(a.client))}</span>`;
+  return `<span class="pill" title="${esc(a.name)}: no contact for 10+ minutes (last seen ${a.last ? ago(a.last) : 'never'})">${D}${sr}${N}offline</span>`;
 }
 // Per-agent controls in its People row: how many tasks it may hold, and "hit its usage limit".
 function agentControls(a) {
@@ -2575,7 +2649,9 @@ function agentControls(a) {
   const clash = a.conflict ? `<div class="note row" role="status">${esc(conflictText(a))}</div>` : '';
   return `<div class="actl">${owner}${slots}${lim}${clash}</div>${form}`;
 }
-function renderPeople() {
+function renderPeople(si = setupInfo()) {
+  // The team at a glance, above the rows: who's online and how much can run at once.
+  patch($('p-sum'), si.ros.some((r) => r.agent || r.humanOnline) ? `<span title="Online = an agent someone started with /board, seen in the last 10 min and not out of usage. Not started = its tool is connected but nobody typed /board yet. Out of usage = hit its plan's limit. Offline = not seen for 10 min. Watching = people with this page open." class="stat" id="online-count"><span class="on ${si.onlineA.length ? 'y' : si.waitingA.length ? 'w' : ''}"></span>${agentsLine(si)} · ${si.watchers.length} watching</span>${teamCapHtml()}` : '');
   const ps = people();
   $('p-legend').hidden = !ps.some((p) => p.r.agents?.length);
   const r = filterRoot(); const S = state.settings;
@@ -2634,7 +2710,7 @@ function renderPeople() {
     }
     return `<li class="person ${sel ? 'sel' : ''}" ${hs(p.name)}>
       <div class="ph" data-ptoggle="${key}"><button type="button" class="ptog" data-ptoggle="${key}" data-fk="ptog-${key}" aria-expanded="${open}" ${open ? `aria-controls="pd-${key}"` : ''} aria-describedby="ps-${key}" title="${open ? 'Hide' : 'Show'} ${key}'s agents and tasks"><span class="chev" aria-hidden="true"></span><span class="pdot" aria-hidden="true" data-i="${esc([...p.name][0]?.toUpperCase() || '')}"></span><span class="pc" ${hs(p.name)}>${key}</span>${p.name === me ? '<span class="pill">you</span>' : ''}</button>
-        <span class="pchips" id="ps-${key}">${summary}</span><span class="pwhen">${p.last ? ago(p.last) : ''}</span></div>
+        <span class="pchips" id="ps-${key}">${summary}</span></div>
       ${detail}</li>`;
   }).join('') : '<li class="muted">Nobody yet. When a teammate\'s AI agent connects, it appears here with what it\'s working on.</li>');
 }
@@ -3016,8 +3092,13 @@ function observeMentions() {
   $('feed').querySelectorAll('.ev.mention[data-eid]').forEach((n) => { if (Number(n.dataset.eid) > seenMention) mentionIO.observe(n); });
 }
 
+// File locks fold to their title (with the count): agents set and clear them, a human only steps in when an owner is
+// gone. Open or folded is remembered in this browser.
+function syncLocks() { const o = store.get('board-locks') === 'open'; $('l-body').hidden = !o; $('l-tog').setAttribute('aria-expanded', String(o)); }
+$('l-tog').addEventListener('click', () => { store.set('board-locks', $('l-body').hidden ? 'open' : 'closed'); syncLocks(); });
+syncLocks();
 function renderLocks() {
-  $('l-count').textContent = state.locks.length ? `${state.locks.length} held` : '';
+  $('l-count').textContent = state.locks.length ? `· ${state.locks.length} held` : '· none';
   patch($('locks'), state.locks.length ? state.locks.map((l) => {
     const mins = Math.max(0, Math.ceil((l.expires_at - Date.now()) / 60000));
     const confirming = ui.confirmLock === l.path;
@@ -3920,11 +4001,11 @@ try { themePref = window.themeOf(localStorage.getItem('board-theme')); } catch {
 function syncThemeButtons() {
   for (const b of document.querySelectorAll('[data-theme-set]')) {
     const on = b.dataset.themeSet === themePref;
-    // The 3D view's picker is a radio group (one Tab stop); the help dialog's are toggle buttons.
-    if (b.getAttribute('role') === 'radio') { b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; } else b.setAttribute('aria-pressed', String(on));
+    // The picker is a radio group: one Tab stop, on the current palette.
+    b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1;
   }
   const l = THEME_LIST.find(([v]) => v === themePref) || THEME_LIST[0];
-  $('o-theme-sw').className = 'sw sw-' + l[0]; $('o-theme-chip').setAttribute('aria-label', `Theme: ${l[1]}. Change it`); $('o-theme-chip').title = `Theme: ${l[1]}`;
+  $('theme-sw').className = 'sw sw-' + l[0]; $('theme-btn').setAttribute('aria-label', `Theme: ${l[1]}. Change it`); $('theme-btn').title = `Theme: ${l[1]}`;
 }
 function setTheme(t) {
   themePref = window.applyTheme(t);
@@ -3932,8 +4013,32 @@ function setTheme(t) {
   syncThemeButtons();
   office.mod?.setTheme(scenePalette());
 }
-// Every theme control (help dialog, the 3D view's swatches) is a [data-theme-set] button.
-document.addEventListener('click', (ev) => { const b = ev.target.closest?.('[data-theme-set]'); if (b) setTheme(b.dataset.themeSet); });
+// One theme control for both views: the header's swatch button opens the five palettes (a radio group) under it. A
+// click picks one and closes it; arrow keys, Home and End choose without closing; Esc or a click elsewhere closes it and
+// focus goes back to the button.
+function themePop(open, focus = true) {
+  ui.themeOpen = open; $('theme-pop').hidden = !open; $('theme-btn').setAttribute('aria-expanded', String(open));
+  if (open) { ui.oGoal = false; ui.oDl = false; if (boardView === 'office') renderOffice(); }
+  if (!focus) return;
+  if (open) $('theme-pop').querySelector('[aria-checked="true"]')?.focus(); else $('theme-btn').focus({ preventScroll: true });
+}
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest?.('[data-theme-set]');
+  if (b) { setTheme(b.dataset.themeSet); if (b.closest('#theme-pop')) themePop(false); return; }
+  if (ev.target.closest?.('#theme-btn')) return themePop(!ui.themeOpen);
+  if (ui.themeOpen && !ev.target.closest?.('#theme-pop')) themePop(false, false);
+});
+$('theme-pop').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); return themePop(false); }
+  if (ev.key === 'Tab') return themePop(false, false);
+  const rs = [...$('theme-pop').querySelectorAll('[role="radio"]')]; const i = rs.indexOf(document.activeElement);
+  const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[ev.key];
+  if (ev.key === 'Home' || ev.key === 'End' || step) {
+    ev.preventDefault();
+    const n = rs[ev.key === 'Home' ? 0 : ev.key === 'End' ? rs.length - 1 : (i + step + rs.length) % rs.length];
+    setTheme(n.dataset.themeSet); n.focus();
+  }
+});
 syncThemeButtons();
 
 // ---------- view: Board | 3D office ----------
@@ -4072,10 +4177,10 @@ function oApply() {
   $('o-act').hidden = !oUi.act; $('o-act-chip').setAttribute('aria-expanded', String(!!oUi.act));
   $('o-goal').hidden = !ui.oGoal; $('o-goal-chip').setAttribute('aria-expanded', String(!!ui.oGoal));
   $('o-dl').hidden = !ui.oDl; $('o-dl-chip').setAttribute('aria-expanded', String(!!ui.oDl));
-  $('o-theme').hidden = !ui.oTheme; $('o-theme-chip').setAttribute('aria-expanded', String(!!ui.oTheme));
   oFrame();
 }
-// The room is framed in the part of the view no dock, chip row or Tasks window covers (the camera is told the insets).
+// The room is framed in the part of the view no dock, chip or Tasks window (or its title bar) covers (the camera is told
+// the insets).
 function oFrame() {
   if (!office.mod?.setInsets || boardView !== 'office') return;
   const v = $('office-view').getBoundingClientRect(); if (!v.width || !v.height) return;
@@ -4086,7 +4191,7 @@ function oFrame() {
     left: l ? (l.right - v.left) / v.width : 0,
     right: r ? (v.right - r.left) / v.width : 0,
     top: (top.bottom - v.top) / v.height,
-    bottom: (v.bottom - (t && !maxed ? t.top : bot.top)) / v.height,
+    bottom: t && !maxed ? (v.bottom - t.top) / v.height : 0,
   });
 }
 function oFold(which, folded = !oOff(which)) {
@@ -4098,6 +4203,7 @@ function oFold(which, folded = !oOff(which)) {
     (folded ? (which === 'tasks' ? $('o-prog-chip') : $('o-' + which + '-pill')) : box.querySelector('[data-o-fold]')).focus({ preventScroll: true });
   }
   if (which === 'tasks' && !folded) oMore();
+  if (which === 'act' && !folded) { const f = $('feed'); f.scrollTop = f.scrollHeight; }
 }
 function oAct(open, focus = true) {
   oUi.act = open; oSave(); oApply();
@@ -4110,21 +4216,16 @@ function oChat() {
 }
 // The goal and the demo time open in place, under their chips (one at a time), and are edited there.
 function oGoal(open, { edit = false } = {}) {
-  ui.oGoal = open; ui.oGoalEdit = open && edit; ui.goalErr = ''; if (open) { ui.oDl = false; ui.oTheme = false; }
+  ui.oGoal = open; ui.oGoalEdit = open && edit; ui.goalErr = ''; if (open) { ui.oDl = false; if (ui.themeOpen) themePop(false, false); }
   $('o-goal-b')._html = undefined; renderOffice();
   if (!open) return $('o-goal-chip').focus({ preventScroll: true });
   const ta = $('o-goal-in');
   if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } else $('o-goal').querySelector('.o-ib').focus({ preventScroll: true });
 }
 function oDl(open) {
-  ui.oDl = open; ui.dlErr = ''; if (open) { ui.oGoal = false; ui.oTheme = false; }
+  ui.oDl = open; ui.dlErr = ''; if (open) { ui.oGoal = false; if (ui.themeOpen) themePop(false, false); }
   $('o-dl-b').innerHTML = ''; $('o-dl-b')._html = undefined; renderOffice();
   if (open) $('o-dl-in')?.focus(); else $('o-dl-chip').focus({ preventScroll: true });
-}
-function oTheme(open, focus = true) {
-  ui.oTheme = open; if (open) { ui.oGoal = false; ui.oDl = false; } oApply();
-  if (!focus) return;
-  if (open) $('o-theme').querySelector('[aria-checked="true"]')?.focus(); else $('o-theme-chip').focus({ preventScroll: true });
 }
 // The demo time form for its popover: the board's own (step 2 of Start here), with ids of its own.
 function oDlForm() {
@@ -4324,8 +4425,6 @@ $('office-view').addEventListener('click', (ev) => {
   if (t.id === 'o-act-chip') return oAct(!oUi.act);
   if (t.id === 'o-goal-chip') return oGoal(!ui.oGoal);
   if (t.id === 'o-dl-chip') return oDl(!ui.oDl);
-  if (t.id === 'o-theme-chip') return oTheme(!ui.oTheme);
-  if (d.themeSet && t.closest('#o-theme')) return setTimeout(() => oTheme(false)); // after the theme itself is set
   if (d.oAgent) { const n = d.oAgent; pickAgent(office.picked === n ? null : n, true); return document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }
   if (d.officePerson) {
     const p = d.officePerson; setBoardView('board');
@@ -4334,23 +4433,12 @@ $('office-view').addEventListener('click', (ev) => {
     el?.scrollIntoView({ behavior: smooth(), block: 'center' }); el?.focus({ preventScroll: true });
   }
 });
-// The theme picker is a radio group: one Tab stop, arrow keys choose.
-$('o-theme').addEventListener('keydown', (ev) => {
-  const rs = [...$('o-theme').querySelectorAll('[role="radio"]')]; const i = rs.indexOf(document.activeElement);
-  const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[ev.key];
-  if (ev.key === 'Home' || ev.key === 'End' || step) {
-    ev.preventDefault();
-    const n = rs[ev.key === 'Home' ? 0 : ev.key === 'End' ? rs.length - 1 : (i + step + rs.length) % rs.length];
-    setTheme(n.dataset.themeSet); n.focus();
-  }
-});
-// Esc closes the window on top: a popover (goal, demo time, theme), then Activity, then the maximised tasks, then the
-// selected agent.
+// Esc closes the window on top: a popover (goal, demo time; the theme picker closes itself), then the maximised tasks,
+// then the selected agent.
 document.addEventListener('keydown', (ev) => {
   if (ev.key !== 'Escape' || boardView !== 'office' || ev.defaultPrevented || ev.target.closest?.('dialog')) return;
   if (ev.target.matches?.('input, textarea, select') && !ev.target.closest('#o-act, #o-goal, #o-dl')) return;
   if (ac.open) return;
-  if (ui.oTheme) return oTheme(false);
   if (ui.oDl) return oDl(false);
   if (ui.oGoal) return oGoal(false);
   if (oUi.act) return oAct(false);

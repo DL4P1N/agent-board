@@ -95,7 +95,8 @@ try {
       return [...document.querySelectorAll('#questions button, #questions textarea')].filter((b) => { const q = b.getBoundingClientRect(); return q.right > r.left && q.left < r.right && q.bottom > r.top && q.top < r.bottom; }).map((b) => `${scrollY}: ${b.textContent || b.tagName}`); }));
   }
   check('MO-2 phone: the Chat button never covers an Answer button or answer box', !covered.length, covered.join(' | '));
-  await page.evaluate(() => $('p-h').scrollIntoView({ block: 'start' })); await sleep(400);
+  // On a phone the board follows What to do now (then people, then Activity): the questions are out of the way there.
+  await page.evaluate(() => $('board').scrollIntoView({ block: 'start' })); await sleep(400);
   check('MO-2 phone: Chat button shows once the questions are out of the way', await page.$eval('#tochat', (b) => !b.hidden && getComputedStyle(b).display !== 'none' && b.getBoundingClientRect().bottom <= innerHeight));
   await page.click('#tochat'); await sleep(600);
   const chat = await page.evaluate(() => ({ top: $('f-h').getBoundingClientRect().top, hidden: $('tochat').hidden }));

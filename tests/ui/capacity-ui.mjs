@@ -74,17 +74,22 @@ try {
   await sleep(400);
 
   // ---- 1. plan + x/slots per agent ----
+  // One line per person: each agent pill is its tool's dot and x/slots; the tool and plan are in its screen-reader text
+  // and tooltip (and spelled out in the open row, checked below).
   const people = await txt('#people');
-  check('ana shows plan and 2/3', /Claude Max 20x · 2\/3/.test(people), people);
-  check('one-slot Codex agent shows plan and 1/1', /ChatGPT Edu · 1\/1/.test(people), people);
-  check('no plan: tool name + 0/2 (Claude Code default)', /Claude Code · 0\/2/.test(people), people);
-  check('no plan: Copilot default 0/1', /Copilot \(VS Code\) · 0\/1/.test(people), people);
+  const pill = (n) => page.$eval(`#people .person:has([data-ptoggle="${n}"]) .pchips .pill`, (e) => ({ vis: [...e.childNodes].filter((c) => !c.classList?.contains('vh')).map((c) => c.textContent).join('').trim(), title: e.title })).catch(() => ({}));
+  const pAna = await pill('ana'), pCy = await pill('cy');
+  check('ana shows plan and 2/3', /Claude Max 20x: 2\/3/.test(people) && /^2\/3/.test(pAna.vis) && /Claude Max 20x/.test(pAna.title), JSON.stringify(pAna));
+  check('one-slot Codex agent shows plan and 1/1', /ChatGPT Edu: 1\/1/.test(people) && /^1\/1/.test(pCy.vis) && /ChatGPT Edu/.test(pCy.title), JSON.stringify(pCy));
+  check('no plan: tool name + 0/2 (Claude Code default)', /Claude Code: 0\/2/.test(people), people);
+  check('no plan: Copilot default 0/1', /Copilot \(VS Code\): 0\/1/.test(people), people);
+  check('one line per person: no plan names on screen in the rows', !/Claude Max 20x|ChatGPT Edu/.test(await page.evaluate(() => [...document.querySelectorAll('#people .pchips')].map((e) => e.innerText).join(' ').replace(/\s+/g, ' ').replace(/[A-Za-z ()]+: /g, ''))), people);
   const tip = await page.$eval('#people .pill.full, #people .pill.ok', (e) => e.title).catch(() => '');
   check('capacity pill explains itself in its tooltip', /allows \d at once/.test(tip), tip);
 
-  // ---- 5. team capacity in the summary bar ----
-  const sum = await txt('#setup');
-  check('summary bar: team capacity and running', /Team can run 7 tasks at once · 3 running/.test(sum), sum);
+  // ---- 5. team capacity, above the people rows ----
+  const sum = await txt('#p-sum');
+  check('people panel: team capacity and running', /Team can run 7 tasks at once · 3 running/.test(sum), sum);
 
   // ---- 2. size: dialog select saves, card badge shows ----
   await openCard(T[3].id);
@@ -110,7 +115,7 @@ try {
   check("the reserved agent's claim works", ok.status === 'claimed' && ok.assignee === 'eve', JSON.stringify(ok).slice(0, 160));
   await page.waitForFunction((id) => document.querySelector(`#col-claimed .card[data-id="${id}"]`), { timeout: 5000 }, T[4].id);
   check('reserved badge hidden once the reserved agent holds it', !/reserved for/.test(await cardTxt(T[4].id)));
-  check('summary bar updates: 4 running', /Team can run 7 tasks at once · 4 running/.test(await txt('#setup')), await txt('#setup'));
+  check('team capacity updates: 4 running', /Team can run 7 tasks at once · 4 running/.test(await txt('#p-sum')), await txt('#p-sum'));
 
   // ---- create with size + reservation ----
   await page.click('#new-task-btn');
@@ -150,7 +155,7 @@ try {
   await page.waitForFunction(() => /idle/.test(document.getElementById('now').innerText), { timeout: 5000 }).catch(() => {});
   const now = await txt('#now');
   check('What to do now: agents idle, add tasks or ask the planner', /1 agent is idle: add tasks or ask the planner for more/.test(now), now);
-  check('summary bar flags the idle agent', /1 agent idle, 0 ready to claim/.test(await txt('#setup')), await txt('#setup'));
+  check('team capacity flags the idle agent', /1 agent idle, 0 ready to claim/.test(await txt('#p-sum')), await txt('#p-sum'));
   await page.click('#now [data-go="idle"]');
   const draft = await page.$eval('#msg', (e) => e.value);
   check('suggestion drafts a message to the planner (not sent)', /^@ana .*idle.*add more tasks/.test(draft) && !(await human('/state')).events.some((e) => /add more tasks/.test(e.text)), draft);

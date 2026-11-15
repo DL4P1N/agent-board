@@ -119,6 +119,8 @@ try {
   await page.setRequestInterception(false); page.removeAllListeners('request');
 
   // ---- WB-1 / ER-1: losing the server shows under the header even when scrolled ----
+  // One column (a narrow window), so the page itself scrolls: on a laptop the board scrolls beside the rails.
+  await page.setViewport({ width: 960, height: 700 }); await sleep(200);
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); await sleep(200);
   await board.stop();
   await page.waitForFunction(() => !$('downbar').hidden, { timeout: 15000 }).catch(() => {});
@@ -130,6 +132,7 @@ try {
   await page.waitForFunction(() => $('conn').classList.contains('live'), { timeout: 20000 }).catch(() => {});
   check('WB-1 back: bar hidden, header normal', await page.evaluate(() => $('downbar').hidden && !document.querySelector('#app > header').classList.contains('down')));
   await page.evaluate(() => window.scrollTo(0, 0));
+  await page.setViewport({ width: 1440, height: 900 });
 
   // ---- WB-4: after the demo, with nobody on the board, the page says the event is over ----
   // The API refuses a past demo time: set one a second ahead and let it pass.
