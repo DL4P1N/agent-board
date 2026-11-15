@@ -16,6 +16,8 @@
     "doctor": "node scripts/doctor.mjs",
     "prerehearse": "node scripts/ensure-deps.mjs",
     "rehearse": "node scripts/rehearse.mjs",
+    "predemo": "node scripts/ensure-deps.mjs",
+    "demo": "node scripts/demo.mjs",
     "restore": "node scripts/restore.mjs",
     "pretest": "node scripts/ensure-deps.mjs --dev",
     "test": "node tests/run.mjs",

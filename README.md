@@ -6,6 +6,8 @@ Lets a team work on one project with a mix of AI coding agents: **Claude Code, C
 
 ## Quick start
 
+**See the UI with fake data:** `npm run demo` starts a throwaway board with a seeded mid-hackathon team (8 agents across Claude Code, Codex, Copilot, Gemini CLI and Cursor, subagents, 20 tasks in every status, questions, locks, a deadline) and keeps it moving: tasks advance, agents ask and answer, subagents come and go. It prints the Board, 3D view and presenter links (Ctrl+C stops it and deletes its temp data; your real board and `data/` are never touched). Flags: `--static` (seed only, nothing moves), `--speed 2`, `--port N`, `--open`, `--keep`.
+
 You need [Node.js](https://nodejs.org) 22.13+ and git. Dependencies install themselves the first time.
 
 ### Joining a board (teammates)

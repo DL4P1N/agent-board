@@ -13,7 +13,7 @@ export { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
-const freePort = () => new Promise((resolve, reject) => {
+export const freePort = () => new Promise((resolve, reject) => {
   const s = net.createServer();
   s.unref();
   s.on('error', reject);
@@ -23,13 +23,14 @@ const freePort = () => new Promise((resolve, reject) => {
 // Starts `node src/server.js` on a free port with an empty data folder.
 // restart() replaces it with a fresh, empty board on the same port.
 // env: extra environment for the server, e.g. { PUBLIC_URL }.
-export async function startBoard({ env = {} } = {}) {
-  const port = await freePort();
-  const board = { port, base: `http://localhost:${port}`, token: TOKEN, dataDir: '', child: null };
+// Optional: port (default: a free one), token (default 'testtok'), prefix (temp folder name; the demo uses its own).
+export async function startBoard({ env = {}, port: wantPort, token = TOKEN, prefix = 'claude-board-test-' } = {}) {
+  const port = wantPort || await freePort();
+  const board = { port, base: `http://localhost:${port}`, token, dataDir: '', child: null };
   const launch = async (keepData = false) => {
-    if (!keepData) board.dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-test-'));
+    if (!keepData) board.dataDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
     board.child = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js')], {
-      env: { ...process.env, PORT: String(port), BOARD_TOKEN: TOKEN, BOARD_DATA: board.dataDir, BOARD_NO_JOIN: '1', ...env },
+      env: { ...process.env, PORT: String(port), BOARD_TOKEN: token, BOARD_DATA: board.dataDir, BOARD_NO_JOIN: '1', ...env },
       stdio: 'ignore',
     });
     for (let i = 0; i < 80; i++) {
