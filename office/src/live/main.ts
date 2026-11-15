@@ -87,7 +87,9 @@ addEventListener('storage', (e) => {
   meta('m-tc-dark', 'content', t && dark ? BARS[t] : BARS.dusk);
   themeChanged();
 });
-try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', themeChanged); } catch { /* old browsers */ }
+// Keep the MediaQueryList: a temporary one can be garbage-collected and take its listener with it.
+const darkMq = matchMedia('(prefers-color-scheme: dark)');
+try { darkMq.addEventListener('change', themeChanged); } catch { /* old browsers */ }
 
 connect({
   state(s) { board = s; overlay.setState(s); applyBoard(); },

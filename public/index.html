@@ -3924,7 +3924,9 @@ function showOffice() {
 Object.defineProperty(window, '__officeState', { get: () => office.mod?.snapshot() ?? null, configurable: true });
 // Another tab (the board, the presenter, the Boards page) changed the theme, or the OS switched light / dark.
 addEventListener('storage', (e) => { if (e.key !== 'board-theme') return; themePref = window.applyTheme(e.newValue); syncThemeButtons(); office.mod?.setTheme(scenePalette()); });
-matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => office.mod?.setTheme(scenePalette()));
+// Keep the MediaQueryList: a temporary one can be garbage-collected and take its listener with it.
+const darkMq = matchMedia('(prefers-color-scheme: dark)');
+darkMq.addEventListener?.('change', () => office.mod?.setTheme(scenePalette()));
 phoneMq.addEventListener?.('change', () => { if (phoneMq.matches && boardView === 'office') setBoardView('board', { save: false }); renderViewSwitch(); });
 $('vseg').addEventListener('click', (ev) => { const b = ev.target.closest('[data-vset]'); if (b) setBoardView(b.dataset.vset); });
 // In the office, links to hidden parts of the board switch back to it first (then do what they say).

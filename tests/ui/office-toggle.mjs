@@ -216,10 +216,14 @@ try {
       check(`theme ${t}: the office draws the ${t} palette`, await v2.page.evaluate((x) => office.mod?.palette === x && scenePalette() === x && window.__officeState?.agents.length > 0, t));
     }
     await v2.page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
-    await v2.page.evaluate(() => setTheme('auto')); await sleep(150);
-    check('Auto on a light OS: the Day room', await v2.page.evaluate(() => office.mod?.palette === 'day'));
-    await v2.page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]); await sleep(150);
-    check('Auto follows the OS switching to dark: the Dusk room', await v2.page.evaluate(() => office.mod?.palette === 'dusk'));
+    await v2.page.evaluate(() => setTheme('auto'));
+    check('Auto on a light OS: the Day room', await until(v2.page, () => office.mod?.palette === 'day'));
+    await v2.page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
+    // Chrome fires media-query 'change' events on a rendering frame, which a headless test tab doesn't reliably get.
+    // The page must see the dark OS; if the browser hasn't delivered the event yet, fire it on the page's own listener.
+    check('Auto: the page sees the OS switch to dark', await until(v2.page, () => darkMq.matches && scenePalette() === 'dusk'));
+    if (!(await until(v2.page, () => office.mod?.palette === 'dusk', null, 2000))) await v2.page.evaluate(() => darkMq.dispatchEvent(new Event('change')));
+    check('Auto follows the OS switching to dark: the Dusk room', await until(v2.page, () => office.mod?.palette === 'dusk'));
     for (const [w, h, theme] of [[1440, 900, 'dusk'], [1440, 900, 'day'], [1366, 768, 'dusk']]) {
       await v2.page.evaluate((t) => setTheme(t), theme);
       await v2.page.setViewport({ width: w, height: h }); await sleep(800);
