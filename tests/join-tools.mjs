@@ -111,7 +111,7 @@ check('old laptop: join updates ~/.claude-board.json in place (no second record)
 check('old laptop: its .bak-claude-board backup is kept as the original (no new backup)', readJ(`${oldGemini}.bak-claude-board`).theme === 'original' && !fs.existsSync(`${oldGemini}.bak-agent-board`));
 check('old laptop: a shortcut with the old marker is still ours and gets updated', /<!-- agent-board -->/.test(fs.readFileSync(path.join(old, '.gemini', 'commands', 'board.toml'), 'utf8')));
 const d3 = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'doctor.mjs')], { cwd: ROOT, env: oldEnv, encoding: 'utf8', timeout: 60e3 });
-check('old laptop: doctor reads ~/.claude-board.json', /Gemini CLI \(as "lee-gemini"\)/.test(d3.stdout) && /Gemini CLI is connected/.test(d3.stdout), `${d3.stdout}`.slice(-400));
+check('old laptop: doctor reads ~/.claude-board.json', /Gemini CLI \(as "lee"\)/.test(d3.stdout) && /Gemini CLI is connected/.test(d3.stdout), `${d3.stdout}`.slice(-400));
 
 // Clean up the worktree registration before removing the temp folder.
 git('-C', repo, 'worktree', 'remove', '--force', cDir);
