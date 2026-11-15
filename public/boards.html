@@ -4,13 +4,36 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark" id="m-scheme">
+<meta name="theme-color" content="#cfe3f2" media="(prefers-color-scheme: light)" id="m-tc-light">
+<meta name="theme-color" content="#1b1530" media="(prefers-color-scheme: dark)" id="m-tc-dark">
+<script>
+// Theme: the board's choice (Auto / Dusk / Day / Night / Terminal, per browser, 'board-theme'), applied before first paint.
+// Auto leaves html[data-theme] off and follows the OS. Older saved values: light = Day, dark = Dusk.
+(function () {
+  var THEMES = { dusk: '#1b1530', day: '#cfe3f2', night: '#080c1a', terminal: '#020a04' };
+  function themeOf(t) { t = t === 'light' ? 'day' : t === 'dark' ? 'dusk' : t; return Object.prototype.hasOwnProperty.call(THEMES, t) ? t : 'auto'; }
+  function apply(t) {
+    var d = document.documentElement, g = function (i) { return document.getElementById(i); };
+    t = themeOf(t);
+    var dark = t !== 'auto' && t !== 'day';
+    if (t === 'auto') d.removeAttribute('data-theme'); else d.setAttribute('data-theme', t);
+    g('m-scheme').setAttribute('content', t === 'auto' ? 'light dark' : dark ? 'dark' : 'light');
+    g('m-tc-light').setAttribute('media', t === 'auto' ? '(prefers-color-scheme: light)' : t === 'day' ? 'all' : 'not all');
+    g('m-tc-dark').setAttribute('media', t === 'auto' ? '(prefers-color-scheme: dark)' : dark ? 'all' : 'not all');
+    g('m-tc-dark').setAttribute('content', dark ? THEMES[t] : THEMES.dusk);
+  }
+  try { apply(localStorage.getItem('board-theme')); } catch (e) {}
+  addEventListener('storage', function (e) { if (e.key === 'board-theme') apply(e.newValue); });
+})();
+</script>
 <title>Boards · Claude Board</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23ffb86b'/><rect x='3' y='4' width='3' height='8' fill='%232a1600'/><rect x='7' y='4' width='3' height='5' fill='%232a1600'/><rect x='11' y='4' width='2' height='6' fill='%232a1600'/></svg>">
 <style>
   /* Same tokens as the board (index.html): change them there first, then here. The office demo's pixel look:
-     Day / Dusk palettes, square corners, 2px borders, bevelled panels; monospace for titles and ids. */
+     the four palettes (Day, Dusk, Night, Terminal), square corners, 2px borders, bevelled panels; monospace for titles and ids. */
   :root {
-    color-scheme: light dark;
+    color-scheme: light;
     --bg: #cfe3f2; --sunken: #f3e9d8; --panel: #fff7e8; --chip: #efe3cc; --field: #fffaf0;
     --ink: #2c2114; --muted: #67563e; --line: #d4c2a2; --line-strong: #a68f69; --field-line: #7a5f3d;
     --border: #7a5f3d; --outline: #3a2a14; --hi: rgba(255, 255, 255, .7); --lo: rgba(80, 50, 10, .16);
@@ -30,8 +53,10 @@
     --e2: var(--e1);
     --t-fast: 100ms; --t-base: 160ms; --ease: cubic-bezier(.2, .7, .2, 1);
   }
+  /* Dusk: Auto on a dark OS, or chosen. (Same values twice: a media query can't share a rule with an attribute.) */
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme]) {
+      color-scheme: dark;
       --bg: #1b1530; --sunken: #201939; --panel: #241c40; --chip: #342a5a; --field: #130e24;
       --ink: #f1e9ff; --muted: #b0a2d2; --line: #44386c; --line-strong: #67589a; --field-line: #8e7fc6;
       --border: #5b4b8a; --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35);
@@ -40,6 +65,37 @@
       --bad: #ff6b7a; --bad-hover: #ff8a96; --bad-soft: #432647; --on-fill: #1b1530;
       --toast: #2b2249; --toast-ink: #f1e9ff; --shade: 2px 2px 0 rgba(0, 0, 0, .35);
     }
+  }
+  :root[data-theme="dusk"] {
+    color-scheme: dark;
+    --bg: #1b1530; --sunken: #201939; --panel: #241c40; --chip: #342a5a; --field: #130e24;
+    --ink: #f1e9ff; --muted: #b0a2d2; --line: #44386c; --line-strong: #67589a; --field-line: #8e7fc6;
+    --border: #5b4b8a; --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35);
+    --accent: #ffb86b; --accent-hover: #ffc98c; --accent-ink: #2a1600; --accent-soft: #46344a;
+    --ok: #7ee081; --ok-soft: #2b3a45;
+    --bad: #ff6b7a; --bad-hover: #ff8a96; --bad-soft: #432647; --on-fill: #1b1530;
+    --toast: #2b2249; --toast-ink: #f1e9ff; --shade: 2px 2px 0 rgba(0, 0, 0, .35);
+  }
+  :root[data-theme="day"] { color-scheme: light; }
+  :root[data-theme="night"] {
+    color-scheme: dark;
+    --bg: #080c1a; --sunken: #0b1122; --panel: #0f1730; --chip: #1c2a50; --field: #060a16;
+    --ink: #dce7ff; --muted: #9aaad6; --line: #26365f; --line-strong: #3d5290; --field-line: #6a80c0;
+    --border: #31457f; --outline: #02040c; --hi: rgba(160, 190, 255, .14); --lo: rgba(0, 0, 0, .45);
+    --accent: #6ea8ff; --accent-hover: #8dbbff; --accent-ink: #04122c; --accent-soft: #1a2c55;
+    --ok: #5fe3a1; --ok-soft: #133238;
+    --bad: #ff7a90; --bad-hover: #ff97a8; --bad-soft: #341c38; --on-fill: #080c1a;
+    --toast: #152040; --toast-ink: #dce7ff; --shade: 2px 2px 0 rgba(0, 0, 0, .45);
+  }
+  :root[data-theme="terminal"] {
+    color-scheme: dark;
+    --bg: #020a04; --sunken: #03100a; --panel: #04140a; --chip: #0b2814; --field: #010703;
+    --ink: #a4ffb5; --muted: #5fc477; --line: #0f4a1f; --line-strong: #1d7a37; --field-line: #2fb352;
+    --border: #1d9a3d; --outline: #000; --hi: rgba(57, 255, 106, .16); --lo: rgba(0, 0, 0, .5);
+    --accent: #39ff6a; --accent-hover: #6cff91; --accent-ink: #00230a; --accent-soft: #0d3519;
+    --ok: #39ff6a; --ok-soft: #0d3519;
+    --bad: #ff6b6b; --bad-hover: #ff8f8f; --bad-soft: #2e1010; --on-fill: #020a04;
+    --toast: #071c0e; --toast-ink: #a4ffb5; --shade: 2px 2px 0 rgba(0, 0, 0, .5);
   }
 
   @media (hover: none) and (pointer: coarse) { :root { --ctl: 2.5rem; --ctl-sm: 2rem; } }

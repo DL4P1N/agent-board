@@ -1,5 +1,5 @@
 /* Presenter view (3D office): the board's design system (public/index.html, public/present-classic.html), set large
-   for a screen across the room. Dusk (dark) and Day (light) palettes, pixel panels: square corners, 2px borders,
+   for a screen across the room. The demo's four palettes (Dusk, Day, Night, Terminal; Auto = Dusk or Day by the OS), pixel panels: square corners, 2px borders,
    bevels; monospace for labels and numbers. Sizes follow the width and the height (1366×768 up to 1920×1080). */
 :root {
   color-scheme: light;
@@ -15,8 +15,9 @@
   --e1: inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 4px 4px 0 rgba(0, 0, 0, .16);
   --label-scale: 1.5;
 }
+/* Dusk: Auto on a dark OS, or chosen. (Same values twice: a media query can't share a rule with an attribute.) */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme]) {
     color-scheme: dark;
     --bg: #1b1530; --panel: #241c40; --chip: #342a5a; --ink: #f1e9ff; --muted: #b0a2d2; --line: #5b4b8a; --field-line: #8e7fc6;
     --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --shade: 2px 2px 0 rgba(0, 0, 0, .35);
@@ -24,12 +25,27 @@
     --pl: 74%; --ps: 70%;
   }
 }
-:root[data-theme="dark"] {
+:root[data-theme="dusk"] {
   color-scheme: dark;
   --bg: #1b1530; --panel: #241c40; --chip: #342a5a; --ink: #f1e9ff; --muted: #b0a2d2; --line: #5b4b8a; --field-line: #8e7fc6;
   --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --shade: 2px 2px 0 rgba(0, 0, 0, .35);
   --accent: #6ec1ff; --mark: #ffb86b; --mark-ink: #2a1600; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
   --pl: 74%; --ps: 70%;
+}
+:root[data-theme="day"] { color-scheme: light; }
+:root[data-theme="night"] {
+  color-scheme: dark;
+  --bg: #080c1a; --panel: #0f1730; --chip: #1c2a50; --ink: #dce7ff; --muted: #9aaad6; --line: #31457f; --field-line: #6a80c0;
+  --outline: #02040c; --hi: rgba(160, 190, 255, .14); --lo: rgba(0, 0, 0, .45); --shade: 2px 2px 0 rgba(0, 0, 0, .45);
+  --accent: #5cd6f0; --mark: #6ea8ff; --mark-ink: #04122c; --accent-ink: #080c1a; --ok: #5fe3a1; --warn: #f2c14e; --warn-soft: #2a2838; --bad: #ff7a90; --bad-soft: #341c38;
+  --pl: 76%; --ps: 70%;
+}
+:root[data-theme="terminal"] {
+  color-scheme: dark;
+  --bg: #020a04; --panel: #04140a; --chip: #0b2814; --ink: #a4ffb5; --muted: #5fc477; --line: #1d9a3d; --field-line: #2fb352;
+  --outline: #000; --hi: rgba(57, 255, 106, .16); --lo: rgba(0, 0, 0, .5); --shade: 2px 2px 0 rgba(0, 0, 0, .5);
+  --accent: #4de0ff; --mark: #39ff6a; --mark-ink: #00230a; --accent-ink: #020a04; --ok: #39ff6a; --warn: #e5ff4d; --warn-soft: #1c260a; --bad: #ff6b6b; --bad-soft: #2e1010;
+  --pl: 72%; --ps: 70%;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }

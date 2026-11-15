@@ -7,15 +7,21 @@
 <meta name="theme-color" content="#cfe3f2" media="(prefers-color-scheme: light)" id="m-tc-light">
 <meta name="theme-color" content="#1b1530" media="(prefers-color-scheme: dark)" id="m-tc-dark">
 <script>
-// Theme (Auto / Light / Dark), applied before first paint so a saved choice never flashes the other theme.
-// Auto leaves html[data-theme] off and follows the OS; the choice is per browser, not per board.
+// Theme: Auto (Dusk or Day, following the OS) or one of the office demo's four palettes: Dusk, Day, Night, Terminal.
+// Applied before first paint so a saved choice never flashes another one. Auto leaves html[data-theme] off; the choice
+// is per browser, not per board ('board-theme', shared with the presenter and the Boards page). Older saved values:
+// light = Day, dark = Dusk.
+window.THEMES = { dusk: '#1b1530', day: '#cfe3f2', night: '#080c1a', terminal: '#020a04' };
+window.themeOf = function (t) { t = t === 'light' ? 'day' : t === 'dark' ? 'dusk' : t; return Object.prototype.hasOwnProperty.call(window.THEMES, t) ? t : 'auto'; };
 window.applyTheme = function (t) {
   var d = document.documentElement, g = function (i) { return document.getElementById(i); };
-  if (t !== 'light' && t !== 'dark') t = 'auto';
+  t = window.themeOf(t);
+  var dark = t !== 'auto' && t !== 'day';
   if (t === 'auto') d.removeAttribute('data-theme'); else d.setAttribute('data-theme', t);
-  g('m-scheme').setAttribute('content', t === 'auto' ? 'light dark' : t);
-  g('m-tc-light').setAttribute('media', t === 'auto' ? '(prefers-color-scheme: light)' : t === 'light' ? 'all' : 'not all');
-  g('m-tc-dark').setAttribute('media', t === 'auto' ? '(prefers-color-scheme: dark)' : t === 'dark' ? 'all' : 'not all');
+  g('m-scheme').setAttribute('content', t === 'auto' ? 'light dark' : dark ? 'dark' : 'light');
+  g('m-tc-light').setAttribute('media', t === 'auto' ? '(prefers-color-scheme: light)' : t === 'day' ? 'all' : 'not all');
+  g('m-tc-dark').setAttribute('media', t === 'auto' ? '(prefers-color-scheme: dark)' : dark ? 'all' : 'not all');
+  g('m-tc-dark').setAttribute('content', dark ? window.THEMES[t] : window.THEMES.dusk);
   return t;
 };
 try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
@@ -32,7 +38,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
                dialogs) carry the pixel chrome: 2px border, inset bevel, hard drop shadow. Nothing
                inside a panel gets a box of its own: rows and cards sit on a one-step fill (raised),
                groups are split by space or a 1px rule, never by another border.
-     Colour    Dark = the demo's Dusk palette, light = its Day palette. Every text colour is at
+     Colour    The demo's four palettes: Day (light), Dusk, Night, Terminal; Auto = Dusk or Day. Every text colour is at
                least 4.5:1 on the surfaces it sits on. bg < sunken (columns) < panel < raised (rows,
                cards). The accent (amber in Dusk, burnt orange in Day) marks the one main action of an
                area (New task, Answer, Send) and the item that leads What to do now; toggles and the
@@ -85,9 +91,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     --tool-claude: #a8492a; --tool-codex: #0b6e65; --tool-copilot: #6d3fd6; --tool-gemini: #c2185b; --tool-cursor: #7a5500; --tool-other: #52525b;
     --t-fast: 100ms; --t-base: 160ms; --t-slow: 240ms; --ease: cubic-bezier(.2, .7, .2, 1);
   }
-  /* Dusk. The same values twice: once for Auto on a dark OS, once for a forced Dark. */
+  /* Dusk: Auto on a dark OS, or chosen. (Same values twice: a media query can't share a rule with an attribute.) */
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
+    :root:not([data-theme]) {
+      color-scheme: dark;
       --tool-claude: #d97757; --tool-codex: #2dd4bf; --tool-copilot: #a78bfa; --tool-gemini: #f472b6; --tool-cursor: #facc15; --tool-other: #9ca3af;
       --bg: #1b1530; --sunken: #201939; --panel: #241c40; --raised: #2b2249; --chip: #342a5a; --field: #130e24;
       --ink: #f1e9ff; --muted: #b0a2d2; --line: #44386c; --line-strong: #67589a; --field-line: #8e7fc6;
@@ -102,7 +109,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       --shade: 2px 2px 0 rgba(0, 0, 0, .35);
     }
   }
-  :root[data-theme="dark"] {
+  :root[data-theme="dusk"] {
     color-scheme: dark;
     --tool-claude: #d97757; --tool-codex: #2dd4bf; --tool-copilot: #a78bfa; --tool-gemini: #f472b6; --tool-cursor: #facc15; --tool-other: #9ca3af;
     --bg: #1b1530; --sunken: #201939; --panel: #241c40; --raised: #2b2249; --chip: #342a5a; --field: #130e24;
@@ -117,7 +124,39 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     --pl: 74%; --ps: 70%; --dl: 62%;
     --shade: 2px 2px 0 rgba(0, 0, 0, .35);
   }
-  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="day"] { color-scheme: light; }
+  /* Night: the demo's deep blue. Accent is the blue, so In progress (info) leans cyan. */
+  :root[data-theme="night"] {
+    color-scheme: dark;
+    --tool-claude: #e08566; --tool-codex: #2dd4bf; --tool-copilot: #a78bfa; --tool-gemini: #f472b6; --tool-cursor: #facc15; --tool-other: #9ca3af;
+    --bg: #080c1a; --sunken: #0b1122; --panel: #0f1730; --raised: #152040; --chip: #1c2a50; --field: #060a16;
+    --ink: #dce7ff; --muted: #9aaad6; --line: #26365f; --line-strong: #3d5290; --field-line: #6a80c0;
+    --border: #31457f; --outline: #02040c; --hi: rgba(160, 190, 255, .14); --lo: rgba(0, 0, 0, .45);
+    --accent: #6ea8ff; --accent-hover: #8dbbff; --accent-ink: #04122c; --accent-soft: #1a2c55; --accent-line: #3d5f9e;
+    --info: #5cd6f0;
+    --ok: #5fe3a1; --warn: #f2c14e; --warn-soft: #2a2838; --warn-line: #7d6a35; --stale: #141d38;
+    --bad: #ff7a90; --bad-hover: #ff97a8; --bad-soft: #341c38; --bad-line: #8a3a55;
+    --mention: #2c2c45; --mention-line: #a8913f; --on-fill: #080c1a;
+    --toast: #152040; --toast-ink: #dce7ff; --scrim: rgba(2, 4, 12, .75);
+    --pl: 76%; --ps: 70%; --dl: 62%;
+    --shade: 2px 2px 0 rgba(0, 0, 0, .45);
+  }
+  /* Terminal: green phosphor on black. Done (ok) and the accent share the green, as on a terminal. */
+  :root[data-theme="terminal"] {
+    color-scheme: dark;
+    --tool-claude: #ff9a6b; --tool-codex: #4de0ff; --tool-copilot: #c4a0ff; --tool-gemini: #ff7ac0; --tool-cursor: #f5ff6b; --tool-other: #9ab89f;
+    --bg: #020a04; --sunken: #03100a; --panel: #04140a; --raised: #071c0e; --chip: #0b2814; --field: #010703;
+    --ink: #a4ffb5; --muted: #5fc477; --line: #0f4a1f; --line-strong: #1d7a37; --field-line: #2fb352;
+    --border: #1d9a3d; --outline: #000; --hi: rgba(57, 255, 106, .16); --lo: rgba(0, 0, 0, .5);
+    --accent: #39ff6a; --accent-hover: #6cff91; --accent-ink: #00230a; --accent-soft: #0d3519; --accent-line: #1f8a3d;
+    --info: #4de0ff;
+    --ok: #39ff6a; --warn: #e5ff4d; --warn-soft: #1c260a; --warn-line: #7a8a2a; --stale: #0a1d0e;
+    --bad: #ff6b6b; --bad-hover: #ff8f8f; --bad-soft: #2e1010; --bad-line: #8a2a2a;
+    --mention: #1c2a10; --mention-line: #9aa83a; --on-fill: #020a04;
+    --toast: #071c0e; --toast-ink: #a4ffb5; --scrim: rgba(0, 0, 0, .75);
+    --pl: 72%; --ps: 70%; --dl: 58%;
+    --shade: 2px 2px 0 rgba(0, 0, 0, .5);
+  }
   @media (prefers-contrast: more) { :root { --line: var(--field-line); --line-strong: var(--muted); } }
   /* Touch screens: larger targets, from the same three control sizes. */
   @media (hover: none) and (pointer: coarse) { :root { --ctl: 2.5rem; --ctl-sm: 2rem; --ctl-xs: 2rem; } }
@@ -664,7 +703,15 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .gloss dd b { color: var(--ink); }
   .gloss .keys input { flex: 0 0 auto; }
   .themesw { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s3); }
+  .themesw button { display: inline-flex; align-items: center; gap: var(--s3); }
   .themesw button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); font-weight: 700; }
+  /* The demo's palette swatches: each theme's page colour and accent, split on the diagonal. Fixed colours on purpose. */
+  .sw { display: inline-block; width: 14px; height: 14px; flex: 0 0 auto; box-shadow: 0 0 0 2px var(--outline); }
+  .sw-dusk { background: linear-gradient(135deg, #3a2a66 50%, #ffb86b 50%); }
+  .sw-day { background: linear-gradient(135deg, #fff1cf 50%, #7cc4f5 50%); }
+  .sw-night { background: linear-gradient(135deg, #0d1428 50%, #6ea8ff 50%); }
+  .sw-terminal { background: linear-gradient(135deg, #031a09 50%, #39ff6a 50%); }
+  .sw-auto { background: linear-gradient(135deg, #fff1cf 50%, #3a2a66 50%); }
 
   /* ---------- view switch (Board | 3D office) and the office view ---------- */
   /* The demo's segmented view switch, in the board's look: a sunken box like the needs badges; pressed buttons like
@@ -1016,8 +1063,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dd>A markdown summary of the day (goal, who built what, decisions, what's unfinished) for your submission, and a JSON backup of everything on the board.
       <div class="xacts"><button type="button" class="ghost" data-act="export-md">Download summary (.md)</button><button type="button" class="ghost" data-act="export-copy">Copy summary</button><button type="button" class="ghost" data-act="export-json">Download backup (JSON)</button></div></dd>
     <dt>Theme</dt>
-    <dd>Follow the device (Auto), or always Light or Dark. Saved in this browser.
-      <div class="themesw" role="group" aria-label="Theme"><button type="button" class="ghost sm" data-theme-set="auto" aria-pressed="false">Auto</button><button type="button" class="ghost sm" data-theme-set="light" aria-pressed="false">Light</button><button type="button" class="ghost sm" data-theme-set="dark" aria-pressed="false">Dark</button></div></dd>
+    <dd>The office demo's four palettes: <b>Dusk</b>, <b>Day</b> (light), <b>Night</b> and <b>Terminal</b>, or <b>Auto</b> (Dusk or Day, following the device). The 3D office and the presenter view follow it. Saved in this browser.
+      <div class="themesw" role="group" aria-label="Theme"><button type="button" class="ghost sm" data-theme-set="auto" aria-pressed="false" title="Dusk or Day, following the device"><i class="sw sw-auto" aria-hidden="true"></i>Auto</button><button type="button" class="ghost sm" data-theme-set="dusk" aria-pressed="false"><i class="sw sw-dusk" aria-hidden="true"></i>Dusk</button><button type="button" class="ghost sm" data-theme-set="day" aria-pressed="false"><i class="sw sw-day" aria-hidden="true"></i>Day</button><button type="button" class="ghost sm" data-theme-set="night" aria-pressed="false"><i class="sw sw-night" aria-hidden="true"></i>Night</button><button type="button" class="ghost sm" data-theme-set="terminal" aria-pressed="false"><i class="sw sw-terminal" aria-hidden="true"></i>Terminal</button></div></dd>
     <dt>Keyboard</dt>
     <dd><code>Ctrl</code>+<code>K</code> (<code>⌘K</code> on a Mac) opens the command palette, even while you type: jump to a task or a person, add a task, answer a question, set the demo time, switch the filter or theme. <code>n</code> new task · <code>/</code> write a message · <code>?</code> this help · <code>Esc</code> closes dialogs. On a focused card: <code>Enter</code> opens it; its <b>Move…</b> button changes its status.
       <label class="keys"><input type="checkbox" id="keys-on"> Single-key shortcuts (<code>n</code>, <code>/</code>, <code>?</code>) on</label>
@@ -3608,15 +3655,21 @@ async function recheck() {
 let resizeT; addEventListener('resize', () => { if (ui.doneOpen) return; clearTimeout(resizeT); resizeT = setTimeout(() => { if (!$('app').hidden) render(); }, 200); });
 
 // ---------- theme ----------
+// Auto (Dusk or Day, following the OS) or one of the demo's four palettes. The saved value is shared with the presenter
+// and the Boards page; older 'light' / 'dark' read as Day / Dusk (window.themeOf, in <head>).
+const THEME_LIST = [['auto', 'Auto', 'Dusk or Day, following the device'], ['dusk', 'Dusk', 'Violet evening (dark)'], ['day', 'Day', 'Warm paper (light)'], ['night', 'Night', 'Deep blue (dark)'], ['terminal', 'Terminal', 'Green on black (dark)']];
 let themePref = 'auto';
-try { const v = localStorage.getItem('board-theme'); if (v === 'light' || v === 'dark') themePref = v; } catch {}
+try { themePref = window.themeOf(localStorage.getItem('board-theme')); } catch {}
+function syncThemeButtons() { for (const b of document.querySelectorAll('[data-theme-set]')) b.setAttribute('aria-pressed', String(b.dataset.themeSet === themePref)); }
 function setTheme(t) {
   themePref = window.applyTheme(t);
   try { localStorage.setItem('board-theme', themePref); } catch {}
-  for (const b of document.querySelectorAll('[data-theme-set]')) b.setAttribute('aria-pressed', String(b.dataset.themeSet === themePref));
-  office.mod?.setTheme(sceneTheme());
+  syncThemeButtons();
+  office.mod?.setTheme(scenePalette());
 }
-for (const b of document.querySelectorAll('[data-theme-set]')) { b.setAttribute('aria-pressed', String(b.dataset.themeSet === themePref)); b.addEventListener('click', () => setTheme(b.dataset.themeSet)); }
+// Every theme control (help dialog, the 3D view's swatches) is a [data-theme-set] button.
+document.addEventListener('click', (ev) => { const b = ev.target.closest?.('[data-theme-set]'); if (b) setTheme(b.dataset.themeSet); });
+syncThemeButtons();
 
 // ---------- view: Board | 3D office ----------
 // The header's view switch swaps the main area in place, like the office demo's. Board is the default. The office
@@ -3638,7 +3691,8 @@ function webglWorks() {
     return !!gl;
   } catch { return false; }
 }
-const sceneTheme = () => { const t = document.documentElement.getAttribute('data-theme'); return t === 'light' || t === 'dark' ? t : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; };
+// The palette the page shows now (Auto resolved), which the 3D room uses too.
+const scenePalette = () => { const t = window.themeOf(document.documentElement.getAttribute('data-theme')); return t !== 'auto' ? t : matchMedia('(prefers-color-scheme: dark)').matches ? 'dusk' : 'day'; };
 function noOffice(msg) {
   office.failed = true;
   setBoardView('board', { save: false, quiet: true });
@@ -3670,7 +3724,7 @@ function showOffice() {
   if (office.loading) return;
   const view = $('office-view'); view.classList.add('loading'); view.setAttribute('aria-busy', 'true');
   office.loading = import(BASE + '/office/embed.js').then((m) => {
-    const o = m.mount($('office-scene'), { theme: sceneTheme(), reducedMotion: reduceMotion(), onPick: pickAgent });
+    const o = m.mount($('office-scene'), { theme: scenePalette(), reducedMotion: reduceMotion(), onPick: pickAgent });
     if (!o.usable) { o.destroy(); return noOffice("The 3D office couldn't start WebGL in this browser. Staying on the board."); }
     office.mod = o;
     if (state) o.update(state);
@@ -3683,8 +3737,9 @@ function showOffice() {
 }
 // A copy of what the office draws, for tests and the console (null until it has loaded).
 Object.defineProperty(window, '__officeState', { get: () => office.mod?.snapshot() ?? null, configurable: true });
-addEventListener('storage', (e) => { if (e.key === 'board-theme') office.mod?.setTheme(sceneTheme()); });
-matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => office.mod?.setTheme(sceneTheme()));
+// Another tab (the board, the presenter, the Boards page) changed the theme, or the OS switched light / dark.
+addEventListener('storage', (e) => { if (e.key !== 'board-theme') return; themePref = window.applyTheme(e.newValue); syncThemeButtons(); office.mod?.setTheme(scenePalette()); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => office.mod?.setTheme(scenePalette()));
 phoneMq.addEventListener?.('change', () => { if (phoneMq.matches && boardView === 'office') setBoardView('board', { save: false }); renderViewSwitch(); });
 $('vseg').addEventListener('click', (ev) => { const b = ev.target.closest('[data-vset]'); if (b) setBoardView(b.dataset.vset); });
 // In the office, links to hidden parts of the board switch back to it first (then do what they say).
@@ -3750,7 +3805,7 @@ function palCommands() {
   add('Filter', 'Show tasks for everyone', () => setFilter(''), 'filter show');
   add('Filter', `Show tasks for my team (${me})`, () => setFilter('me'), 'filter show mine');
   for (const n of others) add('Filter', `Show tasks for ${n}`, () => setFilter(n), 'filter show');
-  for (const [v, l] of [['auto', 'Auto (follow the device)'], ['light', 'Light'], ['dark', 'Dark']]) add('Theme', `Theme: ${l}${v === themePref ? ' (current)' : ''}`, () => setTheme(v), 'switch colour mode');
+  for (const [v, l, d] of THEME_LIST) add('Theme', `Theme: ${l}${v === 'auto' ? ' (follow the device)' : ''}${v === themePref ? ' (current)' : ''}`, () => setTheme(v), `switch colour mode palette ${d}`);
   for (const p of people()) add('Person', `Go to ${p.name}${p.name === me ? ' (you)' : ''} in People`, () => {
     needBoard(); ui.openPeople.add(p.name); render();
     const el = document.querySelector(`[data-fk="ptog-${CSS.escape(p.name)}"]`);

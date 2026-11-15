@@ -5,15 +5,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light dark" id="m-scheme">
+<meta name="theme-color" content="#cfe3f2" media="(prefers-color-scheme: light)" id="m-tc-light">
+<meta name="theme-color" content="#1b1530" media="(prefers-color-scheme: dark)" id="m-tc-dark">
 <title>Board presenter</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23ffb86b'/><rect x='3' y='4' width='3' height='8' fill='%232a1600'/><rect x='7' y='4' width='3' height='5' fill='%232a1600'/><rect x='11' y='4' width='2' height='6' fill='%232a1600'/></svg>">
 <meta name="description" content="Read-only big-screen view of the team board: the 3D office with the live goal, countdown and progress">
 <script>
-// Before anything loads: the board's theme choice (Auto / Light / Dark, per browser), and no WebGL means the
+// Before anything loads: the board's theme choice (Auto / Dusk / Day / Night / Terminal, per browser; Auto leaves
+// html[data-theme] off and follows the OS; older saved values: light = Day, dark = Dusk), and no WebGL means the
 // simple 2D presenter instead (it reads the same viewer token; the address keeps it if it came with one).
 (function () {
-  try { var t = localStorage.getItem('board-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  var THEMES = { dusk: '#1b1530', day: '#cfe3f2', night: '#080c1a', terminal: '#020a04' };
+  try {
+    var t = localStorage.getItem('board-theme'); t = t === 'light' ? 'day' : t === 'dark' ? 'dusk' : t;
+    if (Object.prototype.hasOwnProperty.call(THEMES, t)) {
+      var dark = t !== 'day', g = function (i) { return document.getElementById(i); };
+      document.documentElement.setAttribute('data-theme', t);
+      g('m-scheme').setAttribute('content', dark ? 'dark' : 'light');
+      g('m-tc-light').setAttribute('media', dark ? 'not all' : 'all');
+      g('m-tc-dark').setAttribute('media', dark ? 'all' : 'not all');
+      g('m-tc-dark').setAttribute('content', dark ? THEMES[t] : THEMES.dusk);
+    }
+  } catch (e) {}
   var ok = false;
   try {
     var c = document.createElement('canvas');
@@ -24,10 +38,17 @@
   if (!ok) { document.documentElement.setAttribute('data-scene', 'failed'); location.replace('present-classic.html' + location.search); }
 })();
 </script>
-<style>html, body { margin: 0; background: #cfe3f2; } @media (prefers-color-scheme: dark) { html:not([data-theme="light"]), html:not([data-theme="light"]) body { background: #1b1530; } } html[data-theme="dark"], html[data-theme="dark"] body { background: #1b1530; }</style>
-  <script type="module" crossorigin src="./office/present-DO5C0WjT.js"></script>
+<style>
+html, body { margin: 0; background: #cfe3f2; }
+@media (prefers-color-scheme: dark) { html:not([data-theme]), html:not([data-theme]) body { background: #1b1530; } }
+html[data-theme="dusk"], html[data-theme="dusk"] body { background: #1b1530; }
+html[data-theme="day"], html[data-theme="day"] body { background: #cfe3f2; }
+html[data-theme="night"], html[data-theme="night"] body { background: #080c1a; }
+html[data-theme="terminal"], html[data-theme="terminal"] body { background: #020a04; }
+</style>
+  <script type="module" crossorigin src="./office/present-CcZaQ_8Q.js"></script>
   <link rel="modulepreload" crossorigin href="./office/adapter-1GJeIk9s.js">
-  <link rel="stylesheet" crossorigin href="./office/present-CtCdgtkD.css">
+  <link rel="stylesheet" crossorigin href="./office/present-BQfs0nSe.css">
 </head>
 <body>
 <div id="live" class="has-msg">

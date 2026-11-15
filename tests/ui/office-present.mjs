@@ -93,15 +93,45 @@ try {
       await page.screenshot({ path: path.join(out, `office-${w}.png`) });
     }
 
-    // Theme: the board's choice (localStorage board-theme) wins over the OS; Day palette for light.
-    const lp = watch(await browser.newPage());
-    await lp.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
-    await lp.evaluateOnNewDocument(() => { try { localStorage.setItem('board-theme', 'light'); } catch {} });
-    await lp.goto(`${board.base}/present.html`);
-    await until(lp, () => /2 of 4 done/.test(document.body.innerText));
-    check('board-theme light: light page over a dark OS', await lp.evaluate(() => document.documentElement.dataset.theme === 'light' && getComputedStyle(document.body).backgroundColor === 'rgb(207, 227, 242)'));
-    await lp.screenshot({ path: path.join(out, 'office-light.png') });
-    await lp.close();
+    // Theme: the board's choice (localStorage board-theme: auto / dusk / day / night / terminal; older: light, dark) wins
+    // over the OS. Auto = no data-theme, Dusk on a dark OS, Day on a light one. The scene palette follows.
+    const BG = { dusk: 'rgb(27, 21, 48)', day: 'rgb(207, 227, 242)', night: 'rgb(8, 12, 26)', terminal: 'rgb(2, 10, 4)' };
+    const themed = async (stored, os) => {
+      const tp = watch(await browser.newPage());
+      await tp.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: os }]);
+      await tp.evaluateOnNewDocument((v) => { try { if (v === null) localStorage.removeItem('board-theme'); else localStorage.setItem('board-theme', v); } catch {} }, stored);
+      await tp.goto(`${board.base}/present.html`);
+      await until(tp, () => document.documentElement.dataset.scene === 'ready');
+      const r = await tp.evaluate(() => ({ theme: document.documentElement.dataset.theme ?? null, bg: getComputedStyle(document.body).backgroundColor, palette: window.__officePalette, scheme: getComputedStyle(document.documentElement).colorScheme, meta: document.getElementById('m-scheme').content }));
+      return { tp, ...r };
+    };
+    const cases = [['dusk', 'dusk', 'dusk'], ['day', 'day', 'day'], ['night', 'night', 'night'], ['terminal', 'terminal', 'terminal'], ['light', 'day', 'day'], ['dark', 'dusk', 'dusk']];
+    for (const [stored, theme, pal] of cases) {
+      const r = await themed(stored, stored === 'day' || stored === 'light' ? 'dark' : 'light'); // the OS says the opposite: the choice wins
+      check(`board-theme ${stored}: data-theme ${theme}, ${pal} background, ${pal} scene palette, ${pal === 'day' ? 'light' : 'dark'} colour scheme`, r.theme === theme && r.bg === BG[pal] && r.palette === pal && r.scheme === (pal === 'day' ? 'light' : 'dark') && r.meta === (pal === 'day' ? 'light' : 'dark'), JSON.stringify(r.theme) + ' ' + r.bg + ' ' + r.palette + ' ' + r.scheme);
+      if (stored === 'night' || stored === 'terminal') await r.tp.screenshot({ path: path.join(out, `office-${stored}.png`) });
+      if (stored === 'day') await r.tp.screenshot({ path: path.join(out, 'office-light.png') });
+      await r.tp.close();
+    }
+    for (const [stored, os, pal] of [[null, 'dark', 'dusk'], [null, 'light', 'day'], ['auto', 'dark', 'dusk'], ['auto', 'light', 'day'], ['purple', 'light', 'day']]) {
+      const r = await themed(stored, os);
+      check(`board-theme ${stored ?? '(none)'} over a ${os} OS: no data-theme, ${pal} (Auto follows the OS)`, r.theme === null && r.bg === BG[pal] && r.palette === pal && r.meta === 'light dark', JSON.stringify(r.theme) + ' ' + r.bg + ' ' + r.palette);
+      await r.tp.close();
+    }
+    check('the palette hook is read-only', await page.evaluate(() => { try { window.__officePalette = 'night'; } catch {} return typeof window.__officePalette === 'string' && window.__officePalette !== 'night'; }));
+    {
+      // The board changes the theme in another tab of the same browser: this one follows, without a reload.
+      const a = await themed('day', 'dark');
+      const b = await browser.newPage(); await b.goto(`${board.base}/health`);
+      for (const [v, theme, pal] of [['terminal', 'terminal', 'terminal'], ['dark', 'dusk', 'dusk'], ['night', 'night', 'night']]) {
+        await b.evaluate((x) => localStorage.setItem('board-theme', x), v);
+        const ok = await until(a.tp, ([t, p]) => document.documentElement.dataset.theme === t && window.__officePalette === p, [theme, pal]);
+        check(`another tab sets board-theme ${v}: this presenter switches to ${pal} live`, ok);
+      }
+      await b.evaluate(() => localStorage.removeItem('board-theme'));
+      check('another tab clears board-theme: back to Auto (no data-theme)', await until(a.tp, () => !document.documentElement.hasAttribute('data-theme')));
+      await b.close(); await a.tp.close();
+    }
 
     // Reduced motion: no paper planes or celebrations.
     const rp = watch(await browser.newPage());

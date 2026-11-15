@@ -227,6 +227,29 @@ try {
   check('the board page shows "This board couldn’t open" with the reason (once, without the prefix twice)', await bp.$eval('#failed', (e) => !e.hidden).catch(() => false) && (await bp.$eval('#failed-msg', (e) => e.textContent).catch(() => '')) === 'file is not a database');
   await fp.close();
 
+  // Theme: the board's choice (localStorage board-theme: auto / dusk / day / night / terminal; older: light, dark) wins over
+  // the OS. Auto = no data-theme and follows the OS (Dusk on a dark one, Day on a light one).
+  const BG = { dusk: 'rgb(27, 21, 48)', day: 'rgb(207, 227, 242)', night: 'rgb(8, 12, 26)', terminal: 'rgb(2, 10, 4)' };
+  const themed = async (stored, os) => {
+    const tp = await browser.newPage(); tp.on('pageerror', (e) => errors.push(e.message));
+    await tp.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: os }]);
+    await tp.evaluateOnNewDocument((v) => { try { if (v === null) localStorage.removeItem('board-theme'); else localStorage.setItem('board-theme', v); } catch {} }, stored);
+    await tp.goto(`${BASE}/boards?admin=${ADMIN}`);
+    const r = await tp.evaluate(() => ({ theme: document.documentElement.dataset.theme ?? null, bg: getComputedStyle(document.body).backgroundColor, scheme: getComputedStyle(document.documentElement).colorScheme, meta: document.getElementById('m-scheme').content }));
+    return { tp, ...r };
+  };
+  for (const [stored, pal] of [['dusk', 'dusk'], ['day', 'day'], ['night', 'night'], ['terminal', 'terminal'], ['light', 'day'], ['dark', 'dusk']]) {
+    const r = await themed(stored, pal === 'day' ? 'dark' : 'light'); // the OS says the opposite: the choice wins
+    check(`Boards page, board-theme ${stored}: data-theme ${pal}, ${pal} background, ${pal === 'day' ? 'light' : 'dark'} colour scheme`, r.theme === pal && r.bg === BG[pal] && r.scheme === (pal === 'day' ? 'light' : 'dark'), JSON.stringify([r.theme, r.bg, r.scheme]));
+    if (stored === 'night' || stored === 'terminal') { await r.tp.waitForSelector('#app:not([hidden])', { timeout: 8000 }).catch(() => {}); await r.tp.screenshot({ path: path.join(out, `boards-${stored}.png`), fullPage: true }); }
+    await r.tp.close();
+  }
+  for (const [stored, os, pal] of [[null, 'dark', 'dusk'], [null, 'light', 'day'], ['auto', 'dark', 'dusk'], ['auto', 'light', 'day'], ['purple', 'light', 'day']]) {
+    const r = await themed(stored, os);
+    check(`Boards page, board-theme ${stored ?? '(none)'} over a ${os} OS: no data-theme, ${pal} (Auto follows the OS)`, r.theme === null && r.bg === BG[pal] && r.meta === 'light dark', JSON.stringify([r.theme, r.bg, r.meta]));
+    await r.tp.close();
+  }
+
   check('no page errors or browser dialogs', !errors.length, errors.join(' | ').slice(0, 300));
 } catch (e) {
   R.push(`CRASH ${e.message}`);

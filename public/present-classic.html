@@ -3,13 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light dark" id="m-scheme">
+<meta name="theme-color" content="#cfe3f2" media="(prefers-color-scheme: light)" id="m-tc-light">
+<meta name="theme-color" content="#1b1530" media="(prefers-color-scheme: dark)" id="m-tc-dark">
 <title>Board presenter</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23ffb86b'/><rect x='3' y='4' width='3' height='8' fill='%232a1600'/><rect x='7' y='4' width='3' height='5' fill='%232a1600'/><rect x='11' y='4' width='2' height='6' fill='%232a1600'/></svg>">
 <meta name="description" content="Read-only big-screen view of the team board for the room or the demo">
 <script>
-// The board's theme choice (Auto / Light / Dark, per browser), like the board and the 3D presenter.
-try { const t = localStorage.getItem('board-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+// The board's theme choice (Auto / Dusk / Day / Night / Terminal, per browser), like the board and the 3D presenter.
+// Auto leaves html[data-theme] off and follows the OS. Older saved values: light = Day, dark = Dusk.
+(function () {
+  var THEMES = { dusk: '#1b1530', day: '#cfe3f2', night: '#080c1a', terminal: '#020a04' };
+  function themeOf(t) { t = t === 'light' ? 'day' : t === 'dark' ? 'dusk' : t; return Object.prototype.hasOwnProperty.call(THEMES, t) ? t : 'auto'; }
+  function apply(t) {
+    var d = document.documentElement, g = function (i) { return document.getElementById(i); };
+    t = themeOf(t);
+    var dark = t !== 'auto' && t !== 'day';
+    if (t === 'auto') d.removeAttribute('data-theme'); else d.setAttribute('data-theme', t);
+    g('m-scheme').setAttribute('content', t === 'auto' ? 'light dark' : dark ? 'dark' : 'light');
+    g('m-tc-light').setAttribute('media', t === 'auto' ? '(prefers-color-scheme: light)' : t === 'day' ? 'all' : 'not all');
+    g('m-tc-dark').setAttribute('media', t === 'auto' ? '(prefers-color-scheme: dark)' : dark ? 'all' : 'not all');
+    g('m-tc-dark').setAttribute('content', dark ? THEMES[t] : THEMES.dusk);
+  }
+  try { apply(localStorage.getItem('board-theme')); } catch (e) {}
+  // Changed on the board in another tab of this browser: follow it.
+  addEventListener('storage', function (e) { if (e.key === 'board-theme') apply(e.newValue); });
+})();
 </script>
 <style>
   /* Classic presenter view (the simple 2D page): public/present.html (the 3D office) opens it when WebGL is missing,
@@ -21,7 +40,7 @@ try { const t = localStorage.getItem('board-theme'); if (t === 'light' || t === 
     --outline: #3a2a14; --hi: rgba(255, 255, 255, .7); --lo: rgba(80, 50, 10, .16); --shade: 1px 1px 0 rgba(255, 255, 255, .6);
     --accent: #135fa8; --accent-ink: #fff7e8; --mark: #9a4a14; --mark-ink: #fff7e8; --ok: #1a6e2d; --warn: #845407; --warn-soft: #f8e8c6; --bad: #b42335; --bad-soft: #f9e0dc;
     --pl: 28%; --ps: 60%;
-    /* The board's pixel look (office demo): square corners, 2px borders, bevelled panels, Dusk / Day palettes; monospace for labels and numbers. */
+    /* The board's pixel look (office demo): square corners, 2px borders, bevelled panels, the four palettes (Dusk, Day, Night, Terminal); monospace for labels and numbers. */
     --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif;
     --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
     /* Sizes follow the width and the height, so the page fits a 1366×768 projector as well as 1920×1080. */
@@ -30,21 +49,37 @@ try { const t = localStorage.getItem('board-theme'); if (t === 'light' || t === 
     --gap: clamp(12px, min(1.6vw, 2.2vh), 24px); --pad: clamp(16px, min(2vw, 3vh), 32px); --edge: clamp(16px, min(3vw, 4vh), 48px);
     --r-lg: 0; --r-full: 0; --e1: inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 4px 4px 0 rgba(0, 0, 0, .16);
   }
+  /* Dusk: Auto on a dark OS, or chosen. (Same values twice: a media query can't share a rule with an attribute.) */
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
+    :root:not([data-theme]) {
       color-scheme: dark;
       --bg: #1b1530; --panel: #241c40; --chip: #342a5a; --ink: #f1e9ff; --muted: #b0a2d2; --line: #5b4b8a; --field-line: #8e7fc6;
       --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --shade: 2px 2px 0 rgba(0, 0, 0, .35);
-      --accent: #6ec1ff; --accent-ink: #1b1530; --mark: #ffb86b; --mark-ink: #2a1600; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
+      --accent: #6ec1ff; --mark: #ffb86b; --mark-ink: #2a1600; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
       --pl: 74%; --ps: 70%;
     }
   }
-  :root[data-theme="dark"] {
+  :root[data-theme="dusk"] {
     color-scheme: dark;
     --bg: #1b1530; --panel: #241c40; --chip: #342a5a; --ink: #f1e9ff; --muted: #b0a2d2; --line: #5b4b8a; --field-line: #8e7fc6;
     --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --shade: 2px 2px 0 rgba(0, 0, 0, .35);
-    --accent: #6ec1ff; --accent-ink: #1b1530; --mark: #ffb86b; --mark-ink: #2a1600; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
+    --accent: #6ec1ff; --mark: #ffb86b; --mark-ink: #2a1600; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
     --pl: 74%; --ps: 70%;
+  }
+  :root[data-theme="day"] { color-scheme: light; }
+  :root[data-theme="night"] {
+    color-scheme: dark;
+    --bg: #080c1a; --panel: #0f1730; --chip: #1c2a50; --ink: #dce7ff; --muted: #9aaad6; --line: #31457f; --field-line: #6a80c0;
+    --outline: #02040c; --hi: rgba(160, 190, 255, .14); --lo: rgba(0, 0, 0, .45); --shade: 2px 2px 0 rgba(0, 0, 0, .45);
+    --accent: #5cd6f0; --mark: #6ea8ff; --mark-ink: #04122c; --accent-ink: #080c1a; --ok: #5fe3a1; --warn: #f2c14e; --warn-soft: #2a2838; --bad: #ff7a90; --bad-soft: #341c38;
+    --pl: 76%; --ps: 70%;
+  }
+  :root[data-theme="terminal"] {
+    color-scheme: dark;
+    --bg: #020a04; --panel: #04140a; --chip: #0b2814; --ink: #a4ffb5; --muted: #5fc477; --line: #1d9a3d; --field-line: #2fb352;
+    --outline: #000; --hi: rgba(57, 255, 106, .16); --lo: rgba(0, 0, 0, .5); --shade: 2px 2px 0 rgba(0, 0, 0, .5);
+    --accent: #4de0ff; --mark: #39ff6a; --mark-ink: #00230a; --accent-ink: #020a04; --ok: #39ff6a; --warn: #e5ff4d; --warn-soft: #1c260a; --bad: #ff6b6b; --bad-soft: #2e1010;
+    --pl: 72%; --ps: 70%;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }

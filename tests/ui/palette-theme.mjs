@@ -1,4 +1,4 @@
-// Theme switch (Auto / Light / Dark, saved per browser) and the Ctrl+K command palette.
+// Theme switch (Auto / Dusk / Day / Night / Terminal: the office demo's palettes, saved per browser) and the Ctrl+K command palette.
 // Starts its own throwaway board. Run all suites with: npm test
 import { startBoard, launchBrowser, shotsDir, finish, seed } from '../helpers.mjs';
 
@@ -32,28 +32,64 @@ try {
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
 
   await page.click('#help-btn'); await page.waitForSelector('#help-dlg[open]');
-  await page.click('[data-theme-set="dark"]'); await sleep(100);
-  check('Dark button sets data-theme=dark and the dark tokens, even with an OS in light', (await attr()) === 'dark' && (await bg()) === 'rgb(27, 21, 48)', `${await attr()} ${await bg()}`);
-  check('Dark button is pressed, the others are not', await page.evaluate(() => [...document.querySelectorAll('[data-theme-set]')].map((b) => b.getAttribute('aria-pressed')).join()) === 'false,false,true');
+  check('help offers Auto and the four palettes, each with a swatch', await page.evaluate(() => [...document.querySelectorAll('#help-dlg [data-theme-set]')].map((b) => b.dataset.themeSet + (b.querySelector('.sw') ? '+' : '')).join()) === 'auto+,dusk+,day+,night+,terminal+');
+  await page.click('[data-theme-set="dusk"]'); await sleep(100);
+  check('Dusk button sets data-theme=dusk and the Dusk tokens, even with an OS in light', (await attr()) === 'dusk' && (await bg()) === 'rgb(27, 21, 48)', `${await attr()} ${await bg()}`);
+  check('Dusk button is pressed, the others are not', await page.evaluate(() => [...document.querySelectorAll('#help-dlg [data-theme-set]')].map((b) => b.getAttribute('aria-pressed')).join()) === 'false,true,false,false,false');
   const m = await metas();
-  check('color-scheme and theme-color metas follow the forced theme', m.scheme === 'dark' && m.dark === 'all' && m.light === 'not all', JSON.stringify(m));
-  check('saved in localStorage', await page.evaluate(() => localStorage.getItem('board-theme')) === 'dark');
+  check('color-scheme and theme-color metas follow the chosen theme', m.scheme === 'dark' && m.dark === 'all' && m.light === 'not all', JSON.stringify(m));
+  check('saved in localStorage', await page.evaluate(() => localStorage.getItem('board-theme')) === 'dusk');
+  // Every palette: its own page colour and tokens, color-scheme (only Day is light) and the browser bar colour.
+  const PAL = { night: ['rgb(8, 12, 26)', 'dark', '#080c1a'], terminal: ['rgb(2, 10, 4)', 'dark', '#020a04'], day: ['rgb(207, 227, 242)', 'light', null], dusk: ['rgb(27, 21, 48)', 'dark', '#1b1530'] };
+  const inks = new Set();
+  for (const [t, [want, scheme, bar]] of Object.entries(PAL)) {
+    await page.click(`#help-dlg [data-theme-set="${t}"]`); await sleep(80);
+    const v = await page.evaluate(() => { const cs = getComputedStyle(document.documentElement); return { cs: cs.colorScheme, ink: cs.getPropertyValue('--ink').trim(), tool: cs.getPropertyValue('--tool-claude').trim(), scheme: document.getElementById('m-scheme').content, bar: document.getElementById(document.getElementById('m-tc-dark').media === 'all' ? 'm-tc-dark' : 'm-tc-light').content }; });
+    inks.add(v.ink);
+    check(`${t}: data-theme, page colour, color-scheme and theme-color`, (await attr()) === t && (await bg()) === want && v.cs === scheme && v.scheme === scheme && (!bar || v.bar === bar) && !!v.tool, JSON.stringify({ bg: await bg(), ...v }));
+    // Contrast spot-check: every text colour on every surface it sits on, at least 4.5:1.
+    const low = await page.evaluate(() => {
+      const rgb = (c) => c.match(/[\d.]+/g).map(Number).slice(0, 3);
+      const L = (c) => { const [r, g, b] = rgb(c).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+      const cr = (a, b) => { const [x, y] = [L(a), L(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+      const probe = document.createElement('i'); document.body.append(probe);
+      const col = (v) => { probe.style.color = `var(${v})`; return getComputedStyle(probe).color; };
+      const out = [];
+      for (const f of ['--ink', '--muted', '--accent', '--info', '--ok', '--warn', '--bad']) for (const b of ['--bg', '--sunken', '--panel', '--raised', '--chip', '--field']) { const r = cr(col(f), col(b)); if (r < 4.5) out.push(`${f}/${b} ${r.toFixed(2)}`); }
+      for (const [f, b] of [['--accent-ink', '--accent'], ['--on-fill', '--bad'], ['--warn', '--warn-soft'], ['--bad', '--bad-soft'], ['--toast-ink', '--toast']]) { const r = cr(col(f), col(b)); if (r < 4.5) out.push(`${f}/${b} ${r.toFixed(2)}`); }
+      probe.remove(); return out;
+    });
+    check(`${t}: all text colours >= 4.5:1 on their surfaces`, !low.length, low.join(', '));
+    await page.screenshot({ path: `${out}/${t}-help.png` });
+  }
+  check('four palettes, four different ink colours', inks.size === 4, [...inks].join(' '));
+  await page.click('[data-theme-set="dusk"]'); await sleep(80);
   await page.screenshot({ path: `${out}/dark-help.png` });
   await page.keyboard.press('Escape');
 
   await page.reload(); await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 8000 });
-  check('after a reload the theme is still dark', (await attr()) === 'dark' && (await bg()) === 'rgb(27, 21, 48)', `${await attr()} ${await bg()}`);
+  check('after a reload the theme is still Dusk', (await attr()) === 'dusk' && (await bg()) === 'rgb(27, 21, 48)', `${await attr()} ${await bg()}`);
   const firstPaint = await (async () => { // the attribute is there before the app script runs (inline script in <head>)
     const p2 = await browser.newPage();
     await p2.evaluateOnNewDocument(() => { document.addEventListener('readystatechange', () => { if (!window.__early) window.__early = document.documentElement.getAttribute('data-theme'); }); });
     await p2.goto(board.base + '/'); const v = await p2.evaluate(() => window.__early); await p2.close(); return v;
   })();
-  check('data-theme is set before first paint', firstPaint === 'dark', String(firstPaint));
+  check('data-theme is set before first paint', firstPaint === 'dusk', String(firstPaint));
+  // Values saved before the four palettes: light = Day, dark = Dusk; anything unknown = Auto.
+  for (const [old, want] of [['light', 'day'], ['dark', 'dusk'], ['purple', null]]) {
+    const p3 = await browser.newPage();
+    await p3.evaluateOnNewDocument((v) => { try { localStorage.setItem('board-theme', v); } catch {} }, old);
+    await p3.goto(board.base + '/');
+    const got = await p3.evaluate(() => document.documentElement.getAttribute('data-theme'));
+    check(`an old saved '${old}' reads as ${want || 'Auto'}`, got === want, String(got));
+    await p3.close();
+  }
+  await page.evaluate(() => localStorage.setItem('board-theme', 'dusk')); // the pages above shared this storage
 
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
   await page.click('#help-btn'); await page.waitForSelector('#help-dlg[open]');
-  await page.click('[data-theme-set="light"]'); await sleep(100);
-  check('Light wins over an OS in dark', (await attr()) === 'light' && (await bg()) === 'rgb(207, 227, 242)', `${await attr()} ${await bg()}`);
+  await page.click('[data-theme-set="day"]'); await sleep(100);
+  check('Day wins over an OS in dark', (await attr()) === 'day' && (await bg()) === 'rgb(207, 227, 242)', `${await attr()} ${await bg()}`);
   await page.screenshot({ path: `${out}/light-help.png` });
   await page.click('[data-theme-set="auto"]'); await sleep(100);
   check('Auto removes data-theme and follows the OS again', (await attr()) === null && (await bg()) === 'rgb(27, 21, 48)' && (await metas()).scheme === 'light dark', `${await attr()} ${await bg()}`);
@@ -126,8 +162,10 @@ try {
   await run('go to chen');
   check('"Go to chen" focuses their People row', await page.evaluate(() => document.activeElement.dataset.fk === 'ptog-chen' && !!document.activeElement.closest('#people')));
 
-  await run('theme: dark');
-  check('"Theme: Dark" switches the theme', (await attr()) === 'dark');
+  await run('theme: night');
+  check('"Theme: Night" switches the theme', (await attr()) === 'night');
+  await run('theme: terminal');
+  check('"Theme: Terminal" switches the theme', (await attr()) === 'terminal' && await page.evaluate(() => localStorage.getItem('board-theme')) === 'terminal');
   await run('theme: auto');
   check('"Theme: Auto" switches it back', (await attr()) === null);
 

@@ -133,9 +133,17 @@ try {
     check('?view=office opens the office (nothing saved)', await view(v2.page) === 'office' && await until(v2.page, () => !!document.querySelector('#office-scene canvas'), null, 20000) && await v2.page.evaluate(() => localStorage.getItem('board-view-mode') === null));
 
     // Theme: the office follows the board's light / dark choice.
-    await v2.page.evaluate(() => setTheme('light')); await sleep(300);
-    check('a light theme gives the office its Day colours', await v2.page.evaluate(() => sceneTheme() === 'light' && window.__officeState?.agents.length > 0));
-    for (const [w, h, theme] of [[1440, 900, 'dark'], [1440, 900, 'light'], [1366, 768, 'dark']]) {
+    // Theme: the room is drawn in the board's palette (each of the four), and Auto follows the OS.
+    for (const t of ['day', 'night', 'terminal', 'dusk']) {
+      await v2.page.evaluate((x) => setTheme(x), t); await sleep(150);
+      check(`theme ${t}: the office draws the ${t} palette`, await v2.page.evaluate((x) => office.mod?.palette === x && scenePalette() === x && window.__officeState?.agents.length > 0, t));
+    }
+    await v2.page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
+    await v2.page.evaluate(() => setTheme('auto')); await sleep(150);
+    check('Auto on a light OS: the Day room', await v2.page.evaluate(() => office.mod?.palette === 'day'));
+    await v2.page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]); await sleep(150);
+    check('Auto follows the OS switching to dark: the Dusk room', await v2.page.evaluate(() => office.mod?.palette === 'dusk'));
+    for (const [w, h, theme] of [[1440, 900, 'dusk'], [1440, 900, 'day'], [1366, 768, 'dusk']]) {
       await v2.page.evaluate((t) => setTheme(t), theme);
       await v2.page.setViewport({ width: w, height: h }); await sleep(800);
       await v2.page.screenshot({ path: path.join(out, `office-${w}-${theme}.png`) });

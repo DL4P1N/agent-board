@@ -118,6 +118,41 @@ try {
   await p3.goto(`${board.base}/present-classic.html?token=nope`);
   const exp = await p3.waitForFunction(() => /presenter link has expired/.test(document.body.innerText), { timeout: 8000 }).then(() => true).catch(() => false);
   check('a rejected token: "This presenter link has expired"', exp && !e3.length, e3.join('; '));
+  // Theme: the board's choice (localStorage board-theme: auto / dusk / day / night / terminal; older: light, dark) wins over
+  // the OS. Auto = no data-theme, Dusk on a dark OS, Day on a light one.
+  const BG = { dusk: 'rgb(27, 21, 48)', day: 'rgb(207, 227, 242)', night: 'rgb(8, 12, 26)', terminal: 'rgb(2, 10, 4)' };
+  const themed = async (stored, os) => {
+    const tp = await browser.newPage(); tp.on('pageerror', (e) => errors.push(e.message));
+    await tp.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: os }]);
+    await tp.evaluateOnNewDocument((v) => { try { if (v === null) localStorage.removeItem('board-theme'); else localStorage.setItem('board-theme', v); } catch {} }, stored);
+    await tp.goto(`${board.base}/present-classic.html`);
+    const r = await tp.evaluate(() => ({ theme: document.documentElement.dataset.theme ?? null, bg: getComputedStyle(document.body).backgroundColor, scheme: getComputedStyle(document.documentElement).colorScheme, meta: document.getElementById('m-scheme').content, bar: [...document.querySelectorAll('meta[name=theme-color]')].filter((m) => m.media === 'all').map((m) => m.content) }));
+    return { tp, ...r };
+  };
+  for (const [stored, pal] of [['dusk', 'dusk'], ['day', 'day'], ['night', 'night'], ['terminal', 'terminal'], ['light', 'day'], ['dark', 'dusk']]) {
+    const r = await themed(stored, pal === 'day' ? 'dark' : 'light'); // the OS says the opposite: the choice wins
+    check(`board-theme ${stored}: data-theme ${pal}, ${pal} background, ${pal === 'day' ? 'light' : 'dark'} colour scheme and browser bar`, r.theme === pal && r.bg === BG[pal] && r.scheme === (pal === 'day' ? 'light' : 'dark') && r.meta === (pal === 'day' ? 'light' : 'dark') && r.bar.length === 1 && r.bar[0].toLowerCase() === (pal === 'day' ? '#cfe3f2' : { dusk: '#1b1530', night: '#080c1a', terminal: '#020a04' }[pal]), JSON.stringify([r.theme, r.bg, r.scheme, r.meta, r.bar]));
+    if (stored === 'night' || stored === 'terminal') await r.tp.screenshot({ path: path.join(out, `present-${stored}.png`) });
+    await r.tp.close();
+  }
+  for (const [stored, os, pal] of [[null, 'dark', 'dusk'], [null, 'light', 'day'], ['auto', 'dark', 'dusk'], ['auto', 'light', 'day'], ['purple', 'dark', 'dusk']]) {
+    const r = await themed(stored, os);
+    check(`board-theme ${stored ?? '(none)'} over a ${os} OS: no data-theme, ${pal} (Auto follows the OS)`, r.theme === null && r.bg === BG[pal] && r.meta === 'light dark', JSON.stringify([r.theme, r.bg, r.meta]));
+    await r.tp.close();
+  }
+  {
+    // The board changes the theme in another tab of the same browser: this page follows without a reload.
+    const a = await themed('day', 'dark');
+    const b = await browser.newPage(); await b.goto(`${board.base}/health`);
+    for (const [v, pal] of [['terminal', 'terminal'], ['dark', 'dusk'], ['night', 'night']]) {
+      await b.evaluate((x) => localStorage.setItem('board-theme', x), v);
+      const ok = await a.tp.waitForFunction((t) => document.documentElement.dataset.theme === t, { timeout: 5000, polling: 100 }, pal).then(() => true).catch(() => false);
+      check(`another tab sets board-theme ${v}: this page switches to ${pal} live`, ok && await a.tp.evaluate((bg) => getComputedStyle(document.body).backgroundColor === bg, BG[pal]));
+    }
+    await b.evaluate(() => localStorage.removeItem('board-theme'));
+    check('another tab clears board-theme: back to Auto (no data-theme)', await a.tp.waitForFunction(() => !document.documentElement.hasAttribute('data-theme'), { timeout: 5000, polling: 100 }).then(() => true).catch(() => false));
+    await b.close(); await a.tp.close();
+  }
   check('no page errors', !errors.length, errors.join('; '));
 } catch (e) {
   R.push(`CRASH ${e.message}`);

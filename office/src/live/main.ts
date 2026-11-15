@@ -15,8 +15,17 @@ import { Overlay } from './overlay';
 const root = document.documentElement;
 const mq = (q: string): boolean => { try { return matchMedia(q).matches; } catch { return false; } };
 const reduced = mq('(prefers-reduced-motion: reduce)');
-// The board's theme choice (Auto / Light / Dark, per browser) picks the office palette: Dusk for dark, Day for light.
-const light = (): boolean => (root.dataset.theme === 'light' ? true : root.dataset.theme === 'dark' ? false : !mq('(prefers-color-scheme: dark)'));
+// The board's theme choice (Auto / Dusk / Day / Night / Terminal, per browser) picks the office palette. Auto (no
+// html[data-theme]) follows the OS: Dusk on a dark one, Day on a light one. Older saved values: light = Day, dark = Dusk.
+type Palette = VisualSettings['palette'];
+const PALETTES: readonly Palette[] = ['dusk', 'day', 'night', 'terminal'];
+const BARS: Record<Palette, string> = { dusk: '#1b1530', day: '#cfe3f2', night: '#080c1a', terminal: '#020a04' };
+const themeOf = (t: string | null | undefined): Palette | null => {
+  const v = t === 'light' ? 'day' : t === 'dark' ? 'dusk' : t;
+  return (PALETTES as readonly string[]).includes(v ?? '') ? (v as Palette) : null;
+};
+const palette = (): Palette => themeOf(root.dataset.theme) ?? (mq('(prefers-color-scheme: dark)') ? 'dusk' : 'day');
+const light = (): boolean => palette() === 'day';
 const classicHref = (): string => 'present-classic.html' + (viewToken() ? '?token=' + encodeURIComponent(viewToken()) : '');
 
 let fellBack = false;
@@ -37,8 +46,9 @@ let board: BoardState | null = null;
 
 // Read-only debug hook for tests and the console: a copy of the state the scene draws.
 Object.defineProperty(window, '__officeState', { get: () => JSON.parse(JSON.stringify(world.state)), configurable: false });
+Object.defineProperty(window, '__officePalette', { get: () => palette(), configurable: false });
 
-const visual = (): VisualSettings => ({ ...DEFAULT_VISUAL, palette: light() ? 'day' : 'dusk', live: true, showLabels: true, showBubbles: true, autoOrbit: false, focus: 0 });
+const visual = (): VisualSettings => ({ ...DEFAULT_VISUAL, palette: palette(), live: true, showLabels: true, showBubbles: true, autoOrbit: false, focus: 0 });
 let scene: OfficeScene | null = null;
 // With reduced motion the office stands still: it only animates for a moment after something on it changed.
 let settleUntil = 0;
@@ -66,8 +76,15 @@ function themeChanged(): void {
 // The theme changed on the board in another tab (same browser), or the OS switched light/dark.
 addEventListener('storage', (e) => {
   if (e.key !== 'board-theme') return;
-  const v = e.newValue;
-  if (v === 'light' || v === 'dark') root.dataset.theme = v; else delete root.dataset.theme;
+  const t = themeOf(e.newValue);
+  if (t) root.dataset.theme = t; else delete root.dataset.theme;
+  // The page's own tags follow (the pre-paint script in present.html set them for the first paint).
+  const meta = (id: string, attr: string, v: string): void => document.getElementById(id)?.setAttribute(attr, v);
+  const dark = t !== null && t !== 'day';
+  meta('m-scheme', 'content', t === null ? 'light dark' : dark ? 'dark' : 'light');
+  meta('m-tc-light', 'media', t === null ? '(prefers-color-scheme: light)' : t === 'day' ? 'all' : 'not all');
+  meta('m-tc-dark', 'media', t === null ? '(prefers-color-scheme: dark)' : dark ? 'all' : 'not all');
+  meta('m-tc-dark', 'content', t && dark ? BARS[t] : BARS.dusk);
   themeChanged();
 });
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', themeChanged); } catch { /* old browsers */ }
