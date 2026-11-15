@@ -1,4 +1,4 @@
-// The People panel: stable person colours, agent names in pills, the pill legend, the "Belongs to" list,
+// The Agents panel: stable person colours, one row per agent by its own name, its state in words, the "Belongs to" list,
 // and availability in the Reserve-for and Assign-to lists.
 // Starts its own throwaway board. Run all suites with: npm test
 import path from 'node:path';
@@ -30,8 +30,8 @@ const browser = await launchBrowser({ defaultViewport: { width: 1440, height: 10
 const errors = [];
 let page;
 const txt = (sel) => page.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ')).catch(() => '');
-const hueOf = (n) => page.$eval(`#people .person:has([data-ptoggle="${n}"])`, (e) => e.style.getPropertyValue('--h').trim()).catch(() => '');
-const row = (n) => txt(`#people .person:has([data-ptoggle="${n}"])`);
+const hueOf = (n) => page.$eval(`#people [data-person-row="${n}"]`, (e) => e.style.getPropertyValue('--h').trim()).catch(() => '');
+const row = (n) => txt(`#people [data-person-row="${n}"]`);
 try {
   page = await browser.newPage();
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
@@ -43,7 +43,7 @@ try {
 
   // ---- WB-7: a person's colour doesn't change when others join ----
   const before = await hueOf('hostp');
-  check('legend hidden while nobody has an agent', await page.$eval('#p-legend', (e) => e.hidden));
+  check('no colour legend: an agent\'s state is a word in its row (Agents, both views)', !(await page.$('#p-legend')));
   const carol = await agent('carol-codex', { client: 'codex-mcp-client' });
   const dave = await agent('dave', { client: 'omp-agent' });
   await agent('bob-codex', { client: 'codex-mcp-client', plan: 'ChatGPT Plus' });
@@ -67,28 +67,27 @@ try {
   await pv.close();
 
   // ---- WB-8: a second cue besides colour ----
-  check('People dot shows the person\'s initial', (await page.$eval('#people .person:has([data-ptoggle="emil"]) .pdot', (e) => e.dataset.i).catch(() => '')) === 'E');
+  check('People dot shows the person\'s initial', (await page.$eval('#people [data-person-row="emil"] .pdot', (e) => e.dataset.i).catch(() => '')) === 'E');
   check('the initial is not read out or part of the row text', /^emil/.test(await row('emil')), (await row('emil')).slice(0, 20));
 
   // ---- WB-9: an agent grouped under someone else keeps its name in the pill ----
   await human('/agents/dave', 'PATCH', { person: 'carol' });
-  await page.waitForFunction(() => /dave/.test(document.querySelector('#people .person:has([data-ptoggle="carol"])')?.innerText || ''), { timeout: 5000 }).catch(() => {});
+  await page.waitForFunction(() => !!document.querySelector('#people [data-person-row="carol"] [data-o-agent="dave"]'), { timeout: 5000 }).catch(() => {});
   const carolRow = await row('carol');
-  check('carol\'s row names dave in its pill', /dave · /.test(carolRow), carolRow);
+  check('carol\'s agents list dave by its own name', await page.evaluate(() => !!document.querySelector('#people [data-person-row="carol"] [data-o-agent="dave"] .o-an')?.textContent.startsWith('dave')), carolRow);
 
   // ---- WB-10: two agents with the same tool ----
   const emilRow = await row('emil');
-  // One line per person: the pills name the two agents (the tool is their dot, tooltip and screen-reader text).
-  check('emil\'s two Claude Code agents are told apart', /\bclaude · 0\/2/.test(emilRow) && /\bclaude2 · 0\/2/.test(emilRow), emilRow);
+  // One row per agent, by its own name (the tool is its dot and the second line).
+  check('emil\'s two Claude Code agents are told apart', await page.evaluate(() => [...document.querySelectorAll('#people [data-person-row="emil"] .o-agent')].map((b) => b.dataset.oAgent).join() === 'emil-claude,emil-claude2'), emilRow);
 
   // ---- WB-12: pill legend ----
-  check('legend explains the pill colours', /has room/.test(await txt('#p-legend')) && /full/.test(await txt('#p-legend')) && /offline/.test(await txt('#p-legend')), await txt('#p-legend'));
-  check('legend visible once agents connect', !(await page.$eval('#p-legend', (e) => e.hidden)));
+  check('every agent row says its state in words', await page.evaluate(() => [...document.querySelectorAll('#people .o-agent')].every((b) => /\w/.test(b.querySelector('.o-st')?.textContent || ''))));
 
   // ---- WB-11: expanded row copy and the Belongs-to list ----
-  await page.click('#people .ptog[data-ptoggle="carol"]');
-  await page.waitForSelector('#pd-carol');
-  const det = await txt('#pd-carol');
+  await page.click('#people [data-o-agent="dave"]');
+  await page.waitForSelector('#o-det');
+  const det = await txt('#o-det');
   check('no "@" before agent names in the detail', !/@main agent|@dave/.test(det), det.slice(0, 120));
   check('detail names dave by its own name', /\bdave · omp-agent|\bdave\b/.test(det), det.slice(0, 120));
   check('ghosty is a known name (so the next check means something)', await page.evaluate(() => knownPeople().includes('ghosty')));

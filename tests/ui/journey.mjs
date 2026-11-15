@@ -88,7 +88,7 @@ try {
   const t3 = await alice('create_task', { title: 'Leaderboard page' });
   const t4 = await alice('create_task', { title: 'Submission form' });
   await sleep(500);
-  check('setup collapsed to summary bar', await page.evaluate(() => !!document.querySelector('#setup .sumbar')));
+  check('setup collapsed: the guide hides, the top bar stays', await page.evaluate(() => $('setup').hidden && /Goal:/.test($('topbar').innerText) && !!$('topbar').querySelector('[data-act="setup-open"]')));
   check('phase Build', await page.$eval('.phases .cur', (e) => e.textContent) === 'Build');
   check('column descriptions', await page.$eval('#col-review .cd', (e) => /integrator/.test(e.textContent)));
   await shots('4-tasks', { light: false });
@@ -126,7 +126,7 @@ try {
   await page.keyboard.press('Escape'); await sleep(150);
   // reopen setup from summary
   await page.click('[data-act="setup-close"]'); await sleep(200);
-  check('Hide collapses to summary', await page.evaluate(() => !!document.querySelector('#setup .sumbar')));
+  check('Hide collapses to the top bar', await page.evaluate(() => $('setup').hidden && !!$('topbar').querySelector('[data-act="setup-open"]')));
   await page.click('[data-act="setup-open"]'); await sleep(200);
   check('Setup button reopens guide', await page.evaluate(() => !!document.querySelector('#setup .steps')));
   await shots('7-all-good-setup-open', { light: false });

@@ -168,7 +168,7 @@ try {
   check('"Answer the oldest question" focuses the first answer box', await page.evaluate(() => document.activeElement.id) === oldest && /^qa-/.test(oldest), oldest);
 
   await run('go to chen');
-  check('"Go to chen" focuses their People row', await page.evaluate(() => document.activeElement.dataset.fk === 'ptog-chen' && !!document.activeElement.closest('#people')));
+  check('"Go to chen" focuses their row in Agents', await page.evaluate(() => !!document.activeElement.closest('[data-person-row="chen"]') && !!document.activeElement.closest('#o-right')), await page.evaluate(() => document.activeElement.outerHTML.slice(0, 80)));
 
   await run('theme: night');
   check('"Theme: Night" switches the theme', (await attr()) === 'night');
@@ -183,7 +183,8 @@ try {
   check('"Show tasks for everyone" clears it', await page.$eval('#filter', (e) => e.value) === '');
 
   await run('demo time');
-  check('"Set the demo time" goes where the clock goes', await page.evaluate(() => /^(dl-in|dl-edit)$/.test(document.activeElement.id) || document.activeElement.dataset.fk === 'dl-edit'), await page.evaluate(() => document.activeElement.id || document.activeElement.dataset.fk));
+  check('"Set the demo time" goes where the clock goes (its popover, focus in the time field)', await page.evaluate(() => document.activeElement.id === 'o-dl-in' && !$('o-dl').hidden), await page.evaluate(() => document.activeElement.id || document.activeElement.dataset.fk));
+  await page.keyboard.press('Escape');
 
   await run('write a message');
   check('"Write a message" focuses chat', await page.evaluate(() => document.activeElement.id) === 'msg');

@@ -59,7 +59,7 @@ try {
   check('A step 3 not done while agent only connected', await page.$eval('#step-start', (e) => !e.classList.contains('done') && /connected, not started/.test(e.innerText)));
   await openStep(page, 'invite');
   check('A chip says connected · not started — type /board', /erin.*connected · not started — type \/board/.test(await txt(page, '#step-invite .chips')), await txt(page, '#step-invite .chips'));
-  check('A person row says not started', /not started — type \/board/.test(await txt(page, '#people')), await txt(page, '#people'));
+  check('A person row says not started', /not started/.test(await txt(page, '[data-o-agent="erin"] .o-st')) && /type \/board/.test(await txt(page, '[data-o-agent="erin"]')), await txt(page, '#people'));
 
   // Goal set, no tasks, no planner, nobody started.
   await openStep(page, 'goal');
@@ -127,7 +127,7 @@ try {
   await page.evaluate(() => { localStorage.removeItem('board-setup'); ui.forceSetup = false; ui.steps = {}; });
   await reload(page); await sleep(400);
   check('A collapsed Setup button names what is left', (await txt(page, '[data-act="setup-open"]')) === 'Setup: pick merger', await txt(page, '[data-act="setup-open"]'));
-  check('A summary bar: "Connect a laptop" + repo', /Connect a laptop/.test(await txt(page, '#setup')) && /Repo: https:\/\/github.com\/team\/vote-app/.test(await txt(page, '#setup')));
+  check('A top bar: "Connect a laptop" + repo', /Connect a laptop/.test(await txt(page, '#topbar')) && /Repo: https:\/\/github.com\/team\/vote-app/.test(await txt(page, '#topbar')), await txt(page, '#topbar'));
   // One task for two idle agents: the low-priority offer asks for more tasks first...
   check('A All good + "2 agents are idle: add tasks…"', /All good/.test(await txt(page, '#now .na')) && /2 agents are idle: add tasks or ask the planner for more/.test(await txt(page, '#now .na2')), await txt(page, '#now'));
   // ...and once there is enough work, it suggests picking a merger.
@@ -187,9 +187,9 @@ try {
   await p.goto(BASE + '/');
   await p.waitForFunction(() => document.getElementById('conn').classList.contains('live') && document.querySelectorAll('.card').length > 20, { timeout: 8000 });
   await sleep(400);
-  const lay = await p.evaluate(() => ({ board: $('board').getBoundingClientRect().top + scrollY, card: document.querySelector('#board .card').getBoundingClientRect().top + scrollY, colW: $('col-open').offsetWidth, people: $('people').closest('.panel').offsetHeight, persons: document.querySelectorAll('#people .person').length, rows: [...document.querySelectorAll('#people .person')].map((e) => e.offsetHeight), beside: $('people').closest('.rail').getBoundingClientRect().left > $('board').getBoundingClientRect().right - 2 }));
-  // Who's doing what: one line per person, in the right rail beside the board (it no longer sits above it).
-  check('B busy: 5 people, one line each, beside the board', lay.persons === 5 && lay.rows.every((h) => h <= 48) && lay.beside, JSON.stringify(lay));
+  const lay = await p.evaluate(() => ({ board: $('board').getBoundingClientRect().top + scrollY, card: document.querySelector('#board .card').getBoundingClientRect().top + scrollY, colW: $('col-open').offsetWidth, people: $('o-right').offsetHeight, persons: document.querySelectorAll('#people .person').length, rows: [...document.querySelectorAll('#people .o-agent')].map((e) => e.offsetHeight), beside: $('o-right').getBoundingClientRect().left > $('board').getBoundingClientRect().right - 2 }));
+  // Agents: a line per person and a compact row per agent (2 lines), in the right column beside the board.
+  check('B busy: 5 people, a compact row per agent, beside the board', lay.persons === 5 && lay.rows.length && lay.rows.every((h) => h <= 56) && lay.beside, JSON.stringify(lay));
   check('B 1366×768: kanban starts in the first viewport', lay.board < 768 && lay.card < 768 - 40, JSON.stringify(lay));
   check('B columns at least 120px wide (between the rails)', lay.colW >= 120, lay.colW + 'px');
   const doneTxt = await p.$eval('#col-done', (e) => e.textContent.trim());
@@ -306,7 +306,7 @@ try {
     await scheme(p, s); await sleep(150);
     const c = await p.evaluate(() => {
       const cs = (el, pe) => getComputedStyle(el, pe);
-      const msg = $('msg'); const panel = msg.closest('.panel');
+      const msg = $('msg'); const panel = msg.closest('.o-panel');
       const fld = Math.min(__cr(cs(msg).borderTopColor, cs(msg).backgroundColor), __cr(cs(msg).borderTopColor, cs(panel).backgroundColor));
       const ph = __cr(cs(msg, '::placeholder').color, cs(msg).backgroundColor);
       const probe = document.createElement('div'); probe.innerHTML = '<div class="tabs"><span class="n">3</span></div><button class="danger">x</button><div class="toast bad">y</div>';

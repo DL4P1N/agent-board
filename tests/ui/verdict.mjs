@@ -146,7 +146,7 @@ try {
   check('review backlog of 4 is listed', /4 tasks waiting in Review/.test(now), now);
   check('an agent out of usage is listed', /alice is out of usage/.test(now), now);
   await page.click('#now [data-go="limited"]'); await sleep(400);
-  check('clicking it opens alice in People', await page.evaluate(() => ui.openPeople.has('alice') && /alice/.test(document.activeElement?.dataset.fk || '')), await page.evaluate(() => document.activeElement?.dataset.fk || ''));
+  check('clicking it selects alice in Agents (with It\'s back)', await page.evaluate(() => ui.picked === 'alice' && document.activeElement?.dataset.fk === 'ul-alice' && !!document.activeElement.closest('#o-det')), await page.evaluate(() => document.activeElement?.dataset.fk || ''));
   await page.click('#now [data-go="review"]'); await sleep(400);
   check('the review item jumps to the Review column', await page.evaluate(() => !!document.activeElement?.closest('#col-review')));
   await page.screenshot({ path: `${out}/signals-now.png`, clip: { x: 0, y: 0, width: 1440, height: 260 } });

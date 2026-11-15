@@ -263,7 +263,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .on.w { background: var(--warn); }
 
   /* ---------- header: the demo's top bar ---------- */
-  header { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s4) var(--s4); padding: var(--s3) var(--s5); min-height: 52px; border-bottom: 2px solid var(--border); box-shadow: 0 2px 0 var(--outline), inset 0 -2px 0 var(--lo), 0 6px 0 rgba(0, 0, 0, .12); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+  header { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s4) var(--s4); padding: var(--s3) var(--s5); min-height: 52px; border-bottom: 2px solid var(--border); box-shadow: 0 2px 0 var(--outline), inset 0 -2px 0 var(--lo), 0 6px 0 rgba(0, 0, 0, .12); background: var(--panel); position: sticky; top: 0; z-index: 10; } /* above every panel of both views (main is its own stacking layer) */
   header h1 { font-size: .9375rem; line-height: var(--lh-tight); display: inline-flex; align-items: center; gap: var(--s4); white-space: nowrap; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
   .mark { width: 22px; height: 22px; flex: 0 0 auto; box-shadow: 0 0 0 2px var(--outline); }
   .tagline { font-size: var(--fs-meta); color: var(--muted); }
@@ -344,43 +344,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .downbar { background: var(--bad); color: var(--on-fill); font-size: var(--fs-sm); font-weight: 700; padding: var(--s3) var(--s6); text-align: center; position: sticky; top: var(--hdr-h, 0px); z-index: 5; }
 
   /* ---------- page ---------- */
-  /* Board view: three regions, the 3D view's spatial model. Left rail: what needs you (What to do now, the questions).
-     Centre: the goal bar and the task board, from the top of the page. Right rail: who's doing what, Activity (feed and
-     chat), file locks. The rails stick under the header and scroll on their own, so the board never leaves the screen.
-     The rails are not boxes themselves: page > panel > row, two levels. */
-  main { --rail-l: clamp(256px, 20vw, 340px); --rail-r: clamp(272px, 22vw, 400px); --top: calc(var(--hdr, 54px) + var(--s4));
-    display: grid; grid-template-columns: var(--rail-l) minmax(0, 1fr) var(--rail-r); grid-template-areas: "left centre right"; gap: var(--s5); align-items: start;
-    padding: var(--s4) var(--s5) var(--s5); max-width: 2400px; margin: 0 auto; }
-  .rail-l { grid-area: left; } .centre { grid-area: centre; } .rail-r { grid-area: right; }
-  .centre { display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
-  .rail { position: sticky; top: var(--top); max-height: calc(100vh - var(--top) - var(--s5)); display: flex; flex-direction: column; gap: var(--gap); min-width: 0;
-    overflow-y: auto; overscroll-behavior: contain; padding: 0 6px 6px 0; margin-right: -6px; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
-  .rail > * { flex: 0 0 auto; }
-  /* The right rail is exactly as tall as the screen: who's doing what takes what it needs (up to 40%), Activity the rest,
-     its feed scrolling inside, the composer at the foot. */
-  .rail-r { height: calc(100vh - var(--top) - var(--s5)); overflow: hidden; }
-  .rail-r > .ppl { flex: 0 0 auto; max-height: 36%; display: flex; flex-direction: column; min-height: 0; }
-  .rail-r > .ppl > .people { overflow-y: auto; min-height: 0; margin-right: calc(-1 * var(--s3)); padding-right: var(--s3); scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
-  .rail-r > .act { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
-  .rail-r > .act .feedwrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin-top: var(--s2); }
-  .rail-r > .act .feed { max-height: none; flex: 1 1 auto; min-height: 96px; }
-  /* Short laptop screens: the chat hint is the composer's description (read out, and its tooltip), so the feed keeps
-     the room. */
-  @media (min-width: 1101px) and (max-height: 900px) { .rail-r > .act > .hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
-  /* Narrow laptops: slimmer rails. */
-  @media (max-width: 1279px) { main { --rail-l: 240px; --rail-r: 260px; gap: var(--s4); } }
-  /* Up to 1100px: two columns. The rails stack on the left (what needs you, then people and Activity), the board takes
-     the rest; the page scrolls as one. */
-  @media (max-width: 1100px) {
-    main { grid-template-columns: 264px minmax(0, 1fr); grid-template-areas: "left centre" "right centre"; grid-template-rows: auto 1fr; }
-    .rail { position: static; max-height: none; height: auto; overflow: visible; padding: 0; margin: 0; }
-    .rail-r > .ppl { max-height: none; }
-    .rail-r > .act .feed { max-height: 50vh; }
-  }
-  /* Tablets and phones: one column, in order of what matters: what needs you, the board, people, Activity. */
-  @media (max-width: 1000px) {
-    main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "left" "centre" "right"; grid-template-rows: none; }
-  }
   /* Panels: the demo's pixel window chrome. Their first heading row is the window's title bar. */
   .panel { background: var(--panel); border: 2px solid var(--border); border-radius: var(--r-lg); padding: var(--s4) var(--s5) var(--s5); box-shadow: var(--e2); min-width: 0; margin: 2px; }
   .sec-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s1) var(--s4); margin-bottom: var(--s4); font-size: var(--fs-meta); }
@@ -423,21 +386,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .phases ol { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1); list-style: none; margin: 0; padding: 0; flex: 1 1 0; min-width: 0; }
   .phases li { display: inline-flex; align-items: center; gap: var(--s1); }
 
-  /* In the Board view's left rail (as in the 3D view's Needs you dock): the lead, then the rest, stacked. */
-  .rail-l .now { flex-direction: column; align-items: stretch; gap: var(--s4); }
-  .rail-l .now::after { display: none; }
-  .rail-l .now .nl { flex: 0 0 auto; margin: 0 calc(-1 * var(--s5)); }
-  .rail-l .now .phases { margin: calc(-1 * var(--s2)) 0 0; padding: 0; border: 0; }
-  .rail-l .now .phases .ph-l { display: none; }
-  .rail-l .now .na { flex: 0 0 auto; }
-  .rail-l .now .appr { align-self: flex-start; }
-  .rail-l .now .also { flex-direction: column; align-items: flex-start; gap: 0; }
-  .rail-l .now .also .link + .link::before { display: none; }
-  .rail-l .now .also .link { padding: 2px 0; }
-  .rail-l .qs { grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
-  .rail-l .qcard textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  /* A long question shows 4 lines until you answer it (its whole text is read out either way). */
-  .rail-l .qcard:not(:focus-within) .qt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
   /* Questions: the one thing that must not be missed. Inside the same window, under a dashed rule. */
   .nyou > .attn { margin: 0; border: 0; box-shadow: none; background: transparent; padding: 0 var(--s5) var(--s4); }
   /* With questions below it, the lead row sits closer to them (every pixel here pushes the board down). */
@@ -527,39 +475,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .sumbar .acts button { min-height: var(--ctl-sm); padding: 0 var(--s4); font-size: var(--fs-meta); }
   .ci-pill { margin-left: var(--s3); }
 
-  /* ---------- people ---------- */
-  /* Who's doing what: one line per person (name, then a dot and x/y per agent, roles, and only the exceptions), the
-     team's line above. Open a row for its agents, tasks, controls and the filter. */
-  .psum { display: flex; flex-direction: column; gap: 0; flex: 1 1 100%; font-size: var(--fs-meta); line-height: var(--lh-tight); }
-  .psum:empty { display: none; }
-  .ppl > .sec-h:first-child { flex: 0 0 auto; flex-wrap: wrap; row-gap: var(--s2); padding-block: var(--s3); }
-  .people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
-  .person { border-radius: var(--r-md); padding: 1px var(--s3); min-width: 0; background: var(--raised); transition: box-shadow var(--t-fast) var(--ease); }
-  .person .capw { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .person:hover { box-shadow: inset 0 0 0 2px var(--line); }
-  .person.sel { box-shadow: inset 0 0 0 2px hsl(var(--h) 60% var(--dl)); }
-  .person .ph { display: flex; align-items: center; gap: var(--s3); min-height: 26px; min-width: 0; cursor: pointer; }
-  .person .ptog { display: inline-flex; align-items: center; gap: var(--s3); background: none; border: 0; box-shadow: none; padding: var(--s1); min-height: 26px; color: var(--ink); flex: 0 0 auto; min-width: 0; max-width: 60%; border-radius: var(--r-xs); }
-  .person .ptog:hover { background: none; }
-  .person .ptog:active { transform: none; box-shadow: none; }
-  .person .ptog .chev { color: var(--accent); font-size: 12px; width: 10px; display: inline-block; }
-  .person .ptog .chev::before { content: "▸"; }
-  .person .ptog[aria-expanded="true"] .chev::before { content: "▾"; }
-  .person .ptog .pc { font-size: var(--fs-body); overflow: hidden; text-overflow: ellipsis; }
-  .person .pcap { font-size: var(--fs-meta); color: var(--muted); }
-  /* Chips wrap to a second line rather than being cut off (a chip cut to "1" reads as a bug). */
-  .person .pchips { display: flex; gap: 0 var(--s3); align-items: center; min-width: 0; min-height: 26px; flex: 1 1 auto; flex-wrap: wrap; }
-  .person .pchips > * { flex: 0 1 auto; max-width: 100%; }
-  .person .pchips > .pill { white-space: normal; }
-  .person .pd { border-top: 2px dashed var(--line); margin-top: 3px; padding: var(--s3) 0 var(--s3) var(--s2); }
-  .person .pd .inl { margin-top: var(--s2); }
-  .person ul { list-style: none; margin: var(--s2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--s3); }
-  .person li { font-size: var(--fs-sm); min-width: 0; }
-  .person .an { font-weight: 700; }
-  .plegend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .person .last, .doing { color: var(--muted); font-size: var(--fs-meta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .person .tk { display: flex; gap: var(--s3); align-items: baseline; min-width: 0; }
-  .person .tk button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  /* ---------- an agent's controls (Agents, the selected agent) ---------- */
   .actl { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; margin-top: var(--s2); font-size: var(--fs-meta); }
   .actl select { width: auto; min-height: var(--ctl-sm); padding: 1px var(--s2); font-size: var(--fs-meta); }
   .actl label { display: inline; margin: 0; font-weight: 400; }
@@ -666,6 +582,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .tabs button:active { transform: none; box-shadow: none; }
   .taskbar { display: flex; gap: var(--s4); align-items: center; flex-wrap: wrap; margin: 0 2px var(--s3); }
   .taskbar .tabs { margin-left: auto; }
+  .taskbar > .o-h { flex: 0 0 auto; margin: 0; }
+  .taskbar.none > :not(h2) { display: none; }
   .tsearch { flex: 1 1 200px; max-width: 360px; margin: 0; }
   .tsearch input { width: 100%; min-height: var(--ctl-sm); padding-top: 2px; padding-bottom: 2px; }
   .board[hidden], .ttable[hidden], .taskbar[hidden] { display: none; }
@@ -722,16 +640,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .ac li[aria-selected="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
   .ac .ak { margin-left: auto; font-size: var(--fs-micro); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ac .ak.on { width: auto; height: auto; border-radius: 0; background: none; color: var(--ok); }
-  /* File locks fold to their title bar. */
-  .locksp:has(#l-body[hidden]) { padding-bottom: 0; }
-  .locksp:has(#l-body[hidden]) > .sec-h:first-child { margin-bottom: 0; border-bottom: 0; }
-  .ltog { display: inline-flex; align-items: center; gap: var(--s3); background: none; border: 0; box-shadow: none; padding: 0; min-height: var(--ctl-xs); color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; }
-  .ltog:hover { background: none; color: var(--ink); }
-  .ltog:active { transform: none; box-shadow: none; }
-  .ltog .chev { font-size: 12px; width: 10px; }
-  .ltog .chev::before { content: "▸"; }
-  .ltog[aria-expanded="true"] .chev::before { content: "▾"; }
-  .ltog .muted { text-transform: none; letter-spacing: 0; }
   .locks { list-style: none; margin: 0; padding: 0; }
   .lock { display: flex; justify-content: space-between; align-items: center; gap: var(--s4); font-size: var(--fs-meta); padding: var(--s3) 0; border-top: 1px solid var(--line); }
   .lock:first-child { border-top: 0; }
@@ -793,7 +701,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .sw-terminal { background: linear-gradient(135deg, #031a09 50%, #39ff6a 50%); }
   .sw-auto { background: linear-gradient(135deg, #fff1cf 50%, #3a2a66 50%); }
 
-  /* ---------- view switch (Board | 3D office) and the office view ---------- */
+  /* ---------- view switch (Board | 3D office) ---------- */
   /* The demo's segmented view switch, in the board's look: a sunken box like the needs badges; pressed buttons like
      Columns / Table (the current view is ink with an underline). Not on phones (a tiny 3D room is no use there). */
   .vseg { display: inline-flex; align-items: center; padding: 0 var(--s1); border: 2px solid var(--line); background: var(--sunken); }
@@ -802,68 +710,77 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .vseg button:active { transform: none; box-shadow: none; }
   .vseg button[aria-pressed="true"] { color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--ink); }
   @media (max-width: 760px) { .vseg { display: none !important; } }
-  /* 3D office: the demo's office view. The room fills the window under the header; translucent pixel panels float
-     over it: Needs you (left dock), Agents with Activity (feed + chat) under it (right column), Tasks (bottom window,
-     progress in its title bar), Goal and demo time chips on top. Docks fold to chips, Tasks and Activity to their title
-     bars (remembered per board). The theme is the header's, as on the Board view. */
-  .office-view { display: none; }
-  html[data-board-view="office"] body { overflow: hidden; }
-  html[data-board-view="office"] #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
-  html[data-board-view="office"] main { display: flex; flex-direction: column; align-items: stretch; flex: 1 1 auto; min-height: 0; width: 100%; max-width: none; padding: 0; }
-  html[data-board-view="office"] main > :not(.office-view), html[data-board-view="office"] :is(.skip:not([data-skip="now"]), .tochat, header .needs, header #clock) { display: none !important; }
-  html[data-board-view="office"] .office-view { display: block; position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: var(--bg);
-    --o-gap: 8px; --o-dock: clamp(272px, 20vw, 340px); --o-chip: 34px; --o-bottom: var(--o-gap); --o-tasks-h: clamp(176px, 27%, 270px);
-    --glass: color-mix(in srgb, var(--panel) 92%, transparent); }
-  .office-scene { position: absolute; inset: 0; z-index: 0; isolation: isolate; } /* its name tags stack among themselves, under every panel */
-  /* The office draws its name tags at 9-10px: larger here (12px and up, the board's floor for labels). */
-  .office-scene .ab-tagin { transform: translate(-50%, -100%) scale(1.35); transform-origin: 50% 100%; }
-  .office-load { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; margin: 0; color: var(--muted); font: var(--fs-sm) var(--mono); }
-  .office-view.loading .office-load { display: flex; }
 
-  /* The demo's window chrome: a 2px border with a dark outline ring, bevel, hard shadow, glass over the room. */
-  .o-panel, .o-chip, .o-pill { background: var(--glass); border: 2px solid var(--border); box-shadow: 0 0 0 2px var(--outline), inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 4px 4px 0 2px rgba(0, 0, 0, .28);
-    -webkit-backdrop-filter: blur(8px) saturate(1.15); backdrop-filter: blur(8px) saturate(1.15); color: var(--ink); }
-  .o-panel { position: absolute; z-index: 3; display: flex; flex-direction: column; min-height: 0; }
-  .o-head { display: flex; align-items: center; gap: var(--s4); min-height: 34px; padding: 2px var(--s2) 2px var(--s5); border-bottom: 2px solid var(--border); flex: 0 0 auto; }
-  .o-head h2, .o-pill .o-t, .o-chip .o-t { font: 700 var(--fs-meta)/1.2 var(--mono); text-transform: uppercase; letter-spacing: .12em; text-shadow: var(--shade); }
-  .o-head h2 { flex: 1 0 auto; color: var(--ink); white-space: nowrap; }
-  .o-head .o-sub { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font: var(--fs-meta) var(--mono); white-space: nowrap; }
+  /* ---------- panels: one component for both views ---------- */
+  /* The demo's pixel window: a 2px border with a dark outline ring, bevel, hard shadow. Its title bar (.o-head) is the
+     one heading component of the page: the panel's name (mono, uppercase), its counts, then its fold button. The 3D view
+     makes the same windows glass over the room. */
+  .o-panel, .o-pill { background: var(--panel); border: 2px solid var(--border); box-shadow: 0 0 0 2px var(--outline), inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 4px 4px 0 2px rgba(0, 0, 0, .18); color: var(--ink); }
+  .o-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .o-head { display: flex; align-items: center; gap: var(--s4); min-height: 34px; padding: 2px var(--s2) 2px var(--s5); border-bottom: 2px solid var(--border); flex: 0 0 auto; min-width: 0; }
+  .o-head h2, .o-h, .o-pill .o-t { font: 700 var(--fs-meta)/1.2 var(--mono); text-transform: uppercase; letter-spacing: .12em; text-shadow: var(--shade); color: var(--ink); }
+  .o-head h2 { flex: 0 0 auto; white-space: nowrap; }
+  .o-head .o-sub { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font: var(--fs-meta) var(--mono); white-space: nowrap; }
+  .o-head .o-ib:first-of-type { margin-left: auto; }
   .o-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--s4) var(--s5) var(--s5); scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
   /* Small square icon buttons in title bars: fold, maximise, close. 26px targets. */
-  .o-ib { width: 26px; min-height: 26px; padding: 0; background: transparent; color: var(--muted); border: 2px solid transparent; box-shadow: none; font: 700 var(--fs-sm)/1 var(--mono); display: inline-flex; align-items: center; justify-content: center; }
+  .o-ib { flex: 0 0 auto; width: 26px; min-height: 26px; padding: 0; background: transparent; color: var(--muted); border: 2px solid transparent; box-shadow: none; font: 700 var(--fs-sm)/1 var(--mono); display: inline-flex; align-items: center; justify-content: center; }
   .o-ib:hover { background: transparent; color: var(--ink); border-color: var(--border); }
   .o-ib:active { transform: translate(1px, 1px); box-shadow: none; }
-  /* Folded: the demo's pill, a title chip in the dock's corner. */
-  .o-pill { position: absolute; z-index: 3; top: var(--o-gap); display: inline-flex; align-items: center; gap: var(--s4); min-height: var(--o-chip); padding: 0 var(--s5); font-size: var(--fs-sm); }
-  .o-pill:hover { background: var(--panel); }
-  .o-pill .o-t { color: var(--ink); }
+  /* Folded: the demo's pill, a title chip where the panel was. */
+  .o-pill { display: inline-flex; align-items: center; gap: var(--s4); min-height: 34px; padding: 0 var(--s5); font-size: var(--fs-sm); }
+  .o-pill:hover { background: var(--raised); }
   .o-pill .o-n { color: var(--warn); font: 700 var(--fs-meta) var(--mono); }
   .o-pill .o-n:empty { display: none; }
   .o-pill .o-ar { color: var(--muted); font-family: var(--mono); }
+  /* Folded to the title bar (Activity, File locks, the 3D Tasks window): the body hides. */
+  .o-panel.folded > .o-body { display: none; }
+  .o-panel.folded > .o-head { border-bottom: 0; }
 
-  /* Docks: full height. */
-  .o-dock { top: var(--o-gap); bottom: var(--o-bottom); width: var(--o-dock); }
-  .o-left { left: var(--o-gap); } .o-right { right: var(--o-gap); }
-  #o-left-pill { left: var(--o-gap); } #o-right-pill { right: var(--o-gap); }
-  /* Needs you: What to do now and the questions, the same block as on the board, stacked for a narrow column. */
+  /* The top bar: the goal, progress, who merges to main and setup, one line (the same in both views). */
+  .topbar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s5); padding: var(--s3) var(--s3) var(--s3) var(--s5); min-height: 42px; font-size: var(--fs-ctl); }
+  .topbar > * { min-width: 0; }
+  .topbar .tb-goal { display: inline-flex; align-items: baseline; gap: var(--s2); flex: 1 1 0; min-width: 9ch; min-height: var(--ctl-xs); font-size: var(--fs-ctl); }
+  .topbar .tb-goal .o-x { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .tb-goal .o-ar { color: var(--muted); font-family: var(--mono); flex: 0 0 auto; }
+  .topbar .tb-goal[aria-expanded="true"] .o-ar { display: inline-block; transform: rotate(180deg); }
+  .topbar .repo-s { flex: 0 1 auto; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .tb-merge { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .acts { display: flex; gap: var(--s3); flex: 0 0 auto; }
+  .topbar .acts button { min-height: var(--ctl-sm); padding: 0 var(--s4); font-size: var(--fs-meta); }
+  @media (min-width: 1101px) { .topbar { flex-wrap: nowrap; } .topbar .stat { flex: 0 0 auto; } }
+  @media (max-width: 600px) { .topbar .tb-goal { flex-basis: 100%; } }
+  /* Popovers: the goal (under the top bar) and the demo time (under the header clock), each edited in place. */
+  .o-pop { position: absolute; z-index: 8; max-height: min(70vh, 560px); }
+  .o-goal { top: calc(100% + var(--s4)); left: 0; width: min(560px, 100%); }
+  .centre > .o-goal { top: 50px; }
+  .o-dl { position: fixed; top: calc(var(--hdr, 54px) + var(--s2)); width: min(400px, calc(100vw - 24px)); z-index: 30; }
+  .o-goal .o-body p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-body); }
+  .o-pop .xacts { margin-top: var(--s4); }
+  .o-form label { margin: 0 0 var(--s2); }
+  .o-form .o-fr + .o-fr { margin-top: var(--s4); }
+  .o-form .o-in { display: flex; align-items: center; gap: var(--s3); }
+  .o-form input[type="number"] { width: 5.5em; }
+  .o-form textarea { min-height: 96px; }
+
+  /* Needs you: the lead, the rest under "Also", the questions with Answer, then what's blocked. */
   .o-left .nyou { background: none; border: 0; box-shadow: none; margin: 0; }
   .o-left .now { flex-direction: column; align-items: stretch; gap: var(--s4); padding: 0; }
   .o-left .now::after { display: none; }
   .o-left .now .nl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; margin: 0; padding: 0; border: 0; }
+  .o-left .now .phases { margin: 0; padding: 0; border: 0; }
+  .o-left .now .phases .ph-l { display: none; }
   .o-left .now .na { flex: 0 0 auto; }
   .o-left .now .appr { align-self: flex-start; }
   .o-left .now .also { flex-direction: column; align-items: flex-start; gap: 0; }
   .o-left .now .also .link + .link::before { display: none; }
   .o-left .now .also .link { padding: 2px 0; }
-  /* The phase track is setup progress, not a need: the Board view has it. */
-  .o-left .now .phases { display: none; }
   html[data-board-view="office"] .now [data-leaves]::after { content: " (Board view)"; color: var(--muted); font-weight: 400; font-size: var(--fs-sm); }
   .o-left .nyou > .attn { padding: var(--s4) 0 0; margin-top: var(--s4); border-top: 2px dashed var(--line); }
-  .o-left .attn > h2:not(.vh) { margin-bottom: var(--s3); }
   .o-left .qs { grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
-  .o-left .qcard { background: color-mix(in srgb, var(--raised) 85%, transparent); padding: var(--s2) var(--s4) var(--s3); }
-  /* A long question shows 3 lines until you answer it (its whole text is read out either way). */
-  .o-left .qcard:not(:focus-within) .qt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+  .o-left .qcard { padding: var(--s2) var(--s4) var(--s3); }
+  /* A long question shows 4 lines until you answer it (its whole text is read out either way). */
+  .o-left .qcard:not(:focus-within) .qt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
   .o-left .qcard .qt { margin: var(--s1) 0 var(--s2); }
   .o-left .qcard textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .o-sec { margin-top: var(--s5); padding-top: var(--s4); border-top: 2px dashed var(--line); }
@@ -873,22 +790,32 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-list .o-why { display: block; color: var(--muted); overflow-wrap: anywhere; }
   .o-list .o-why.bad { color: var(--bad); }
 
-  /* Agents: people, then their agents. A row selects the agent in the room (and a pick in the room selects the row). */
-  .o-person + .o-person { margin-top: var(--s4); }
-  .o-person > .o-pn { display: flex; align-items: baseline; gap: var(--s3); font-size: var(--fs-sm); margin: 0 0 var(--s2); }
+  /* Agents: the team's line, then per person a heading (initial, name, roles, the filter) and one row per agent (tool
+     dot, name, state; what it does, its tool and model), its subagents under it. A row selects the agent (and, in the 3D
+     view, its character in the room); the selected agent shows what it holds and its controls. */
+  .psum { margin: 0 0 var(--s4); font-size: var(--fs-meta); line-height: var(--lh-tight); color: var(--muted); }
+  .psum:empty { display: none; }
+  .people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s4); }
+  .o-pn { display: flex; align-items: center; gap: var(--s3); min-height: var(--ctl-xs); font-size: var(--fs-sm); margin: 0 0 var(--s2); min-width: 0; }
+  .o-pn .pc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .o-pn .pill.role { flex: 0 0 auto; }
+  .o-pn .o-ib { margin-left: auto; width: var(--ctl-xs); min-height: var(--ctl-xs); }
+  .o-pn .o-ib[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+  .o-pn .o-ib .ico { width: 14px; height: 14px; }
+  .person .o-none { font-size: var(--fs-meta); color: var(--muted); margin: 0; }
   .o-agents { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
   .o-agent { display: flex; flex-direction: column; align-items: stretch; gap: 2px; width: 100%; min-height: 0; padding: var(--s3) var(--s4); text-align: left; white-space: normal; font-weight: 400; font-size: var(--fs-sm);
-    background: color-mix(in srgb, var(--raised) 80%, transparent); color: var(--ink); border: 2px solid transparent; box-shadow: none; }
+    background: var(--raised); color: var(--ink); border: 2px solid transparent; box-shadow: none; }
   .o-agent:hover { background: var(--raised); border-color: var(--line-strong); }
   .o-agent:active { transform: none; box-shadow: none; }
-  .o-agent[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .o-agent[aria-pressed="true"] { border-color: var(--line-strong); box-shadow: inset 4px 0 0 hsl(var(--h, 0) 60% var(--dl)); }
   .o-agent .o-r1, .o-agent .o-r2 { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
   .o-agent .o-an { flex: 1 1 auto; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .o-agent .o-r2 { color: var(--muted); font-size: var(--fs-meta); }
   .o-agent .o-r2 .o-tk { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .o-agent .o-r2 .o-cl { flex: 0 0 auto; }
+  .o-agent .o-r2 .o-tk.bad { color: var(--bad); }
+  .o-agent .o-r2 .o-cl { flex: 0 0 auto; min-width: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .o-agent .tdot { margin: 0; }
-  .o-agent.off { opacity: .8; }
   .o-agent.off .o-an { font-weight: 400; color: var(--muted); }
   /* State: a plain muted word, except the three a human acts on, boxed like the demo's chips: Question (amber, the word
      on the room's bubble), Blocked (red) and Out of usage. */
@@ -897,20 +824,114 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-st.question, .o-st.limited { color: var(--warn); } .o-st.blocked { color: var(--bad); }
   .o-helpers { list-style: none; margin: 2px 0 0 var(--s6); padding: 0 0 0 var(--s4); border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-meta); }
   .o-helpers li { display: flex; gap: var(--s3); align-items: baseline; min-width: 0; color: var(--muted); }
-  .o-helpers .o-hn { color: var(--ink); flex: 0 0 auto; }
+  .o-helpers .o-hn { color: var(--ink); flex: 0 0 auto; font-size: var(--fs-meta); }
   .o-helpers .o-hs { flex: 0 0 auto; font-family: var(--mono); }
   .o-helpers .o-hs.question { color: var(--warn); font-weight: 700; } .o-helpers .o-hs.blocked { color: var(--bad); font-weight: 700; }
-  .o-helpers .o-tk { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .o-det { margin: 2px 0 var(--s2); padding: var(--s3) var(--s4) var(--s4); background: color-mix(in srgb, var(--raised) 80%, transparent); font-size: var(--fs-sm); border-left: 4px solid var(--accent); }
+  .o-helpers .o-tk { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .o-helpers .o-hm { flex: 0 0 auto; margin-left: auto; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .o-det { margin: 2px 0 var(--s2); padding: var(--s3) var(--s4) var(--s4); background: var(--raised); font-size: var(--fs-sm); border-left: 4px solid hsl(var(--h, 0) 60% var(--dl)); }
   .o-det ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
-  .o-det li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .o-det .oc-a { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s4); }
+  .o-det .tk { display: flex; gap: var(--s3); align-items: baseline; min-width: 0; }
+  .o-det .tk > * { flex: 0 0 auto; white-space: nowrap; }
+  .o-det .tk button { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; text-align: left; }
+  .o-det .pcap, .o-det .last, .o-det .doing { font-size: var(--fs-meta); color: var(--muted); }
+  .o-det .last, .o-det .doing { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .o-det > * + * { margin-top: var(--s3); }
+  .o-det .oc-a { display: flex; flex-wrap: wrap; gap: var(--s3); }
 
-  /* Tasks: the demo's ticket board window, between the docks at the bottom. Maximised, it covers the room (still glass). */
-  .o-tasks { left: calc(var(--o-dock) + var(--o-gap) * 2); right: calc(var(--o-dock) + var(--o-gap) * 2); bottom: var(--o-bottom); height: var(--o-tasks-h); }
-  .o-tasks.max { left: var(--o-gap); right: var(--o-gap); top: var(--o-gap); height: auto; z-index: 6; }
+  /* Activity: filters, the feed, the chat. File locks: folded to their title bar (with the count) by default. */
+  .o-act > .o-body { display: flex; flex-direction: column; padding: var(--s3) var(--s5) var(--s4); overflow: hidden; }
+  .o-act .tabs { justify-content: flex-start; margin: 0 0 var(--s3); flex: 0 0 auto; }
+  .o-act .tabs button { padding: 0 var(--s2); min-width: var(--ctl-xs); }
+  .o-act .feedwrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .o-act .feed { max-height: none; flex: 1 1 auto; min-height: 96px; }
+  .o-locks .panel-hint { margin: 0 0 var(--s3); }
+
+  /* ---------- Board view: the panels as three columns ---------- */
+  /* The side columns stick under the header and scroll on their own, so the board never leaves the screen. A folded
+     Needs you leaves its chip and gives the board the width. */
+  main { --dock: clamp(272px, 20vw, 340px); --top: calc(var(--hdr, 54px) + var(--s4)); isolation: isolate;
+    display: grid; grid-template-columns: var(--dock-l, var(--dock)) minmax(0, 1fr) var(--dock); grid-template-areas: "left centre right"; gap: var(--s5); align-items: start;
+    padding: var(--s4) var(--s5) var(--s5); max-width: 2400px; margin: 0 auto; }
+  @media (max-width: 1400px) { main { --dock: clamp(256px, 20vw, 280px); } }
+  main.l-off { --dock-l: max-content; }
+  #o-left, #o-left-pill { grid-area: left; } .centre { grid-area: centre; } .o-rcol { grid-area: right; }
+  .centre { position: relative; display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
+  .office-view { display: none; }
+  html:not([data-board-view="office"]) #o-left { position: sticky; top: var(--top); max-height: calc(100vh - var(--top) - var(--s5)); margin: 2px; }
+  html:not([data-board-view="office"]) #o-left-pill { position: sticky; top: var(--top); margin: 2px; justify-self: start; }
+  html:not([data-board-view="office"]) .topbar { margin: 2px; }
+  .o-rcol { display: flex; flex-direction: column; gap: calc(var(--gap) + 4px); min-width: 0; min-height: 0; }
+  html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top); height: calc(100vh - var(--top) - var(--s5)); padding: 2px 6px 6px 2px; margin-right: -6px; }
+  .o-rcol > .o-right { flex: 0 0 auto; min-height: 120px; max-height: 45%; } /* its rows up to 45%; Activity takes the rest, its feed scrolling */
+  .o-rcol > .o-act { flex: 0 1 auto; min-height: 0; }
+  .o-rcol > #o-right-pill:not([hidden]) + .o-act:not(.folded) { flex: 1 1 auto; } /* Agents folded: Activity takes the column */
+  .o-rcol > .o-locks { flex: 0 1 auto; min-height: 0; max-height: 40%; }
+  .o-rcol > .o-act.folded, .o-rcol > .o-locks.folded { flex: 0 0 auto; }
+  .o-rcol > .o-act.folded { margin-top: auto; }
+  .o-rcol > #o-right-pill { align-self: flex-end; flex: 0 0 auto; }
+  /* Short laptop screens: the chat hint is the composer's description (read out, and its tooltip), so the feed keeps
+     the room. */
+  @media (max-height: 900px) { .o-act #chat-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
+  /* Up to 1100px: two columns. Needs you over Agents and Activity on the left, the board on the right; the page scrolls
+     as one. */
+  @media (max-width: 1100px) {
+    main { grid-template-columns: 264px minmax(0, 1fr); grid-template-areas: "left centre" "right centre"; grid-template-rows: auto 1fr; }
+    html:not([data-board-view="office"]) :is(#o-left, #o-left-pill, .o-rcol) { position: static; max-height: none; height: auto; }
+    html:not([data-board-view="office"]) .o-rcol { padding: 0; margin: 0; }
+    html:not([data-board-view="office"]) .o-rcol > .o-panel { flex: 0 0 auto; max-height: none; }
+    html:not([data-board-view="office"]) .o-act .feed { max-height: 50vh; }
+  }
+  /* Tablets and phones: one column, in order of what matters: what needs you, the board, the agents, Activity. */
+  @media (max-width: 1000px) {
+    main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "left" "centre" "right"; grid-template-rows: none; }
+  }
+
+  /* ---------- 3D view: the same panels over the room ---------- */
+  /* The room fills the window under the header; the panels float over it as glass: Needs you (left), Agents with
+     Activity and File locks under it (right), the top bar, and Tasks (a window at the foot, folded to its title bar on
+     screens up to 900px tall). The header (and every popover and dialog) stays above all of them. */
+  html[data-board-view="office"] body { overflow: hidden; }
+  html[data-board-view="office"] #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+  html[data-board-view="office"] main { display: block; position: relative; flex: 1 1 auto; min-height: 0; width: 100%; max-width: none; padding: 0; overflow: hidden; background: var(--bg);
+    --o-gap: 8px; --o-bottom: var(--o-gap); --o-tasks-h: clamp(176px, 27%, 270px); --glass: color-mix(in srgb, var(--panel) 92%, transparent); }
+  html[data-board-view="office"] :is(.o-panel, .o-pill) { background: var(--glass); box-shadow: 0 0 0 2px var(--outline), inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 4px 4px 0 2px rgba(0, 0, 0, .28);
+    -webkit-backdrop-filter: blur(8px) saturate(1.15); backdrop-filter: blur(8px) saturate(1.15); }
+  html[data-board-view="office"] :is(.o-agent, .o-det, .qcard) { background: color-mix(in srgb, var(--raised) 85%, transparent); }
+  html[data-board-view="office"] :is(.skip[data-skip="tasks"], .tochat) { display: none !important; }
+  html[data-board-view="office"] .office-view { display: block; position: absolute; inset: 0; overflow: hidden; }
+  .office-scene { position: absolute; inset: 0; z-index: 0; isolation: isolate; } /* its name tags stack among themselves, under every panel */
+  /* The office draws its name tags at 9-10px: larger here (12px and up, the board's floor for labels). */
+  .office-scene .ab-tagin { transform: translate(-50%, -100%) scale(1.35); transform-origin: 50% 100%; }
+  .office-load { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; margin: 0; color: var(--muted); font: var(--fs-sm) var(--mono); }
+  .office-view.loading .office-load { display: flex; }
+  html[data-board-view="office"] #o-left { position: absolute; z-index: 3; top: var(--o-gap); left: var(--o-gap); width: var(--dock); max-height: calc(100% - var(--o-gap) - var(--o-bottom)); } /* as tall as its content, like on the Board view */
+  html[data-board-view="office"] #o-left-pill { position: absolute; z-index: 3; top: var(--o-gap); left: var(--o-gap); }
+  html[data-board-view="office"] .o-rcol { position: absolute; z-index: 3; top: var(--o-gap); bottom: var(--o-bottom); right: var(--o-gap); width: var(--dock); pointer-events: none; }
+  html[data-board-view="office"] .o-rcol > * { pointer-events: auto; }
+  /* The centre column keeps only the top bar (and the goal under it), between the docks. */
+  html[data-board-view="office"] .centre { position: absolute; top: var(--o-gap); left: calc(var(--dock) + var(--o-gap) * 2); right: calc(var(--dock) + var(--o-gap) * 2); display: block; pointer-events: none; }
+  html[data-board-view="office"] .centre > :not(#topbar, #o-goal) { display: none !important; }
+  html[data-board-view="office"] .centre > * { pointer-events: auto; }
+  html[data-board-view="office"] .topbar { position: relative; z-index: 4; }
+  html[data-board-view="office"] .centre > .o-goal { left: 50%; translate: -50% 0; }
+  /* Tasks: the board's columns (or its table) in a window between the docks at the bottom. Its title bar is the
+     board's task bar: Tasks, search, Show and Columns / Table. Maximised, it covers the room under the top bar (still glass). */
+  .o-tasks { position: absolute; z-index: 3; left: calc(var(--dock) + var(--o-gap) * 2); right: calc(var(--dock) + var(--o-gap) * 2); bottom: var(--o-bottom); height: var(--o-tasks-h); }
+  .o-tasks.max { left: var(--o-gap); right: var(--o-gap); top: calc(var(--o-gap) * 2 + var(--tb-h, 48px)); height: auto; z-index: 6; } /* under the top bar, which stays */
+  .o-tasks > .o-head { padding-left: var(--s4); }
+  .o-tasks .taskbar { flex: 1 1 auto; min-width: 0; margin: 0; flex-wrap: nowrap; gap: var(--s4); }
+  .o-tasks .taskbar .tsearch { flex: 0 1 240px; }
+  .o-tasks .taskbar .filter select { max-width: 150px; }
+  .o-tasks .taskbar .tabs { margin-left: auto; }
+  .o-tasks.folded .taskbar > :not(h2) { display: none; }
+  /* Folded, the Tasks window is just its title bar, centred at the foot. */
+  .o-tasks.folded { left: 50%; right: auto; translate: -50% 0; width: max-content; height: auto; max-width: calc(100% - 2 * var(--dock) - 4 * var(--o-gap)); }
+  .o-tasks.folded > .o-head { gap: var(--s5); }
+  .o-tasks.folded #o-tasks-max { display: none; }
   .o-cols { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--s3); height: 100%; min-height: 0; }
   .o-tasks .o-body { padding: var(--s3) var(--s4) var(--s4); overflow: hidden; }
+  .o-tasks .ttable { height: 100%; margin: 0; overflow: auto; box-shadow: none; background: transparent; }
   .o-col { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: color-mix(in srgb, var(--sunken) 70%, transparent); border: 2px solid var(--line); }
   .o-col h3 { display: flex; align-items: center; gap: var(--s3); margin: 0; padding: 2px var(--s3); min-height: 26px; border-bottom: 2px solid var(--line); font: 700 var(--fs-micro)/1.2 var(--font); color: var(--ink); white-space: nowrap; overflow: hidden; }
   .o-col h3 > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -937,64 +958,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-card .id { color: var(--muted); font-variant-numeric: tabular-nums; }
   .o-card .o-cw { display: block; color: var(--muted); font-size: var(--fs-meta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .o-card .o-cw.bad { color: var(--bad); }
-
-  /* Activity: the board's own feed and chat, in a window above its chip (over the Agents dock). */
-  /* The right column: Agents over Activity (the board's own feed, filters and chat), each scrolling on its own and each
-     folding (Agents to its chip at the top, Activity to its title bar at the foot). */
-  .o-rcol { position: absolute; z-index: 3; top: var(--o-gap); bottom: var(--o-bottom); right: var(--o-gap); width: var(--o-dock); display: flex; flex-direction: column; gap: calc(var(--o-gap) + 4px); pointer-events: none; }
-  .o-rcol > * { pointer-events: auto; }
-  .o-rcol > .o-panel { position: relative; top: auto; bottom: auto; left: auto; right: auto; width: auto; min-height: 0; }
-  .o-rcol > .o-right { flex: 1 1 0; min-height: 120px; }
-  .o-rcol > .o-act { flex: 1.3 1 0; min-height: 0; }
-  .o-rcol > #o-right-pill { position: static; align-self: flex-end; }
-  .o-act.folded, .o-tasks.folded { flex: 0 0 auto; height: auto; }
-  .o-act.folded { margin-top: auto; }
-  /* Folded, the Tasks window is just its title bar (Tasks, the progress, the button to show it), centred at the foot. */
-  .o-tasks.folded { left: 50%; right: auto; translate: -50% 0; width: max-content; max-width: calc(100% - 2 * var(--o-dock) - 4 * var(--o-gap)); }
-  .o-tasks.folded > .o-head { border-bottom: 0; gap: var(--s5); }
-  .o-act.folded > .o-body, .o-tasks.folded > .o-body, .o-tasks.folded #o-tasks-max { display: none; }
-  .o-act > .o-body { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
-  .o-act .panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin: 0; border: 0; box-shadow: none; background: transparent; padding: var(--s3) var(--s5) var(--s4); }
-  .o-act .panel > .sec-h:first-child { flex: 0 0 auto; margin: 0 0 var(--s3); padding: 0; border: 0; min-height: var(--ctl-xs); }
-  .o-act .panel > .sec-h h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .o-act .feedwrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-  .o-act .feed { max-height: none; flex: 1 1 auto; min-height: 0; }
-  .o-act .tabs button { padding: 0 var(--s2); min-width: var(--ctl-xs); }
-
-  /* Popovers under the top chips: the goal and the demo time (each edited in place) and the theme picker. */
-  .o-pop { top: calc(var(--o-gap) * 2 + var(--o-chip)); left: 50%; translate: -50% 0; width: min(560px, calc(100% - 2 * var(--o-dock) - 6 * var(--o-gap))); max-height: calc(100% - var(--o-chip) * 2 - var(--o-gap) * 4); z-index: 7; }
-  .o-dl { width: min(400px, calc(100% - 2 * var(--o-gap))); }
-  .o-goal .o-body p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-body); }
-  .o-pop .xacts { margin-top: var(--s4); }
-  .o-form label { margin: 0 0 var(--s2); }
-  .o-form .o-fr + .o-fr { margin-top: var(--s4); }
-  .o-form .o-in { display: flex; align-items: center; gap: var(--s3); }
-  .o-form input[type="number"] { width: 5.5em; }
-  .o-form textarea { min-height: 96px; }
-
-  /* Chips: the goal and the demo time, on top between the docks. */
-  .o-chips { position: absolute; z-index: 4; display: flex; gap: var(--o-gap); align-items: center; min-width: 0; pointer-events: none; }
-  .o-chips > * { pointer-events: auto; }
-  .o-top { top: var(--o-gap); left: calc(var(--o-dock) + var(--o-gap) * 2); right: calc(var(--o-dock) + var(--o-gap) * 2); justify-content: center; }
-  .o-chip { display: inline-flex; align-items: center; gap: var(--s4); min-height: var(--o-chip); max-width: 100%; min-width: 0; padding: 0 var(--s5); font-size: var(--fs-sm); font-weight: 400; white-space: nowrap; }
-  button.o-chip:hover { background: var(--panel); }
-  button.o-chip:active { transform: translate(1px, 1px); }
-  .o-chip .o-t { color: var(--accent); flex: 0 0 auto; }
-  .o-chip .o-x { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
-  .o-chip .o-x.muted { color: var(--muted); }
-  .o-chip .o-ar { color: var(--muted); font-family: var(--mono); flex: 0 0 auto; }
-  .o-chip[aria-expanded="true"] .o-ar { transform: rotate(180deg); }
-  #o-goal-chip { flex: 0 1 auto; min-width: 10rem; }
-  #o-dl-chip { flex: 0 0 auto; }
-  #o-dl-chip .fz { display: none; } /* the freeze time is in its tooltip; the countdown never gets cut */
-  #o-dl-chip .vd.ok { color: var(--ok); } #o-dl-chip .vd.tight, #o-dl-chip .vd.behind { color: var(--warn); }
-  #o-dl-chip.warn .o-x, #o-dl-chip.frozen .o-x { color: var(--warn); }
-  /* Progress (x of y done, a bar) in the Tasks title bar, also when the window is folded to it. */
-  .o-prog { display: inline-flex; align-items: center; gap: var(--s4); min-width: 0; flex: 0 1 auto; }
-  .o-bar { display: inline-flex; width: 72px; height: 10px; flex: 0 0 auto; background: var(--field); box-shadow: 0 0 0 2px var(--line-strong); overflow: hidden; }
-  .o-bar i { display: block; height: 100%; background: var(--ok); }
-  /* Narrow laptops: the docks get a little narrower. */
-  @media (max-width: 1400px) { html[data-board-view="office"] .office-view { --o-dock: clamp(256px, 20vw, 280px); } }
+  .o-bar, .mbar { display: inline-block; width: 48px; height: 8px; background: var(--field); box-shadow: 0 0 0 1px var(--line-strong); }
+  .o-bar i, .mbar i { display: block; height: 100%; background: var(--ok); }
 
   /* ---------- command palette (Ctrl+K) ---------- */
   #pal-dlg { width: min(560px, calc(100vw - 24px)); margin: 12vh auto auto; padding: var(--s4); }
@@ -1050,7 +1015,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     #link-btn .lt { display: none; }
     #link-btn { width: var(--ctl); padding: 0; justify-content: center; }
     main { padding: var(--s4) var(--s4) 72px; gap: var(--gap); } /* room under the last item for the Chat button */
-    .filter span, .person .last { display: none; }
+    .filter span { display: none; }
     .filter { flex: 1 1 140px; min-width: 0; } .filter select { width: 100%; max-width: none; }
     .sumbar .goal { flex-basis: 100%; white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
     .person .pchips { flex-wrap: wrap; padding: var(--s1) 0; }
@@ -1076,10 +1041,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   /* ---------- touch: every control at least 32px tall ---------- */
   @media (hover: none) and (pointer: coarse) {
     .card .mv { min-height: var(--ctl-xs); }
-    .person .ptog { min-height: var(--ctl-sm); }
     .needs button { min-height: var(--ctl-sm); }
     /* Names and #ids inside text: a taller hit area that doesn't move the text. */
-    #feed button.link, #locks button.link, #questions button.link, #now .link { padding: var(--s4) var(--s3); margin: calc(-1 * var(--s4)) calc(-1 * var(--s3)); }
+    #feed button.link, #locks button.link, #questions button.link, #now .link, .o-helpers button.link, #o-blocked button.link { padding: var(--s4) var(--s3); margin: calc(-1 * var(--s4)) calc(-1 * var(--s3)); }
+    .o-ib { width: var(--ctl-sm); min-height: var(--ctl-sm); }
     /* The boxed rows in What to do now are big enough as they are. */
     #now .na.link, #now .also .link { margin: 0; min-height: var(--ctl-sm); }
     #now .na.link { padding: 6px 0 6px 20px; }
@@ -1134,7 +1099,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <div class="vseg" id="vseg" role="group" aria-label="View" hidden><button type="button" data-vset="board" aria-pressed="true" tabindex="-1" title="The task board">Board</button><button type="button" data-vset="office" aria-pressed="false" aria-label="3D office" title="The team's agents in a live 3D office, with what needs you, the agents and the tasks around it">3D<span class="lt"> office</span></button></div>
     <span class="tagline">your team's AI coding agents, on one task board</span>
     <span id="conn" class="conn" role="status">Connecting…</span>
-    <button type="button" id="clock" class="clock" data-act="clock" hidden></button>
+    <button type="button" id="clock" class="clock" data-act="clock" aria-expanded="false" aria-controls="o-dl" hidden></button>
     <div class="needs" id="needs"></div>
     <span class="sp"></span>
     <div class="hacts">
@@ -1149,73 +1114,48 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         <button id="help-btn" class="ghost icon help" title="What does everything mean? (?)" aria-label="Help: what everything on this page means">?</button>
       </span>
     </div>
+    <!-- The demo time, edited in place under the header clock (both views). -->
+    <section class="o-panel o-pop o-dl" id="o-dl" aria-labelledby="o-dl-h" hidden>
+      <div class="o-head"><h2 id="o-dl-h">Demo time</h2><button type="button" class="o-ib" data-o-close="dl" aria-label="Close the demo time">×</button></div>
+      <div class="o-body" id="o-dl-b"></div>
+    </section>
   </header>
   <div id="downbar" class="downbar" role="alert" hidden></div>
   <div id="announcer" class="vh" aria-live="polite"></div>
   <div id="activity-live" class="vh" aria-live="polite" aria-atomic="true"></div>
   <a class="tochat" id="tochat" href="#f-h">Chat</a>
   <main id="main">
-    <!-- Board view: three regions, like the 3D view's docks. Left: what needs you. Centre: the goal bar and the task
-         board. Right: who's doing what, Activity (feed and chat), file locks. The rails stay in view while the board
-         scrolls; on a phone everything stacks in this order. -->
-    <div class="rail rail-l" id="rail-l">
-      <div class="nyou" id="nyou">
-        <section id="now" class="now" aria-labelledby="now-h"></section>
-        <section id="q-panel" class="panel attn" aria-labelledby="q-h" hidden>
-          <h2 id="q-h" class="vh"></h2>
-          <div class="qs" id="questions"></div>
-        </section>
+    <!-- One set of regions for both views. Left: Needs you. Centre: the top bar (goal, progress, who merges), then the
+         Board view's task board or the 3D view's room. Right: Agents, Activity, File locks. The Board view lays them out
+         as columns (the side columns stay in view while the board scrolls; on a phone everything stacks in this order);
+         the 3D view floats the same panels over the room. Each panel folds the same way in both, remembered in this
+         browser. -->
+    <aside class="o-panel o-dock o-left" id="o-left" aria-labelledby="o-left-h">
+      <div class="o-head"><h2 id="o-left-h">Needs you</h2><span class="o-sub" id="o-left-sub"></span><button type="button" class="o-ib" data-o-fold="left" aria-expanded="true" aria-controls="o-left" aria-label="Fold Needs you to a chip" title="Fold">‹</button></div>
+      <div class="o-body" id="o-left-b">
+        <div class="nyou" id="nyou">
+          <section id="now" class="now" aria-labelledby="now-h"></section>
+          <section id="q-panel" class="panel attn" aria-labelledby="q-h" hidden>
+            <h2 id="q-h" class="vh"></h2>
+            <div class="qs" id="questions"></div>
+          </section>
+        </div>
+        <div id="o-blocked"></div>
       </div>
-    </div>
+    </aside>
+    <button type="button" class="o-pill" id="o-left-pill" data-o-fold="left" aria-expanded="false" aria-controls="o-left" hidden><span class="o-t">Needs you</span><span class="o-n" id="o-left-n"></span><span class="o-ar" aria-hidden="true">›</span></button>
 
-    <section id="office-view" class="office-view" aria-label="3D office">
-      <div id="office-scene" class="office-scene" role="img" aria-label="The team's agents in a 3D office, one character per online agent. The Agents panel lists the same agents"></div>
-      <p class="office-load" aria-hidden="true">Loading the 3D office…</p>
-      <div class="o-chips o-top" role="group" aria-label="Goal and demo time">
-        <button type="button" class="o-chip" id="o-goal-chip" aria-expanded="false" aria-controls="o-goal"><span class="o-t">Goal</span><span class="o-x" id="o-goal-x"></span><span class="o-ar" aria-hidden="true">▾</span></button>
-        <button type="button" class="o-chip" id="o-dl-chip" aria-expanded="false" aria-controls="o-dl"><span class="o-t">Demo</span><span class="o-x" id="o-dl-x"></span><span class="o-ar" aria-hidden="true">▾</span></button>
-      </div>
+    <div class="centre" id="centre">
+      <section id="topbar" class="o-panel topbar" aria-label="Goal and progress"></section>
       <section class="o-panel o-pop o-goal" id="o-goal" aria-labelledby="o-goal-h" hidden>
         <div class="o-head"><h2 id="o-goal-h">Goal</h2><button type="button" class="o-ib" data-o-close="goal" aria-label="Close the goal">×</button></div>
         <div class="o-body" id="o-goal-b"></div>
       </section>
-      <section class="o-panel o-pop o-dl" id="o-dl" aria-labelledby="o-dl-h" hidden>
-        <div class="o-head"><h2 id="o-dl-h">Demo time</h2><button type="button" class="o-ib" data-o-close="dl" aria-label="Close the demo time">×</button></div>
-        <div class="o-body" id="o-dl-b"></div>
-      </section>
-
-      <aside class="o-panel o-dock o-left" id="o-left" aria-labelledby="o-left-h">
-        <div class="o-head"><h2 id="o-left-h">Needs you</h2><span class="o-sub" id="o-left-sub"></span><button type="button" class="o-ib" data-o-fold="left" aria-expanded="true" aria-controls="o-left" aria-label="Fold Needs you to a chip" title="Fold">‹</button></div>
-        <div class="o-body" id="o-left-b"><div id="o-blocked"></div></div>
-      </aside>
-      <button type="button" class="o-pill" id="o-left-pill" data-o-fold="left" aria-expanded="false" aria-controls="o-left" hidden><span class="o-t">Needs you</span><span class="o-n" id="o-left-n"></span><span class="o-ar" aria-hidden="true">›</span></button>
-
-
-      <section class="o-panel o-tasks" id="o-tasks" aria-labelledby="o-tasks-h">
-        <div class="o-head"><h2 id="o-tasks-h">Tasks</h2><span class="o-prog" id="o-prog" title="Tasks merged into main (proposals not counted)"><span class="o-sub" id="o-prog-x"></span><span class="o-bar" aria-hidden="true"><i id="o-prog-bar"></i></span></span><button type="button" class="o-ib" id="o-tasks-max" data-o-max aria-pressed="false" aria-label="Maximise the tasks" title="Maximise">□</button><button type="button" class="o-ib" id="o-tasks-fold" data-o-fold="tasks" aria-expanded="true" aria-controls="o-tasks-b" aria-label="Fold the tasks to their title bar" title="Fold">▾</button></div>
-        <div class="o-body" id="o-tasks-b"><div class="o-cols" id="o-cols"></div></div>
-      </section>
-
-      <!-- The right column: Agents, and under it Activity (the board's own feed, filters and chat). Each folds. -->
-      <div class="o-rcol" id="o-rcol">
-        <aside class="o-panel o-dock o-right" id="o-right" aria-labelledby="o-right-h">
-          <div class="o-head"><h2 id="o-right-h">Agents</h2><span class="o-sub" id="o-right-sub"></span><button type="button" class="o-ib" data-o-fold="right" aria-expanded="true" aria-controls="o-right" aria-label="Fold Agents to a chip" title="Fold">›</button></div>
-          <div class="o-body" id="o-agents"></div>
-        </aside>
-        <button type="button" class="o-pill" id="o-right-pill" data-o-fold="right" aria-expanded="false" aria-controls="o-right" hidden><span class="o-ar" aria-hidden="true">‹</span><span class="o-t">Agents</span><span class="o-sub o-n" id="o-right-n"></span></button>
-        <section class="o-panel o-act" id="o-act" aria-labelledby="o-act-h">
-          <div class="o-head"><h2 id="o-act-h">Activity</h2><span class="o-sub" id="o-act-x"></span><button type="button" class="o-ib" id="o-act-fold" data-o-fold="act" aria-expanded="true" aria-controls="o-act-b" aria-label="Fold Activity to its title bar" title="Fold">▾</button></div>
-          <div class="o-body" id="o-act-b"></div>
-        </section>
-      </div>
-    </section>
-
-    <div class="centre" id="centre">
-      <section id="setup" class="panel setup" aria-label="Goal and team setup"></section>
-      <section aria-labelledby="b-h" class="boardwrap">
-        <h2 id="b-h" class="vh">Tasks</h2>
+      <section id="setup" class="panel setup" aria-label="Start here" hidden></section>
+      <section aria-labelledby="b-h" class="boardwrap" id="boardwrap">
         <div class="filterbar" id="filterbar" hidden></div>
         <div class="taskbar" id="taskbar">
+          <h2 id="b-h" class="o-h">Tasks</h2>
           <label class="tsearch"><span class="vh">Search tasks</span><input type="search" id="tsearch" autocomplete="off" placeholder="Search tasks: title, #id, person" aria-label="Search tasks by title, number, assignee or reviewer"></label>
           <label class="filter"><span>Show</span><select id="filter" aria-label="Show tasks for"></select></label>
           <div class="tabs" id="viewtog" role="group" aria-label="Task view"><button type="button" data-view="columns" aria-pressed="true">Columns</button><button type="button" data-view="table" aria-pressed="false">Table</button></div>
@@ -1229,14 +1169,26 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       </section>
     </div>
 
-    <div class="rail rail-r side" id="rail-r">
-      <section class="panel ppl" id="p-panel" aria-labelledby="p-h">
-        <div class="sec-h"><h2 id="p-h">Who's doing what</h2><span class="muted psum" id="p-sum"></span>
-          <span class="plegend" id="p-legend" title="Agent pills: x/y = tasks it holds / tasks it may hold at once"><span class="muted">Pills:</span> <span class="pill ok">has room</span> <span class="pill full">full</span> <span class="pill warn">not started or out of usage</span> <span class="pill">offline</span></span></div>
-        <ul class="people" id="people"></ul>
+    <section id="office-view" class="office-view" aria-label="3D office">
+      <div id="office-scene" class="office-scene" role="img" aria-label="The team's agents in a 3D office, one character per online agent. The Agents panel lists the same agents"></div>
+      <p class="office-load" aria-hidden="true">Loading the 3D office…</p>
+      <!-- Tasks: the Board view's columns in a window at the foot of the room. Its title bar is the Board view's task bar
+           (Tasks, search, Show), moved in here while the 3D view is on. -->
+      <section class="o-panel o-tasks" id="o-tasks" aria-labelledby="b-h">
+        <div class="o-head" id="o-tasks-head"><button type="button" class="o-ib" id="o-tasks-max" data-o-max aria-pressed="false" aria-label="Maximise the tasks" title="Maximise">□</button><button type="button" class="o-ib" id="o-tasks-fold" data-o-fold="tasks" aria-expanded="true" aria-controls="o-tasks-b" aria-label="Fold the tasks to their title bar" title="Fold">▾</button></div>
+        <div class="o-body" id="o-tasks-b"><div class="o-cols" id="o-cols"></div></div>
       </section>
-      <section class="panel act" id="f-panel" aria-labelledby="f-h">
-        <div class="sec-h"><h2 id="f-h">Activity</h2>
+    </section>
+
+    <div class="o-rcol" id="o-rcol">
+      <aside class="o-panel o-dock o-right" id="o-right" aria-labelledby="o-right-h">
+        <div class="o-head"><h2 id="o-right-h">Agents</h2><span class="o-sub" id="o-right-sub"></span><button type="button" class="o-ib" data-o-fold="right" aria-expanded="true" aria-controls="o-right" aria-label="Fold Agents to a chip" title="Fold">›</button></div>
+        <div class="o-body" id="o-agents"><p class="psum" id="p-sum"></p><ul class="people" id="people"></ul></div>
+      </aside>
+      <button type="button" class="o-pill" id="o-right-pill" data-o-fold="right" aria-expanded="false" aria-controls="o-right" hidden><span class="o-ar" aria-hidden="true">‹</span><span class="o-t">Agents</span><span class="o-sub o-n" id="o-right-n"></span></button>
+      <section class="o-panel o-act" id="o-act" aria-labelledby="f-h">
+        <div class="o-head"><h2 id="f-h">Activity</h2><span class="o-sub" id="o-act-x"></span><button type="button" class="o-ib" id="o-act-fold" data-o-fold="act" aria-expanded="true" aria-controls="o-act-b" aria-label="Fold Activity to its title bar" title="Fold">▾</button></div>
+        <div class="o-body" id="o-act-b">
           <div class="tabs" id="tabs">
             <button data-tab="all" aria-pressed="true">All</button>
             <button data-tab="chat" aria-pressed="false">Chat</button>
@@ -1244,22 +1196,22 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
             <button data-tab="problems" aria-pressed="false" title="Blocked or sent-back tasks, usage limits, name clashes">Problems</button>
             <button data-tab="merges" aria-pressed="false" title="Merges and reviews: tasks going to review, and merged into main">Merges</button>
           </div>
+          <div class="feedwrap">
+            <div class="feed" id="feed" role="log" aria-live="off" tabindex="0" aria-label="Activity feed"></div>
+            <button class="jump" id="jump" hidden>New activity ↓</button>
+          </div>
+          <form class="composer" id="composer">
+            <select id="chan" aria-label="Channel"><option>general</option><option>help</option><option>review</option><option>humans</option></select>
+            <textarea id="msg" rows="1" autocomplete="off" spellcheck="true" aria-label="Message" aria-describedby="chat-hint" title="Agents read this chat: @name for one agent, @all for everyone. Enter sends, Shift+Enter adds a line" placeholder="Message, @ to mention" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="msg-ac"></textarea>
+            <ul id="msg-ac" class="ac" role="listbox" aria-label="Names to mention" hidden></ul>
+            <button type="submit" id="send">Send</button>
+          </form>
+          <p class="hint" id="chat-hint">Agents read this chat: <code>@alice</code> for alice's agent, <code>@all</code> for everyone. Enter sends, Shift+Enter adds a line<span id="slash-hint"> · press / to focus</span></p>
         </div>
-        <div class="feedwrap">
-          <div class="feed" id="feed" role="log" aria-live="off" tabindex="0" aria-label="Activity feed"></div>
-          <button class="jump" id="jump" hidden>New activity ↓</button>
-        </div>
-        <form class="composer" id="composer">
-          <select id="chan" aria-label="Channel"><option>general</option><option>help</option><option>review</option><option>humans</option></select>
-          <textarea id="msg" rows="1" autocomplete="off" spellcheck="true" aria-label="Message" aria-describedby="chat-hint" title="Agents read this chat: @name for one agent, @all for everyone. Enter sends, Shift+Enter adds a line" placeholder="Message, @ to mention" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="msg-ac"></textarea>
-          <ul id="msg-ac" class="ac" role="listbox" aria-label="Names to mention" hidden></ul>
-          <button type="submit" id="send">Send</button>
-        </form>
-        <p class="hint" id="chat-hint">Agents read this chat: <code>@alice</code> for alice's agent, <code>@all</code> for everyone. Enter sends, Shift+Enter adds a line<span id="slash-hint"> · press / to focus</span></p>
       </section>
-      <section class="panel locksp" aria-labelledby="l-h">
-        <div class="sec-h"><h2 id="l-h"><button type="button" class="ltog" id="l-tog" aria-expanded="false" aria-controls="l-body"><span class="chev" aria-hidden="true"></span>File locks <span class="muted fw-normal" id="l-count"></span></button></h2></div>
-        <div id="l-body" hidden>
+      <section class="o-panel o-locks" id="o-locks" aria-labelledby="l-h">
+        <div class="o-head"><h2 id="l-h">File locks</h2><span class="o-sub" id="l-count"></span><button type="button" class="o-ib" id="l-tog" data-o-fold="locks" aria-expanded="false" aria-controls="l-body" aria-label="Show the file locks" title="Show">▴</button></div>
+        <div class="o-body" id="l-body" hidden>
           <p class="panel-hint">"I'm editing this shared file, don't touch it." Agents set these themselves; they expire on their own.</p>
           <ul class="locks" id="locks"></ul>
         </div>
@@ -1332,7 +1284,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dt>Proposed</dt>
     <dd>A task an agent other than the planner suggested. Nobody can claim it until the planner (or you, with Approve on the card) approves it.</dd>
     <dt>Out of usage</dt>
-    <dd>Mark an agent whose subscription hit its usage limit (open its row under People). The board stops counting it as available, and other agents may take over the tasks it holds. It clears at the time you give, or when the agent talks to the board again.</dd>
+    <dd>Mark an agent whose subscription hit its usage limit (select it under <b>Agents</b>). The board stops counting it as available, and other agents may take over the tasks it holds. It clears at the time you give, or when the agent talks to the board again.</dd>
     <dt>Task statuses</dt>
     <dd><b>Proposed</b> suggested by an agent, waiting for approval → <b>Open</b> ready to pick up → <b>Claimed</b> an agent took it → <b>In progress</b> being worked on → <b>Blocked</b> stuck, needs help → <b>Review</b> pushed to a branch, waiting to be merged → <b>Done</b> merged into main. Drag cards between columns to change a status yourself.</dd>
     <dt>Waits on #3</dt>
@@ -1347,8 +1299,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dd>Open a card and pick an agent under <b>Reserve for</b>: only that agent can claim the task, and it's listed first for them. Pick "Anyone" to remove it.</dd>
     <dt>File lock</dt>
     <dd>"I'm editing this shared file, don't touch it." Agents set these on busy files (like <code>package.json</code>) and they expire on their own. Release one only if its owner is gone.</dd>
-    <dt>Questions</dt>
-    <dd>When an agent needs a human decision it asks here and waits. Its question is waiting for a human answer under <b>What to do now</b>, at the top of the board: answer it there (or in the task's dialog, if the task is blocked on it); the agent continues as soon as you reply. When you've scrolled down, the header's <b>need you</b> badge counts what's waiting and takes you back up.</dd>
+    <dt>Questions (Needs you)</dt>
+    <dd>When an agent needs a human decision it asks here and waits. Its question is waiting for a human answer under <b>Needs you</b>, on the left: answer it there (or in the task's dialog, if the task is blocked on it); the agent continues as soon as you reply. When Needs you is out of view or folded, the header's <b>need you</b> badge (or its chip) counts what's waiting.</dd>
     <dt>Talking to agents</dt>
     <dd>Agents read the chat in Activity. Write <code>@alice</code> to address alice's agent, <code>@alice/ui-worker</code> for one subagent, or <code>@all</code> for everyone. <code>#12</code> links to task 12.</dd>
     <dt>Demo time &amp; feature freeze</dt>
@@ -1356,7 +1308,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dt>Plan approval</dt>
     <dd>Optional (Start here, step 4). When it's on, agents wait after the planner writes the task list until a human checks it and presses <b>Approve plan &amp; start</b>. You can edit and add tasks before approving.</dd>
     <dt>3D office and presenter view</dt>
-    <dd><b>3D office</b> (header, next to <b>Board</b>) shows the team's agents as characters in a pixel office, like the office demo: <b>Needs you</b> on the left (What to do now, the agents' questions with Answer, what's blocked), <b>Agents</b> on the right (click one, or a character, to see what it's doing; only a question, a blocked task or out of usage gets a badge) with <b>Activity</b> (the feed and chat) under it, the same sides as the Board view, <b>Tasks</b> at the bottom with the progress in its title bar (folded to that bar on screens up to 900px tall), and chips for the goal and the demo time (both edited in place). Panels fold and stay that way in this browser; <code>Esc</code> closes the window on top. Not on phones. The <b>presenter view</b> is the same office, read-only and large, for the room's big screen.
+    <dd><b>3D office</b> (header, next to <b>Board</b>) shows the team's agents as characters in a pixel office, like the office demo, with the same panels as the Board view in the same places: <b>Needs you</b> on the left (what to do now, the agents' questions with Answer, what's blocked), the top bar (the goal, progress, who merges to main, setup), <b>Agents</b>, <b>Activity</b> and <b>File locks</b> on the right (click an agent, or its character, to see what it's doing), and <b>Tasks</b> at the bottom, with the same search, Show filter and Columns / Table (folded to its title bar on screens up to 900px tall). Panels fold the same way in both views and stay that way in this browser; <code>Esc</code> closes the window on top. Not on phones. The <b>presenter view</b> is the same office, read-only and large, for the room's big screen.
       <div class="xacts" id="present-row" hidden><a id="present-link" class="plink" href="present.html" hidden target="_blank" rel="noopener" title="Read-only, for the room's big screen (opens in a new tab)" aria-label="Open the presenter view (opens in a new tab)"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 11v2.5M5 13.5h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Open the presenter view</a></div></dd>
     <dt>Desktop notifications</dt>
     <dd>Press the bell in the header to get a desktop notification while this tab is in the background: a new question for the humans, a message that @mentions you, a task that gets blocked, and the feature-freeze reminders. Click a notification to jump to it. Nothing is sent for your own actions.</dd>
@@ -1415,7 +1367,12 @@ let me = (nameParam || store.get('board-name') || '').toLowerCase();
 const DEFAULT_SETTINGS = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '', planner_extra: '2' };
 const ANYONE = '*'; // settings.integrator: whoever is free merges
 let state = { tasks: [], locks: [], questions: [], events: [], settings: { ...DEFAULT_SETTINGS }, phase: 'needs_goal', presence: [], setup: null };
-let ui = { nf: { open: false, loaded: false, loading: false, url: '', kind: null, events: null, err: '' }, rotateArm: false, filter: store.get('board-filter') || '', tab: store.get('board-tab') || 'all', showAllDone: false, confirmLock: null, dragging: false, steps: {}, editGoal: false, editRepo: false, addrs: false, openPeople: new Set(), moveMenu: null, doneOpen: store.get('board-done') };
+let ui = { nf: { open: false, loaded: false, loading: false, url: '', kind: null, events: null, err: '' }, rotateArm: false, filter: store.get('board-filter') || '', tab: store.get('board-tab') || 'all', showAllDone: false, confirmLock: null, dragging: false, steps: {}, editGoal: false, editRepo: false, addrs: false, picked: null, moveMenu: null, doneOpen: store.get('board-done') };
+// Folded panels, the same in both views and remembered per board in this browser: Needs you and Agents (to chips),
+// Activity, File locks and the 3D Tasks window (to their title bars), the maximised Tasks window. File locks start
+// folded; the Tasks window starts folded on screens up to 900px tall.
+const oUi = (() => { try { const v = JSON.parse(store.get('board-office-ui') || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } })();
+const oSave = () => store.set('board-office-ui', JSON.stringify(oUi));
 let seenMention = Number(store.get('board-seen-mention') || 0);
 let editing = null; // snapshot of the task open in the dialog
 let keysOn = store.get('board-keys') !== 'off';
@@ -1693,7 +1650,7 @@ async function load() {
     s.presence = s.presence || []; s.phase = s.phase || (s.tasks.length ? 'building' : 'needs_goal');
     if (older.keep && s.events?.length) s.events = await keepOlder(s.events);
     checkOverwrites(s);
-    state = s; setConn(esOpen ? 'live' : 'connecting'); render();
+    state = s; state.loaded = true; setConn(esOpen ? 'live' : 'connecting'); render();
   }
   catch (e) { if (e.message !== 'Token rejected') setConn('down', e.message); }
 }
@@ -1726,10 +1683,11 @@ const scheduleReload = () => { clearTimeout(reloadTimer); reloadTimer = setTimeo
 function agentInfo() {
   const m = new Map(); const now = Date.now();
   const skip = (n) => !n || n === 'board' || n === 'anonymous';
-  const get = (n) => { n = String(n).toLowerCase(); if (!m.has(n)) m.set(n, { name: n, client: null, plan: null, slots: 0, base: 0, override: null, active: 0, online: false, started: false, last: 0, busy: false, doing: null, limited: null, reviewing: [] }); return m.get(n); };
+  const get = (n) => { n = String(n).toLowerCase(); if (!m.has(n)) m.set(n, { name: n, client: null, model: null, helpers: [], plan: null, slots: 0, base: 0, override: null, active: 0, online: false, started: false, last: 0, busy: false, doing: null, limited: null, reviewing: [] }); return m.get(n); };
   for (const p of state.presence || []) {
     if (p.kind !== 'agent' || skip(p.name)) continue;
     const a = get(p.name); if (p.client) a.client = String(p.client);
+    if (p.model) a.model = String(p.model); if (Array.isArray(p.helpers)) a.helpers = p.helpers;
     // slots from the server include the planner's temporary extra slots: keep those apart.
     a.extra = Number(p.extra_slots) || 0;
     if (p.plan) a.plan = String(p.plan); if (p.slots) a.slots = (Number(p.slots) || 0) - a.extra;
@@ -1930,7 +1888,7 @@ let prevFrozen = null;
 function renderClock() {
   const t = timeNow(); const b = $('clock');
   b.hidden = !t.deadline;
-  if (!t.deadline) { prevFrozen = null; $('o-dl-chip').className = 'o-chip'; $('o-dl-x').innerHTML = '<span class="muted">not set: set it so agents stop on time</span>'; $('o-dl-chip')._html = ''; $('o-dl-chip').title = ''; $('o-dl-chip').setAttribute('aria-label', 'Demo time not set. Set it (on the Board view)'); return; }
+  if (!t.deadline) { prevFrozen = null; return; }
   const now = Date.now();
   // main + detail: the detail (freeze time) hides on narrower screens when a verdict leads the pill.
   let main, detail = '', cls = '', tip;
@@ -1952,9 +1910,6 @@ ${tip}`;
     : `<span>${vd ? `<b class="vd ${vd.verdict}">${esc(vd.label)}</b> · ` : ''}${esc(main)}${detail ? `<span class="fz">${esc(detail)}</span>` : ''}</span>`);
   if (b._html !== html) { b.innerHTML = html; b._html = html; }
   b.className = 'clock ' + cls; b.title = tip; b.setAttribute('aria-label', `${text}. Change the demo time`);
-  const oc = $('o-dl-chip'); const inner = html.slice(CLOCK_ICO.length);
-  if (oc._html !== inner) { $('o-dl-x').innerHTML = inner; oc._html = inner; }
-  oc.className = 'o-chip ' + cls; oc.title = tip; oc.setAttribute('aria-label', `Demo time: ${text}. Change it (on the Board view)`);
   // One polite announcement when the freeze starts while the page is open.
   if (prevFrozen === false && t.frozen && !t.past) announce(`Feature freeze started. Agents won't take new tasks; help merge and test.`);
   prevFrozen = t.frozen;
@@ -2114,15 +2069,17 @@ function render() {
   renderClock(); renderBell();
   const si = setupInfo();
   renderNow(qOpen, unread, si);
+  renderTopbar(si);
   renderSetup(si);
   renderBoardEmpty(si);
   renderBoardNote(); renderCi();
   renderQuestions(qOpen);
-  renderPeople(si);
+  renderAgents(si, qOpen);
   renderFilter();
   if (!ui.dragging) renderBoard();
   renderFeed(unread.length);
   renderLocks();
+  renderDocks(qOpen, si);
   if ($('task-dlg').open) renderDialogLive();
   checkNotify(); announceActivity();
   if (boardView === 'office') { office.mod?.update(state); renderOffice(); }
@@ -2134,6 +2091,9 @@ function render() {
 // 10 min and not out of usage). The presenters' copies: office/src/live/board.ts (LABEL, columnCounts, needsOf) and
 // public/present-classic.html (columnCounts, needsOf).
 const colOf = (t) => (t.status === 'proposed' ? 'open' : t.status);
+// What to do now's links that stay in the 3D view (what they lead to is in its panels); the rest open the Board view
+// (Start here, the task columns), and say so there.
+const STAYS = ['cut', 'rejected', 'now', 'questions', 'blocked', 'limited', 'conflict', 'compose', 'mentions', 'idle'];
 // "7 agents online · 1 out of usage" (board) / "7 online · 1 out of usage" (the 3D Agents dock): the same numbers.
 function agentsLine(si, short = false) {
   return [`${short ? si.onlineA.length : plural(si.onlineA.length, 'agent')} online`, si.waitingA.length && `${si.waitingA.length} not started`,
@@ -2158,9 +2118,10 @@ function renderNeeds(qOpen, unread) {
   patch($('needs'), n ? `<button type="button" data-go="now" data-fk="n-all" title="${esc(list.join(' · '))}" aria-label="${esc(`${n} ${n === 1 ? 'thing needs' : 'things need'} you: ${list.join(', ')}. Go to What to do now`)}">${n} need${n === 1 ? 's' : ''} you <span aria-hidden="true">↑</span></button>` : '');
   syncNeeds();
 }
-// Hidden while What to do now is on screen (below the sticky header).
+// Hidden while What to do now is on screen (below the sticky header), and while Needs you is folded to its chip (the
+// chip has the count).
 let nowSeen = true;
-function syncNeeds() { $('needs').hidden = nowSeen; }
+function syncNeeds() { $('needs').hidden = nowSeen || !!oUi.left; }
 if ('IntersectionObserver' in window) new IntersectionObserver(([e]) => { nowSeen = e.isIntersecting; syncNeeds(); }, { rootMargin: '-56px 0px 0px 0px' }).observe($('now'));
 // The Board view's rails stick right under the header, whatever its height.
 if ('ResizeObserver' in window) new ResizeObserver(([e]) => document.documentElement.style.setProperty('--hdr', Math.round(e.target.offsetHeight) + 'px')).observe(document.querySelector('#app > header'));
@@ -2254,7 +2215,6 @@ function renderNow(qOpen, unread, si) {
   if (!over && S.goal && !tm.deadline && !dlSkipped()) more.push({ act: 'clock', text: 'Set the demo time so agents stop on time' });
   if (si.cur === 'invite' && !S.goal) more.push({ go: 'step-goal', text: 'Meanwhile: write the goal (step 2)' });
   // In the 3D view, links that lead to a part only the Board view has say so (CSS adds "(Board view)").
-  const STAYS = ['cut', 'rejected', 'now', 'questions', 'blocked', 'limited', 'compose', 'mentions'];
   const lv = (g) => (g && !STAYS.includes(g) ? ' data-leaves' : '');
   const moreHtml = more.length ? `<div class="also"><span class="n">Also:</span>${more.slice(0, 2).map((m, i) => `<button type="button" class="link" ${m.act ? `data-act="${m.act}"` : `data-go="${m.go}"${lv(m.go)}`} data-fk="now-more-${i}">${esc(m.text)} <span aria-hidden="true">→</span></button>`).join('')}</div>` : '';
   const cutHtml = ui.showCut && cut?.list.length && !over ? `<ul class="cut-list" id="cut-list" aria-label="P3 tasks that probably won't make it"><li class="n">Probably won't make it:</li>${cut.list.map((t) => `<li><button type="button" class="link" data-open-task="${t.id}" data-fk="cut-${t.id}">#${t.id} ${esc(short(t.title, 48))}</button></li>`).join('')}</ul>` : '';
@@ -2272,21 +2232,25 @@ function renderNow(qOpen, unread, si) {
     : `<span class="na">${esc(text)}</span>`}${appr ? '<button type="button" class="appr" data-act="approve" data-fk="now-appr">Approve plan &amp; start</button>' : ''}${text2 ? `<button type="button" class="link na2" data-go="${go2}"${lv(go2)} data-fk="now-go2">${esc(text2)} <span aria-hidden="true">→</span></button>` : ''}${cutHtml}${phases}${moreHtml}`);
 }
 
-function renderSetup(si) {
-  const S = state.settings; const el = $('setup');
-  if (!setupOpen(si.complete)) {
-    const left = si.steps.find((s) => !s.done);
-    // Progress (was a row of tiles): done of all tasks except proposals, with a small bar.
-    const T = state.tasks.filter((t) => t.status !== 'proposed'); const done = T.filter((t) => t.status === 'done').length;
-    const pct = T.length ? Math.round((done / T.length) * 100) : 0;
-    patch(el, `<div class="sumbar">
-      <span class="goal" title="${esc(S.goal || 'No goal set yet')}"><b>Goal:</b> ${S.goal ? esc(S.goal) : '<span class="muted">not set</span>'}</span>
+// The top bar, the same in both views: the goal (opens it in place), progress (done of all tasks except proposals),
+// the repo, who merges to main (with main's CI) and the way into setup.
+function renderTopbar(si) {
+  const S = state.settings;
+  const left = si.steps.find((s) => !s.done);
+  const T = state.tasks.filter((t) => t.status !== 'proposed'); const done = T.filter((t) => t.status === 'done').length;
+  const pct = T.length ? Math.round((done / T.length) * 100) : 0;
+  const goal = String(S.goal || '').trim(); const head = goal.split('\n').find((l) => l.trim()) || '';
+  const open = setupOpen(si.complete) && boardView !== 'office';
+  patch($('topbar'), `<button type="button" class="link tb-goal" id="goal-btn" data-act="goal" data-fk="tb-goal" aria-expanded="${!!ui.oGoal}" aria-controls="o-goal" title="${esc(goal || 'No goal set yet')}" aria-label="Goal: ${esc(goal ? short(head, 120) : 'not set yet')}. ${ui.oGoal ? 'Close' : 'Show'} the full goal"><b>Goal:</b><span class="o-x">${goal ? esc(head) : '<span class="muted">not set</span>'}</span><span class="o-ar" aria-hidden="true">▾</span></button>
       ${T.length ? `<span class="stat" id="done-count" title="${done} of ${T.length} tasks merged into main (${pct}%)"><b>${done} of ${T.length} done</b><span class="mbar" aria-hidden="true"><i style="width:${pct}%"></i></span></span>` : ''}
-      ${S.repo ? `<span class="goal repo-s" title="Project repo: ${esc(S.repo)}"><b>Repo:</b> ${esc(S.repo)}</span>` : ''}
-      <span title="The person whose agent merges finished branches into main">Merges to main: ${S.integrator === '*' ? 'whoever is free' : S.integrator ? `${nameTag(S.integrator)}${ownerOffline({ assignee: S.integrator }) || agentLimited(S.integrator) ? ' <span class="muted">(away: whoever is free merges meanwhile)</span>' : ''}` : '<span class="muted">not picked yet</span>'}${ciPill()}</span>
-      <span class="acts"><button type="button" class="ghost" data-act="invite" data-fk="s-inv">Connect a laptop</button><button type="button" class="ghost" data-act="setup-open" data-fk="s-open" aria-expanded="false" ${left ? `aria-label="Open the setup guide. Left to do: ${esc(left.left)}"` : ''}>Setup${left ? `: ${esc(left.left)}` : ''}</button></span></div>`);
-    return;
-  }
+      ${S.repo ? `<span class="repo-s" title="Project repo: ${esc(S.repo)}"><b>Repo:</b> ${esc(S.repo)}</span>` : ''}
+      <span class="tb-merge" title="The person whose agent merges finished branches into main">Merges to main: ${S.integrator === '*' ? 'whoever is free' : S.integrator ? `${nameTag(S.integrator)}${ownerOffline({ assignee: S.integrator }) || agentLimited(S.integrator) ? ' <span class="muted">(away: whoever is free merges meanwhile)</span>' : ''}` : '<span class="muted">not picked yet</span>'}${ciPill()}</span>
+      <span class="acts"><button type="button" class="ghost" data-act="invite" data-fk="s-inv">Connect a laptop</button><button type="button" class="ghost" data-act="${open ? 'setup-close' : 'setup-open'}" data-fk="s-open" aria-expanded="${open}" aria-controls="setup" ${left ? `aria-label="${open ? 'Hide' : 'Open'} the setup guide. Left to do: ${esc(left.left)}"` : ''}>Setup${left ? `: ${esc(left.left)}` : ''}</button></span>`);
+}
+function renderSetup(si) {
+  const el = $('setup');
+  el.hidden = !setupOpen(si.complete);
+  if (el.hidden) return patch(el, '');
   const body = { invite: stepInvite, goal: stepGoal, start: stepStart, backlog: stepBacklog, integrator: stepIntegrator };
   patch(el, `<div class="sh"><h2>Start here</h2><span class="muted">${si.doneCount} of 5 done · steps tick off by themselves</span><span class="sp"></span>
       <button type="button" class="ghost sm" data-act="setup-close" data-fk="s-close" aria-expanded="true">Hide setup</button></div>
@@ -2603,22 +2567,11 @@ function renderQuestions(qOpen) {
   }).join(''));
 }
 
-// One compact line per person; click it for their agents, tasks and the filter.
-// Compact (one line per person): each agent is its tool's dot and x/y; its tool and plan are in the tooltip, the
-// screen-reader text and the open row. A name only when the dot alone can't say which agent it is, and words only for
-// what needs someone: not started, out of usage, offline, a name clash.
-function toolChip(a, person, all = []) {
-  const st = agentState(a);
-  const warn = a.conflict ? `<span class="pill bad" title="${esc(conflictText(a))}">${esc(a.name)} · ${a.conflict.laptops || 2} laptops</span>` : '';
-  return warn + toolChipState(a, st, pillName(a, person, all));
-}
-// The agent's name in its pill: its own name when it isn't <person>-<tool> ("dave", grouped under carol), the part
-// after the person's name for two agents with the same tool ("claude", "claude2"); otherwise none.
-function pillName(a, person, all) {
-  if (a.name !== person && !a.name.startsWith(person + '-')) return a.name;
-  const twin = a.client && all.some((x) => x.name !== a.name && x.client === a.client);
-  return twin ? (a.name === person ? a.name : a.name.slice(person.length + 1)) : '';
-}
+// ---------- Agents: one component for both views ----------
+// Per person a heading line (initial, name, roles, the person filter), then one row per agent: its tool's dot, its name
+// and its state (the room's word for it, see oStatus), then what it does, its tool and its model. Its subagents sit
+// under it with their own state, task and model. A row selects the agent (in the 3D view also its character in the
+// room); the selected agent shows its capacity, what it holds, its question, its last message and its controls.
 // Same name used from two laptops at once: almost always two people who picked the same name in join.
 const conflictText = (a) => `${a.name} is connected from ${a.conflict?.laptops || 2} laptops: two people may be using the same name. One of them should re-run join with another name.`;
 // Where an agent's person comes from, for tooltips.
@@ -2628,18 +2581,42 @@ function toolDot(a) {
   const k = c.includes('claude') ? 'claude' : c.includes('codex') ? 'codex' : c.includes('copilot') ? 'copilot' : c.includes('gemini') ? 'gemini' : c.includes('cursor') ? 'cursor' : 'other';
   return `<span class="tdot ${k}" data-tool="${k}" aria-hidden="true"></span>`;
 }
-function toolChipState(a, st, nm) {
-  const D = toolDot(a); const N = nm ? `${esc(nm)} · ` : '';
-  const sr = `<span class="vh">${esc([a.client || 'agent', a.plan].filter(Boolean).join(' on '))}: </span>`;
-  if (st === 'limited') return `<span class="pill warn" title="${esc(a.name)} hit its usage limit${a.limited.by === 'agent' ? ' (reported by the agent)' : ''}${a.limited.note ? `: ${esc(a.limited.note)}` : ''}. Other agents may take over its tasks.">${D}${sr}${N}${esc(limitText(a))}</span>`;
-  if (st === 'online') {
-    const full = a.active >= a.slots;
-    return `<span class="pill ${full ? 'full' : 'ok'}" title="${esc(capTip(a))} Running on the board.">${D}${sr}${N}<span class="cap">${capText(a)}</span><span class="capw"> tasks</span></span>`;
-  }
-  if (st === 'waiting') return `<span class="pill ns" title="${esc(a.name)}: ${esc(notStartedText(a))}">${D}${sr}${N}not started — type ${esc(startCmd(a.client))}</span>`;
-  return `<span class="pill" title="${esc(a.name)}: no contact for 10+ minutes (last seen ${a.last ? ago(a.last) : 'never'})">${D}${sr}${N}offline</span>`;
+// The model as the agent reported it, compact: "Claude Sonnet 5.5" -> "Sonnet 5.5" (the tool already says Claude).
+const modelText = (m) => String(m || '').replace(/^claude[\s-]+/i, '').trim();
+// What an agent shows follows the room's rule (lookFor() in office/src/live/adapter.ts), so its row and the bubble over
+// its desk agree. Only what a human acts on gets a badge: a question, a blocked task (with no open question: answering
+// is what unblocks those) and out of usage. Everything else is a plain word. [class, word, badge?]
+function oStatus(a, qOpen) {
+  if (isLimited(a)) return ['limited', 'Out of usage', true];
+  if (!a.online) return ['off', 'offline'];
+  if (!a.started) return ['off', 'not started'];
+  if (qOpen.some((q) => agentRoot(q.asker) === a.name)) return ['question', 'Question', true];
+  const mine = state.tasks.filter((t) => t.assignee && agentRoot(t.assignee) === a.name);
+  if (mine.some((t) => t.status === 'blocked')) return ['blocked', 'Blocked', true];
+  if (mine.some((t) => t.status === 'in_progress')) return ['working', 'working'];
+  if (state.tasks.some((t) => t.status === 'review' && t.reviewer && agentRoot(t.reviewer) === a.name)) return ['review', 'merging'];
+  if (mine.some((t) => t.status === 'claimed')) return ['working', 'working'];
+  if (mine.some((t) => t.status === 'review')) return ['review', 'in review'];
+  return ['idle', a.busy ? 'working' : 'idle'];
 }
-// Per-agent controls in its People row: how many tasks it may hold, and "hit its usage limit".
+// A main agent's subagents (owner/subagent): the ones the board tracks (presence[].helpers, with their model) that hold
+// a task or say what they're doing, plus any holding a task or asking a question. Each has its own state: one can be blocked
+// while another works.
+function subagentsOf(a, qOpen) {
+  const by = new Map();
+  const add = (n) => { n = String(n).toLowerCase(); if (!by.has(n)) by.set(n, { name: n, full: `${a.name}/${n}`, model: null, active: false, doing: null }); return by.get(n); };
+  for (const h of a.helpers || []) { if (!h.task_id && !(h.active && h.doing)) continue; const x = add(h.name); x.model = h.model || null; x.active = !!h.active; x.doing = h.doing || null; }
+  for (const t of state.tasks) if (String(t.assignee || '').includes('/') && agentRoot(t.assignee) === a.name && ACTIVE.includes(t.status)) add(t.assignee.split('/')[1]);
+  for (const q of qOpen) if (q.asker.includes('/') && agentRoot(q.asker) === a.name) add(q.asker.split('/')[1]);
+  return [...by.values()].sort((x, y) => x.name.localeCompare(y.name)).map((h) => {
+    const ts = state.tasks.filter((t) => String(t.assignee || '').toLowerCase() === h.full && ACTIVE.includes(t.status));
+    const q = qOpen.find((x) => x.asker.toLowerCase() === h.full); const b = ts.find((t) => t.status === 'blocked');
+    const [cls, word] = q ? ['question', 'Question'] : b ? ['blocked', 'Blocked'] : ts.some((t) => HOLDING.includes(t.status)) ? ['working', 'working'] : ts.length ? ['review', 'in review'] : h.active ? ['working', 'working'] : ['idle', 'idle'];
+    const t = (q?.task_id && taskById(q.task_id)) || b || ts.find((x) => HOLDING.includes(x.status)) || ts[0];
+    return { ...h, cls, word, t };
+  });
+}
+// Per-agent controls (the selected agent): whose agent it is, how many tasks it may hold, and "hit its usage limit".
 function agentControls(a) {
   const k = esc(a.name);
   const opts = [['', `plan default (${a.base})`], ...Array.from({ length: 10 }, (_, i) => [String(i + 1), String(i + 1)])];
@@ -2654,77 +2631,76 @@ function agentControls(a) {
       <p class="hint row m0" id="lh-${k}">No time: it counts as back as soon as it talks to the board again.</p></form>` : '';
   // Who this agent belongs to: fixes an agent that shows up as its own person (or under the wrong one).
   const cur = a.personSource === 'human' ? a.person : '';
-  // The people on the People panel (not every name ever typed on this page), plus its current person.
+  // The people in the Agents panel (not every name ever typed on this page), plus its current person.
   const ppl = [...new Set([...people().map((p) => p.name), a.person, root(a.name)].filter(Boolean))].sort();
   const owner = `<label for="pb-${k}">Belongs to</label><select id="pb-${k}" data-person="${k}" data-fk="pb-${k}" title="Whose agent this is: ${esc(root(a.name))} (${esc(personSourceText(a))}). Pick a person to group it under them.">
       <option value="" ${cur ? '' : 'selected'}>automatic (${esc(a.personSource === 'human' ? 'join or name' : root(a.name))})</option>${ppl.map((n) => `<option value="${esc(n)}" ${cur === n ? 'selected' : ''}>${esc(n)}${n === me ? ' (you)' : ''}</option>`).join('')}</select>`;
   const clash = a.conflict ? `<div class="note row" role="status">${esc(conflictText(a))}</div>` : '';
   return `<div class="actl">${owner}${slots}${lim}${clash}</div>${form}`;
 }
-function renderPeople(si = setupInfo()) {
-  // The team at a glance, above the rows: who's online and how much can run at once.
-  patch($('p-sum'), si.ros.some((r) => r.agent || r.humanOnline) ? `<span title="Online = an agent someone started with /board, seen in the last 10 min and not out of usage. Not started = its tool is connected but nobody typed /board yet. Out of usage = hit its plan's limit. Offline = not seen for 10 min. Watching = people with this page open." class="stat" id="online-count"><span class="on ${si.onlineA.length ? 'y' : si.waitingA.length ? 'w' : ''}"></span>${agentsLine(si)} · ${si.watchers.length} watching</span>${teamCapHtml()}` : '');
+// Under the selected agent's row: its tool, plan and capacity, what it holds or merges, its question (with Answer),
+// what it last said, a way to message it and its controls.
+function agentDetail(a, qOpen, lastText) {
+  const order = (x, y) => (HOLDING.includes(y.status) - HOLDING.includes(x.status)) || x.id - y.id;
+  const held = state.tasks.filter((t) => t.assignee && agentRoot(t.assignee) === a.name && ACTIVE.includes(t.status)).sort(order);
+  const reviewing = state.tasks.filter((t) => t.status === 'review' && t.reviewer && agentRoot(t.reviewer) === a.name && !held.includes(t));
+  const q = qOpen.find((x) => agentRoot(x.asker) === a.name);
+  const row = (t, label, cls) => `<li><div class="tk"><span class="pill ${cls}">${label}</span>${isStale(t) ? '<span class="pill flag">stale</span>' : ''}${t.assignee && t.assignee.includes('/') ? `<span class="muted t-meta">${esc(t.assignee.split('/')[1])}</span>` : ''}<button type="button" class="link" data-open-task="${t.id}" data-fk="pt-${t.id}" title="${esc(t.title)}">#${t.id} ${esc(t.title)}</button></div></li>`;
+  const lines = [...held.map((t) => row(t, LABEL[t.status], 's-' + t.status)), ...reviewing.map((t) => row(t, 'Merging', 's-review'))];
+  const st = agentState(a);
+  const what = st === 'limited' ? limitText(a) : st === 'offline' ? `Offline${boardView === 'office' ? ': not in the room' : ''} (last seen ${a.last ? ago(a.last) : 'never'})` : st === 'waiting' ? notStartedText(a) : lines.length ? '' : 'No task right now';
+  const cap = `<div class="pcap" title="${esc(capTip(a))}">${esc([a.client, a.plan].filter(Boolean).join(' · ') || 'agent')} · ${a.active} of ${a.slots} at once${a.override ? ' (set here)' : ''}${a.model ? ` · ${esc(a.model)}` : ''}${a.extra ? ` <span class="pill ok" title="Planner: nobody else is free and small/medium work is ready, so it may run ${a.extra} more with subagents">+${a.extra} extra as planner</span>` : ''}</div>`;
+  const doing = lines.length && a.doing && !isLimited(a) && !/^#\d+/.test(a.doing) ? `<div class="doing" title="${esc(a.doing)}">${esc(short(a.doing, 120))}</div>` : '';
+  return `<div class="o-det" id="o-det" role="group" aria-label="${esc(a.name)}">${cap}${what ? `<p class="muted">${esc(what)}</p>` : ''}${lines.length ? `<ul>${lines.join('')}</ul>` : ''}${doing}`
+    + (q ? `<p><span class="pill warn">Question</span> ${esc(short(q.question, 110))}</p>` : '')
+    + (lastText ? `<div class="last" title="${esc(lastText)}">${esc(short(lastText, 120))}</div>` : '')
+    + `<div class="oc-a">${q ? `<button type="button" class="sm" data-go-q="${q.id}" data-fk="oq-${esc(a.name)}">Answer</button>` : ''}<button type="button" class="ghost sm" data-mention="${esc(a.name)}" data-fk="om-${esc(a.name)}">Message ${esc(a.name)}</button></div>`
+    + agentControls(a) + '</div>';
+}
+function renderAgents(si, qOpen) {
   const ps = people();
-  $('p-legend').hidden = !ps.some((p) => p.r.agents?.length);
+  const all = ps.flatMap((p) => p.r.agents || []);
+  // The team at a glance: the count in the title bar (also on the folded chip), what can run at once in the panel.
+  const cnt = agentsLine(si, true);
+  $('o-right-sub').textContent = all.length ? cnt : ''; $('o-right-sub').title = all.length ? 'Online = an agent someone started with /board, seen in the last 10 min and not out of usage. Not started = its tool is connected but nobody typed /board yet. Out of usage = hit its plan\'s limit. Offline = not seen for 10 min.' : '';
+  $('o-right-n').textContent = all.length ? `${si.onlineA.length} online` : '';
+  $('o-right-pill').setAttribute('aria-label', `Agents${all.length ? `: ${cnt}` : ''}. Open the panel`);
+  patch($('p-sum'), teamCapHtml());
+  if (ui.picked && !all.some((a) => a.name === ui.picked)) ui.picked = null;
   const r = filterRoot(); const S = state.settings;
-  const asked = new Set(openQuestions().map((q) => q.task_id).filter(Boolean));
+  const agentRow = (a, p) => {
+    const [cls, word, badge] = oStatus(a, qOpen);
+    const own = state.tasks.filter((t) => String(t.assignee || '').toLowerCase() === a.name && ACTIVE.includes(t.status)).sort((x, y) => (HOLDING.includes(y.status) - HOLDING.includes(x.status)) || x.id - y.id);
+    const qSelf = qOpen.find((x) => x.asker.toLowerCase() === a.name);
+    const merging = state.tasks.find((t) => t.status === 'review' && t.reviewer && agentRoot(t.reviewer) === a.name);
+    const subs = subagentsOf(a, qOpen);
+    const what = a.conflict ? `on ${a.conflict.laptops || 2} laptops: re-run join with another name`
+      : cls === 'limited' ? limitText(a).replace(/^out of usage(?: · )?/, '') || 'until it talks to the board again'
+      : word === 'not started' ? `type ${startCmd(a.client)} in it`
+      : cls === 'off' ? `last seen ${a.last ? ago(a.last) : 'never'}`
+      : qSelf ? 'asked you a question' : own[0] ? `#${own[0].id} ${short(own[0].title, 60)}` : merging ? `merging #${merging.id}`
+      : a.busy && a.doing && !/^#\d+/.test(a.doing) ? short(a.doing, 60) : '';
+    const tm = [a.client, modelText(a.model)].filter(Boolean).join(' · ');
+    const sel = ui.picked === a.name;
+    const sr = `<span class="vh">, ${esc([a.client || 'agent', a.plan].filter(Boolean).join(' on '))}: ${capText(a)} tasks</span>`;
+    return `<li><button type="button" class="o-agent${cls === 'off' ? ' off' : ''}" ${hs(p.name)} data-o-agent="${esc(a.name)}" data-fk="oa-${esc(a.name)}" aria-pressed="${sel}" title="${esc(capTip(a))}${boardView === 'office' ? (a.online ? ' Click to show it in the room.' : ' Offline: not in the room.') : ''}">`
+      + `<span class="o-r1">${toolDot(a)}<span class="o-an">${esc(a.name)}${sr}</span><span class="o-st ${cls}${badge ? ' bx' : ''}">${word}</span></span>`
+      + `<span class="o-r2"><span class="o-tk${a.conflict ? ' bad' : ''}">${esc(what || tm || 'AI tool not reported yet')}</span>${what && tm ? `<span class="o-cl" title="${esc([a.client, a.model].filter(Boolean).join(' · '))}">${esc(tm)}</span>` : ''}</span></button>`
+      + (subs.length ? `<ul class="o-helpers" aria-label="${esc(a.name)}'s subagents">${subs.map((h) => `<li><button type="button" class="link o-hn" data-mention="${esc(h.full)}" title="Subagent of ${esc(a.name)}: works on one task. Click to @mention ${esc(h.full)} in chat">${esc(h.name)}</button><span class="o-hs ${h.cls}">${h.word}</span><span class="o-tk">${h.t ? `#${h.t.id} ${esc(h.t.title)}` : h.doing ? esc(h.doing) : ''}</span>${h.model ? `<span class="o-hm" title="${esc(h.model)}">${esc(modelText(h.model))}</span>` : ''}</li>`).join('')}</ul>` : '')
+      + `${sel ? agentDetail(a, qOpen, p.agents.get(a.name)?.lastText) : ''}</li>`;
+  };
   patch($('people'), ps.length ? ps.map((p) => {
-    // Main agents (one per AI tool) first, each followed by its helpers.
-    const agents = [...p.agents.values()].sort((a, b) => agentRoot(a.id).localeCompare(agentRoot(b.id)) || a.id.includes('/') - b.id.includes('/') || b.last - a.last);
-    const sel = r === p.name; const open = ui.openPeople.has(p.name); const key = esc(p.name);
-    const hasAgent = p.r.agent || p.agents.size > 1 || agents.some((a) => a.tasks.length);
-    const tasks = agents.flatMap((a) => a.tasks);
-    // Blocked on a question: the question card says who is waiting, so only other blocked tasks get a chip here.
-    const nBlocked = tasks.filter((t) => t.status === 'blocked' && !asked.has(t.id)).length; const nStale = tasks.filter(isStale).length;
-    const hasCap = (p.r.agents || []).some((a) => agentState(a) === 'online'); const nReview = tasks.filter((t) => t.status === 'review').length;
-    const summary = [
-      hasAgent ? (p.r.agents?.length ? p.r.agents.map((a) => toolChip(a, p.name, p.r.agents)).join('') : '<span class="pill">agent</span>') : `<span class="muted t-meta">${p.r.humanOnline ? 'watching · ' : ''}no AI agent</span>`,
-      S.planner && root(S.planner) === p.name ? '<span class="pill role" title="Planner: wrote the task list from the goal">planner</span>' : '',
-      S.integrator && S.integrator !== ANYONE && root(S.integrator) === p.name ? '<span class="pill role" title="Integrator: merges finished branches into main">merges to main</span>' : '',
-      (p.r.agents || []).some((a) => a.reviewing.length) ? `<span class="pill role" title="Reviewing and merging into main">merging ${(p.r.agents || []).flatMap((a) => a.reviewing).map((id) => '#' + id).join(' ')}</span>` : '',
-      // Running agents show "x/slots" already; then only tasks waiting in review get their own count.
-      hasCap ? (nReview ? `<span class="pill s-review" title="Pushed, waiting to be merged">${nReview} in review</span>` : '')
-        : tasks.length ? `<span class="pill s-in_progress" title="Tasks claimed, in progress, blocked or in review">${tasks.length} active</span>` : hasAgent && (p.r.agents || []).some((a) => a.online) ? `<span class="muted t-meta">${(p.r.agents || []).some((a) => a.busy) ? 'working' : 'idle'}</span>` : '',
-      nBlocked ? `<span class="pill bad">${nBlocked} blocked</span>` : '',
-      nStale ? '<span class="pill flag" title="No update for 15+ minutes">' + nStale + ' stale</span>' : '',
-    ].join('');
-    let detail = '';
-    if (open) {
-      const filt = hasAgent || tasks.length ? `<button type="button" class="ghost sm" data-filter="${key}" data-fk="pf-${key}" aria-pressed="${sel}" title="${sel ? 'Show everyone\'s tasks on the board' : `Show only ${key}'s tasks on the board`}">${FUNNEL} ${sel ? 'Show everyone' : `Show only ${key}'s tasks`}</button>` : '';
-      if (!hasAgent) {
-        const lt = agents[0]?.lastText;
-        detail = `<ul><li class="muted">${p.r.humanOnline ? 'Watching this page. ' : ''}No AI agent connected under this name${p.name === me ? ' yet (Start here, steps 1 and 3)' : ''}.</li>
-          ${lt ? `<li><div class="last" title="${esc(lt)}">${esc(short(lt, 120))}</div></li>` : ''}</ul>`;
-      } else {
-        const ainfo = new Map((p.r.agents || []).map((a) => [a.name, a]));
-        detail = `<div class="inl mt-0">${filt}<span class="muted t-meta">${p.last ? 'last seen ' + ago(p.last) : 'no activity yet'}</span></div><ul>${agents.map((a) => {
-          const [orch, helper] = a.id.split('/'); const tool = clientOf(orch); const info = !helper && ainfo.get(orch);
-          // The person themself (messages they wrote on this page), not an AI agent under their name.
-          const human = !helper && !info && orch === p.name && !(state.presence || []).some((x) => x.kind === 'agent' && x.name === orch);
-          if (human && !a.tasks.length && p.agents.size > 1) return a.lastText ? `<li><div class="tk"><span class="muted">On this page</span><span class="sp"></span>${a.last ? `<span class="muted t-micro">${ago(a.last)}</span>` : ''}</div><div class="last" title="${esc(a.lastText)}">${esc(short(a.lastText, 120))}</div></li>` : '';
-          // Two agents with the same tool (emil-claude, emil-claude2): name them, "main agent · Claude Code" twice says nothing.
-          const sameTool = !helper && tool && (p.r.agents || []).filter((x) => clientOf(x.name) === tool).length > 1;
-          // An agent not named <person>-<tool> (dave, grouped under carol): lead with its own name.
-          const named = orch !== p.name && !orch.startsWith(p.name + '-');
-          const label = helper ? helper : sameTool ? orch : named ? `${orch}${tool ? ` · ${tool}` : ''}` : orch === p.name && p.agents.size < 2 ? 'main agent' : `main agent${tool ? ` · ${tool}` : orch !== p.name ? ` · ${orch.slice(p.name.length + 1)}` : ''}`;
-          const tk = a.tasks.map((t) => `<div class="tk"><span class="pill s-${t.status}">${LABEL[t.status]}</span>${isStale(t) ? '<span class="pill flag">stale</span>' : ''}<button type="button" class="link" data-open-task="${t.id}" data-fk="pt-${t.id}" title="${esc(t.title)}">#${t.id} ${esc(t.title)}</button></div>`).join('');
-          if (!tk && !a.last && !info && a.id === p.name && p.agents.size > 1) return '';
-          const idleTxt = tk ? '' : info && isLimited(info) ? `<span class="muted">· ${esc(limitText(info))}</span>` : info && !info.online ? `<span class="muted">· offline${info.last ? ` (last seen ${esc(ago(info.last))})` : ''}</span>` : info && info.busy ? `<span class="muted" title="${esc(info.doing || 'Working')}">· ${esc(short(info.doing || 'working', 60))}</span>` : '<span class="muted">· idle</span>';
-          return `<li><div class="tk"><button type="button" class="link an" data-mention="${esc(a.id)}" title="${!a.id.includes('/') ? `A main agent${tool ? ` (${esc(tool)})` : ''} on this laptop (orchestrator): it claims tasks from the board. ` : 'Subagent working on one task. '}Click to @mention ${esc(a.id)} in chat">${esc(label)}</button>${idleTxt}<span class="sp"></span>${Math.max(a.last, info?.last || 0) ? `<span class="muted t-micro">${ago(Math.max(a.last, info?.last || 0))}</span>` : ''}</div>
-            ${info ? `<div class="pcap" title="${esc(capTip(info))}">${esc([info.client, info.plan].filter(Boolean).join(' · ') || 'agent')} · ${info.active} of ${info.slots} at once${info.override ? ' (set here)' : ''}${info.extra ? ` <span class="pill ok" title="Planner: nobody else is free and small/medium work is ready, so it may run ${info.extra} more with subagents">+${info.extra} extra as planner</span>` : ''}</div>` : ''}
-            ${info && tk && info.doing && !isLimited(info) && !/^#\d+/.test(info.doing) ? `<div class="doing" title="${esc(info.doing)}">${esc(short(info.doing, 120))}</div>` : ''}
-            ${info ? agentControls(info) : ''}
-            ${info && agentState(info) === 'waiting' ? `<div class="ns-txt">${esc(notStartedText(info))}</div>` : ''}
-            ${tk}${a.lastText ? `<div class="last" title="${esc(a.lastText)}">${esc(short(a.lastText, 120))}</div>` : ''}</li>`;
-        }).join('')}</ul>`;
-      }
-      detail = `<div class="pd" id="pd-${key}">${detail}</div>`;
-    }
-    return `<li class="person ${sel ? 'sel' : ''}" ${hs(p.name)}>
-      <div class="ph" data-ptoggle="${key}"><button type="button" class="ptog" data-ptoggle="${key}" data-fk="ptog-${key}" aria-expanded="${open}" ${open ? `aria-controls="pd-${key}"` : ''} aria-describedby="ps-${key}" title="${open ? 'Hide' : 'Show'} ${key}'s agents and tasks"><span class="chev" aria-hidden="true"></span><span class="pdot" aria-hidden="true" data-i="${esc([...p.name][0]?.toUpperCase() || '')}"></span><span class="pc" ${hs(p.name)}>${key}</span>${p.name === me ? '<span class="pill">you</span>' : ''}</button>
-        <span class="pchips" id="ps-${key}">${summary}</span></div>
-      ${detail}</li>`;
-  }).join('') : '<li class="muted">Nobody yet. When a teammate\'s AI agent connects, it appears here with what it\'s working on.</li>');
+    const key = esc(p.name); const sel = r === p.name; const agents = p.r.agents || [];
+    const tasks = [...p.agents.values()].flatMap((a) => a.tasks);
+    const roles = (S.planner && root(S.planner) === p.name ? '<span class="pill role" title="Planner: wrote the task list from the goal">planner</span>' : '')
+      + (S.integrator && S.integrator !== ANYONE && root(S.integrator) === p.name ? '<span class="pill role" title="Integrator: merges finished branches into main">merges to main</span>' : '');
+    const filt = agents.length || tasks.length ? `<button type="button" class="o-ib pfilt" data-filter="${key}" data-fk="pf-${key}" aria-pressed="${sel}" aria-label="${sel ? 'Show everyone\'s tasks' : `Show only ${key}'s tasks`}" title="${sel ? 'Showing only their tasks: show everyone\'s' : `Show only ${key}'s tasks`}">${FUNNEL}</button>` : '';
+    const lt = [...p.agents.values()].find((a) => a.lastText && !agents.some((x) => x.name === a.id))?.lastText;
+    return `<li class="person${sel ? ' sel' : ''}" ${hs(p.name)} data-person-row="${key}"><div class="o-pn"><span class="pdot" aria-hidden="true" data-i="${esc([...p.name][0]?.toUpperCase() || '')}"></span><b class="pc" ${hs(p.name)}>${key}</b>${p.name === me ? '<span class="muted">(you)</span>' : ''}${roles}${filt}</div>`
+      + (agents.length ? `<ul class="o-agents" aria-label="${key}'s agents">${agents.map((a) => agentRow(a, p)).join('')}</ul>`
+        : `<p class="o-none" title="${esc(lt || '')}">${p.r.humanOnline && p.name !== me ? 'watching · ' : ''}no AI agent${p.name === me ? ' yet (Start here, steps 1 and 3)' : ''}</p>`)
+      + '</li>';
+  }).join('') : '<li class="muted">Nobody yet. When a teammate\'s AI agent connects, it appears here with what it\'s working on.</li><li><button type="button" class="ghost sm" data-go="step-invite" data-fk="o-invite">Connect a laptop</button></li>');
 }
 
 function renderFilter() {
@@ -2862,10 +2838,10 @@ function renderTable(visible) {
   const body = rows.map((t) => `<tr data-open-task="${t.id}" data-id="${t.id}"><td>#${t.id}</td><td class="tt"><button type="button" class="link" data-open-task="${t.id}" data-fk="tt-${t.id}">${esc(t.title)}</button></td><td><span class="pill s-${t.status}">${LABEL[t.status]}</span></td><td>P${t.priority || 2}</td><td>${['S', 'L'].includes(t.size) ? t.size : 'M'}</td><td>${t.assignee ? esc(t.assignee) : '<span class="muted">unassigned</span>'}</td><td title="Last update ${esc(fullTime(t.updated_at))}">${ago(t.updated_at)}</td></tr>`).join('');
   patch($('tasktable'), `<table><caption class="vh">Tasks, sorted by ${tv.sort}</caption><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>${rows.length ? '' : `<p class="muted tt-empty">${tv.q.trim() ? 'No tasks match your search.' : 'No tasks to show.'}</p>`}`);
 }
-$('tsearch').addEventListener('input', () => { tv.q = $('tsearch').value; renderBoard(); });
+$('tsearch').addEventListener('input', () => { tv.q = $('tsearch').value; renderBoard(); renderOffice(); });
 $('viewtog').addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-view]'); if (!b) return;
-  tv.view = b.dataset.view === 'table' ? 'table' : 'columns'; store.set('board-view', tv.view); renderBoard();
+  tv.view = b.dataset.view === 'table' ? 'table' : 'columns'; store.set('board-view', tv.view); renderBoard(); renderOffice();
 });
 $('tasktable').addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-tsort]'); if (!b) return;
@@ -2876,7 +2852,7 @@ function renderBoard() {
   const visible = state.tasks.filter(taskShown);
   const table = tv.view === 'table';
   $('viewtog').querySelectorAll('button').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.view === tv.view)); b.tabIndex = b.dataset.view === tv.view ? -1 : 0; });
-  $('taskbar').hidden = !state.tasks.length;
+  $('taskbar').classList.toggle('none', !state.tasks.length);
   $('board').hidden = table; $('tasktable').hidden = !table || !state.tasks.length; $('cols-hint').hidden = table;
   if (table) { if (state.tasks.length) renderTable(visible); return; }
   const dOpen = doneOpen();
@@ -3104,13 +3080,10 @@ function observeMentions() {
   $('feed').querySelectorAll('.ev.mention[data-eid]').forEach((n) => { if (Number(n.dataset.eid) > seenMention) mentionIO.observe(n); });
 }
 
-// File locks fold to their title (with the count): agents set and clear them, a human only steps in when an owner is
-// gone. Open or folded is remembered in this browser.
-function syncLocks() { const o = store.get('board-locks') === 'open'; $('l-body').hidden = !o; $('l-tog').setAttribute('aria-expanded', String(o)); }
-$('l-tog').addEventListener('click', () => { store.set('board-locks', $('l-body').hidden ? 'open' : 'closed'); syncLocks(); });
-syncLocks();
+// File locks fold to their title bar (with the count), like the other panels: agents set and clear them, a human only
+// steps in when an owner is gone.
 function renderLocks() {
-  $('l-count').textContent = state.locks.length ? `· ${state.locks.length} held` : '· none';
+  $('l-count').textContent = state.locks.length ? `${state.locks.length} held` : 'none';
   patch($('locks'), state.locks.length ? state.locks.map((l) => {
     const mins = Math.max(0, Math.ceil((l.expires_at - Date.now()) / 60000));
     const confirming = ui.confirmLock === l.path;
@@ -3128,7 +3101,7 @@ function renderLocks() {
 function focusCard(id) { document.querySelector(`.card[data-id="${id}"]`)?.focus({ preventScroll: true }); }
 function focusNow() { const b = $('now').querySelector('button'); if (b) b.focus({ preventScroll: true }); else { $('now').tabIndex = -1; $('now').focus({ preventScroll: true }); } }
 function goQuestion(id) {
-  if (boardView === 'office' && oUi.left) oFold('left', false);
+  oShow('left');
   const c = $('q-' + id); if (!c) return toast('That question was already answered.');
   c.scrollIntoView({ behavior: smooth(), block: 'center' }); $('qa-' + id)?.focus({ preventScroll: true });
 }
@@ -3139,7 +3112,7 @@ function goCard(id) {
   c.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); c.focus({ preventScroll: true });
 }
 function goMention(eid) {
-  needBoard();
+  oShow('act');
   ui.tab = 'me'; store.set('board-tab', 'me'); markMentionsSeen(); $('feed')._html = undefined; render();
   const n = $('feed').querySelector(`[data-eid="${eid}"]`);
   $('feed').scrollIntoView({ behavior: smooth(), block: 'center' });
@@ -3148,7 +3121,7 @@ function goMention(eid) {
 }
 function goBoard() {
   needBoard();
-  const c = $('board').querySelector('.card'); $('b-h').parentElement.scrollIntoView({ behavior: smooth(), block: 'start' });
+  const c = $('board').querySelector('.card'); $('boardwrap').scrollIntoView({ behavior: smooth(), block: 'start' });
   (c || $('board')).focus({ preventScroll: true });
 }
 // Answer an agent's question (the top panel, or a blocked task's dialog). It disappears at once (optimistic).
@@ -3166,9 +3139,9 @@ function goWrapup() {
   (n.querySelector('[data-act^="export"]') || n).focus({ preventScroll: true });
 }
 function skipTo(where) {
-  if (where === 'now') { $('nyou').scrollIntoView({ block: 'start' }); return focusNow(); }
+  if (where === 'now') { oShow('left'); $('nyou').scrollIntoView({ block: 'start' }); return focusNow(); }
+  if (where === 'chat') { oShow('act'); $('msg').scrollIntoView({ block: 'center' }); return $('msg').focus({ preventScroll: true }); }
   needBoard();
-  if (where === 'chat') { $('msg').scrollIntoView({ block: 'center' }); return $('msg').focus({ preventScroll: true }); }
   const c = $('board').querySelector('.card'); ($('board').hidden || !state.tasks.length ? $('board-empty') : $('board')).scrollIntoView({ block: 'start' });
   if (c) c.focus({ preventScroll: true }); else { $('board').focus({ preventScroll: true }); }
 }
@@ -3189,7 +3162,7 @@ function chatOverCard() {
 }
 addEventListener('scroll', () => { if (!chatRaf) chatRaf = requestAnimationFrame(chatOverCard); }, { passive: true });
 if ('IntersectionObserver' in window) {
-  new IntersectionObserver(([e]) => { chatHide.feed = e.isIntersecting; syncChat(); }).observe($('f-h').closest('.panel'));
+  new IntersectionObserver(([e]) => { chatHide.feed = e.isIntersecting; syncChat(); }).observe($('o-act'));
   new IntersectionObserver(([e]) => { chatHide.q = e.isIntersecting; syncChat(); }, { rootMargin: '-80% 0px 0px 0px' }).observe($('q-panel'));
 }
 const answering = () => { chatHide.typing = !!document.activeElement?.closest?.('#questions textarea'); syncChat(); };
@@ -3198,13 +3171,12 @@ document.addEventListener('click', (ev) => {
   const sk = ev.target.closest('[data-skip]'); if (sk) { ev.preventDefault(); return skipTo(sk.dataset.skip); }
   if (ev.target.closest('a[href]')) return; // links (PRs, URLs in chat) open by themselves
   if (ev.target.closest('.card input, .card label')) return; // typing a reject reason doesn't open the card
-  const el = ev.target.closest('button, .card, [data-open-task], [data-ptoggle]');
+  const el = ev.target.closest('button, .card, [data-open-task]');
   if (ui.moveMenu && !ev.target.closest('.mvmenu, [data-move]')) { ui.moveMenu = null; render(); }
   if (ui.moveAsk && !ev.target.closest('.mvask, [data-move-to]')) { ui.moveAsk = null; render(); }
   if (!el) return;
   const d = el.dataset;
   if (el.classList.contains('card')) return openTask(Number(d.id));
-  if (d.ptoggle) { const n = d.ptoggle; ui.openPeople.has(n) ? ui.openPeople.delete(n) : ui.openPeople.add(n); render(); reveal($('pd-' + n)); return document.querySelector(`[data-fk="ptog-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }
   if (d.move) { const id = Number(d.move); ui.moveMenu = ui.moveMenu === id ? null : id; render(); reveal(document.querySelector(`.card[data-id="${id}"] .mvmenu`)); return (ui.moveMenu ? document.querySelector(`.card[data-id="${id}"] .mvmenu button`) : document.querySelector(`[data-fk="mv-${id}"]`))?.focus({ preventScroll: true }); }
   if (d.moveTo) { const id = Number(d.moveId); const t = taskById(id); ui.moveMenu = null; if (t && t.status !== d.moveTo) moveTask(t, d.moveTo); render(); return ui.moveAsk?.id === id ? document.querySelector(`.card[data-id="${id}"] .mvask button`)?.focus({ preventScroll: true }) : focusCard(id); }
   if (d.askTo) { const id = Number(d.askId); const t = taskById(id); const { to, force } = ui.moveAsk || {}; ui.moveAsk = null; if (t && to) moveTask(t, to, { force, assignee: d.askTo }); render(); return focusCard(id); }
@@ -3230,7 +3202,7 @@ document.addEventListener('click', (ev) => {
   if (d.step) { const si = setupInfo(); ui.steps[d.step] = !stepOpen(d.step, si.cur); render(); return reveal($('sb-' + d.step)); }
   if (d.act) return doAct(d.act, el);
   if (d.go && d.go.startsWith('step-')) return goStep(d.go.slice(5));
-  if (d.go === 'compose') { $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); return $('msg').focus({ preventScroll: true }); }
+  if (d.go === 'compose') { oShow('act'); $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); return $('msg').focus({ preventScroll: true }); }
   if (d.openTask) return openTask(Number(d.openTask));
   if (d.mention) return mention(d.mention);
   if ('filter' in d && el.id !== 'filter') { setFilter(filterRoot() === d.filter && d.filter ? '' : d.filter); return; }
@@ -3240,9 +3212,21 @@ document.addEventListener('click', (ev) => {
   if (d.unlock) { ui.confirmLock = d.unlock; render(); return document.querySelector(`[data-fk="un-${CSS.escape(d.unlock)}"]`)?.focus(); }
   if ('unlockNo' in d) { ui.confirmLock = null; return render(); }
   if (d.unlockYes) { const p = d.unlockYes; ui.confirmLock = null; act(api('/locks/release', { method: 'POST', body: JSON.stringify({ paths: [p] }) }), `Released lock on ${p}`).catch(() => {}); return render(); }
-  if (d.go === 'questions') { $('q-panel').scrollIntoView({ behavior: smooth(), block: 'start' }); return $('questions').querySelector('textarea')?.focus({ preventScroll: true }); }
-  if (d.go === 'mentions') { ui.tab = 'me'; store.set('board-tab', 'me'); markMentionsSeen(); render(); return $('feed').scrollIntoView({ behavior: smooth(), block: 'center' }); }
-  if (d.go === 'blocked') { $('col-blocked')?.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); return $('col-blocked')?.querySelector('.card')?.focus({ preventScroll: true }); }
+  if (d.go === 'questions') { oShow('left'); $('q-panel').scrollIntoView({ behavior: smooth(), block: 'start' }); return $('questions').querySelector('textarea')?.focus({ preventScroll: true }); }
+  if (d.go === 'mentions') { ui.tab = 'me'; store.set('board-tab', 'me'); markMentionsSeen(); $('feed')._html = undefined; render(); return oAct(); }
+  if (d.go === 'blocked') {
+    // The Blocked list under the questions in Needs you, with why.
+    oShow('left');
+    const b = $('o-blocked').querySelector('button'); b?.scrollIntoView({ behavior: smooth(), block: 'nearest' });
+    return b?.focus({ preventScroll: true });
+  }
+  if (d.go === 'limited') {
+    // Select the out-of-usage agent in Agents: its "out of usage" line, its tasks and "It's back".
+    const a = setupInfo().limitedA[0]; if (!a) return;
+    oShow('right'); pickAgent(a.name, true);
+    const el = document.querySelector(`[data-fk="ul-${CSS.escape(a.name)}"]`) || document.querySelector(`[data-fk="oa-${CSS.escape(a.name)}"]`);
+    el?.scrollIntoView({ behavior: smooth(), block: 'nearest' }); return el?.focus({ preventScroll: true });
+  }
   if (d.go === 'cut') {
     // Show (or hide) the P3 tasks that probably won't make it; with none to name, the demo time is the lever.
     if (!cutTasks()?.list.length) return doAct('clock', el);
@@ -3250,20 +3234,13 @@ document.addEventListener('click', (ev) => {
     return ui.showCut ? $('cut-list')?.querySelector('button')?.focus() : undefined;
   }
   if (d.go === 'rejected') { const b = bouncedTasks()[0]; return b && openTask(b.id); }
-  if (d.go === 'limited') {
-    // Open the person with the out-of-usage agent, so its "out of usage" line and tasks are in view.
-    const a = setupInfo().limitedA[0]; if (!a) return;
-    const n = root(a.name); ui.openPeople.add(n); render();
-    const el = document.querySelector(`[data-fk="pb-${CSS.escape(a.name)}"]`) || document.querySelector(`[data-fk="ptog-${CSS.escape(n)}"]`);
-    el?.scrollIntoView({ behavior: smooth(), block: 'center' }); return el?.focus({ preventScroll: true });
-  }
   if (d.go === 'board') return goBoard();
-  if (d.go === 'now') { $('nyou').scrollIntoView({ behavior: smooth(), block: 'start' }); return focusNow(); }
+  if (d.go === 'now') { oShow('left'); $('o-left-b').scrollTop = 0; $('nyou').scrollIntoView({ behavior: smooth(), block: 'start' }); return focusNow(); }
   if (d.go === 'idle') {
     // Draft a request to the planner (not sent: the human reviews it), or add a task directly when nobody plans.
     const pl = state.settings.planner; if (!pl) return openTask(null);
     const c = teamCapacity();
-    mention(pl); const m = $('msg');
+    oShow('act'); mention(pl); const m = $('msg');
     if (!/idle/.test(m.value)) m.value += `${plural(c.idle.length, 'agent is', 'agents are')} idle and only ${plural(c.forIdle, 'task is', 'tasks are')} ready to claim. Please add more tasks for the goal.`;
     growMsg();
     m.scrollIntoView({ behavior: smooth(), block: 'center' }); m.focus({ preventScroll: true }); m.setSelectionRange(m.value.length, m.value.length);
@@ -3271,10 +3248,10 @@ document.addEventListener('click', (ev) => {
   }
   if (d.go === 'wrapup') return goWrapup();
   if (d.go === 'conflict') {
-    // Open the person with the clashing agent, so its warning and "Belongs to" are in view.
+    // Select the clashing agent in Agents, so its warning and "Belongs to" are in view.
     const a = [...agentInfoNow().values()].find((x) => x.conflict); if (!a) return;
-    const n = root(a.name); ui.openPeople.add(n); render();
-    const el = document.querySelector(`[data-fk="pb-${CSS.escape(a.name)}"]`) || document.querySelector(`[data-fk="ptog-${CSS.escape(n)}"]`);
+    oShow('right'); pickAgent(a.name, true);
+    const el = document.querySelector(`[data-fk="pb-${CSS.escape(a.name)}"]`) || document.querySelector(`[data-fk="oa-${CSS.escape(a.name)}"]`);
     el?.scrollIntoView({ behavior: smooth(), block: 'center' }); return el?.focus({ preventScroll: true });
   }
   if (d.go === 'review') { $('col-review')?.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); return ($('col-review')?.querySelector('.card') || $('col-review'))?.focus({ preventScroll: true }); }
@@ -3359,7 +3336,7 @@ document.addEventListener('submit', async (ev) => {
       state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: ts, freeze_minutes: fm }) });
       ui.editDeadline = false; ui.dlErr = '';
       toast(`Demo at ${when(ts)}${fm ? `; feature freeze at ${when(ts - fm * 60e3)}` : ''}. Agents see it too.`);
-      if (inOffice) { ui.oDl = false; render(); scheduleReload(); return $('o-dl-chip').focus({ preventScroll: true }); }
+      if (inOffice) { ui.oDl = false; render(); scheduleReload(); return $('clock').focus({ preventScroll: true }); }
       render(); scheduleReload();
       document.querySelector('[data-fk="dl-edit"]')?.focus({ preventScroll: true });
     } catch (e) { toast(e.message, true); btn.disabled = false; }
@@ -3433,7 +3410,6 @@ document.addEventListener('change', async (ev) => {
     const n = ev.target.dataset.person; const v = ev.target.value;
     try {
       await api(`/agents/${encodeURIComponent(n)}`, { method: 'PATCH', body: JSON.stringify({ person: v }) });
-      if (v) ui.openPeople.add(v);
       toast(v ? `${n} now shows under ${v}` : `${n} is grouped automatically again`); scheduleReload();
     } catch (e) { toast(e.message, true); render(); }
     return;
@@ -3496,15 +3472,16 @@ function doAct(a, el) {
   if (a === 'sec-go') { const b = document.querySelector('[data-fk="rot"], [data-fk="rot-no"]'); b?.scrollIntoView({ behavior: smooth(), block: 'center' }); return b?.focus({ preventScroll: true }); }
   if (a === 'dl-skip') { store.set('board-dl-skip', '1'); ui.steps.goal = false; render(); toast('No demo time: no countdown or feature freeze. Set one any time in step 2.'); return document.querySelector('[data-fk="sh-goal"]')?.focus({ preventScroll: true }); }
   if (a === 'qr') { ui.qr = !ui.qr; render(); return document.querySelector('[data-fk="qr-tog"]')?.focus({ preventScroll: true }); }
-  if (a === 'clock') return boardView === 'office' ? oDl(true) : goStep('goal', 'dl');
+  if (a === 'clock') return oDl(el?.id === 'clock' ? !ui.oDl : true);
+  if (a === 'goal') return oGoal(!ui.oGoal);
   if (a === 'o-goal-edit') return oGoal(true, { edit: true });
-  if (a === 'o-goal-cancel') { ui.oGoalEdit = false; ui.goalErr = ''; renderOffice(); return document.querySelector('[data-fk="o-goal-edit"]')?.focus(); }
+  if (a === 'o-goal-cancel') { ui.oGoalEdit = false; ui.goalErr = ''; renderDocks(); return document.querySelector('[data-fk="o-goal-edit"]')?.focus(); }
   if (a === 'dl-edit') { ui.editDeadline = true; render(); return $('dl-in')?.focus(); }
   if (a === 'dl-cancel') { ui.editDeadline = false; ui.dlErr = ''; render(); return document.querySelector('[data-fk="dl-edit"]')?.focus(); }
   if (a === 'dl-clear') {
     return api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: '' }) }).then((st) => {
       state.settings = st; ui.editDeadline = false; ui.dlErr = ''; toast('Deadline removed. No countdown or feature freeze.');
-      if (ui.oDl) { ui.oDl = false; render(); scheduleReload(); return $('o-dl-chip').focus(); }
+      if (ui.oDl) { ui.oDl = false; render(); scheduleReload(); return $('clock').hidden ? focusNow() : $('clock').focus(); }
       render(); scheduleReload();
       $('dl-in')?.focus();
     }).catch((e) => toast(e.message, true));
@@ -3560,7 +3537,7 @@ $('help-btn').onclick = openHelp;
 helpDlg.addEventListener('click', (ev) => { if (ev.target.closest('[data-close]')) return helpDlg.close();
   if (ev.target === helpDlg) { const r = helpDlg.getBoundingClientRect(); if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) helpDlg.close(); } });
 
-function setFilter(v) { needBoard(); ui.filter = v; store.set('board-filter', v); render(); }
+function setFilter(v) { ui.filter = v; store.set('board-filter', v); render(); }
 $('filter').addEventListener('change', (e) => setFilter(e.target.value));
 function markMentionsSeen() {
   const max = Math.max(seenMention, ...state.events.filter(mentionsMe).map((e) => e.id));
@@ -4030,7 +4007,7 @@ function setTheme(t) {
 // focus goes back to the button.
 function themePop(open, focus = true) {
   ui.themeOpen = open; $('theme-pop').hidden = !open; $('theme-btn').setAttribute('aria-expanded', String(open));
-  if (open) { ui.oGoal = false; ui.oDl = false; if (boardView === 'office') renderOffice(); }
+  if (open && (ui.oGoal || ui.oDl)) { ui.oGoal = false; ui.oDl = false; renderDocks(); }
   if (!focus) return;
   if (open) $('theme-pop').querySelector('[aria-checked="true"]')?.focus(); else $('theme-btn').focus({ preventScroll: true });
 }
@@ -4059,7 +4036,7 @@ syncThemeButtons();
 // loads on the first switch only, and draws the same /api/state this page loads: it fetches nothing itself.
 // Remembered per board in this browser ('board-view-mode'); ?view=office|board overrides. Not on phones, and not
 // without WebGL (a note, then the board).
-const office = { mod: null, loading: null, picked: null, failed: false };
+const office = { mod: null, loading: null, failed: false };
 let boardView = 'board';
 const viewParam = ['office', 'board'].includes(qs.get('view')) ? qs.get('view') : '';
 const phoneMq = matchMedia('(max-width: 760px)');
@@ -4096,14 +4073,15 @@ function setBoardView(v, { save = true, quiet = false } = {}) {
   if (qs.has('view')) { try { const u = new URL(location.href); u.searchParams.set('view', v); history.replaceState(null, '', u); } catch {} }
   renderViewSwitch();
   officeMount(v === 'office');
-  if (v === 'office') { renderOffice(); showOffice(); }
-  else { office.mod?.setActive(false); office.picked = null; office.mod?.select(null); ui.oGoal = false; }
+  if (state.loaded) render(); else oApply();
+  if (v === 'office') showOffice();
+  else office.mod?.setActive(false);
   if (changed && !quiet) announce(v === 'office' ? 'Showing the 3D office' : 'Showing the board');
 }
 // Anything that leads to a part of the board the office view hides (task columns, People, chat, Start here).
 function needBoard() { if (boardView === 'office') setBoardView('board'); }
 function showOffice() {
-  if (office.mod) { office.mod.setActive(true); if (state) office.mod.update(state); return; }
+  if (office.mod) { office.mod.setActive(true); if (state) office.mod.update(state); office.mod.select(ui.picked || null); return; }
   if (office.loading) return;
   const view = $('office-view'); view.classList.add('loading'); view.setAttribute('aria-busy', 'true');
   office.loading = import(BASE + '/office/embed.js').then((m) => {
@@ -4111,6 +4089,7 @@ function showOffice() {
     if (!o.usable) { o.destroy(); return noOffice("The 3D office couldn't start WebGL in this browser. Staying on the board."); }
     office.mod = o;
     if (state) o.update(state);
+    o.select(ui.picked || null);
     if (boardView !== 'office') o.setActive(false);
   }).catch((e) => {
     console.warn('3D office did not load', e);
@@ -4127,117 +4106,107 @@ const darkMq = matchMedia('(prefers-color-scheme: dark)');
 darkMq.addEventListener?.('change', () => office.mod?.setTheme(scenePalette()));
 phoneMq.addEventListener?.('change', () => { if (phoneMq.matches && boardView === 'office') setBoardView('board', { save: false }); renderViewSwitch(); });
 $('vseg').addEventListener('click', (ev) => { const b = ev.target.closest('[data-vset]'); if (b) setBoardView(b.dataset.vset); });
-// In the office, links to hidden parts of the board switch back to it first (then do what they say).
+// In the 3D view, links to parts only the Board view has (Start here, the task columns, the setup guide) switch to it
+// first, then do what they say. What to do now's other links (STAYS) lead into the panels both views share.
 document.addEventListener('click', (ev) => {
   if (boardView !== 'office') return;
-  const el = ev.target.closest?.('[data-go], [data-skip], [data-act="clock"], [data-act="invite"], [data-act="sec-go"]');
-  if (!el || (el.closest('#office-view') && !el.closest('#o-left, #o-goal') && !el.matches('[data-act="clock"]'))) return;
-  if (el.matches('[data-act="clock"]')) { ev.preventDefault(); ev.stopPropagation(); return oDl(true); }
-  const go = el.dataset.go;
-  // What needs you lives in the office's left dock: these stay here (and open the dock if it was folded).
-  if (['cut', 'rejected', 'now', 'questions', 'blocked', 'limited'].includes(go) || el.dataset.skip === 'now') {
-    if (oUi.left) oFold('left', false);
-    if (el.dataset.skip === 'now') { ev.preventDefault(); ev.stopPropagation(); $('o-left-b').scrollTop = 0; return focusNow(); }
-    if (go === 'blocked' || go === 'limited') {
-      ev.preventDefault(); ev.stopPropagation();
-      const b = $('o-blocked').querySelector(go === 'limited' ? '#o-lim-h + ul .pc' : 'button, .pc'); b?.scrollIntoView({ block: 'nearest', behavior: smooth() });
-      if (b) { if (!b.matches('button')) b.tabIndex = -1; b.focus({ preventScroll: true }); }
-    }
-    return;
-  }
-  // Chat and mentions go to the office's Activity (under Agents) instead.
-  if (go === 'compose' || go === 'mentions') {
-    ev.preventDefault(); ev.stopPropagation();
-    if (go === 'mentions') { ui.tab = 'me'; store.set('board-tab', 'me'); markMentionsSeen(); $('feed')._html = undefined; render(); return oAct(); }
-    return oChat();
-  }
+  const el = ev.target.closest?.('[data-go], [data-act="invite"], [data-act="sec-go"], [data-act="setup-open"]');
+  if (!el || (el.dataset.go && STAYS.includes(el.dataset.go))) return;
   setBoardView('board');
 }, true);
 
-// ---------- 3D office: docks, windows and chips over the room ----------
-// The demo's office layout with the board's own data and controls. What to do now + the questions and the Activity
-// panel are MOVED into the office (the same elements, so answering, the feed filters and chat work exactly as on the
-// board) and moved back when you switch to Board. Folded docks / windows are remembered per board in this browser.
-const oUi = (() => { try { const v = JSON.parse(store.get('board-office-ui') || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } })();
-const oSave = () => store.set('board-office-ui', JSON.stringify(oUi));
+// ---------- the panels, the same in both views ----------
+// Needs you (left), Agents, Activity and File locks (right), the top bar with the goal, the demo time under the header
+// clock. One fold state for both views (oUi), one way to open each panel again: a dock folds to its chip, Activity
+// and File locks (and the 3D Tasks window) to their title bars.
 const oHome = {};
+// The Board view's task bar (Tasks, search, Show, Columns / Table) and its table move into the 3D Tasks window while
+// the 3D view is on, and back: the same elements, so the search text, the filter and the saved view carry over.
 function officeMount(on) {
-  const blocks = [['nyou', $('nyou'), () => $('o-left-b'), 'prepend'], ['act', $('f-h').closest('.panel'), () => $('o-act-b'), 'append']];
-  for (const [k, el, to, how] of blocks) {
-    if (on) { if (!oHome[k]) { oHome[k] = document.createComment(k); el.before(oHome[k]); } if (!to().contains(el)) to()[how](el); }
-    else if (oHome[k] && !oHome[k].nextSibling?.isSameNode?.(el)) oHome[k].after(el);
-  }
+  const tb = $('taskbar'), tt = $('tasktable');
+  if (on) {
+    if (!oHome.tb) { oHome.tb = document.createComment('taskbar'); tb.before(oHome.tb); oHome.tt = document.createComment('tasktable'); tt.before(oHome.tt); }
+    if (!$('o-tasks-head').contains(tb)) $('o-tasks-head').prepend(tb);
+    if (!$('o-tasks-b').contains(tt)) $('o-tasks-b').append(tt);
+  } else if (oHome.tb) { if (oHome.tb.nextSibling !== tb) oHome.tb.after(tb); if (oHome.tt.nextSibling !== tt) oHome.tt.after(tt); }
 }
-// The Tasks window folds to its title bar (with the progress) by default on screens up to 900px tall (the room needs the height) and
-// is open above that; folding or unfolding it yourself is remembered.
+// The Tasks window folds to its title bar by default on screens up to 900px tall (the room needs the height) and is
+// open above that; File locks start folded. Folding or unfolding one yourself is remembered.
 const oTasksOff = () => (typeof oUi.tasks === 'boolean' ? oUi.tasks : innerHeight <= 900);
-const oOff = (w) => (w === 'tasks' ? oTasksOff() : w === 'act' ? !!oUi.actOff : !!oUi[w]);
-// Fold state: the Needs you and Agents docks (to chips), the Tasks window and Activity (to their title bars), maximised
-// tasks, the goal and demo time popovers.
+const oLocksOff = () => (typeof oUi.locks === 'boolean' ? oUi.locks : store.get('board-locks') !== 'open');
+const oOff = (w) => (w === 'tasks' ? oTasksOff() : w === 'locks' ? oLocksOff() : w === 'act' ? !!oUi.actOff : !!oUi[w]);
 function oApply() {
-  const v = $('office-view');
+  const m = $('main');
   for (const s of ['left', 'right']) {
     $('o-' + s).hidden = !!oUi[s]; $('o-' + s + '-pill').hidden = !oUi[s];
-    v.classList.toggle(s[0] + '-off', !!oUi[s]);
+    m.classList.toggle(s[0] + '-off', !!oUi[s]);
   }
   const tOff = oTasksOff();
   $('o-tasks').classList.toggle('max', !!oUi.max && !tOff);
   $('o-tasks-max').setAttribute('aria-pressed', String(!!oUi.max)); $('o-tasks-max').setAttribute('aria-label', oUi.max ? 'Restore the tasks window' : 'Maximise the tasks'); $('o-tasks-max').title = oUi.max ? 'Restore (Esc)' : 'Maximise';
   $('o-tasks-max').textContent = oUi.max ? '❐' : '□';
-  for (const [box, b, off, what] of [[$('o-tasks'), $('o-tasks-fold'), tOff, 'the tasks'], [$('o-act'), $('o-act-fold'), !!oUi.actOff, 'Activity']]) {
+  for (const [box, b, off, what] of [[$('o-tasks'), $('o-tasks-fold'), tOff, 'the tasks'], [$('o-act'), $('o-act-fold'), !!oUi.actOff, 'Activity'], [$('o-locks'), $('l-tog'), oLocksOff(), 'the file locks']]) {
     box.classList.toggle('folded', off); b.setAttribute('aria-expanded', String(!off)); b.textContent = off ? '▴' : '▾';
     b.title = off ? 'Show' : 'Fold'; b.setAttribute('aria-label', off ? `Show ${what}` : `Fold ${what} to ${what === 'Activity' ? 'its' : 'their'} title bar`);
   }
-  $('o-goal').hidden = !ui.oGoal; $('o-goal-chip').setAttribute('aria-expanded', String(!!ui.oGoal));
-  $('o-dl').hidden = !ui.oDl; $('o-dl-chip').setAttribute('aria-expanded', String(!!ui.oDl));
+  $('l-body').hidden = oLocksOff();
+  $('o-goal').hidden = !ui.oGoal; $('goal-btn')?.setAttribute('aria-expanded', String(!!ui.oGoal));
+  $('o-dl').hidden = !ui.oDl; $('clock').setAttribute('aria-expanded', String(!!ui.oDl));
+  if (ui.oDl) { const c = $('clock'); const r = c.offsetWidth ? c.getBoundingClientRect() : null; const w = $('o-dl').offsetWidth || 400; $('o-dl').style.left = `${Math.max(8, Math.min((r ? r.left : 8), innerWidth - w - 8))}px`; if (r) $('o-dl').style.top = `${Math.round(r.bottom + 8)}px`; }
+  syncNeeds();
+  if (boardView === 'office') $('main').style.setProperty('--tb-h', $('topbar').offsetHeight + 'px');
   oFrame();
 }
-// The room is framed in the part of the view no dock, chip or Tasks window (or its title bar) covers (the camera is told
-// the insets).
+// The room is framed in the part of the view no dock, the top bar or the Tasks window (or its title bar) covers (the
+// camera is told the insets).
 function oFrame() {
   if (!office.mod?.setInsets || boardView !== 'office') return;
   const v = $('office-view').getBoundingClientRect(); if (!v.width || !v.height) return;
   const R = (id) => { const e = $(id); return e && !e.hidden && e.offsetWidth ? e.getBoundingClientRect() : null; };
-  const l = R('o-left'), r = R('o-right') || R('o-act'), t = R('o-tasks'), top = document.querySelector('.o-top').getBoundingClientRect();
+  const l = R('o-left'), r = R('o-right') || R('o-act'), t = R('o-tasks'), top = $('topbar').getBoundingClientRect();
   const maxed = t && $('o-tasks').classList.contains('max');
   office.mod.setInsets({
     left: l ? (l.right - v.left) / v.width : 0,
     right: r ? (v.right - r.left) / v.width : 0,
-    top: (top.bottom - v.top) / v.height,
+    top: Math.max(0, (top.bottom - v.top) / v.height),
     bottom: t && !maxed ? (v.bottom - t.top) / v.height : 0,
   });
 }
 function oFold(which, folded = !oOff(which)) {
   const from = document.activeElement;
-  oUi[which === 'act' ? 'actOff' : which] = folded; oSave(); oApply(); renderOffice(); office.mod?.resize?.();
-  // Focus stays on the control you used (Tasks and Activity fold to their title bars, which keep the button); if that
-  // just went away, it moves to its counterpart (a dock's fold button <-> its chip).
-  if (from && from !== document.body && !from.offsetParent) (folded ? $('o-' + which + '-pill') : $('o-' + which).querySelector('[data-o-fold]')).focus({ preventScroll: true });
+  oUi[which === 'act' ? 'actOff' : which] = folded; oSave(); renderDocks();
+  if (boardView === 'office') { renderOffice(); office.mod?.resize?.(); }
+  // Focus stays on the control you used (Tasks, Activity and File locks fold to their title bars, which keep the
+  // button); if that just went away, it moves to its counterpart (a dock's fold button <-> its chip).
+  if (from && from !== document.body && !from.offsetParent) (folded ? $('o-' + which + '-pill') : $('o-' + which)?.querySelector('[data-o-fold]'))?.focus({ preventScroll: true });
   if (which === 'tasks' && !folded) oMore();
   if (which === 'act' && !folded) { const f = $('feed'); f.scrollTop = f.scrollHeight; }
 }
+// Open a folded panel (a link led to it).
+function oShow(which) { if (oOff(which)) oFold(which, false); }
 // Show Activity (unfolded), at its latest event; focus the feed.
 function oAct(focus = true) {
-  if (oUi.actOff) oFold('act', false);
+  oShow('act');
   const f = $('feed'); f.scrollTop = f.scrollHeight; if (focus) f.focus({ preventScroll: true });
 }
-function oChat() {
-  if (ui.tab !== 'chat' && ui.tab !== 'all') { ui.tab = 'chat'; store.set('board-tab', 'chat'); $('feed')._html = undefined; render(); }
-  oAct(false); $('msg').focus({ preventScroll: true });
-}
-// The goal and the demo time open in place, under their chips (one at a time), and are edited there.
+// The goal opens in place under the top bar, the demo time under the header clock (one at a time), and each is edited
+// there. A click elsewhere or Esc closes them.
 function oGoal(open, { edit = false } = {}) {
   ui.oGoal = open; ui.oGoalEdit = open && edit; ui.goalErr = ''; if (open) { ui.oDl = false; if (ui.themeOpen) themePop(false, false); }
-  $('o-goal-b')._html = undefined; renderOffice();
-  if (!open) return $('o-goal-chip').focus({ preventScroll: true });
+  $('o-goal-b')._html = undefined; renderDocks(); $('topbar')._html = undefined; renderTopbar(setupInfo());
+  if (!open) return $('goal-btn')?.focus({ preventScroll: true });
   const ta = $('o-goal-in');
   if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } else $('o-goal').querySelector('.o-ib').focus({ preventScroll: true });
 }
 function oDl(open) {
   ui.oDl = open; ui.dlErr = ''; if (open) { ui.oGoal = false; if (ui.themeOpen) themePop(false, false); }
-  $('o-dl-b').innerHTML = ''; $('o-dl-b')._html = undefined; renderOffice();
-  if (open) $('o-dl-in')?.focus(); else $('o-dl-chip').focus({ preventScroll: true });
+  $('o-dl-b').innerHTML = ''; $('o-dl-b')._html = undefined; renderDocks();
+  if (open) $('o-dl-in')?.focus(); else $('clock').focus({ preventScroll: true });
 }
+document.addEventListener('click', (ev) => {
+  if (ui.oGoal && !ev.target.closest?.('#o-goal, #goal-btn') && ev.target.isConnected) { ui.oGoal = false; renderDocks(); }
+  if (ui.oDl && !ev.target.closest?.('#o-dl, #clock, [data-act="clock"]') && ev.target.isConnected) { ui.oDl = false; renderDocks(); }
+});
 // The demo time form for its popover: the board's own (step 2 of Start here), with ids of its own.
 function oDlForm() {
   const S = state.settings; const t = timeNow();
@@ -4249,43 +4218,9 @@ function oDlForm() {
       <div class="err" id="o-dl-err" role="alert">${esc(ui.dlErr || '')}</div>
       <div class="xacts">${t.deadline ? '<button type="button" class="ghost sm" data-act="dl-clear" data-fk="o-dl-clear">Remove</button>' : ''}<span class="sp"></span><button type="button" class="ghost sm" data-o-close="dl" data-fk="o-dl-cancel">Cancel</button><button type="submit" class="sm" data-fk="o-dl-save">Save time</button></div></form>`;
 }
-// What an agent shows in the Agents dock follows the room's rule (lookFor() in office/src/live/adapter.ts), so its row
-// and the bubble over its desk agree. Only what a human acts on gets a badge: a question, a blocked task (with no open
-// question: answering is what unblocks those) and out of usage. Everything else is a plain word. [class, word, badge?]
-function oStatus(a, qOpen) {
-  if (isLimited(a)) return ['limited', 'Out of usage', true];
-  if (!a.online) return ['off', 'offline'];
-  if (!a.started) return ['off', 'not started'];
-  if (qOpen.some((q) => agentRoot(q.asker) === a.name)) return ['question', 'Question', true];
-  const mine = state.tasks.filter((t) => t.assignee && agentRoot(t.assignee) === a.name);
-  if (mine.some((t) => t.status === 'blocked')) return ['blocked', 'Blocked', true];
-  if (mine.some((t) => t.status === 'in_progress')) return ['working', 'working'];
-  if (state.tasks.some((t) => t.status === 'review' && t.reviewer && agentRoot(t.reviewer) === a.name)) return ['review', 'merging'];
-  if (mine.some((t) => t.status === 'claimed')) return ['working', 'working'];
-  if (mine.some((t) => t.status === 'review')) return ['review', 'in review'];
-  return ['idle', a.busy ? 'working' : 'idle'];
-}
-// A main agent's helpers (owner/helper), each with its own state and task: one helper can be blocked while another works.
-function oHelpers(a, qOpen) {
-  const names = new Set();
-  for (const t of state.tasks) if (String(t.assignee || '').includes('/') && agentRoot(t.assignee) === a.name && ACTIVE.includes(t.status)) names.add(t.assignee.toLowerCase());
-  for (const q of qOpen) if (q.asker.includes('/') && agentRoot(q.asker) === a.name) names.add(q.asker.toLowerCase());
-  return [...names].sort().map((h) => {
-    const ts = state.tasks.filter((t) => String(t.assignee || '').toLowerCase() === h && ACTIVE.includes(t.status));
-    const q = qOpen.find((x) => x.asker.toLowerCase() === h); const b = ts.find((t) => t.status === 'blocked');
-    const [cls, word] = q ? ['question', 'Question'] : b ? ['blocked', 'Blocked'] : ts.some((t) => HOLDING.includes(t.status)) ? ['working', 'working'] : ts.length ? ['review', 'in review'] : ['idle', 'idle'];
-    const t = (q?.task_id && taskById(q.task_id)) || b || ts.find((x) => HOLDING.includes(x.status)) || ts[0];
-    return `<li><span class="o-hn">${esc(h.split('/')[1])}</span><span class="o-hs ${cls}">${word}</span>${t ? `<span class="o-tk">#${t.id} ${esc(t.title)}</span>` : ''}</li>`;
-  });
-}
-// The Tasks window's columns: the board's six (proposals in Open), with the board's names and counts.
-const O_COLS = STATUSES.map((s) => [s, LABEL[s]]);
-const oRoveAt = {};
-function renderOffice() {
-  if (boardView !== 'office') return;
-  const qOpen = openQuestions();
-  const si = setupInfo();
-  // Needs you: its counts in the title bar (the header badge's, which hides in the office), and on its chip when folded.
+// The panels' own lines: Needs you's counts (the need-you badge's words), what's blocked and who is out of usage,
+// Activity's latest event when folded, the goal and demo time popovers.
+function renderDocks(qOpen = openQuestions(), si = setupInfo()) {
   const needTxt = (ui.needParts || []).join(' · ');
   $('o-left-sub').textContent = needTxt; $('o-left-sub').title = needTxt;
   $('o-left-n').textContent = ui.needN ? String(ui.needN) : '';
@@ -4295,66 +4230,12 @@ function renderOffice() {
   patch($('o-blocked'), (alone.length ? `<section class="o-sec" aria-labelledby="o-bl-h"><h3 id="o-bl-h">Blocked</h3><ul class="o-list">${
     alone.map((t) => `<li><button type="button" class="link tref" data-open-task="${t.id}" data-fk="ob-${t.id}">#${t.id} ${esc(short(t.title, 48))}</button>${t.assignee ? ` <span class="muted">·</span> ${nameTag(agentRoot(t.assignee))}` : ''}${blockedNote(t) ? `<span class="o-why bad">${esc(short(blockedNote(t), 140))}</span>` : ''}</li>`).join('')}</ul></section>` : '')
     + (si.limitedA.length ? `<section class="o-sec" aria-labelledby="o-lim-h"><h3 id="o-lim-h">Out of usage</h3><ul class="o-list">${si.limitedA.map((a) => `<li>${nameTag(a.name)} <span class="o-why">${esc(limitText(a).replace(/^out of usage(?: · )?/, '') || 'until it talks to the board again')}${a.limited?.note ? `: ${esc(short(a.limited.note, 100))}` : ''}</span></li>`).join('')}</ul></section>` : ''));
-
-  // Agents: one row per agent, under its person (a person with one agent named after them is just that row).
-  const ps = people().filter((p) => p.r.agents.length);
-  const all = ps.flatMap((p) => p.r.agents);
-  const cnt = agentsLine(si, true);
-  $('o-right-sub').textContent = all.length ? cnt : '';
-  $('o-right-n').textContent = all.length ? `${si.onlineA.length} online` : '';
-  $('o-right-pill').setAttribute('aria-label', `Agents${all.length ? `: ${cnt}` : ''}. Open the panel`);
-  if (office.picked && !all.some((a) => a.name === office.picked)) office.picked = null;
-  const row = (a, p, solo) => {
-    const [cls, word, badge] = oStatus(a, qOpen);
-    const own = state.tasks.filter((t) => String(t.assignee || '').toLowerCase() === a.name && ACTIVE.includes(t.status)).sort((x, y) => (HOLDING.includes(y.status) - HOLDING.includes(x.status)) || x.id - y.id);
-    const mine = state.tasks.filter((t) => t.assignee && agentRoot(t.assignee) === a.name && ACTIVE.includes(t.status)).sort((x, y) => (HOLDING.includes(y.status) - HOLDING.includes(x.status)) || x.id - y.id);
-    const q = qOpen.find((x) => agentRoot(x.asker) === a.name);
-    const qSelf = qOpen.find((x) => x.asker.toLowerCase() === a.name);
-    const helpers = oHelpers(a, qOpen);
-    const merging = state.tasks.find((t) => t.status === 'review' && t.reviewer && agentRoot(t.reviewer) === a.name);
-    const what = cls === 'limited' || cls === 'off' ? '' : qSelf ? 'asked you a question' : own[0] ? `#${own[0].id} ${short(own[0].title, 60)}` : merging ? `merging #${merging.id}` : helpers.length ? '' : '';
-    const sel = office.picked === a.name;
-    return `<li><button type="button" class="o-agent${cls === 'off' ? ' off' : ''}" data-o-agent="${esc(a.name)}" data-fk="oa-${esc(a.name)}" aria-pressed="${sel}" title="${a.online ? 'Show it in the room' : 'Not in the room: offline'}">`
-      + `<span class="o-r1">${toolDot(a)}<span class="o-an">${esc(a.name)}${solo && p.name === me ? ' <span class="muted">(you)</span>' : ''}</span><span class="o-st ${cls}${badge ? ' bx' : ''}">${word}</span></span>`
-      + `<span class="o-r2"><span class="o-tk">${esc(what || a.client || 'AI tool not reported yet')}</span>${what && a.client ? `<span class="o-cl">${esc(a.client)}</span>` : ''}</span></button>`
-      + (helpers.length ? `<ul class="o-helpers" aria-label="${esc(a.name)}'s helpers">${helpers.join('')}</ul>` : '')
-      + `${sel ? oDetail(a, mine, q) : ''}</li>`;
-  };
-  patch($('o-agents'), ps.length ? ps.map((p) => {
-    const solo = p.r.agents.length === 1 && p.r.agents[0].name === p.name;
-    return solo ? `<ul class="o-agents o-person">${row(p.r.agents[0], p, true)}</ul>`
-      : `<div class="o-person"><p class="o-pn">${nameTag(p.name)}${p.name === me ? ' <span class="muted">(you)</span>' : ''}</p><ul class="o-agents">${p.r.agents.map((a) => row(a, p, false)).join('')}</ul></div>`;
-  }).join('') : '<p class="empty-note">No agents yet.</p><p class="xacts"><button type="button" class="ghost sm" data-go="step-invite" data-fk="o-invite">Open Start here (Board view)</button></p>');
-
-  // Tasks: the board's columns, names and counts. Overflowing columns say how many more there are (oMore).
-  const tasks = state.tasks;
-  if (patch($('o-cols'), O_COLS.map(([k, label]) => {
-    let list = tasks.filter((t) => colOf(t) === k);
-    list = k === 'open' ? list.sort((a, b) => (b.status === 'proposed') - (a.status === 'proposed') || a.priority - b.priority || a.id - b.id) : list.sort((a, b) => b.updated_at - a.updated_at);
-    return `<section class="o-col s-${k}${list.length ? ' has' : ''}" data-s="${k}" aria-label="${label}, ${plural(list.length, 'task')}"><h3 title="${COL_DESC[k]}"><span>${label}</span><span class="o-c">${list.length}</span></h3>${list.length ? `<ul>${list.map((t) => {
-      const who = t.assignee ? agentRoot(t.assignee) : '';
-      const note = t.status === 'blocked' ? blockedNote(t) : '';
-      const sub = t.status === 'proposed' ? 'proposed, waiting for approval' : note ? note : t.status === 'review' && t.reviewer ? `${who} · ${agentRoot(t.reviewer)} merges` : who;
-      return `<li><button type="button" class="o-card${who ? ' has-owner' : ''}" ${who ? hs(who) : ''} data-open-task="${t.id}" data-fk="oc-${t.id}"><span class="o-ct"><span class="id">#${t.id}</span> ${esc(t.title)}</span>${sub ? `<span class="o-cw${note ? ' bad' : ''}">${esc(short(sub, 80))}</span>` : ''}</button></li>`;
-    }).join('')}</ul><p class="o-more" aria-hidden="true" hidden></p>` : '<p class="o-none">None</p>'}</section>`;
-  }).join(''))) oRove();
-  requestAnimationFrame(oMore);
-
-  // Progress, in the Tasks title bar: done of all tasks (proposals don't count), like the board and the presenter.
-  const real = tasks.filter((t) => t.status !== 'proposed'); const done = real.filter((t) => t.status === 'done').length;
-  $('o-prog-x').textContent = real.length ? `${done} of ${real.length} done` : 'no tasks yet';
-  $('o-prog-bar').style.width = real.length ? `${Math.round((done / real.length) * 100)}%` : '0';
-  $('o-prog').setAttribute('aria-label', `Progress: ${real.length ? `${done} of ${real.length} tasks done` : 'no tasks yet'}`);
   // Folded Activity: its title bar says the latest event.
   const last = state.events.reduce((m, e) => (!m || e.id > m.id ? e : m), null);
   const lt = last ? `${last.author}: ${last.kind === 'settings' ? settingsText(last) : last.text}` : 'Nothing yet';
   $('o-act-x').textContent = oUi.actOff ? short(lt, 80) : ''; $('o-act-x').title = oUi.actOff ? lt : '';
-  // Goal chip and its popover: the full goal, edited in place.
+  // The goal popover: the full goal, edited in place.
   const goal = String(state.settings.goal || '').trim();
-  const head = goal.split('\n').find((l) => l.trim()) || '';
-  $('o-goal-x').textContent = goal ? short(head, 70) : 'not set yet';
-  $('o-goal-x').classList.toggle('muted', !goal);
-  $('o-goal-chip').setAttribute('aria-label', `Goal: ${goal ? short(head, 120) : 'not set yet'}. ${ui.oGoal ? 'Close' : 'Show'} the full goal`);
   patch($('o-goal-b'), ui.oGoalEdit || (ui.oGoal && !goal)
     ? `<form class="o-form goalform" data-goalform="o" novalidate><label for="o-goal-in">${goal ? 'The goal' : 'In 1–3 sentences: what are you building, and what should the demo show?'}</label>
         <textarea id="o-goal-in" data-keep="o-goal" rows="4" maxlength="1000" title="Enter saves · Shift+Enter adds a new line" aria-describedby="o-goal-err" ${ui.goalErr ? 'aria-invalid="true"' : ''}>${esc(goal)}</textarea>
@@ -4363,6 +4244,29 @@ function renderOffice() {
     : `<p>${esc(goal)}</p><div class="xacts"><button type="button" class="ghost sm" data-act="o-goal-edit" data-fk="o-goal-edit">Edit the goal</button></div>`);
   if (ui.oDl) patch($('o-dl-b'), oDlForm());
   oApply();
+}
+// ---------- 3D view: the room and the Tasks window ----------
+// The Tasks window's columns: the board's six (proposals in Open), with the board's names, and the board's search and
+// Show filter applied, so the counts match the Board view's columns. Columns / Table is the board's saved choice.
+const O_COLS = STATUSES.map((s) => [s, LABEL[s]]);
+const oRoveAt = {};
+function renderOffice() {
+  if (boardView !== 'office') return;
+  const table = tv.view === 'table' && state.tasks.length;
+  $('o-cols').hidden = !!table;
+  const tasks = state.tasks.filter(taskShown);
+  if (patch($('o-cols'), O_COLS.map(([k, label]) => {
+    let list = tasks.filter((t) => colOf(t) === k);
+    list = k === 'open' ? list.sort((a, b) => (b.status === 'proposed') - (a.status === 'proposed') || a.priority - b.priority || a.id - b.id) : list.sort((a, b) => b.updated_at - a.updated_at);
+    return `<section class="o-col s-${k}${list.length ? ' has' : ''}" data-s="${k}" aria-label="${label}, ${plural(list.length, 'task')}"><h3 title="${COL_DESC[k]}"><span>${label}</span><span class="o-c">${list.length}</span></h3>${list.length ? `<ul>${list.map((t) => {
+      const who = t.assignee ? agentRoot(t.assignee) : '';
+      const note = t.status === 'blocked' ? blockedNote(t) : '';
+      const sub = t.status === 'proposed' ? 'proposed, waiting for approval' : note ? note : t.status === 'review' && t.reviewer ? `${who} · ${agentRoot(t.reviewer)} merges` : who;
+      return `<li><button type="button" class="o-card${who ? ' has-owner' : ''}" ${who ? hs(who) : ''} data-open-task="${t.id}" data-fk="oc-${t.id}"><span class="o-ct"><span class="id">#${t.id}</span> ${esc(t.title)}</span>${sub ? `<span class="o-cw${note ? ' bad' : ''}">${esc(short(sub, 80))}</span>` : ''}</button></li>`;
+    }).join('')}</ul><p class="o-more" aria-hidden="true" hidden></p>` : `<p class="o-none">${tv.q.trim() || filterRoot() ? 'No matches' : 'None'}</p>`}</section>`;
+  }).join(''))) oRove();
+  requestAnimationFrame(oMore);
+  oFrame();
 }
 // Tasks: one Tab stop per column, arrow keys between cards (Left / Right: the next column), as on the Board view.
 function oRove() {
@@ -4394,7 +4298,7 @@ $('o-cols').addEventListener('keydown', (ev) => {
   ev.preventDefault();
   if (n) { n.focus(); n.scrollIntoView({ block: 'nearest' }); }
 });
-// A column with more cards than fit: "+N more" at its foot (and a fade), so 3 visible cards never read as 3 tasks.
+// A column with more cards than fit: "+N more" at its foot, so 3 visible cards never read as 3 tasks.
 function oMore() {
   if (boardView !== 'office' || $('o-tasks').hidden) return;
   for (const col of $('o-cols').querySelectorAll('.o-col')) {
@@ -4405,52 +4309,33 @@ function oMore() {
   }
 }
 $('o-cols').addEventListener('scroll', () => requestAnimationFrame(oMore), true);
-addEventListener('resize', () => { if (boardView !== 'office') return; oApply(); requestAnimationFrame(oMore); });
-// Under a selected agent's row: what it holds or reviews, its question, and a way to its People row on the board.
-function oDetail(a, held, q) {
-  const reviewing = state.tasks.filter((t) => t.status === 'review' && t.reviewer && agentRoot(t.reviewer) === a.name && !held.includes(t));
-  const row = (t, label, cls) => `<li><span class="pill ${cls}">${label}</span> <button type="button" class="link" data-open-task="${t.id}">#${t.id} ${esc(t.title)}</button></li>`;
-  const lines = [...held.map((t) => row(t, LABEL[t.status], 's-' + t.status)), ...reviewing.map((t) => row(t, 'Merging', 's-review'))];
-  const st = agentState(a);
-  const what = st === 'limited' ? limitText(a) : st === 'offline' ? `Offline: not in the room (last seen ${a.last ? ago(a.last) : 'never'})` : st === 'waiting' ? notStartedText(a) : lines.length ? '' : 'No task right now';
-  return `<div class="o-det" id="o-det" role="group" aria-label="${esc(a.name)}">${what ? `<p class="muted">${esc(what)}</p>` : `<ul>${lines.join('')}</ul>`}`
-    + (q ? `<p class="mt-2"><span class="pill warn">Question</span> ${esc(short(q.question, 110))}</p>` : '')
-    + `<div class="oc-a">${q ? `<button type="button" class="sm" data-go-q="${q.id}">Answer</button>` : ''}<button type="button" class="ghost sm" data-office-person="${esc(root(a.name))}">Show in People</button></div></div>`;
-}
-// Click a character in the room, or an agent's row: select it in both (again: unselect).
+addEventListener('resize', () => { oApply(); if (boardView === 'office') requestAnimationFrame(oMore); });
+// Select an agent (its row, or its character in the room); again: unselect. The selection is the same in both views.
 function pickAgent(id, fromRow = false) {
-  office.picked = id || null; office.mod?.select(office.picked); renderOffice();
-  if (!office.picked || fromRow) return;
-  if (oUi.right) oFold('right', false);
-  document.querySelector(`[data-fk="oa-${CSS.escape(office.picked)}"]`)?.scrollIntoView({ block: 'nearest', behavior: smooth() });
+  ui.picked = id || null; office.mod?.select(ui.picked); render();
+  if (!ui.picked || fromRow) return;
+  oShow('right');
+  document.querySelector(`[data-fk="oa-${CSS.escape(ui.picked)}"]`)?.scrollIntoView({ block: 'nearest', behavior: smooth() });
 }
-$('office-view').addEventListener('click', (ev) => {
+$('app').addEventListener('click', (ev) => {
   const t = ev.target.closest('button'); if (!t) return;
   const d = t.dataset;
   if (d.oFold) return oFold(d.oFold);
   if ('oMax' in d) { oUi.max = !oUi.max; oSave(); oApply(); requestAnimationFrame(oMore); return office.mod?.resize(); }
   if (d.oClose === 'goal') return oGoal(false);
   if (d.oClose === 'dl') return oDl(false);
-  if (t.id === 'o-goal-chip') return oGoal(!ui.oGoal);
-  if (t.id === 'o-dl-chip') return oDl(!ui.oDl);
-  if (d.oAgent) { const n = d.oAgent; pickAgent(office.picked === n ? null : n, true); return document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }
-  if (d.officePerson) {
-    const p = d.officePerson; setBoardView('board');
-    ui.openPeople.add(p); render();
-    const el = document.querySelector(`[data-fk="ptog-${CSS.escape(p)}"]`);
-    el?.scrollIntoView({ behavior: smooth(), block: 'center' }); el?.focus({ preventScroll: true });
-  }
+  if (d.oAgent) { const n = d.oAgent; pickAgent(ui.picked === n ? null : n, true); return document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }
 });
 // Esc closes the window on top: a popover (goal, demo time; the theme picker closes itself), then the maximised tasks,
 // then the selected agent.
 document.addEventListener('keydown', (ev) => {
-  if (ev.key !== 'Escape' || boardView !== 'office' || ev.defaultPrevented || ev.target.closest?.('dialog')) return;
+  if (ev.key !== 'Escape' || ev.defaultPrevented || ev.target.closest?.('dialog')) return;
   if (ev.target.matches?.('input, textarea, select') && !ev.target.closest('#o-goal, #o-dl')) return;
   if (ac.open) return;
   if (ui.oDl) return oDl(false);
   if (ui.oGoal) return oGoal(false);
-  if (oUi.max && !oTasksOff()) { oUi.max = false; oSave(); oApply(); office.mod?.resize(); return $('o-tasks-max').focus({ preventScroll: true }); }
-  if (office.picked) { const n = office.picked; pickAgent(null, true); document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }
+  if (boardView === 'office' && oUi.max && !oTasksOff()) { oUi.max = false; oSave(); oApply(); office.mod?.resize(); return $('o-tasks-max').focus({ preventScroll: true }); }
+  if (ui.picked && ev.target.closest?.('#o-right, #office-view')) { const n = ui.picked; pickAgent(null, true); document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }
 });
 
 // ---------- command palette (Ctrl+K) ----------
@@ -4468,18 +4353,21 @@ function palCommands() {
   const vt = state.setup?.viewer_token;
   if (vt) add('Action', 'Open the presenter view (new tab)', () => window.open(BASE + '/present.html?token=' + encodeURIComponent(vt), '_blank', 'noopener'), 'projector big screen present 3d office');
   add('Action', state.settings?.deadline ? 'Edit the demo time' : 'Set the demo time', () => doAct('clock'), 'deadline clock countdown freeze');
-  add('Action', 'Write a message in chat', () => { needBoard(); $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); $('msg').focus({ preventScroll: true }); }, 'focus chat');
+  add('Action', 'Write a message in chat', () => { oShow('act'); $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); $('msg').focus({ preventScroll: true }); }, 'focus chat');
   add('Action', 'Open help', openHelp, 'what everything means keyboard');
   const others = people().map((p) => p.name).filter((n) => n !== me);
   add('Filter', 'Show tasks for everyone', () => setFilter(''), 'filter show');
   add('Filter', `Show tasks for my team (${me})`, () => setFilter('me'), 'filter show mine');
   for (const n of others) add('Filter', `Show tasks for ${n}`, () => setFilter(n), 'filter show');
   for (const [v, l, d] of THEME_LIST) add('Theme', `Theme: ${l}${v === 'auto' ? ' (follow the device)' : ''}${v === themePref ? ' (current)' : ''}`, () => setTheme(v), `switch colour mode palette ${d}`);
-  for (const p of people()) add('Person', `Go to ${p.name}${p.name === me ? ' (you)' : ''} in People`, () => {
-    needBoard(); ui.openPeople.add(p.name); render();
-    const el = document.querySelector(`[data-fk="ptog-${CSS.escape(p.name)}"]`);
+  for (const p of people()) add('Person', `Go to ${p.name}${p.name === me ? ' (you)' : ''} in Agents`, () => {
+    // Their first agent, selected (what it holds and its controls), or their row when they have none.
+    oShow('right'); const a = p.r.agents?.[0];
+    if (a && ui.picked !== a.name) pickAgent(a.name, true);
+    const el = document.querySelector(a ? `[data-fk="oa-${CSS.escape(a.name)}"]` : `[data-person-row="${CSS.escape(p.name)}"] button`) || document.querySelector(`[data-person-row="${CSS.escape(p.name)}"]`);
+    if (el && !el.matches('button')) el.tabIndex = -1;
     el?.scrollIntoView({ behavior: smooth(), block: 'center' }); el?.focus({ preventScroll: true });
-  }, p.name + ' person agent');
+  }, p.name + ' person agent people');
   for (const t of state.tasks) add('Task', `#${t.id} ${t.title}`, () => openTask(t.id), `${LABEL[t.status] || t.status} ${t.assignee || ''}`);
   return cmds;
 }

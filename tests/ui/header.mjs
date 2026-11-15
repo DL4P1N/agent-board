@@ -56,7 +56,8 @@ try {
   check('ONB-2 the strip asks for the demo time', /Set the demo time so agents stop on time/.test(await txt('#now .also')), await txt('#now'));
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.click('#now .also [data-act="clock"]'); await sleep(400);
-  check('ONB-2 the hint focuses the demo time field', await page.evaluate(() => document.activeElement?.id === 'dl-in'));
+  check('ONB-2 the hint opens the demo time under the header clock, focus in its field', await page.evaluate(() => document.activeElement?.id === 'o-dl-in' && !$('o-dl').hidden));
+  await page.keyboard.press('Escape');
   await page.click('[data-fk="dl-skip"]'); await sleep(300);
   check('ONB-2 "No demo time" removes the hint and the "no demo time yet" note', !/Set the demo time/.test(await txt('#now')) && !/no demo time yet/.test(await txt('#step-goal .step-s')), await txt('#now'));
 
@@ -69,8 +70,8 @@ try {
   await rest('dana', '/agents/bea', 'PATCH', { limited: true });
   await ageAgent('cid', 25);
   await page.evaluate(() => { localStorage.setItem('board-setup', 'closed'); }); await reload();
-  const oc = await txt('#online-count');
-  check('WB-6 "1 agent online · 1 out of usage · 1 offline"', /^1 agent online · 1 out of usage · 1 offline · \d+ watching$/.test(oc.trim()), oc);
+  const oc = await txt('#o-right-sub');
+  check('WB-6 Agents title bar: "1 online · 1 out of usage · 1 offline"', /^1 online · 1 out of usage · 1 offline$/.test(oc.trim()), oc);
   await rest('dana', '/agents/bea', 'PATCH', { limited: false });
 
   // ---- WB-3: plan approval outranks a question; the question follows under "Also" ----

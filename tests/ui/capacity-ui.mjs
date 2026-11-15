@@ -74,18 +74,17 @@ try {
   await sleep(400);
 
   // ---- 1. plan + x/slots per agent ----
-  // One line per person: each agent pill is its tool's dot and x/slots; the tool and plan are in its screen-reader text
-  // and tooltip (and spelled out in the open row, checked below).
+  // Agents: one row per agent (its tool's dot, name, state; what it does, tool and model). Its tool, plan and x/slots are
+  // in its screen-reader text and tooltip, and spelled out when it is selected (checked below).
   const people = await txt('#people');
-  const pill = (n) => page.$eval(`#people .person:has([data-ptoggle="${n}"]) .pchips .pill`, (e) => ({ vis: [...e.childNodes].filter((c) => !c.classList?.contains('vh')).map((c) => c.textContent).join('').trim(), title: e.title })).catch(() => ({}));
-  const pAna = await pill('ana'), pCy = await pill('cy');
-  check('ana shows plan and 2/3', /Claude Max 20x: 2\/3/.test(people) && /^2\/3/.test(pAna.vis) && /Claude Max 20x/.test(pAna.title), JSON.stringify(pAna));
-  check('one-slot Codex agent shows plan and 1/1', /ChatGPT Edu: 1\/1/.test(people) && /^1\/1/.test(pCy.vis) && /ChatGPT Edu/.test(pCy.title), JSON.stringify(pCy));
+  const arow = (n) => page.$eval(`#people [data-o-agent="${n}"]`, (e) => ({ sr: e.querySelector('.vh')?.textContent || '', title: e.title, vis: e.querySelector('.o-r2')?.innerText || '' })).catch(() => ({}));
+  const pAna = await arow('ana'), pCy = await arow('cy');
+  check('ana: plan and 2/3 (screen reader and tooltip)', /Claude Max 20x: 2\/3/.test(pAna.sr) && /Claude Max 20x/.test(pAna.title), JSON.stringify(pAna));
+  check('one-slot Codex agent: plan and 1/1', /ChatGPT Edu: 1\/1/.test(pCy.sr) && /ChatGPT Edu/.test(pCy.title), JSON.stringify(pCy));
   check('no plan: tool name + 0/2 (Claude Code default)', /Claude Code: 0\/2/.test(people), people);
   check('no plan: Copilot default 0/1', /Copilot \(VS Code\): 0\/1/.test(people), people);
-  check('one line per person: no plan names on screen in the rows', !/Claude Max 20x|ChatGPT Edu/.test(await page.evaluate(() => [...document.querySelectorAll('#people .pchips')].map((e) => e.innerText).join(' ').replace(/\s+/g, ' ').replace(/[A-Za-z ()]+: /g, ''))), people);
-  const tip = await page.$eval('#people .pill.full, #people .pill.ok', (e) => e.title).catch(() => '');
-  check('capacity pill explains itself in its tooltip', /allows \d at once/.test(tip), tip);
+  check('rows stay compact: no plan names on screen in the rows', !/Claude Max 20x|ChatGPT Edu/.test(await page.evaluate(() => [...document.querySelectorAll('#people .o-agent .o-r2, #people .o-agent .o-st')].map((e) => e.innerText).join(' '))), people);
+  check('an agent row explains its capacity in its tooltip', /allows \d at once/.test(pAna.title), pAna.title);
 
   // ---- 5. team capacity, above the people rows ----
   const sum = await txt('#p-sum');
@@ -200,9 +199,9 @@ try {
 
   // ---- screenshots: desktop dark + light, 390px; expanded rows show capacity per agent ----
   await human('/settings', 'PUT', { deadline: '' });
-  await page.evaluate(() => { for (const n of [...document.querySelectorAll('#people .ptog')].map((b) => b.dataset.ptoggle)) document.querySelector(`#people .ptog[data-ptoggle="${n}"][aria-expanded="false"]`)?.click(); });
+  await page.click('#people [data-o-agent="cy"]');
   await sleep(400);
-  check('expanded row: tool, plan and "x of y at once"', /Codex · ChatGPT Edu · 1 of 1 at once/.test(await txt('#people')), await txt('#people'));
+  check('selected agent: tool, plan and "x of y at once"', /Codex · ChatGPT Edu · 1 of 1 at once/.test(await txt('#o-det')), await txt('#people'));
   await page.screenshot({ path: `${out}/desktop-dark.png`, fullPage: true });
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
   await sleep(200);

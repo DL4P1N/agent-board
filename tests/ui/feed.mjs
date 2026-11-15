@@ -75,7 +75,7 @@ try {
   check('WB-22 stays open when new events arrive', await page.$eval('#feed .ev.long', (e) => e.classList.contains('open')));
   await page.click('#feed .ev.long [data-more]');
   check('WB-22 Show less clamps it again', !(await page.$eval('#feed .ev.long', (e) => e.classList.contains('open'))));
-  await (await page.$('#f-panel')).screenshot({ path: `${out}/feed-actions-long.png` });
+  await (await page.$('#o-act')).screenshot({ path: `${out}/feed-actions-long.png` });
 
   // WB-21: more than 200 events: "Load earlier activity" pages back.
   for (let i = 0; i < 230; i++) await rest('bob-claude', '/messages', 'POST', { text: `filler ${i}` });

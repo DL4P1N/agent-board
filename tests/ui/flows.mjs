@@ -92,8 +92,7 @@ await page.keyboard.press('Escape');
 await page.evaluate(() => document.activeElement.blur());
 await page.keyboard.press('/');
 check('"/" focuses the composer', await page.evaluate(() => document.activeElement.id === 'msg'));
-await domClick('.person [data-ptoggle="alice"].ptog'); // expand alice's row
-await domClick('.person [data-mention="alice/db-worker"]');
+await domClick('.person [data-mention="alice/db-worker"]'); // a subagent's row under its agent in Agents
 check('click name inserts @mention', (await page.$eval('#msg', (e) => e.value)) === '@alice/db-worker ');
 await page.type('#msg', 'how close is #1?');
 await page.keyboard.press('Enter');
@@ -247,9 +246,9 @@ await page.evaluate(() => document.getElementById('toasts').replaceChildren());
 // locks: release with inline confirm
 const lockCount = await page.$$eval('#locks .lock', (l) => l.length);
 // File locks fold to their title bar (with the count); open them to release one. Open is remembered.
-check('file locks start folded, with the count in their title bar', await page.evaluate((n) => $('l-body').hidden && new RegExp(`${n} held`).test($('l-tog').textContent) && $('l-tog').getAttribute('aria-expanded') === 'false', lockCount));
+check('file locks start folded, with the count in their title bar', await page.evaluate((n) => $('l-body').hidden && new RegExp(`${n} held`).test($('l-count').textContent) && $('l-tog').getAttribute('aria-expanded') === 'false' && $('o-locks').querySelector('.o-head').contains($('l-tog')), lockCount));
 await page.click('#l-tog');
-check('the title bar opens the locks', await page.evaluate(() => !$('l-body').hidden && $('l-tog').getAttribute('aria-expanded') === 'true' && localStorage.getItem('board-locks') === 'open'));
+check('the title bar opens the locks (remembered with the other panels)', await page.evaluate(() => !$('l-body').hidden && $('l-tog').getAttribute('aria-expanded') === 'true' && JSON.parse(localStorage.getItem('board-office-ui') || '{}').locks === false));
 await page.$eval('[data-unlock="package.json"]', (b) => b.scrollIntoView({ block: 'center' })); await sleep(300); const hit = await page.evaluate(() => { const b = document.querySelector('[data-unlock="package.json"]').getBoundingClientRect(); const el = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return el.outerHTML.slice(0, 120); }); console.log('debug: element at release button = ' + hit);
 await page.click('[data-unlock="package.json"]');
 check('release asks inline confirmation (focus on Keep)', await page.evaluate(() => document.activeElement?.dataset.unlockNo !== undefined && !!document.querySelector('[data-unlock-yes="package.json"]')));
@@ -258,8 +257,7 @@ await page.waitForFunction((n) => document.querySelectorAll('#locks .lock').leng
 check('force-release removes lock', true);
 
 // person filter
-await domClick('.person [data-ptoggle="bob"].ptog'); // expand bob's row
-await domClick('.person [data-filter="bob"]');
+await domClick('.person [data-filter="bob"]'); // the filter button on bob's line in Agents
 await sleep(200);
 const owners = await page.$$eval('#board .card', (cs) => cs.map((c) => c.innerText));
 check('per-person filter shows only bob', owners.length > 0 && owners.every((t) => /bob/.test(t) || !/alice|chen/.test(t)), owners.length + ' cards');
