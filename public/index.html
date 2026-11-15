@@ -324,7 +324,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   ::selection { background: var(--accent-soft); }
   /* The demo's monospace stays where it labels or counts: titles, tiles, column heads, chips, ids, times. Content is sans. */
-  header h1, .panel > h2, .sec-h h2, .setup > .sh h2, .now .nl, .col h3, .needs, .phases, time, .conn { font-family: var(--mono); }
+  .panel > h2, .sec-h h2, .setup > .sh h2, .now .nl, .col h3, .needs, .phases, time, .conn { font-family: var(--mono); }
   .attn > h2 { font-family: var(--font); }
 
   /* ---------- controls ---------- */
@@ -410,7 +410,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 
   /* ---------- header: the demo's top bar ---------- */
   header { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s4) var(--s4); padding: var(--s3) var(--s5); min-height: 52px; border-bottom: 2px solid var(--border); box-shadow: 0 2px 0 var(--outline), inset 0 -2px 0 var(--lo), 0 6px 0 rgba(0, 0, 0, .12); background: var(--panel); position: sticky; top: 0; z-index: 10; } /* above every panel of both views (main is its own stacking layer) */
-  header h1 { font-size: .9375rem; line-height: var(--lh-tight); display: inline-flex; align-items: center; gap: var(--s4); white-space: nowrap; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+  /* The wordmark: sans, bold, sentence case (the mono uppercase is for section labels). */
+  header h1 { font: 700 1rem/var(--lh-tight) var(--font); display: inline-flex; align-items: center; gap: var(--s4); white-space: nowrap; }
   /* The logo: three agents, two in the accent behind one in the text colour; the eyes are cut out in the colour behind. */
   .mark { width: 26px; height: 26px; flex: 0 0 auto; }
   .mark .ma { fill: var(--accent); } .mark .mi { fill: var(--ink); } .mark .me { fill: var(--panel); }
@@ -1202,7 +1203,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     .now .also .link + .link::before { display: none; }
     .nyou > .attn { padding-top: var(--s3); }
     .phases .ph-l { display: none; }
-    header h1 { font-size: .875rem; letter-spacing: .06em; }
+    header h1 { font-size: .9375rem; }
     .nyou:has(> #q-panel:not([hidden])) > .now { padding-bottom: var(--s4); }
     .step-b { margin-left: 0; }
     .step-s { flex-basis: 100%; padding-left: 32px; }
