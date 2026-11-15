@@ -1,4 +1,4 @@
-import{p as Dh,P as Dl,R as bt,a as Rf,D as Il,C as ci,S as We,b as Cf,f as Pf}from"./present-BWtYJ7dF.js";/**
+import{e as Dh,P as Dl,R as bt,f as Rf,g as Il,C as ci,S as We,j as Cf,k as Pf}from"./adapter-BfYmpURm.js";/**
  * @license
  * Copyright 2010-2024 Three.js Authors
  * SPDX-License-Identifier: MIT

@@ -111,6 +111,12 @@ the wall screens show done counts instead of spend and readiness. Build it with 
 the repo root) and commit the output in `public/`; the board server serves it as is, and CI fails if the committed
 files are out of date. The build is deterministic and clears `public/office/` first, so no old hashed files stay behind.
 
+The same build makes `public/office/embed.js` (fixed name) from `src/live/embed.ts`: the board's own *3D office* view.
+`mount(container, { theme, reducedMotion, onPick })` returns `{ update(state), setTheme, setActive, select, resize,
+destroy, snapshot }`. It reuses `LiveWorld` and `OfficeScene` but fetches nothing: `public/index.html` passes it the
+`/api/state` object it already loads, and imports it with a dynamic `import()` on the first switch only, so three.js
+(the hashed `OfficeScene-*.js` chunk) never loads for people who stay on the board.
+
 ## Backend
 
 See [docs/BACKEND_PLAN.md](docs/BACKEND_PLAN.md). Headline decisions: GitHub as repo of record with only the

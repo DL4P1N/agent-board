@@ -23,8 +23,8 @@ if (qs.get('token')) { store.set(VIEW_KEY, token); history.replaceState(null, ''
 export const viewToken = (): string => token;
 
 const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-export const EXPIRED = "This presenter link has expired: open a new one from the board's header (<b>Presenter view</b>).";
-export const NO_TOKEN = 'Open this from the board: <b>Presenter view</b> in its header.';
+export const EXPIRED = "This presenter link has expired: open a new one from the board (<b>Presenter view</b> in its help, <b>?</b>, or Ctrl+K).";
+export const NO_TOKEN = 'Open this from the board: <b>Presenter view</b> in its help (<b>?</b>) or Ctrl+K.';
 
 export interface ConnectionEvents {
   /** A fresh board state. */
