@@ -192,7 +192,7 @@ try {
   check('B 1366×768: kanban starts in the first viewport', lay.board < 768 && lay.card < 768 - 40, JSON.stringify(lay));
   check('B columns at least 170px wide', lay.colW >= 170, lay.colW + 'px');
   const doneTxt = await p.$eval('#col-done', (e) => e.textContent.trim());
-  check('B Done collapsed to "Merged (6)"', /Merged \(6\)/.test(doneTxt), doneTxt);
+  check('B Done collapsed to "Done 6" (the column\'s own name, as in every view)', /Done 6/.test(doneTxt) && !/Merged/.test(doneTxt), doneTxt);
   await p.screenshot({ path: `${out}/r-busy-1366-dark.png` });
   await scheme(p, 'light'); await sleep(150); await p.screenshot({ path: `${out}/r-busy-1366-light.png` });
   await p.setViewport({ width: 1440, height: 1000 }); await sleep(250);
@@ -207,7 +207,8 @@ try {
   check('B "question waiting" badge jumps to that question', await p.evaluate((q) => document.activeElement?.id === 'qa-' + q, blockedQ.question_id));
 
   // Kanban semantics
-  check('B columns are regions labelled by headings; cards in lists', await p.evaluate(() => [...document.querySelectorAll('.col')].every((c) => c.getAttribute('role') === 'region' && document.getElementById(c.getAttribute('aria-labelledby').split(' ')[0])) && !!document.querySelector('.col ul.cards > li > .card')));
+  // Named "<heading>, N tasks" (an aria-label, so no stray space before the comma); cards in lists.
+  check('B columns are regions named after their headings; cards in lists', await p.evaluate(() => [...document.querySelectorAll('.col')].every((c) => { const h = document.getElementById('colh-' + c.dataset.status); return c.getAttribute('role') === 'region' && h && (c.getAttribute('aria-label') || '').startsWith(h.textContent.replace(/[^A-Za-z ]/g, '').trim() + ', ') && /, \d+ tasks?$/.test(c.getAttribute('aria-label')); }) && !!document.querySelector('.col ul.cards > li > .card')));
 
   // Stale card: Ping + Release (with Undo)
   const before = (await rest('dana', '/state')).events.length;

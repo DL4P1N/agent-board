@@ -210,7 +210,7 @@ const dc = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === dlgT
 check('DLG-1 dialog Status Claimed + Assign to bob: claimed for bob, no question asked', dc.status === 'claimed' && dc.assignee === 'bob' && !(await page.$(`.card[data-id="${dlgT.id}"] .mvask`)), `${dc.status} ${dc.assignee}`);
 
 // WB-19: column names read "Open, 3 tasks" (no stray space before the comma)
-check('WB-19 column region names', await page.evaluate(() => { const c = document.getElementById('col-open'); const n = c.getAttribute('aria-labelledby').split(' ').map((i) => document.getElementById(i).textContent).join(' '); return /^Open, \d+ tasks?$/.test(n) ? true : n; }) === true);
+check('WB-19 column region names', await page.evaluate(() => { const c = document.getElementById('col-open'); const n = c.getAttribute('aria-label') || ''; return /^Open, \d+ tasks?$/.test(n) ? true : n; }) === true);
 // WB-16: the PR pill is a Tab stop
 const ciId = findT('CI pipeline with tests on PRs').id;
 await rest('dana', `/tasks/${ciId}`, 'PATCH', { pr_url: 'https://github.com/o/r/pull/5' });

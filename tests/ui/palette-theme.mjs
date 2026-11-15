@@ -26,7 +26,7 @@ try {
 
   // ---- theme ----
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
-  check('auto: no data-theme, follows the OS (light)', (await attr()) === null && (await bg()) === 'rgb(207, 227, 242)', await bg());
+  check('auto: no data-theme, follows the OS (light)', (await attr()) === null && (await bg()) === 'rgb(239, 228, 207)', await bg());
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
   check('auto: follows the OS (dark)', (await attr()) === null && (await bg()) === 'rgb(27, 21, 48)', await bg());
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
@@ -40,7 +40,7 @@ try {
   check('color-scheme and theme-color metas follow the chosen theme', m.scheme === 'dark' && m.dark === 'all' && m.light === 'not all', JSON.stringify(m));
   check('saved in localStorage', await page.evaluate(() => localStorage.getItem('board-theme')) === 'dusk');
   // Every palette: its own page colour and tokens, color-scheme (only Day is light) and the browser bar colour.
-  const PAL = { night: ['rgb(8, 12, 26)', 'dark', '#080c1a'], terminal: ['rgb(2, 10, 4)', 'dark', '#020a04'], day: ['rgb(207, 227, 242)', 'light', null], dusk: ['rgb(27, 21, 48)', 'dark', '#1b1530'] };
+  const PAL = { night: ['rgb(8, 12, 26)', 'dark', '#080c1a'], terminal: ['rgb(2, 10, 4)', 'dark', '#020a04'], day: ['rgb(239, 228, 207)', 'light', null], dusk: ['rgb(27, 21, 48)', 'dark', '#1b1530'] };
   const inks = new Set();
   for (const [t, [want, scheme, bar]] of Object.entries(PAL)) {
     await page.click(`#help-dlg [data-theme-set="${t}"]`); await sleep(80);
@@ -55,7 +55,7 @@ try {
       const probe = document.createElement('i'); document.body.append(probe);
       const col = (v) => { probe.style.color = `var(${v})`; return getComputedStyle(probe).color; };
       const out = [];
-      for (const f of ['--ink', '--muted', '--accent', '--info', '--ok', '--warn', '--bad']) for (const b of ['--bg', '--sunken', '--panel', '--raised', '--chip', '--field']) { const r = cr(col(f), col(b)); if (r < 4.5) out.push(`${f}/${b} ${r.toFixed(2)}`); }
+      for (const f of ['--ink', '--muted', '--accent', '--info', '--review', '--ok', '--warn', '--bad']) for (const b of ['--bg', '--sunken', '--panel', '--raised', '--chip', '--field']) { const r = cr(col(f), col(b)); if (r < 4.5) out.push(`${f}/${b} ${r.toFixed(2)}`); }
       for (const [f, b] of [['--accent-ink', '--accent'], ['--on-fill', '--bad'], ['--warn', '--warn-soft'], ['--bad', '--bad-soft'], ['--toast-ink', '--toast']]) { const r = cr(col(f), col(b)); if (r < 4.5) out.push(`${f}/${b} ${r.toFixed(2)}`); }
       probe.remove(); return out;
     });
@@ -89,7 +89,7 @@ try {
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
   await page.click('#help-btn'); await page.waitForSelector('#help-dlg[open]');
   await page.click('#help-dlg [data-theme-set="day"]'); await sleep(100);
-  check('Day wins over an OS in dark', (await attr()) === 'day' && (await bg()) === 'rgb(207, 227, 242)', `${await attr()} ${await bg()}`);
+  check('Day wins over an OS in dark', (await attr()) === 'day' && (await bg()) === 'rgb(239, 228, 207)', `${await attr()} ${await bg()}`);
   await page.screenshot({ path: `${out}/light-help.png` });
   await page.click('#help-dlg [data-theme-set="auto"]'); await sleep(100);
   check('Auto removes data-theme and follows the OS again', (await attr()) === null && (await bg()) === 'rgb(27, 21, 48)' && (await metas()).scheme === 'light dark', `${await attr()} ${await bg()}`);

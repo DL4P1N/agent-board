@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark" id="m-scheme">
-<meta name="theme-color" content="#cfe3f2" media="(prefers-color-scheme: light)" id="m-tc-light">
+<meta name="theme-color" content="#efe4cf" media="(prefers-color-scheme: light)" id="m-tc-light">
 <meta name="theme-color" content="#1b1530" media="(prefers-color-scheme: dark)" id="m-tc-dark">
 <script>
 // Theme: the board's choice (Auto / Dusk / Day / Night / Terminal, per browser, 'board-theme'), applied before first paint.
 // Auto leaves html[data-theme] off and follows the OS. Older saved values: light = Day, dark = Dusk.
 (function () {
-  var THEMES = { dusk: '#1b1530', day: '#cfe3f2', night: '#080c1a', terminal: '#020a04' };
+  var THEMES = { dusk: '#1b1530', day: '#efe4cf', night: '#080c1a', terminal: '#020a04' };
   function themeOf(t) { t = t === 'light' ? 'day' : t === 'dark' ? 'dusk' : t; return Object.prototype.hasOwnProperty.call(THEMES, t) ? t : 'auto'; }
   function apply(t) {
     var d = document.documentElement, g = function (i) { return document.getElementById(i); };
@@ -34,7 +34,7 @@
      the four palettes (Day, Dusk, Night, Terminal), square corners, 2px borders, bevelled panels; monospace for titles and ids. */
   :root {
     color-scheme: light;
-    --bg: #cfe3f2; --sunken: #f3e9d8; --panel: #fff7e8; --chip: #efe3cc; --field: #fffaf0;
+    --bg: #efe4cf; --sunken: #f3e9d8; --panel: #fff7e8; --chip: #efe3cc; --field: #fffaf0;
     --ink: #2c2114; --muted: #67563e; --line: #d4c2a2; --line-strong: #a68f69; --field-line: #7a5f3d;
     --border: #7a5f3d; --outline: #3a2a14; --hi: rgba(255, 255, 255, .7); --lo: rgba(80, 50, 10, .16);
     --accent: #9a4a14; --accent-hover: #823d0f; --accent-ink: #fff7e8; --accent-soft: #f7e2cb;
@@ -82,7 +82,7 @@
     --bg: #080c1a; --sunken: #0b1122; --panel: #0f1730; --chip: #1c2a50; --field: #060a16;
     --ink: #dce7ff; --muted: #9aaad6; --line: #26365f; --line-strong: #3d5290; --field-line: #6a80c0;
     --border: #31457f; --outline: #02040c; --hi: rgba(160, 190, 255, .14); --lo: rgba(0, 0, 0, .45);
-    --accent: #6ea8ff; --accent-hover: #8dbbff; --accent-ink: #04122c; --accent-soft: #1a2c55;
+    --accent: #ffb86b; --accent-hover: #ffc98c; --accent-ink: #2a1600; --accent-soft: #3a2c34;
     --ok: #5fe3a1; --ok-soft: #133238;
     --bad: #ff7a90; --bad-hover: #ff97a8; --bad-soft: #341c38; --on-fill: #080c1a;
     --toast: #152040; --toast-ink: #dce7ff; --shade: 2px 2px 0 rgba(0, 0, 0, .45);
@@ -92,7 +92,7 @@
     --bg: #020a04; --sunken: #03100a; --panel: #04140a; --chip: #0b2814; --field: #010703;
     --ink: #a4ffb5; --muted: #5fc477; --line: #0f4a1f; --line-strong: #1d7a37; --field-line: #2fb352;
     --border: #1d9a3d; --outline: #000; --hi: rgba(57, 255, 106, .16); --lo: rgba(0, 0, 0, .5);
-    --accent: #39ff6a; --accent-hover: #6cff91; --accent-ink: #00230a; --accent-soft: #0d3519;
+    --accent: #ffb547; --accent-hover: #ffc870; --accent-ink: #1a0f00; --accent-soft: #2e2008;
     --ok: #39ff6a; --ok-soft: #0d3519;
     --bad: #ff6b6b; --bad-hover: #ff8f8f; --bad-soft: #2e1010; --on-fill: #020a04;
     --toast: #071c0e; --toast-ink: #a4ffb5; --shade: 2px 2px 0 rgba(0, 0, 0, .5);
@@ -150,8 +150,8 @@
   .cmd code { background: none; padding: 0; flex: 1; font-size: var(--fs-meta); }
 
   /* Board list */
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s5); list-style: none; margin: 0; padding: 0; }
-  .card { background: var(--panel); border: 2px solid var(--border); margin: 2px; border-radius: var(--r-md); padding: var(--s5) var(--s6); display: flex; flex-direction: column; gap: var(--s4); box-shadow: var(--e1); min-width: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: var(--s5); list-style: none; margin: 0; padding: 0; }
+  .card { background: var(--panel); border: 2px solid var(--border); margin: 2px; border-radius: var(--r-md); padding: var(--s5); display: flex; flex-direction: column; gap: var(--s4); box-shadow: var(--e1); min-width: 0; }
   .card.archived { background: var(--sunken); box-shadow: none; }
   .ch { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--s4); min-width: 0; }
   .ch h3 { font-size: var(--fs-lead); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100%; }
@@ -165,7 +165,8 @@
   .facts b { color: var(--ink); font-weight: 700; }
   .bar { height: 6px; background: var(--field); border: 1px solid var(--border); border-radius: var(--r-full); overflow: hidden; }
   .bar i { display: block; height: 100%; background: var(--ok); border-radius: var(--r-full); transition: width var(--t-base) var(--ease); }
-  .acts { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: auto; }
+  .acts { display: flex; flex-wrap: wrap; gap: var(--s3) var(--s2); margin-top: auto; } /* a card is wide enough for Open and both Copy buttons on one row */
+  .acts button { white-space: nowrap; }
   .confirm { background: var(--bad-soft); color: var(--bad); border: 2px solid var(--bad); border-radius: var(--r-sm); padding: var(--s4); font-size: var(--fs-sm); display: flex; flex-direction: column; gap: var(--s4); }
   .confirm .acts { margin: 0; }
   .empty { color: var(--muted); padding: var(--s7) var(--s6); text-align: center; border: 2px dashed var(--line-strong); border-radius: var(--r-md); }

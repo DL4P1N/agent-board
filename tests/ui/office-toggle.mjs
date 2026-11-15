@@ -1,8 +1,9 @@
 // The board's view switch (header: Board | 3D office): the 3D office as a view inside the main board, built from
 // office/src/live/embed.ts into public/office/embed.js by `npm run build:present`. Board is the default; the office
 // (three.js) loads on the first switch only and draws the state the board already loads. Laid out like the office demo:
-// the room fills the window, with a Needs you dock (left), an Agents dock (right), a Tasks window (bottom), Goal / demo
-// time / theme chips on top and Progress / Activity / Chat chips along the bottom. Works with or without WebGL:
+// the room fills the window, with a Needs you dock (left), an Agents dock (right), a Tasks window (bottom; folded into
+// the Progress chip by default on screens up to 900px tall), Goal / demo time / theme chips on top (each opens a popover
+// in place) and Progress / Activity chips along the bottom. The room is framed in the space the panels leave free. Works with or without WebGL:
 // Chrome runs with SwiftShader so CI runners without a GPU still get it; without WebGL the board stays, with a note.
 // Run all suites with: npm test
 import path from 'node:path';
@@ -77,6 +78,15 @@ try {
     check('the switch is announced politely', await until(page, () => /Showing the 3D office/.test(document.getElementById('announcer').textContent)));
     check('first switch loads the office chunk and draws a canvas', await until(page, () => !!document.querySelector('#office-scene canvas'), null, 20000) && officeReqs(reqs).some((u) => /embed\.js/.test(u)) && officeReqs(reqs).some((u) => /OfficeScene-/.test(u)), officeReqs(reqs).map((u) => u.split('/').pop()).join(' '));
     check('loading note gone once it is ready', await until(page, () => !document.getElementById('office-view').classList.contains('loading')));
+    check('the Tasks window starts folded into the Progress chip on a 900px-tall screen (the room needs the height)', await page.evaluate(() => $('o-tasks').hidden && $('o-prog-chip').getAttribute('aria-expanded') === 'false'));
+    const share = await page.evaluate(() => {
+      const v = $('office-view').getBoundingClientRect(); let n = 0, hit = 0;
+      for (let x = 0.02; x < 1; x += 0.04) for (let y = 0.02; y < 1; y += 0.04) { n++; if (document.elementFromPoint(v.left + v.width * x, v.top + v.height * y)?.closest('#office-scene')) hit++; }
+      return hit / n;
+    });
+    check('the room gets at least half of the 3D view by default (was 38%)', share >= 0.5, share.toFixed(2));
+    await page.click('#o-prog-chip');
+    check('the Progress chip opens the Tasks window', await page.evaluate(() => !$('o-tasks').hidden && $('o-prog-chip').getAttribute('aria-expanded') === 'true'));
     check('the room fills the window under the header; the task columns are hidden; no scrolling', await page.evaluate(() => { const r = $('office-view').getBoundingClientRect(); const h = document.querySelector('#app > header').getBoundingClientRect(); return Math.abs(r.top - h.bottom) < 3 && Math.abs(r.bottom - innerHeight) < 2 && r.width === innerWidth && !$('board').offsetWidth && document.documentElement.scrollHeight <= innerHeight + 1; }));
     const lay = await page.evaluate(() => {
       const R = (id) => { const e = document.getElementById(id); return e && !e.hidden && e.offsetWidth ? e.getBoundingClientRect() : null; };
@@ -89,9 +99,28 @@ try {
     });
     check('docks and the Tasks window are there, apart from each other and the chips, inside the room, the middle clear', lay.docks && lay.apart && lay.mid && lay.inside, JSON.stringify(lay));
     check('Needs you (left dock) holds What to do now and the questions, with Answer', await page.evaluate(() => !!$('o-left').contains($('now')) && $('o-left').contains($('q-panel'))) && await shown(page, '#now') && await shown(page, '#q-panel textarea') && /Which login provider/.test(await page.$eval('#q-panel', (e) => e.innerText)));
-    check('Agents (right dock): people, then their agents with tool dot, status and current task', await until(page, () => { const b = document.querySelector('[data-o-agent="ana-claude"]'); return b && $('o-right').contains(b) && !!b.querySelector('.tdot') && /working/i.test(b.querySelector('.o-st')?.textContent) && /asked you a question|#\d+ Vote API/.test(b.innerText) && /\bana\b/.test($('o-agents').innerText); }), await page.$eval('#o-agents', (e) => e.innerText.replace(/\s+/g, ' ')).catch(() => ''));
-    check('Tasks window: five columns with counts and cards', await page.evaluate(() => { const c = [...document.querySelectorAll('#o-cols .o-col')]; return c.length === 5 && c.map((x) => x.querySelector('h3 span').textContent).join() === 'Open,In progress,Blocked,Review,Done' && /Vote API/.test(c[1].innerText) && /Leaderboard page/.test(c[0].innerText); }));
+    const dock = await page.evaluate(() => { const f = $('questions').querySelector('form'); const ta = f.querySelector('textarea').getBoundingClientRect(); const b = f.querySelector('button').getBoundingClientRect(); return { sub: $('o-left-sub').textContent, badge: $('needs').querySelector('button')?.title, phases: !!$('o-left').querySelector('.phases')?.offsetWidth, row: Math.abs(ta.top - b.top) < 12 && b.left > ta.right - 2 }; });
+    check('Needs you: its counts in the title bar (the same words and count as the need-you badge of the Board view), no phase track, the answer box and Answer on one row', /1 question/.test(dock.sub) && dock.sub === dock.badge && !dock.phases && dock.row, JSON.stringify(dock));
+    check('Agents (right dock): people, then their agents with tool dot, state and current task', await until(page, () => { const b = document.querySelector('[data-o-agent="ana-claude"]'); return b && $('o-right').contains(b) && !!b.querySelector('.tdot') && /asked you a question|#\d+ Vote API/.test(b.innerText) && /\bana\b/.test($('o-agents').innerText); }), await page.$eval('#o-agents', (e) => e.innerText.replace(/\s+/g, ' ')).catch(() => ''));
+    // The row and the room say the same thing: a question is "Question" in both, boxed; working is a plain word.
+    const st = await page.evaluate(() => { const s = document.querySelector('[data-o-agent="ana-claude"] .o-st'); return { word: s.textContent, boxed: s.classList.contains('bx'), bubble: window.__officeState?.agents.find((a) => a.id === 'ana-claude')?.bubble, badges: [...document.querySelectorAll('#o-agents .o-st.bx')].map((x) => x.textContent) }; });
+    check('an agent waiting on an answer: "Question" badge in its row, the same word as its bubble in the room', st.word === 'Question' && st.boxed && st.bubble === 'Question', JSON.stringify(st));
+    check('only Question / Blocked / Out of usage get a badge', st.badges.every((w) => ['Question', 'Blocked', 'Out of usage'].includes(w)), JSON.stringify(st.badges));
+    check('the Agents count uses the board\'s rule and words ("N online", out of usage apart)', await page.evaluate(() => $('o-right-sub').textContent === agentsLine(setupInfo(), true) && /^\d+ online/.test($('o-right-sub').textContent)), await page.$eval('#o-right-sub', (e) => e.textContent));
+    check('Tasks window: the board\'s six columns, names and counts', await page.evaluate(() => {
+      const c = [...document.querySelectorAll('#o-cols .o-col')];
+      return c.length === 6 && c.map((x) => x.querySelector('h3 span').textContent).join() === 'Open,Claimed,In progress,Blocked,Review,Done' && /Vote API/.test(c[2].innerText) && /Leaderboard page/.test(c[0].innerText)
+        && c.every((x) => x.querySelector('.o-c').textContent === (document.getElementById('col-' + x.dataset.s)?.getAttribute('aria-label') || '').match(/(\d+) tasks?$/)?.[1]);
+    }), await page.evaluate(() => [...document.querySelectorAll('#o-cols .o-col')].map((x) => `${x.querySelector('h3 span').textContent}=${x.querySelector('.o-c')?.textContent}/${document.getElementById('col-' + x.dataset.s)?.getAttribute('aria-label')}`).join(' ')));
+    check('Tasks: one Tab stop per column (the board\'s model)', await page.evaluate(() => [...document.querySelectorAll('#o-cols .o-col')].every((c) => { const k = [...c.querySelectorAll('.o-card')]; return !k.length || k.filter((x) => x.tabIndex === 0).length === 1; })));
     check('top chips: Goal and demo time (with the verdict / countdown), the header clock and need-you badge hide', await page.evaluate(() => /voting app/i.test($('o-goal-chip').innerText) && /Demo in/.test($('o-dl-chip').innerText) && !$('clock').offsetWidth && !$('needs').offsetWidth));
+    await page.click('#o-dl-chip');
+    check('the Demo chip opens the demo time in place (still the 3D view), focus in its time field', await view(page) === 'office' && await page.evaluate(() => !$('o-dl').hidden && document.activeElement === $('o-dl-in') && $('o-dl-chip').getAttribute('aria-expanded') === 'true'));
+    await page.$eval('#o-fz-in', (i) => { i.value = '45'; });
+    await page.click('[data-fk="o-dl-save"]');
+    check('saving it closes the popover, back on the chip, still in 3D; the board has the new freeze', await until(page, () => document.getElementById('o-dl').hidden && document.activeElement?.id === 'o-dl-chip' && String(state.settings.freeze_minutes) === '45') && await view(page) === 'office');
+    await page.click('#o-dl-chip'); await page.keyboard.press('Escape');
+    check('Esc closes the demo time popover, focus back on its chip', await page.evaluate(() => $('o-dl').hidden && document.activeElement === $('o-dl-chip')));
     check('bottom chips: Progress (x of y done, bar) and Activity (the latest event); chat lives in Activity, no separate Chat chip', await page.evaluate(() => /0 of 2 done/.test($('o-prog-chip').innerText) && !!$('o-prog-bar') && $('o-act-x').textContent.length > 3 && !$('o-chat-chip')));
     const small = await page.evaluate(() => {
       const out = [];
@@ -154,6 +183,16 @@ try {
     // Activity: the board's own feed (with its filters) and chat, in a window; Esc closes it.
     await page.click('#o-act-chip');
     check('the Activity chip opens the feed with its filters', await page.evaluate(() => !$('o-act').hidden && $('o-act').contains($('feed')) && $('o-act').contains($('tabs')) && $('feed').offsetHeight > 150 && /vote API is up/.test($('feed').innerText)));
+    // Its filters are clickable: the feed doesn't cover them, and the room's name tags never paint over the window.
+    const corners = await page.evaluate(() => { const r = $('o-act').getBoundingClientRect(); return [[r.left + 4, r.top + 4], [r.right - 4, r.top + 4], [r.left + 4, r.bottom - 4], [r.right - 4, r.bottom - 4], [r.left + r.width / 2, r.top + r.height / 2]].filter(([x, y]) => !$('o-act').contains(document.elementFromPoint(x, y))).length; });
+    check('nothing from the room covers the Activity window (its corners and middle are its own)', corners === 0, String(corners));
+    check('the room\'s name tags sit under every panel (the scene is its own stacking layer)', await page.evaluate(() => { const s = getComputedStyle($('office-scene')); return s.zIndex === '0' && s.isolation === 'isolate'; }));
+    for (const tab of ['chat', 'me', 'problems', 'merges', 'all']) {
+      const pos = await page.$eval(`#tabs [data-tab="${tab}"]`, (b) => { const r = b.getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { x: r.left + r.width / 2, y: r.top + r.height / 2, own: e === b || b.contains(e) }; });
+      await page.mouse.click(pos.x, pos.y); await sleep(120);
+      const r = await page.evaluate((t) => ({ pressed: document.querySelector(`#tabs [data-tab="${t}"]`).getAttribute('aria-pressed'), dlg: document.getElementById('task-dlg').open, focusOk: !document.activeElement?.matches?.('textarea[id^="tdqa"]') }), tab);
+      check(`3D Activity: a click on the "${tab}" filter selects it (and opens nothing else)`, pos.own && r.pressed === 'true' && !r.dlg && r.focusOk, JSON.stringify({ ...pos, ...r }));
+    }
     await page.keyboard.press('Escape');
     check('Esc closes it, focus back on the chip', await page.evaluate(() => $('o-act').hidden && document.activeElement === $('o-act-chip')));
     await page.click('#o-act-chip');
@@ -164,11 +203,17 @@ try {
     await page.keyboard.press('Escape');
     check('Esc in the composer closes the window', await page.evaluate(() => $('o-act').hidden));
 
-    // The theme swatches in the top bar switch the page and the room.
-    await page.click('.o-theme [data-theme-set="night"]');
-    check('a top-bar swatch switches the theme and the room (Night)', await page.evaluate(() => document.documentElement.dataset.theme === 'night' && office.mod.palette === 'night' && document.querySelector('.o-theme [data-theme-set="night"]').getAttribute('aria-pressed') === 'true'));
+    // The theme chip (one swatch) opens the picker: a radio group, one Tab stop, arrow keys choose.
+    await page.click('#o-theme-chip');
+    check('the theme chip opens the picker, focus on the current palette (a radio group)', await page.evaluate(() => !$('o-theme').hidden && $('o-theme').getAttribute('role') === 'radiogroup' && document.activeElement?.getAttribute('aria-checked') === 'true' && $('o-theme').querySelectorAll('[role="radio"][tabindex="0"]').length === 1));
+    await page.click('#o-theme [data-theme-set="night"]');
+    check('a palette in the picker switches the theme and the room (Night), and the picker closes', await until(page, () => document.documentElement.dataset.theme === 'night' && office.mod.palette === 'night' && document.querySelector('#o-theme [data-theme-set="night"]').getAttribute('aria-checked') === 'true' && document.getElementById('o-theme').hidden));
     await page.screenshot({ path: path.join(out, 'office-night-1440.png') });
-    await page.click('.o-theme [data-theme-set="auto"]');
+    await page.click('#o-theme-chip'); await page.keyboard.press('ArrowRight');
+    check('arrow keys move through the palettes (Night -> Terminal)', await until(page, () => document.documentElement.dataset.theme === 'terminal' && document.activeElement?.dataset.themeSet === 'terminal'));
+    await page.keyboard.press('Escape');
+    check('Esc closes the picker, focus back on the chip', await page.evaluate(() => $('o-theme').hidden && document.activeElement === $('o-theme-chip')));
+    await page.evaluate(() => setTheme('auto'));
 
     // "Show in People" (selected agent) opens that person on the board; the moved blocks go home.
     await page.evaluate(() => pickAgent('ana-claude'));
@@ -193,13 +238,29 @@ try {
 
     // What to do now's links: blocked tasks are listed in the dock (stay); a link to Start here opens the board view.
     await page.click('#now [data-go="blocked"]');
-    check('"blocked" in What to do now stays in the office, on the Stuck list', await view(page) === 'office' && await page.evaluate(() => $('o-blocked').contains(document.activeElement)));
+    check('"blocked" in What to do now stays in the office, on the Blocked list', await view(page) === 'office' && await page.evaluate(() => $('o-blocked').contains(document.activeElement)));
     await page.click('#o-goal-chip');
     check('the Goal chip shows the full goal', await page.evaluate(() => !$('o-goal').hidden && /voting app for hackathon projects/.test($('o-goal').innerText)));
-    await page.click('#o-goal [data-go="step-goal"]');
-    check('"Edit the goal" opens the board view at Start here', await until(page, () => document.documentElement.dataset.boardView === 'board'));
+    await page.click('#o-goal [data-act="o-goal-edit"]');
+    check('"Edit the goal" edits it in place (still the 3D view), focus in the text', await view(page) === 'office' && await page.evaluate(() => document.activeElement === $('o-goal-in')));
+    await page.evaluate(() => { $('o-goal-in').value = ''; }); await page.type('#o-goal-in', 'A voting app for hackathon projects, with a live leaderboard'); await page.keyboard.press('Enter');
+    check('Enter saves the goal from the popover, focus back on Edit the goal', await until(page, () => /live leaderboard/.test(state.settings.goal) && document.activeElement?.dataset.fk === 'o-goal-edit' && /live leaderboard/.test(document.getElementById('o-goal-chip').innerText)) && await view(page) === 'office');
+    await page.keyboard.press('Escape');
+
+    // Ctrl+K: "Edit the demo time" opens the popover in 3D, and focus lands in it (the command runs after the palette closes).
+    await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control');
+    await page.type('#pal-in', 'demo time'); await sleep(150); await page.keyboard.press('Enter');
+    check('Ctrl+K "Edit the demo time" in 3D: the popover, focus in its time field', await until(page, () => !document.getElementById('o-dl').hidden && document.activeElement?.id === 'o-dl-in') && await view(page) === 'office', await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName));
+    await page.keyboard.press('Escape');
+
+    // The skip link stays in 3D: "Skip to what needs you" lands in the Needs you dock.
+    await page.focus('#o-goal-chip'); await page.evaluate(() => document.activeElement.blur());
+    check('3D: "Skip to what needs you" is still there (the other skip links go to Board-only parts)', await page.evaluate(() => getComputedStyle(document.querySelector('.skip[data-skip="now"]')).display !== 'none' && getComputedStyle(document.querySelector('.skip[data-skip="tasks"]')).display === 'none'));
+    await page.focus('.skip[data-skip="now"]'); await page.keyboard.press('Enter');
+    check('the skip link focuses What to do now in the dock', await until(page, () => document.getElementById('now').contains(document.activeElement)) && await view(page) === 'office');
 
     // Remembered across reloads; ?view= overrides.
+    await page.click('#vseg [data-vset="board"]');
     await page.click('#vseg [data-vset="office"]');
     check('the choice is saved in this browser', await page.evaluate(() => localStorage.getItem('board-view-mode') === 'office'));
     await page.reload(); await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 8000 });
@@ -225,6 +286,17 @@ try {
     check('Auto: the page sees the OS switch to dark', await until(v2.page, () => darkMq.matches && scenePalette() === 'dusk'));
     if (!(await until(v2.page, () => office.mod?.palette === 'dusk', null, 2000))) await v2.page.evaluate(() => darkMq.dispatchEvent(new Event('change')));
     check('Auto follows the OS switching to dark: the Dusk room', await until(v2.page, () => office.mod?.palette === 'dusk'));
+    // A column with more cards than fit says how many more; a helper shows under its agent with its own state; a person
+    // whose only agent has their name is one row.
+    for (let i = 0; i < 7; i++) await ana('create_task', { title: `Extra task ${i + 1}`, size: 'S' });
+    const helperTask = await ana('create_task', { title: 'Helper task' });
+    await ana('claim_task', { id: helperTask.id, as: 'ui-worker' }); await ana('update_task', { id: helperTask.id, status: 'in_progress', as: 'ui-worker' });
+    const carol = await agent(board, 'carol'); await carol('board_status');
+    await v2.page.setViewport({ width: 1366, height: 768 });
+    await v2.page.evaluate(() => { if (document.getElementById('o-tasks').hidden) document.getElementById('o-prog-chip').click(); });
+    check('an overflowing Tasks column says "+N more" (N = the cards out of view)', await until(v2.page, () => { const c = document.querySelector('#o-cols .o-col[data-s="open"]'); const m = c?.querySelector('.o-more'); if (!m || m.hidden) return false; const ul = c.querySelector('ul').getBoundingClientRect(); const out = [...c.querySelectorAll('.o-card')].filter((x) => x.getBoundingClientRect().bottom > ul.bottom + 1).length; return out > 0 && m.textContent === `+${out} more`; }), await v2.page.evaluate(() => document.querySelector('#o-cols .o-col[data-s="open"] .o-more')?.textContent));
+    check('a helper shows under its agent, with its own state and task', await until(v2.page, () => { const h = document.querySelector('[data-o-agent="ana-claude"]')?.closest('li')?.querySelector('.o-helpers'); return !!h && /ui-worker/.test(h.innerText) && /working/.test(h.innerText) && /Helper task/.test(h.innerText); }));
+    check('a person whose one agent has their name is a single row (no heading)', await until(v2.page, () => !!document.querySelector('[data-o-agent="carol"]') && ![...document.querySelectorAll('#o-agents .o-pn')].some((p) => /carol/.test(p.textContent))));
     for (const [w, h, theme] of [[1440, 900, 'dusk'], [1440, 900, 'day'], [1366, 768, 'dusk']]) {
       await v2.page.evaluate((t) => setTheme(t), theme);
       await v2.page.setViewport({ width: w, height: h }); await sleep(800);
