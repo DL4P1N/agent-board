@@ -92,10 +92,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     --r-xs: 0; --r-sm: 0; --r-md: 0; --r-lg: 0; --r-full: 0;
     --ctl: 2rem; --ctl-sm: 1.625rem; --ctl-xs: 1.5rem;
 
-    --bevel: inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo);
+    --bevel: 0 0 #0000;
     --e1: var(--bevel);
-    --e2: inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 4px 4px 0 rgba(0, 0, 0, .16);
-    --e3: inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 8px 8px 0 rgba(0, 0, 0, .3);
+    --e2: 4px 4px 0 rgba(0, 0, 0, .16);
+    --e3: 8px 8px 0 rgba(0, 0, 0, .3);
 
     --t-fast: 100ms; --t-base: 160ms; --t-slow: 240ms; --ease: cubic-bezier(.2, .7, .2, 1);
   }
@@ -844,7 +844,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   /* The demo's pixel window: a 2px border with a dark outline ring, bevel, hard shadow. Its title bar (.o-head) is the
      one heading component of the page: the panel's name (mono, uppercase), its counts, then its fold button. The 3D view
      makes the same windows glass over the room. */
-  .o-panel, .o-pill { background: var(--panel); border: 2px solid var(--border); box-shadow: 0 0 0 2px var(--outline), inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 4px 4px 0 2px rgba(0, 0, 0, .18); color: var(--ink); }
+  .o-panel, .o-pill { background: var(--panel); border: 2px solid var(--border); box-shadow: 0 0 0 2px var(--outline), 4px 4px 0 2px rgba(0, 0, 0, .18); color: var(--ink); }
   .o-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
   .o-head { display: flex; align-items: center; gap: var(--s4); min-height: 34px; padding: 2px var(--s2) 2px var(--s5); border-bottom: 2px solid var(--border); flex: 0 0 auto; min-width: 0; }
   /* Section titles, the same everywhere (panels, sections, the top bar's chip labels): small uppercase mono in the accent,
@@ -871,13 +871,13 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   /* The top bar, the same in both views: a row of separate chips, each a small uppercase mono label in the accent, then
      its value, and ▾ when it opens something in place: GOAL (the goal), DEMO (the countdown and the pace verdict; the
      demo time), DONE (progress), MERGES (who merges to main and main's CI; the merger choice). Connect a laptop and
-     Setup are plain buttons at the end. One row from 1101px: the goal gives way first, then the demo chip, cut with an
+     Setup end the row as chips too (same frame, no label: they are actions, not facts). One row from 1101px: the goal gives way first, then the demo chip, cut with an
      ellipsis (their full text is the tooltip). */
   #topbar.topbar { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s4); padding: 0; background: none; border: 0; box-shadow: none; min-height: var(--ctl); }
   .topbar > *, .tb-slot > * { min-width: 0; }
   .tb-slot { display: contents; }
   .tbc { display: inline-flex; align-items: center; gap: var(--s3); min-height: var(--ctl); max-width: 100%; padding: 0 var(--s4); background: var(--panel); color: var(--ink); border: 2px solid var(--border);
-    box-shadow: 0 0 0 2px var(--outline), inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 3px 3px 0 1px rgba(0, 0, 0, .18); font: 400 var(--fs-ctl)/1.2 var(--font); white-space: nowrap; text-align: left; }
+    box-shadow: 0 0 0 2px var(--outline), 3px 3px 0 1px rgba(0, 0, 0, .18); font: 400 var(--fs-ctl)/1.2 var(--font); white-space: nowrap; text-align: left; }
   html[data-board-view="office"] .tbc { background: var(--glass); }
   button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
   button.tbc:active { transform: translate(1px, 1px); }
@@ -892,7 +892,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .topbar .repo-s { flex: 0 1 auto; min-width: 8ch; max-width: 220px; }
   .topbar .stat { flex: 0 0 auto; font-weight: 600; }
   .topbar .acts { display: flex; gap: var(--s3); flex: 0 0 auto; margin-left: auto; }
-  .topbar .acts button { min-height: var(--ctl-sm); padding: 0 var(--s4); font-size: var(--fs-meta); }
   @media (min-width: 1101px) { #topbar.topbar { flex-wrap: nowrap; } }
   @media (max-width: 1800px) { .clock:has(.vd) .fz { display: none; } }
   @media (max-width: 1600px) { .topbar .repo-s, .clock .fz { display: none; } }
@@ -1046,7 +1045,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   html[data-board-view="office"] #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
   html[data-board-view="office"] main { display: block; position: relative; flex: 1 1 auto; min-height: 0; width: 100%; max-width: none; padding: 0; overflow: hidden; background: var(--bg);
     --o-gap: 8px; --o-bottom: var(--o-gap); --o-tasks-h: clamp(176px, 27%, 270px); --glass: color-mix(in srgb, var(--panel) 92%, transparent); }
-  html[data-board-view="office"] :is(.o-panel, .o-pill) { background: var(--glass); box-shadow: 0 0 0 2px var(--outline), inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 4px 4px 0 2px rgba(0, 0, 0, .28);
+  html[data-board-view="office"] :is(.o-panel, .o-pill) { background: var(--glass); box-shadow: 0 0 0 2px var(--outline), 4px 4px 0 2px rgba(0, 0, 0, .28);
     -webkit-backdrop-filter: blur(8px) saturate(1.15); backdrop-filter: blur(8px) saturate(1.15); }
   html[data-board-view="office"] :is(.o-agent, .o-det, .qcard) { background: color-mix(in srgb, var(--raised) 85%, transparent); }
   html[data-board-view="office"] :is(.skip[data-skip="tasks"], .tochat) { display: none !important; }
@@ -2410,7 +2409,7 @@ function renderTopbar(si) {
   patch($('tb-b'), `${T.length ? `<span class="tbc stat" id="done-count" title="${done} of ${T.length} tasks merged into main (${pct}%)"><span class="tbl">Done</span><b>${done} of ${T.length}</b><span class="mbar" aria-hidden="true"><i style="width:${pct}%"></i></span></span>` : ''}
       ${S.repo ? `<span class="tbc repo-s" title="Project repo: ${esc(S.repo)}"><span class="tbl">Repo</span><span class="o-x">${esc(S.repo)}</span></span>` : ''}
       <button type="button" class="tbc tb-merge" id="merge-btn" data-act="merge" data-fk="tb-merge" aria-expanded="${!!ui.oMerge}" aria-controls="o-merge" title="The person whose agent merges finished branches into main${away ? ` (${S.integrator} is away: whoever is free merges meanwhile)` : ''}" aria-label="Merges to main: ${esc(m || 'not picked yet')}${away ? ' (away)' : ''}${ci}. ${ui.oMerge ? 'Close' : 'Choose who merges'}"><span class="tbl">Merges</span><span class="o-x">${m ? (S.integrator === ANYONE ? 'whoever is free' : nameTag(S.integrator)) + (away ? ' <span class="muted">(away)</span>' : '') : '<span class="muted">not picked</span>'}</span>${ciPill()}<span class="o-ar" aria-hidden="true">▾</span></button>
-      <span class="acts"><button type="button" class="ghost" data-act="invite" data-fk="s-inv">Connect a laptop</button><button type="button" class="ghost" data-act="${open ? 'setup-close' : 'setup-open'}" data-fk="s-open" aria-expanded="${open}" aria-controls="setup" ${left ? `aria-label="${open ? 'Hide' : 'Open'} the setup guide. Left to do: ${esc(left.left)}"` : ''}>Setup${left ? `: ${esc(left.left)}` : ''}</button></span>`);
+      <span class="acts"><button type="button" class="tbc tb-act" data-act="invite" data-fk="s-inv">Connect a laptop</button><button type="button" class="tbc tb-act" data-act="${open ? 'setup-close' : 'setup-open'}" data-fk="s-open" aria-expanded="${open}" aria-controls="setup" ${left ? `aria-label="${open ? 'Hide' : 'Open'} the setup guide. Left to do: ${esc(left.left)}"` : ''}>Setup${left ? `: ${esc(left.left)}` : ''}</button></span>`);
 }
 function renderSetup(si) {
   const el = $('setup');
