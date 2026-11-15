@@ -902,7 +902,8 @@ function boardSummary(b) {
   };
   try {
     if (live) {
-      const tasks = live.board.listTasks();
+      // Proposed tasks aren't counted, as on the board and the presenter ("4 of 19 done").
+      const tasks = live.board.listTasks().filter((t) => t.status !== 'proposed');
       out.tasks = tasks.length; out.done = tasks.filter((t) => t.status === 'done').length;
       out.agents_online = live.board.presence().filter((p) => p.kind === 'agent' && p.online).length;
       out.last_activity = live.board.db.prepare('SELECT MAX(ts) AS t FROM events').get().t || null;
@@ -911,7 +912,7 @@ function boardSummary(b) {
       if (fs.existsSync(file)) {
         const db = new DatabaseSync(file, { readOnly: true });
         try {
-          const t = db.prepare("SELECT COUNT(*) AS n, SUM(status = 'done') AS d FROM tasks").get();
+          const t = db.prepare("SELECT COUNT(*) AS n, SUM(status = 'done') AS d FROM tasks WHERE status != 'proposed'").get();
           out.tasks = Number(t.n) || 0; out.done = Number(t.d) || 0;
           out.last_activity = db.prepare('SELECT MAX(ts) AS t FROM events').get().t || null;
         } finally { db.close(); }
