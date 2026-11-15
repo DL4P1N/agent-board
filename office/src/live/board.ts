@@ -131,7 +131,7 @@ export function teamSlots(b: BoardState, now = Date.now()): number {
 
 export interface Outlook { verdict: 'ok' | 'tight' | 'behind' | 'unknown'; label?: string; why: string; shortBy?: number; left?: number }
 const LEFT_ST: TaskStatus[] = ['open', 'claimed', 'in_progress', 'review', 'blocked'];
-/** The board's deadline verdict (public/index.html outlook()): will the work left fit before the freeze (or the demo,
+/** Keep in sync with outlook() in public/index.html (a separate bundle). The board's deadline verdict: will the work left fit before the freeze (or the demo,
  *  once frozen)? null: no demo time, it has passed, or nothing is left. */
 export function outlook(b: BoardState, t: TimeNow = timeNow(b), now = Date.now()): Outlook | null {
   if (!t.deadline || t.past) return null;

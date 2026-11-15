@@ -1485,6 +1485,7 @@ function dur(ms) {
   return h ? `${h}h ${m % 60}m` : `${m}m`;
 }
 const approvalWait = () => state.phase === 'awaiting_approval';
+// Keep in sync with outlook() in office/src/live/board.ts (the 3D presenter; a separate bundle).
 // Will the work left fit before the freeze (or the demo, once frozen)? Work left = every task not done or proposed,
 // at this board's median minutes for its size (state.stats, null until 3 are done), shared over the slots of the
 // agents online now. Same thresholds as the office demo: up to 0.9 of the time is on track, up to 1.1 tight.
