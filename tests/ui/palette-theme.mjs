@@ -27,6 +27,7 @@ try {
   const metas = () => page.evaluate(() => ({ scheme: document.getElementById('m-scheme').content, light: document.getElementById('m-tc-light').media, dark: document.getElementById('m-tc-dark').media }));
 
   // ---- theme ----
+  const ORDER = ['auto', 'light', 'dark', 'contrast', 'day', 'night', 'paper', 'terminal', 'sticky', 'sunset', 'candy', 'synthwave', 'coral', 'ocean', 'dusk', 'forest'];
   const IDS = ['dark', 'light', 'dusk', 'day', 'night', 'terminal', 'contrast', 'paper', 'synthwave', 'ocean', 'sticky', 'coral', 'candy', 'sunset', 'forest'];
   const NAMES = ['Dark', 'Light', 'Dusk', 'Day', 'Night', 'Terminal', 'High Contrast', 'Paper', 'Synthwave', 'Ocean', 'Sticky Note', 'Coral', 'Cotton Candy', 'Sunset', 'Forest'];
   const LIGHT = new Set(['light', 'day', 'paper', 'sticky', 'coral', 'candy']);
@@ -45,8 +46,8 @@ try {
   check('one theme control on the page (in the header), no theme list in the help', await page.evaluate(() => document.querySelectorAll('[data-theme-set]').length === 16 && !!$('theme-btn').closest('header') && !document.querySelector('#help-dlg [data-theme-set], #help-dlg .sw')
     && ![...document.querySelectorAll('#help-dlg dd')].some((d) => /Dusk|Terminal|Sticky/.test(d.textContent))));
   await page.click('#theme-btn');
-  check('the theme button opens the chooser: one radio group of 16 tiles (Auto, then the light themes, then the dark ones), focus on the current one', await page.evaluate(() => !$('theme-pop').hidden && $('theme-btn').getAttribute('aria-expanded') === 'true' && $('theme-pop').getAttribute('role') === 'radiogroup'
-    && document.activeElement?.dataset.themeSet === 'auto' && document.activeElement.getAttribute('aria-checked') === 'true') && (await radios()).join() === ['auto', ...IDS.filter((t) => LIGHT.has(t)), ...IDS.filter((t) => !LIGHT.has(t))].join());
+  check('the theme button opens the chooser: one radio group of 16 tiles (Auto and the basics, then light themes beside their dark partners), focus on the current one', await page.evaluate(() => !$('theme-pop').hidden && $('theme-btn').getAttribute('aria-expanded') === 'true' && $('theme-pop').getAttribute('role') === 'radiogroup'
+    && document.activeElement?.dataset.themeSet === 'auto' && document.activeElement.getAttribute('aria-checked') === 'true') && (await radios()).join() === ORDER.join() && [...ORDER.slice(1)].sort().join() === [...IDS].sort().join());
   check('each tile is a tiny board in its own theme with its name (Auto: Dark and Light side by side)', await page.evaluate((names, ids) => {
     const tiles = [...document.querySelectorAll('#theme-pop [role="radio"]')];
     const own = tiles.slice(1).every((b) => b.querySelector('.mini')?.dataset.tp === b.dataset.themeSet && b.textContent.trim() === names[ids.indexOf(b.dataset.themeSet)]
@@ -65,15 +66,15 @@ try {
   // each move applies the theme and keeps the chooser open; one Tab stop.
   await page.click('#theme-btn');
   const at = () => page.evaluate(() => ({ f: document.activeElement?.dataset.themeSet, t: document.documentElement.getAttribute('data-theme') ?? 'auto', open: !$('theme-pop').hidden, stops: [...document.querySelectorAll('#theme-pop [role="radio"]')].filter((b) => b.tabIndex === 0).length }));
-  // Rows: Auto, Light, Day, Paper | Sticky Note, Coral, Cotton Candy | Dark, Dusk, Night, Terminal | High Contrast, Synthwave, Ocean, Sunset | Forest.
-  const keys = [['ArrowRight', 'night'], ['ArrowDown', 'ocean'], ['ArrowLeft', 'synthwave'], ['ArrowUp', 'dusk'], ['End', 'forest'], ['ArrowDown', 'forest'], ['ArrowRight', 'auto'], ['ArrowUp', 'auto'], ['ArrowLeft', 'forest'], ['ArrowUp', 'contrast'], ['Home', 'auto'], ['ArrowDown', 'sticky']];
+  // Rows: Auto, Light, Dark, High Contrast | Day, Night, Paper, Terminal | Sticky Note, Sunset, Cotton Candy, Synthwave | Coral, Ocean, Dusk, Forest.
+  const keys = [['ArrowRight', 'forest'], ['ArrowUp', 'synthwave'], ['ArrowLeft', 'candy'], ['ArrowDown', 'dusk'], ['End', 'forest'], ['ArrowDown', 'forest'], ['ArrowRight', 'auto'], ['ArrowUp', 'auto'], ['ArrowLeft', 'forest'], ['ArrowUp', 'synthwave'], ['Home', 'auto'], ['ArrowDown', 'day']];
   const walk = [];
   for (const [k, want] of keys) { await page.keyboard.press(k); await sleep(40); const a = await at(); walk.push(`${k}:${a.f}`); if (a.f !== want || a.t !== want || !a.open || a.stops !== 1) { walk.push(`(want ${want}, got ${JSON.stringify(a)})`); break; } }
   check('arrow keys move through the grid (left/right wrap, up/down by a row), Home/End; each applies and keeps it open, one Tab stop', !walk.some((w) => w.startsWith('(')), walk.join(' '));
   await page.keyboard.press('ArrowRight'); await page.keyboard.press('Enter'); await sleep(80);
-  check('Enter keeps the focused theme (Coral) and closes the chooser, focus back on the button', (await attr()) === 'coral' && await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn')));
+  check('Enter keeps the focused theme (Night) and closes the chooser, focus back on the button', (await attr()) === 'night' && await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn')));
   await page.keyboard.press('Enter'); await sleep(80); await page.keyboard.press('ArrowLeft'); await page.keyboard.press(' '); await sleep(80);
-  check('the button opens it from the keyboard; Space picks (Sticky Note) and closes it', (await attr()) === 'sticky' && await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn')));
+  check('the button opens it from the keyboard; Space picks (Day) and closes it', (await attr()) === 'day' && await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn')));
   await page.click('#theme-btn'); await page.keyboard.press('Escape'); await sleep(80);
   check('Esc closes the chooser, focus back on the theme button', await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn') && $('theme-btn').getAttribute('aria-expanded') === 'false'));
   await page.click('#theme-btn'); await page.mouse.click(300, 900); await sleep(80);
