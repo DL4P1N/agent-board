@@ -174,11 +174,13 @@ try {
     const sel = await page.evaluate(() => ({ row: document.querySelector('[data-o-agent="ana-claude"]').getAttribute('aria-pressed'), scene: office.mod.selected, t: $('o-det')?.innerText.replace(/\s+/g, ' ') || '' }));
     check('a pick in the room selects the row (pressed) and shows what the agent holds, Message and its controls', sel.row === 'true' && sel.scene === 'ana-claude' && /Vote API/.test(sel.t) && /Message ana-claude/.test(sel.t) && /Task limit/.test(sel.t), JSON.stringify(sel));
     // The rows re-render as bob's updates arrive: click the element itself (as flows.mjs does).
-    await sleep(300); await page.$eval('[data-o-agent="bob-codex"]', (b) => { b.focus(); b.click(); });
-    check('clicking a row selects that agent in the room (and only that row)', await page.evaluate(() => office.mod.selected === 'bob-codex' && document.querySelectorAll('.o-agent[aria-pressed="true"]').length === 1 && document.activeElement?.dataset.oAgent === 'bob-codex'));
+    // A click can land on a row that is replaced a moment later; click the current row again until the pick sticks.
+    const clickRow = (want) => until(page, (w) => { const b = document.querySelector('[data-o-agent="bob-codex"]'); if ((office.mod.selected === 'bob-codex') !== w && b) { b.focus(); b.click(); } return (office.mod.selected === 'bob-codex') === w; }, want);
+    await clickRow(true);
+    check('clicking a row selects that agent in the room (and only that row)', await until(page, () => office.mod.selected === 'bob-codex' && document.querySelectorAll('.o-agent[aria-pressed="true"]').length === 1 && document.activeElement?.dataset.oAgent === 'bob-codex'));
     check('a blocked agent says so, with its reason in Needs you', await page.evaluate(() => /blocked/i.test(document.querySelector('[data-o-agent="bob-codex"] .o-st').textContent) && /bob-codex/.test($('o-blocked').innerText) && /needs a key/.test($('o-blocked').innerText)));
-    await sleep(300); await page.$eval('[data-o-agent="bob-codex"]', (b) => b.click()); // the row re-renders as bob's updates arrive
-    check('clicking it again unselects it', await page.evaluate(() => office.mod.selected === null && !document.querySelector('.o-agent[aria-pressed="true"]')));
+    await sleep(300); await clickRow(false); // the row re-renders as bob's updates arrive
+    check('clicking it again unselects it', await until(page, () => office.mod.selected === null && !document.querySelector('.o-agent[aria-pressed="true"]')));
     await page.evaluate(() => pickAgent('ana-claude')); await page.focus('[data-o-agent="ana-claude"]');
     await page.keyboard.press('Escape');
     check('Esc unselects the agent', await page.evaluate(() => office.mod.selected === null));

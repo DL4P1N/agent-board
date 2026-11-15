@@ -12,8 +12,8 @@ const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' 
 const stale = [...build()].filter(([p, txt]) => !fs.existsSync(p) || fs.readFileSync(p, 'utf8') !== txt).map(([p]) => path.relative(ROOT, p));
 check('every page carries the current generated theme blocks (run node scripts/themes.mjs)', !stale.length, stale.join(', '));
 check('fifteen themes in the agreed order', IDS.join() === 'dark,light,dusk,day,night,terminal,contrast,paper,synthwave,ocean,sticky,coral,candy,sunset,forest');
-check('display names', IDS.map((t) => BASE[t].name).join() === 'Dark,Light,Dusk,Day,Night,Terminal,High Contrast,Paper,Synthwave,Ocean,Sticky Note,Coral,Candy,Sunset,Forest');
-check('light themes: Light, Day, Paper, Sticky Note, Coral, Candy', IDS.filter((t) => BASE[t].light).join() === 'light,day,paper,sticky,coral,candy');
+check('display names', IDS.map((t) => BASE[t].name).join() === 'Dark,Light,Dusk,Day,Night,Terminal,High Contrast,Paper,Synthwave,Ocean,Sticky Note,Coral,Cotton Candy,Sunset,Forest');
+check('light themes: Light, Day, Paper, Sticky Note, Coral, Cotton Candy', IDS.filter((t) => BASE[t].light).join() === 'light,day,paper,sticky,coral,candy');
 check('Dusk, Day, Night and Terminal keep their board colours', TOKENS.dusk.bg === '#1b1530' && TOKENS.day.bg === '#efe4cf' && TOKENS.night.bg === '#080c1a' && TOKENS.terminal.bg === '#020a04' && TOKENS.day.accent === '#9a4a14');
 const low = contrastProblems();
 check('every base text colour >= 4.5:1 on the surfaces it sits on, field borders >= 3:1, in every theme', !low.length, low.join('; '));

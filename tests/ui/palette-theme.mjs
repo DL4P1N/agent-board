@@ -28,7 +28,7 @@ try {
 
   // ---- theme ----
   const IDS = ['dark', 'light', 'dusk', 'day', 'night', 'terminal', 'contrast', 'paper', 'synthwave', 'ocean', 'sticky', 'coral', 'candy', 'sunset', 'forest'];
-  const NAMES = ['Dark', 'Light', 'Dusk', 'Day', 'Night', 'Terminal', 'High Contrast', 'Paper', 'Synthwave', 'Ocean', 'Sticky Note', 'Coral', 'Candy', 'Sunset', 'Forest'];
+  const NAMES = ['Dark', 'Light', 'Dusk', 'Day', 'Night', 'Terminal', 'High Contrast', 'Paper', 'Synthwave', 'Ocean', 'Sticky Note', 'Coral', 'Cotton Candy', 'Sunset', 'Forest'];
   const LIGHT = new Set(['light', 'day', 'paper', 'sticky', 'coral', 'candy']);
   const THEMES = await page.evaluate(() => window.THEMES);
   const rgbOf = (h) => `rgb(${[1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(', ')})`;

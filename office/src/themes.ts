@@ -13,7 +13,7 @@ export const THEMES = {
   ocean: { name: "Ocean", bg: '#04161f', light: false },
   sticky: { name: "Sticky Note", bg: '#ffe066', light: true },
   coral: { name: "Coral", bg: '#ffd3c2', light: true },
-  candy: { name: "Candy", bg: '#e4efff', light: true },
+  candy: { name: "Cotton Candy", bg: '#e4efff', light: true },
   sunset: { name: "Sunset", bg: '#1c0d14', light: false },
   forest: { name: "Forest", bg: '#0e1912', light: false },
 } as const;

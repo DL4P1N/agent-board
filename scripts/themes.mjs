@@ -32,7 +32,7 @@ export const BASE = {
   ocean: { name: 'Ocean', bg: '#04161f', panel: '#0a2230', border: '#1f5a73', text: '#e2f4f8', muted: '#94bccb', accent: '#ff8a65', accentInk: '#2a0d00', ok: '#5fe0b5', warn: '#ffd166', bad: '#ff7b8a', info: '#6fd3ff' },
   sticky: { name: 'Sticky Note', light: true, bg: '#ffe066', panel: '#fff7cc', border: '#c29012', text: '#2b1d05', muted: '#563f0c', accent: '#a23500', accentInk: '#ffffff', ok: '#195c26', warn: '#683e00', bad: '#981226', info: '#0d4d8c' },
   coral: { name: 'Coral', light: true, bg: '#ffd3c2', panel: '#fff3ee', border: '#c25a3c', text: '#2e0f08', muted: '#6a3324', accent: '#b3261e', accentInk: '#ffffff', ok: '#1b6430', warn: '#6e4300', bad: '#8f0f2a', info: '#124f8a' },
-  candy: { name: 'Candy', light: true, accentSoft: 0.06, bg: '#e4efff', panel: '#fff4fa', border: '#8f78c9', text: '#2a1640', muted: '#5e4a7e', accent: '#c4127a', accentInk: '#ffffff', ok: '#126b3a', warn: '#865000', bad: '#b0122e', info: '#1a5bc0' },
+  candy: { name: 'Cotton Candy', light: true, accentSoft: 0.06, bg: '#e4efff', panel: '#fff4fa', border: '#8f78c9', text: '#2a1640', muted: '#5e4a7e', accent: '#c4127a', accentInk: '#ffffff', ok: '#126b3a', warn: '#865000', bad: '#b0122e', info: '#1a5bc0' },
   sunset: { name: 'Sunset', bg: '#1c0d14', panel: '#28131d', border: '#8a3b52', text: '#ffeee8', muted: '#d4a7ac', accent: '#ff9e45', accentInk: '#2a1000', ok: '#8fe0a0', warn: '#ffd166', bad: '#ff7d8c', info: '#80c8ff' },
   forest: { name: 'Forest', bg: '#0e1912', panel: '#15251a', border: '#43734b', text: '#e8f1e3', muted: '#a2baa0', accent: '#f2b84b', accentInk: '#241600', ok: '#8edb8a', warn: '#f2b84b', bad: '#ff8070', info: '#7cc9e3' },
 };
