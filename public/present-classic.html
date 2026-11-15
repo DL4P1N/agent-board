@@ -396,7 +396,7 @@ function showMsg(html) { const a = $('app'); a._html = undefined; a.innerHTML = 
 
 function countdown() {
   const t = state?.time || {}; const now = Date.now();
-  if (!t.deadline) return { big: 'Not set', sub: 'Set the demo time on the board: Start here, step 2.', cls: 'none' };
+  if (!t.deadline) return { big: 'Not set', sub: 'Set the demo time on the board: Setup, step 2.', cls: 'none' };
   // An hour after the demo the event is over: say so, with the final numbers, instead of a red "Demo time".
   if (now - t.deadline >= 60 * 60e3) { const ts = (state.tasks || []).filter((x) => x.status !== 'proposed'); return { big: 'Event finished', sub: `Demo was at ${clock(t.deadline)}. Final: ${ts.filter((x) => x.status === 'done').length} of ${ts.length} tasks done.`, cls: 'none' }; }
   if (t.past || now >= t.deadline) return { big: 'Demo time', sub: `Demo was at ${clock(t.deadline)}. Wrapping up.`, cls: 'warn' };

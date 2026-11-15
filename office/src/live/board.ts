@@ -194,7 +194,7 @@ export function outlook(b: BoardState, t: TimeNow = timeNow(b), now = Date.now()
 /** The big countdown, like the classic presenter's: digits, a line under them, and a colour class. */
 export function countdown(b: BoardState, now = Date.now()): { big: string; sub: string; cls: '' | 'warn' | 'bad' | 'none' } {
   const t = timeNow(b, now);
-  if (!t.deadline) return { big: 'No demo time', sub: 'Set it on the board: Start here, step 2.', cls: 'none' };
+  if (!t.deadline) return { big: 'No demo time', sub: 'Set it on the board: Setup, step 2.', cls: 'none' };
   if (now - t.deadline >= 60 * 60e3) {
     const ts = (b.tasks || []).filter((x) => x.status !== 'proposed');
     return { big: 'Event finished', sub: `Demo was at ${clock(t.deadline)}. Final: ${ts.filter((x) => x.status === 'done').length} of ${ts.length} tasks done.`, cls: 'none' };
