@@ -51,7 +51,7 @@ try {
 
   // ---- no stats yet (2 done): the countdown as before, the reason in the tooltip ----
   let c = await pill();
-  check('fewer than 3 done: pill keeps the plain countdown', /^Demo in 2h 5\dm · freeze (?:\w{3} )?\d\d?:\d\d(?: ?[AP]M)?$|^Demo in 3h 0m · freeze/.test(c.t) && !c.vd, c.t);
+  check('fewer than 3 done: pill keeps the plain countdown', /^in 2h 5\dm · freeze (?:\w{3} )?\d\d?:\d\d(?: ?[AP]M)?$|^in 3h 0m · freeze/.test(c.t) && !c.vd, c.t);
   check('fewer than 3 done: tooltip says there is not enough to estimate', /Not enough finished tasks to estimate yet/.test(c.tip), c.tip);
 
   // ---- 3 done, each took 30 min from claim to done: median M = 30 ----
@@ -65,20 +65,20 @@ try {
 
   // 2 open M tasks = 60 min over 2 slots = 30 min, against 120 min to the freeze.
   c = await pill();
-  check('2 tasks left: "On track" leads the pill', /^On track · Demo in (?:2h 5\dm|3h 0m)(?: · freeze .+)?$/.test(c.t) && /\bok\b/.test(c.vd), c.t);
+  check('2 tasks left: "on track" follows the time in the pill', /^in (?:2h 5\dm|3h 0m)(?: · freeze .+)? · on track$/.test(c.t) && /\bok\b/.test(c.vd), c.t);
   check('verdict tooltip explains the estimate', /About 30m of work left \(2 tasks .*2 agent slots online\) and (?:1h 5\dm|2h 0m) to the freeze/.test(c.tip), c.tip);
-  check('aria-label carries the verdict', /^On track · Demo in/.test(c.label), c.label);
+  check('aria-label carries the verdict', /^Demo in .* · On track\. /.test(c.label), c.label);
 
   // 8 tasks = 240 min / 2 = 120 min against ~120: tight.
   await openTasks(6); await reload();
   c = await pill();
-  check('8 tasks left: "Tight"', /^Tight · Demo in/.test(c.t) && /tight/.test(c.vd), c.t);
+  check('8 tasks left: "Tight"', /^in .* · tight$/.test(c.t) && /tight/.test(c.vd), c.t);
   check('tight: no "won\'t make it" item yet', !/won't make it/.test(await txt('#now')), await txt('#now'));
 
   // 16 tasks = 240 min of team time against 120: behind by ~8; 5 of them are unstarted P3s.
   await openTasks(3); await openTasks(5, 3); await reload();
   c = await pill();
-  check('16 tasks left: "Behind by ~8 tasks"', /^Behind by ~8 tasks · Demo in/.test(c.t) && /behind/.test(c.vd), c.t);
+  check('16 tasks left: "Behind by ~8 tasks"', /^in .* · behind by ~8$/.test(c.t) && /Behind by ~8 tasks/.test(c.tip) && /behind/.test(c.vd), c.t);
   let now = await txt('#now');
   check('behind: What to do now names the P3s that won\'t make it', /5 P3 tasks probably won't make it/.test(now), now);
   // One header row with the verdict, at the widths people use.
@@ -107,7 +107,7 @@ try {
   // 24 left, 13 P3: behind by ~16, but never more than half of what's left (12) is suggested.
   await openTasks(8, 3); await reload();
   now = await txt('#now');
-  check('cap: at most half of what\'s left (12 of 24)', /12 P3 tasks probably won't make it/.test(now) && /^Behind by ~16 tasks/.test((await pill()).t), now);
+  check('cap: at most half of what\'s left (12 of 24)', /12 P3 tasks probably won't make it/.test(now) && /· behind by ~16$/.test((await pill()).t), now);
   await page.screenshot({ path: `${out}/behind-now.png`, clip: { x: 0, y: 0, width: 1440, height: 260 } });
 
   // No demo time: no verdict, no pill.

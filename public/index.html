@@ -930,8 +930,13 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .tbc .ci-pill { flex: 0 0 auto; }
   /* The goal gives way last (never under 16ch); the demo time, merges and Setup shrink first, cut with an ellipsis. */
   .topbar .tb-goal { flex: 0 1 auto; min-width: 16ch; }
-  .topbar .clock { flex: 0 20 auto; min-width: 26ch; }
-  .topbar .tb-merge { flex: 0 20 auto; min-width: 19ch; max-width: 260px; }
+  .topbar .clock { flex: 0 0 auto; } /* the time is never cut */
+  .topbar .tb-merge { flex: 0 0 auto; max-width: 260px; }
+  .topbar .tb-merge .o-x { max-width: 16ch; } /* a long name is cut, a short one never */
+  /* The demo chip: the time never shrinks; the freeze time and the verdict after it are cut first. */
+  .clock .o-x { display: inline-flex; min-width: 0; }
+  .clock .o-x .tm { flex: none; }
+  .clock .o-x .rest { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .topbar .repo-s { flex: 0 20 auto; min-width: 8ch; max-width: 220px; }
   .topbar .stat { flex: 0 0 auto; font-weight: 600; }
   .topbar .acts { display: flex; gap: var(--s3); flex: 0 20 auto; min-width: 7ch; margin-left: auto; }
@@ -940,6 +945,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   @media (max-width: 1800px) { .clock:has(.vd) .fz { display: none; } }
   @media (max-width: 1600px) { .topbar .repo-s, .clock .fz { display: none; } }
   @media (max-width: 1500px) { .topbar .stat .mbar { display: none; } }
+  /* Narrower: the verdict word goes (its colour stays on the time, the words are the tooltip), the merger is cut at 8ch. */
+  @media (max-width: 1279px) { .clock .vdw { display: none; } .clock.v-ok .tm { color: var(--ok); } .clock:is(.v-tight, .v-behind) .tm { color: var(--warn); } .topbar .tb-merge .o-x { max-width: 8ch; } .topbar .tb-goal { min-width: 12ch; } }
   @media (max-width: 600px) { .topbar .tb-goal { flex-basis: 100%; } }
   /* Popovers: the goal (under the top bar) and the demo time and who merges (under their top bar chips), each edited in place. */
   .o-pop { position: absolute; z-index: 8; max-height: min(70vh, 560px); }
@@ -2131,7 +2138,8 @@ function outlook(t = timeNow()) {
 let prevFrozen = null;
 function renderClock() {
   const t = timeNow(); const b = $('clock');
-  const chip = (x) => `<span class="tbl">Demo</span><span class="o-x">${x}</span><span class="o-ar" aria-hidden="true">▾</span>`;
+  // DEMO, then the time itself ("in 2h 0m", never cut), then the rest (freeze time, verdict), which is cut first.
+  const chip = (tm, rest = '') => `<span class="tbl">Demo</span> <span class="o-x"><span class="tm">${tm}</span>${rest ? `<span class="rest">${rest}</span>` : ''}</span><span class="o-ar" aria-hidden="true">▾</span>`;
   if (!t.deadline) {
     prevFrozen = null;
     const h = chip('not set'); if (b._html !== h) { b.innerHTML = h; b._html = h; }
@@ -2139,26 +2147,27 @@ function renderClock() {
     return;
   }
   const now = Date.now();
-  // main + detail: the detail (freeze time) hides on narrower screens when a verdict leads the pill.
-  let main, detail = '', cls = '', tip;
-  if (t.past) { main = 'Demo time passed'; cls = 'past'; tip = `The demo was at ${when(t.deadline)}. Click to change the time.`; }
-  else if (t.frozen) { main = 'Feature freeze — finish & merge'; detail = ` · demo in ${dur(t.deadline - now)}`; cls = 'frozen'; tip = `Feature freeze since ${when(t.freezeAt)}: agents don't take new tasks, except priority-1 bug fixes. Demo at ${when(t.deadline)}. Click to change the time.`; }
+  // tm + detail: the detail (freeze time) hides on narrower screens when a verdict follows the time.
+  let tm, detail = '', cls = '', tip;
+  if (t.past) { tm = 'time passed'; cls = 'past'; tip = `The demo was at ${when(t.deadline)}. Click to change the time.`; }
+  else if (t.frozen) { tm = `in ${dur(t.deadline - now)}`; cls = 'frozen'; tip = `Feature freeze since ${when(t.freezeAt)}: agents don't take new tasks, except priority-1 bug fixes. Demo at ${when(t.deadline)}. Click to change the time.`; }
   else {
-    main = `Demo in ${dur(t.deadline - now)}`; detail = t.fm ? ` · freeze ${t.warn ? 'in ' + dur(t.freezeAt - now) : when(t.freezeAt)}` : '';
+    tm = `in ${dur(t.deadline - now)}`; detail = t.fm ? ` · freeze ${t.warn ? 'in ' + dur(t.freezeAt - now) : when(t.freezeAt)}` : '';
     cls = t.warn ? 'warn' : ''; tip = `Demo at ${when(t.deadline)}${t.fm ? `; feature freeze at ${when(t.freezeAt)} (${t.fm} min before): agents stop taking new tasks then (priority-1 bug fixes still allowed)` : ''}. Click to change.`;
   }
   const ol = outlook(t);
-  // During the freeze the pill names the freeze; the verdict ("Behind by ~4 tasks" only means those won't start) moves
-  // to the tooltip. Narrower screens drop "finish & merge", never the countdown.
+  // The verdict is a short word after the time, in its colour (on track, tight, behind by ~N); the full one is the
+  // tooltip. During the freeze the chip names the freeze instead ("Behind" only means those tasks won't start).
   const vd = ol?.label && !t.frozen ? ol : null;
   if (ol) tip = `${ol.label ? `${ol.label}. ` : ''}${ol.why}.
 ${tip}`;
-  const text = `${vd ? vd.label + ' · ' : ''}${main}${detail}`;
-  const html = chip(t.frozen && !t.past
-    ? `Feature freeze<span class="fz"> — finish &amp; merge</span>${esc(detail)}`
-    : `${vd ? `<b class="vd ${vd.verdict}">${esc(vd.label)}</b> · ` : ''}${esc(main)}${detail ? `<span class="fz">${esc(detail)}</span>` : ''}`);
+  const word = vd ? (vd.verdict === 'behind' ? `behind by ~${vd.shortBy}` : vd.label.toLowerCase()) : '';
+  const text = `Demo ${tm}${t.frozen && !t.past ? ' · feature freeze' : detail}${vd ? ' · ' + vd.label : ''}`;
+  const html = chip(esc(tm), t.frozen && !t.past
+    ? '&nbsp;· feature freeze<span class="fz"> — finish &amp; merge</span>'
+    : `${detail ? `<span class="fz">&nbsp;${esc(detail.slice(1))}</span>` : ''}${vd ? `<span class="vdw">&nbsp;· <b class="vd ${vd.verdict}">${esc(word)}</b></span>` : ''}`);
   if (b._html !== html) { b.innerHTML = html; b._html = html; }
-  b.className = 'tbc clock ' + cls; b.title = tip; b.setAttribute('aria-label', `${text}. Change the demo time`);
+  b.className = 'tbc clock ' + cls + (vd ? ' v-' + vd.verdict : ''); b.title = tip; b.setAttribute('aria-label', `${text}. Change the demo time`);
   // One polite announcement when the freeze starts while the page is open.
   if (prevFrozen === false && t.frozen && !t.past) announce(`Feature freeze started. Agents won't take new tasks; help merge and test.`);
   prevFrozen = t.frozen;

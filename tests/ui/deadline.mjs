@@ -70,7 +70,7 @@ try {
   await page.click('[data-fk="dl-save"]');
   await until(page, () => !document.getElementById('clock').classList.contains('unset'));
   const clock1 = await page.$eval('#clock', (e) => e.querySelector('.o-x').textContent.replace(/\s+/g, ' ').trim());
-  check('countdown in the top bar\'s Demo chip: "Demo in 3h 1Xm · freeze HH:MM"', /^Demo in 3h 1[123]m · freeze (?:\w{3} )?\d\d?:\d\d(?: ?[AP]M)?$/.test(clock1), clock1);
+  check('countdown in the top bar\'s Demo chip: "in 3h 1Xm · freeze HH:MM"', /^in 3h 1[123]m · freeze (?:\w{3} )?\d\d?:\d\d(?: ?[AP]M)?$/.test(clock1), clock1);
   const s1 = await rest(board, 'dana', '/state');
   check('deadline saved on the server', Math.abs(Number(s1.settings.deadline) - Math.floor(target / 60e3) * 60e3) < 60e3 && s1.settings.freeze_minutes === '60' && s1.time.deadline > 0, JSON.stringify(s1.settings));
   const dlEv = (s1.events || []).find((e) => /set the demo deadline to/.test(e.text || ''))?.text || '';
@@ -95,7 +95,7 @@ try {
   await settings({ deadline: Date.now() + 30 * 60e3, freeze_minutes: 60 });
   await reload(page); await sleep(300);
   const fz = await page.$eval('#clock', (e) => ({ c: e.className, t: e.querySelector('.o-x').textContent.replace(/\s+/g, ' ').trim() }));
-  check('frozen: the Demo chip says "Feature freeze — finish & merge"', /frozen/.test(fz.c) && /^Feature freeze — finish & merge · demo in (29|30)m$/.test(fz.t), JSON.stringify(fz));
+  check('frozen: the Demo chip says "in 30m · feature freeze — finish & merge"', /frozen/.test(fz.c) && /^in (29|30)m · feature freeze — finish & merge$/.test(fz.t), JSON.stringify(fz));
   const nowF = await txt(page, '#now');
   check('frozen: What to do now mentions the freeze, merge and test', /Feature freeze: agents won't start new tasks\. Help merge and test/.test(nowF) && /Write-up for your submission/.test(nowF), nowF);
   // The freeze has no banner above the board any more (M3/M7 of the 2026-11-14 review): What to do now explains it, the
