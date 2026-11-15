@@ -62,7 +62,8 @@ try {
   const erin = await agent(board, 'erin-claude'); await erin('board_status');
   const submit = (await human('/state')).tasks.find((t) => t.title === 'Submit form');
   await erin('claim_task', { id: submit.id }); await human('/agents/erin-claude', 'PATCH', { limited: true });
-  await page.waitForFunction(() => /6 of 8 done/.test(document.body.innerText), { timeout: 8000 }).catch(() => {});
+  // Wait for the last change (erin out of usage) too: the count can update a reload before it.
+  await page.waitForFunction(() => /6 of 8 done/.test(document.body.innerText) && /out of usage/.test(document.getElementById('h-now').parentElement.innerText), { timeout: 12000 }).catch(() => {});
   await sleep(300);
   const nowTxt = await page.$eval('#h-now', (h) => h.parentElement.innerText);
   check('now working on: no tool-call jargon', !/board call|board_status|update_task/.test(nowTxt), nowTxt);

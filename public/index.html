@@ -227,8 +227,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
      Monospace is wide, so below 1600px they are icons anyway, the filter loses its label and the badges their tails. */
   header:has(#clock:not([hidden])) .tagline { display: none; }
   @media (max-width: 1600px) {
-    :is(#link-btn, #present-link) .lt { display: none; }
-    :is(#link-btn, #present-link) { min-width: var(--ctl); padding: 0 var(--s3); justify-content: center; }
+    #link-btn .lt { display: none; }
+    #link-btn { min-width: var(--ctl); padding: 0 var(--s3); justify-content: center; }
     :is(.filter > span, .needs .lt) { display: none; }
   }
   /* Server lost: the header turns red too, so it shows wherever you've scrolled. */
@@ -259,8 +259,11 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .clock .vd.ok { color: var(--ok); }
   .clock .vd.tight { color: var(--warn); }
   .clock .vd.behind { color: var(--bad); }
+  /* The view switch (Board | 3D office) needs room too: it says "3D" from 1440px. (The Presenter view link lives in
+     the help dialog and the command palette.) */
   @media (max-width: 1600px) { .clock:has(.vd) .fz { display: none; } }
   @media (max-width: 1400px) { .clock .fz { display: none; } }
+  @media (max-width: 1440px) { .vseg .lt { display: none; } }
   .now .cut-list { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
   .now .cut-list .n { color: var(--muted); }
   .filter { display: flex; align-items: center; gap: var(--s3); margin: 0; font-weight: 400; color: var(--muted); font-size: var(--fs-sm); }
@@ -638,6 +641,37 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .themesw { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s3); }
   .themesw button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); font-weight: 700; }
 
+  /* ---------- view switch (Board | 3D office) and the office view ---------- */
+  /* The demo's segmented view switch, in the board's look: a sunken box like the needs badges; pressed buttons like
+     Columns / Table (the current view is ink with an underline). Not on phones (a tiny 3D room is no use there). */
+  .vseg { display: inline-flex; align-items: center; padding: 0 var(--s1); border: 2px solid var(--line); background: var(--sunken); }
+  .vseg button { font: 400 var(--fs-meta) var(--mono); padding: 0 var(--s3); min-height: var(--ctl-xs); background: transparent; color: var(--muted); border: 0; box-shadow: none; }
+  .vseg button:hover { background: transparent; color: var(--ink); }
+  .vseg button:active { transform: none; box-shadow: none; }
+  .vseg button[aria-pressed="true"] { color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--ink); }
+  @media (max-width: 760px) { .vseg { display: none !important; } }
+  /* 3D office: the header, What to do now and the agents' questions stay; the office fills the rest of the window. */
+  .office-view { display: none; }
+  html[data-board-view="office"] body { overflow: hidden; }
+  html[data-board-view="office"] #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+  html[data-board-view="office"] main { flex: 1 1 auto; min-height: 0; width: 100%; }
+  html[data-board-view="office"] main > :not(.nyou, .office-view), html[data-board-view="office"] :is(.skip, .tochat, header .filter) { display: none !important; }
+  html[data-board-view="office"] .nyou { flex: 0 1 auto; max-height: 46%; overflow-y: auto; scrollbar-width: thin; }
+  html[data-board-view="office"] .office-view { display: block; position: relative; flex: 1 1 auto; min-height: 260px; margin: 2px; overflow: hidden; border: 2px solid var(--border); box-shadow: var(--e2); background: var(--sunken); }
+  .office-scene { position: absolute; inset: 0; }
+  /* The office draws its name tags at 9-10px: a little larger here, as on the presenter's big screen. */
+  .office-scene .ab-tagin { transform: translate(-50%, -100%) scale(1.2); transform-origin: 50% 100%; }
+  .office-load { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; margin: 0; color: var(--muted); font: var(--fs-sm) var(--mono); }
+  .office-view.loading .office-load { display: flex; }
+  /* What an agent clicked in the office is doing: a small panel in the corner, never over the middle of the room. */
+  .ocard { position: absolute; left: var(--s5); bottom: var(--s5); z-index: 2; width: min(340px, calc(100% - 2 * var(--s5))); background: var(--panel); border: 2px solid var(--border); box-shadow: var(--e2); padding: var(--s3) var(--s5) var(--s5); font-size: var(--fs-sm); }
+  .ocard .oc-h { display: flex; align-items: center; gap: var(--s4); margin: 0 calc(-1 * var(--s5)) var(--s4); padding: 0 var(--s3) var(--s3) var(--s5); border-bottom: 2px solid var(--line); }
+  .ocard .oc-h .oc-n { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ocard .oc-h .x { flex: 0 0 auto; }
+  .ocard ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
+  .ocard li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ocard .oc-a { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s4); }
+
   /* ---------- command palette (Ctrl+K) ---------- */
   #pal-dlg { width: min(560px, calc(100vw - 24px)); margin: 12vh auto auto; padding: var(--s4); }
   #pal-in { min-height: var(--ctl); font-size: var(--fs-body); }
@@ -684,13 +718,13 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     header > .sp { display: none; }
     .hpair { order: 1; margin-left: auto; }
     .clock { order: 2; }
-    .filter, #new-task-btn, #present-link, #link-btn { order: 3; }
+    .filter, #new-task-btn, #link-btn { order: 3; }
     .filter { flex: 1 1 140px; min-width: 0; }
     .conn { font-size: 0; gap: 0; border: 0; padding: 0; background: none; min-height: 0; }
     #me-btn { max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
     .filter select { width: 100%; max-width: none; }
-    #link-btn .lt, #present-link .lt { display: none; }
-    #link-btn, #present-link { width: var(--ctl); padding: 0; justify-content: center; }
+    #link-btn .lt { display: none; }
+    #link-btn { width: var(--ctl); padding: 0; justify-content: center; }
     main { padding: var(--s4) var(--s4) var(--s6); gap: var(--gap); }
     .filter span, .person .last, .person .pwhen { display: none; }
     .person .pchips { flex-wrap: wrap; padding: var(--s1) 0; }
@@ -772,6 +806,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   <header>
     <h1><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" rx=".6" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" rx=".6" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" rx=".6" fill="var(--accent-ink)"/></svg>Claude Board</h1>
     <span class="bname" id="bname" hidden></span>
+    <div class="vseg" id="vseg" role="group" aria-label="View" hidden><button type="button" data-vset="board" aria-pressed="true" tabindex="-1" title="The task board">Board</button><button type="button" data-vset="office" aria-pressed="false" aria-label="3D office" title="The team's agents in a live 3D office, with what needs you above it">3D<span class="lt"> office</span></button></div>
     <span class="tagline">your team's AI coding agents, on one task board</span>
     <span id="conn" class="conn" role="status">Connecting…</span>
     <button type="button" id="clock" class="clock" data-act="clock" hidden></button>
@@ -781,7 +816,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       <label class="filter"><span>Show</span><select id="filter" aria-label="Show tasks for"></select></label>
       <button id="new-task-btn" title="New task (N)">+ New task</button>
       <a id="boards-link" class="plink" href="/boards" hidden title="All boards on this server: create, open, archive (host only)">Boards</a>
-      <a id="present-link" class="plink" href="present.html" hidden target="_blank" rel="noopener" title="Presenter view: the team's agents in a live 3D office, with the goal, countdown and progress. Read-only, for the room's big screen (opens in a new tab)" aria-label="Presenter view (opens in a new tab)"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 11v2.5M5 13.5h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="lt"> Presenter view</span></a>
       <button id="link-btn" class="ghost" title="Copy this board's link (it includes the token) to send to a teammate" aria-label="Copy board link"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 9.5l3-3M7 4.5l1.2-1.2a2.8 2.8 0 014 4L11 8.5M9 11.5l-1.2 1.2a2.8 2.8 0 01-4-4L5 7.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="lt"> Copy link</span></button>
       <span class="hpair">
         <button id="notify-btn" class="ghost icon bell" type="button" aria-pressed="false" aria-label="Desktop notifications" title="Notify me when this tab is in the background"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.5V7a4 4 0 018 0v4.5l1.2 1.2H2.8zM6.5 13.5a1.6 1.6 0 003 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><path class="slash" d="M2.5 2.5l11 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
@@ -803,6 +837,12 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         <div class="qs" id="questions"></div>
       </section>
     </div>
+
+    <section id="office-view" class="office-view" aria-label="3D office: one character per online agent. Click one for what it is doing">
+      <div id="office-scene" class="office-scene"></div>
+      <p class="office-load" aria-hidden="true">Loading the 3D office…</p>
+      <div id="office-card" class="ocard" role="group" aria-label="Agent" hidden></div>
+    </section>
 
     <section id="setup" class="panel setup" aria-label="Team setup guide"></section>
 
@@ -944,6 +984,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dd>Set when the demo starts in Start here, step 2. The header counts down to it. At the <b>feature freeze</b> (60 min before, by default) agents stop claiming new tasks and finish, push and merge what they have, so <code>main</code> works for the demo. Priority-1 tasks (bug fixes) can still be claimed during the freeze. The board posts a reminder 30 minutes before the freeze and at the freeze.</dd>
     <dt>Plan approval</dt>
     <dd>Optional (Start here, step 4). When it's on, agents wait after the planner writes the task list until a human checks it and presses <b>Approve plan &amp; start</b>. You can edit and add tasks before approving.</dd>
+    <dt>3D office and presenter view</dt>
+    <dd><b>3D office</b> (header, next to <b>Board</b>) shows the team's agents as characters in a pixel office, with What to do now and the agents' questions above it; click a character for what it's doing. Not on phones. The <b>presenter view</b> is the same office, read-only and large, for the room's big screen.
+      <div class="xacts" id="present-row" hidden><a id="present-link" class="plink" href="present.html" hidden target="_blank" rel="noopener" title="Read-only, for the room's big screen (opens in a new tab)" aria-label="Open the presenter view (opens in a new tab)"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 11v2.5M5 13.5h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Open the presenter view</a></div></dd>
     <dt>Desktop notifications</dt>
     <dd>Press the bell in the header to get a desktop notification while this tab is in the background: a new question for the humans, a message that @mentions you, a task that gets blocked, and the feature-freeze reminders. Click a notification to jump to it. Nothing is sent for your own actions.</dd>
     <dt>Write-up &amp; backup</dt>
@@ -1677,7 +1720,7 @@ let prevQIds = null;
 function render() {
   $('me').textContent = me;
   // Presenter view opens with the read-only viewer token, never the board token; hidden until the server gives one.
-  { const vt = state.setup?.viewer_token; const pl = $('present-link'); pl.hidden = !vt; if (vt) pl.href = BASE + '/present.html?token=' + encodeURIComponent(vt); }
+  { const vt = state.setup?.viewer_token; const pl = $('present-link'); pl.hidden = !vt; $('present-row').hidden = !vt; if (vt) pl.href = BASE + '/present.html?token=' + encodeURIComponent(vt); }
   const qOpen = openQuestions();
   // Screen readers: one polite announcement when a new question arrives (not on every refresh).
   if (prevQIds) {
@@ -1705,6 +1748,7 @@ function render() {
   renderLocks();
   if ($('task-dlg').open) renderDialogLive();
   checkNotify(); announceActivity();
+  if (boardView === 'office') { office.mod?.update(state); renderOfficeCard(); }
 }
 
 function renderNeeds(qOpen, unread) {
@@ -2692,11 +2736,13 @@ function goQuestion(id) {
   c.scrollIntoView({ behavior: smooth(), block: 'center' }); $('qa-' + id)?.focus({ preventScroll: true });
 }
 function goCard(id) {
+  needBoard();
   const c = document.querySelector(`.card[data-id="${id}"]`);
   if (!c) return openTask(id);
   c.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); c.focus({ preventScroll: true });
 }
 function goMention(eid) {
+  needBoard();
   ui.tab = 'me'; store.set('board-tab', 'me'); markMentionsSeen(); $('feed')._html = undefined; render();
   const n = $('feed').querySelector(`[data-eid="${eid}"]`);
   $('feed').scrollIntoView({ behavior: smooth(), block: 'center' });
@@ -2704,6 +2750,7 @@ function goMention(eid) {
   $('feed').focus({ preventScroll: true });
 }
 function goBoard() {
+  needBoard();
   const c = $('board').querySelector('.card'); $('b-h').parentElement.scrollIntoView({ behavior: smooth(), block: 'start' });
   (c || $('board')).focus({ preventScroll: true });
 }
@@ -2714,6 +2761,7 @@ function goWrapup() {
   (n.querySelector('[data-act^="export"]') || n).focus({ preventScroll: true });
 }
 function skipTo(where) {
+  needBoard();
   if (where === 'chat') { $('msg').scrollIntoView({ block: 'center' }); return $('msg').focus({ preventScroll: true }); }
   const c = $('board').querySelector('.card'); ($('board').hidden || !state.tasks.length ? $('board-empty') : $('board')).scrollIntoView({ block: 'start' });
   if (c) c.focus({ preventScroll: true }); else { $('board').focus({ preventScroll: true }); }
@@ -3047,6 +3095,7 @@ function doAct(a, el) {
   if (a === 'new-task') return openTask(null);
 }
 function goStep(key, focus) {
+  needBoard();
   const si = setupInfo();
   if (!setupOpen(si.complete)) ui.forceSetup = true; // open for this visit only
   ui.steps[key] = true; render();
@@ -3078,13 +3127,14 @@ $('help-btn').onclick = openHelp;
 helpDlg.addEventListener('click', (ev) => { if (ev.target.closest('[data-close]')) return helpDlg.close();
   if (ev.target === helpDlg) { const r = helpDlg.getBoundingClientRect(); if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) helpDlg.close(); } });
 
-function setFilter(v) { ui.filter = v; store.set('board-filter', v); render(); }
+function setFilter(v) { needBoard(); ui.filter = v; store.set('board-filter', v); render(); }
 $('filter').addEventListener('change', (e) => setFilter(e.target.value));
 function markMentionsSeen() {
   const max = Math.max(seenMention, ...state.events.filter(mentionsMe).map((e) => e.id));
   if (max !== seenMention) { seenMention = max; store.set('board-seen-mention', String(max)); }
 }
 function mention(name) {
+  needBoard();
   if ($('task-dlg').open) $('task-dlg').close();
   const m = $('msg'); const tagText = '@' + name + ' ';
   if (!m.value.includes(tagText)) m.value = (m.value && !/\s$/.test(m.value) ? m.value + ' ' : m.value) + tagText;
@@ -3499,8 +3549,120 @@ function setTheme(t) {
   themePref = window.applyTheme(t);
   try { localStorage.setItem('board-theme', themePref); } catch {}
   for (const b of document.querySelectorAll('[data-theme-set]')) b.setAttribute('aria-pressed', String(b.dataset.themeSet === themePref));
+  office.mod?.setTheme(sceneTheme());
 }
 for (const b of document.querySelectorAll('[data-theme-set]')) { b.setAttribute('aria-pressed', String(b.dataset.themeSet === themePref)); b.addEventListener('click', () => setTheme(b.dataset.themeSet)); }
+
+// ---------- view: Board | 3D office ----------
+// The header's view switch swaps the main area in place, like the office demo's. Board is the default. The office
+// (three.js and the scene: public/office/embed.js, built from office/src/live/embed.ts by `npm run build:present`)
+// loads on the first switch only, and draws the same /api/state this page loads: it fetches nothing itself.
+// Remembered per board in this browser ('board-view-mode'); ?view=office|board overrides. Not on phones, and not
+// without WebGL (a note, then the board).
+const office = { mod: null, loading: null, picked: null, failed: false };
+let boardView = 'board';
+const viewParam = ['office', 'board'].includes(qs.get('view')) ? qs.get('view') : '';
+const phoneMq = matchMedia('(max-width: 760px)');
+const officeAllowed = () => !office.failed && !phoneMq.matches && 'WebGLRenderingContext' in window;
+// Probed on the first switch to the office only, so the board alone never touches the GPU.
+function webglWorks() {
+  try {
+    const c = document.createElement('canvas');
+    const gl = c.getContext('webgl2') || c.getContext('webgl');
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return !!gl;
+  } catch { return false; }
+}
+const sceneTheme = () => { const t = document.documentElement.getAttribute('data-theme'); return t === 'light' || t === 'dark' ? t : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; };
+function noOffice(msg) {
+  office.failed = true;
+  setBoardView('board', { save: false, quiet: true });
+  store.set('board-view-mode', 'board');
+  toast(msg);
+}
+function renderViewSwitch() {
+  $('vseg').hidden = !officeAllowed();
+  // One Tab stop: the view you can switch to (pressing the current one does nothing); both are read as a group.
+  for (const b of $('vseg').querySelectorAll('[data-vset]')) { const on = b.dataset.vset === boardView; b.setAttribute('aria-pressed', String(on)); b.tabIndex = on ? -1 : 0; }
+}
+function setBoardView(v, { save = true, quiet = false } = {}) {
+  if (v === 'office' && !officeAllowed()) v = 'board';
+  if (v === 'office' && !office.mod && !webglWorks()) return noOffice("This browser can't show the 3D office (WebGL is off or not supported). Staying on the board.");
+  const changed = v !== boardView;
+  boardView = v;
+  document.documentElement.dataset.boardView = v;
+  if (save) store.set('board-view-mode', v);
+  if (qs.has('view')) { try { const u = new URL(location.href); u.searchParams.set('view', v); history.replaceState(null, '', u); } catch {} }
+  renderViewSwitch();
+  if (v === 'office') showOffice();
+  else { office.mod?.setActive(false); office.picked = null; office.mod?.select(null); renderOfficeCard(); }
+  if (changed && !quiet) announce(v === 'office' ? 'Showing the 3D office' : 'Showing the board');
+}
+// Anything that leads to a part of the board the office view hides (task columns, People, chat, Start here).
+function needBoard() { if (boardView === 'office') setBoardView('board'); }
+function showOffice() {
+  if (office.mod) { office.mod.setActive(true); if (state) office.mod.update(state); return; }
+  if (office.loading) return;
+  const view = $('office-view'); view.classList.add('loading'); view.setAttribute('aria-busy', 'true');
+  office.loading = import(BASE + '/office/embed.js').then((m) => {
+    const o = m.mount($('office-scene'), { theme: sceneTheme(), reducedMotion: reduceMotion(), onPick: pickAgent });
+    if (!o.usable) { o.destroy(); return noOffice("The 3D office couldn't start WebGL in this browser. Staying on the board."); }
+    office.mod = o;
+    if (state) o.update(state);
+    if (boardView !== 'office') o.setActive(false);
+  }).catch((e) => {
+    console.warn('3D office did not load', e);
+    if (boardView === 'office') setBoardView('board', { save: false, quiet: true });
+    toast("The 3D office didn't load (offline?). Staying on the board.");
+  }).finally(() => { office.loading = null; view.classList.remove('loading'); view.removeAttribute('aria-busy'); });
+}
+// A copy of what the office draws, for tests and the console (null until it has loaded).
+Object.defineProperty(window, '__officeState', { get: () => office.mod?.snapshot() ?? null, configurable: true });
+addEventListener('storage', (e) => { if (e.key === 'board-theme') office.mod?.setTheme(sceneTheme()); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => office.mod?.setTheme(sceneTheme()));
+phoneMq.addEventListener?.('change', () => { if (phoneMq.matches && boardView === 'office') setBoardView('board', { save: false }); renderViewSwitch(); });
+$('vseg').addEventListener('click', (ev) => { const b = ev.target.closest('[data-vset]'); if (b) setBoardView(b.dataset.vset); });
+// In the office, links to hidden parts of the board switch back to it first (then do what they say).
+document.addEventListener('click', (ev) => {
+  if (boardView !== 'office') return;
+  const el = ev.target.closest?.('[data-go], [data-skip], [data-act="clock"], [data-act="invite"], [data-act="sec-go"]');
+  if (!el || el.closest('#office-view')) return;
+  if (['cut', 'rejected'].includes(el.dataset.go) || (el.dataset.go === 'questions' && !$('q-panel').hidden)) return;
+  setBoardView('board');
+}, true);
+
+// Click a character: who it is, what it holds, its question. "Show in People" opens that person on the board.
+function pickAgent(id) { office.picked = id || null; office.mod?.select(office.picked); renderOfficeCard(); }
+function renderOfficeCard() {
+  const c = $('office-card'); const id = office.picked;
+  const a = id && boardView === 'office' && state ? agentInfoNow().get(id) : null;
+  if (!a) { c.hidden = true; return; }
+  const person = root(id);
+  const held = state.tasks.filter((t) => t.assignee && agentRoot(t.assignee) === id && ACTIVE.includes(t.status));
+  const reviewing = state.tasks.filter((t) => t.status === 'review' && t.reviewer && agentRoot(t.reviewer) === id && !held.includes(t));
+  const q = openQuestions().find((x) => agentRoot(x.asker) === id);
+  const row = (t, label, cls) => `<li><span class="pill ${cls}">${label}</span> <button type="button" class="link" data-open-task="${t.id}">#${t.id} ${esc(t.title)}</button></li>`;
+  const lines = [...held.map((t) => row(t, LABEL[t.status], 's-' + t.status)), ...reviewing.map((t) => row(t, 'Reviewing', 's-review'))];
+  const st = agentState(a);
+  const what = st === 'limited' ? 'Out of usage' : st === 'offline' ? 'Offline' : st === 'waiting' ? 'Connected, not started' : lines.length ? '' : 'No task right now';
+  c.hidden = false;
+  patch(c, `<div class="oc-h"><span class="oc-n"><b class="pc" ${hs(id)}>${esc(id)}</b>${person !== id ? ` <span class="muted">· ${esc(person)}</span>` : ''}${a.client ? ` <span class="muted">· ${esc(a.client)}</span>` : ''}</span><button type="button" class="x" data-office-close aria-label="Close">×</button></div>`
+    + (what ? `<p class="muted">${what}</p>` : `<ul>${lines.join('')}</ul>`)
+    + (q ? `<p class="mt-2"><span class="pill warn">Question</span> ${esc(short(q.question, 110))}</p>` : '')
+    + `<div class="oc-a">${q ? `<button type="button" class="sm" data-go-q="${q.id}">Answer</button>` : ''}<button type="button" class="ghost sm" data-office-person="${esc(person)}">Show in People</button></div>`);
+}
+function closeOfficeCard() { office.picked = null; office.mod?.select(null); renderOfficeCard(); }
+$('office-card').addEventListener('click', (ev) => {
+  if (ev.target.closest('[data-office-close]')) return closeOfficeCard();
+  const p = ev.target.closest('[data-office-person]')?.dataset.officePerson; if (!p) return;
+  setBoardView('board');
+  ui.openPeople.add(p); render();
+  const el = document.querySelector(`[data-fk="ptog-${CSS.escape(p)}"]`);
+  el?.scrollIntoView({ behavior: smooth(), block: 'center' }); el?.focus({ preventScroll: true });
+});
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && office.picked && boardView === 'office' && !ev.target.closest?.('dialog, input, textarea, select')) closeOfficeCard();
+});
 
 // ---------- command palette (Ctrl+K) ----------
 // Every command runs something that already exists in the page: it never does anything new by itself.
@@ -3511,10 +3673,13 @@ function palCommands() {
   const cmds = [];
   const add = (kind, label, run, extra = '') => cmds.push({ kind, label, run, hay: (label + ' ' + extra).toLowerCase() });
   add('Action', 'New task', () => openTask(null), 'add create');
+  if (officeAllowed()) add('View', boardView === 'office' ? 'Switch to Board' : 'Switch to 3D office', () => setBoardView(boardView === 'office' ? 'board' : 'office'), 'view office 3d board scene characters');
+  const vt = state.setup?.viewer_token;
+  if (vt) add('Action', 'Open the presenter view (new tab)', () => window.open(BASE + '/present.html?token=' + encodeURIComponent(vt), '_blank', 'noopener'), 'projector big screen present 3d office');
   const oq = openQuestions()[0];
   if (oq) add('Action', `Answer the oldest question (from ${oq.asker})`, () => { const a = $('qa-' + oq.id); a?.scrollIntoView({ behavior: smooth(), block: 'center' }); a?.focus({ preventScroll: true }); }, 'reply ' + oq.question);
   add('Action', state.settings?.deadline ? 'Edit the demo time' : 'Set the demo time', () => goStep('goal', 'dl'), 'deadline clock countdown freeze');
-  add('Action', 'Write a message in chat', () => { $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); $('msg').focus({ preventScroll: true }); }, 'focus chat');
+  add('Action', 'Write a message in chat', () => { needBoard(); $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); $('msg').focus({ preventScroll: true }); }, 'focus chat');
   add('Action', 'Open help', openHelp, 'what everything means keyboard');
   const others = people().map((p) => p.name).filter((n) => n !== me);
   add('Filter', 'Show tasks for everyone', () => setFilter(''), 'filter show');
@@ -3522,7 +3687,7 @@ function palCommands() {
   for (const n of others) add('Filter', `Show tasks for ${n}`, () => setFilter(n), 'filter show');
   for (const [v, l] of [['auto', 'Auto (follow the device)'], ['light', 'Light'], ['dark', 'Dark']]) add('Theme', `Theme: ${l}${v === themePref ? ' (current)' : ''}`, () => setTheme(v), 'switch colour mode');
   for (const p of people()) add('Person', `Go to ${p.name}${p.name === me ? ' (you)' : ''} in People`, () => {
-    ui.openPeople.add(p.name); render();
+    needBoard(); ui.openPeople.add(p.name); render();
     const el = document.querySelector(`[data-fk="ptog-${CSS.escape(p.name)}"]`);
     el?.scrollIntoView({ behavior: smooth(), block: 'center' }); el?.focus({ preventScroll: true });
   }, p.name + ' person agent');
@@ -3531,7 +3696,7 @@ function palCommands() {
 }
 function palFilter(q) {
   const all = palCommands(); const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!words.length) return all.filter((c) => c.kind === 'Action' || c.kind === 'Theme').slice(0, PAL_MAX);
+  if (!words.length) return all.filter((c) => c.kind === 'Action' || c.kind === 'View' || c.kind === 'Theme').slice(0, PAL_MAX);
   const idm = /^#?(\d+)$/.exec(q.trim());
   const rank = (c) => (idm && c.kind === 'Task' && c.label.startsWith('#' + idm[1] + ' ') ? 0 : c.kind === 'Task' ? 3 : c.kind === 'Person' ? 2 : 1);
   return all.filter((c) => words.every((w) => c.hay.includes(w))).map((c, i) => [c, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map((x) => x[0]).slice(0, PAL_MAX);
@@ -3585,6 +3750,7 @@ async function start() {
   // Only a non-secret "this browser is the host's" flag (set by the Boards page); the admin token itself never leaves that page.
   $('boards-link').hidden = !(() => { try { return localStorage.getItem('board-is-host') === '1'; } catch { return false; } })();
   applyKeys();
+  setBoardView(viewParam || (store.get('board-view-mode') === 'office' ? 'office' : 'board'), { save: false, quiet: true });
   await load(); if (!unavailable && !$('app').hidden) connect();
   if (!started) {
     started = true;
