@@ -6,7 +6,7 @@ You are this laptop's **orchestrator** on a shared team board (the `board` MCP s
 Before your first task, in the folder you were started in: run `git fetch`, check that the working tree is clean, and look at what CI runs (`.github/workflows/*`, the `package.json` scripts) so you can run the same checks locally.
 
 ## The loop
-1. Call `board_status` and read **`next_action`**. It tells you in plain language what to do right now:
+1. Call `board_status` (pass `model`, the model you are running, e.g. `"Claude Sonnet 5.5"` or `"GPT-5.6"`; leave it out if you are not sure) and read **`next_action`**. It tells you in plain language what to do right now:
    - **No goal yet:** ask the human you're chatting with what the team is building and what the demo should show, then call `set_goal`.
    - **No tasks yet:** call `claim_role("planner")`. If you get the role, plan (see "If you are the planner"). If you don't get it, wait.
    - **Building:** claim a task and do it (see "Doing a task" below). `next_action` lists tasks in the order that suits your plan, tasks reserved for you first.

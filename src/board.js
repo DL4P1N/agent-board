@@ -147,7 +147,9 @@ export class Board {
       // Who the agent belongs to (person_by: 'join' or 'human'), and the laptops using its name lately.
       ['person', 'TEXT'], ['person_by', 'TEXT'], ['laptops', 'TEXT'], ['conflict_at', 'INTEGER'],
       // Who marked it out of usage: 'human' (web board) or 'agent' (it reported it itself).
-      ['limited_by', 'TEXT']]) {
+      ['limited_by', 'TEXT'],
+      // The model the agent says it runs (board_status's model argument); null when unknown.
+      ['model', 'TEXT']]) {
       if (!cols.includes(c)) this.db.exec(`ALTER TABLE presence_v2 ADD COLUMN ${c} ${type}`);
     }
     const tcols = this.db.prepare('PRAGMA table_info(tasks)').all().map((c) => c.name);
@@ -194,7 +196,7 @@ export class Board {
         for (const c of Object.keys(r)) if (m[c] == null) m[c] = r[c];
         m.last_seen = Math.max(m.last_seen, r.last_seen);
         m.started_at = pick(m.started_at, r.started_at, Math.min);
-        for (const c of ['client', 'plan', 'slots']) m[c] = newer[c] ?? m[c];
+        for (const c of ['client', 'plan', 'slots', 'model']) m[c] = newer[c] ?? m[c];
       }
       this.db.exec('DELETE FROM presence_v2');
       for (const m of merged.values()) {
@@ -1104,6 +1106,15 @@ export class Board {
     return r.changes > 0;
   }
 
+  // The model an agent says it runs, e.g. "Claude Sonnet 5.5". Control chars stripped, trimmed, max 60 chars; empty keeps what we have.
+  setModel(name, model) {
+    const root = agentRootOf(normName(name));
+    const m = String(model ?? '').replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
+    if (!root || !m) return false;
+    const r = this.db.prepare("UPDATE presence_v2 SET model = ? WHERE name = ? AND kind = 'agent' AND (model IS NULL OR model != ?)").run(m, root, m);
+    return r.changes > 0;
+  }
+
   // Agents count as online if they called the board in the last 10 min (orchestrators can be busy for a while).
   presence(humansOnline = new Set()) {
     const rows = this.db.prepare('SELECT * FROM presence_v2 ORDER BY name, kind').all();
@@ -1123,6 +1134,7 @@ export class Board {
         conflict: r.conflict_at && Date.now() - r.last_seen < AGENT_ONLINE_MS ? { since: r.conflict_at, laptops: Object.keys(JSON.parse(r.laptops || '{}')).length } : null,
         kind: r.kind,
         client: r.client || null,
+        model: r.model || null,
         plan: r.plan || null,
         slots: cap.slots,
         // What its plan (or its tool's default) allows, before a human's override.

@@ -55,10 +55,11 @@ export function buildMcpServer(board, baseAgent) {
       title: 'Board status',
       description:
         'Call this first, and again whenever you are unsure what to do. Returns next_action (plain-language instructions for you right now), ' +
-        'the team phase (needs_goal, needs_plan, building, all_done), the project goal, roles (planner, integrator), your role, your tasks, open tasks, locks, questions, recent activity, and the event cursor.',
-      inputSchema: { as: asArg },
+        'the team phase (needs_goal, needs_plan, building, all_done), the project goal, roles (planner, integrator), your role, your tasks, open tasks, locks, questions, recent activity, and the event cursor. ' +
+        'Pass `model` (the model you are running) so the board can show it.',
+      inputSchema: { as: asArg, model: z.string().optional().describe('The model you are running, e.g. "Claude Sonnet 5.5" or "GPT-5.6". Optional; leave it out if you do not know.') },
     },
-    wrap(({ as }) => { started(); return board.status(who(as)); })
+    wrap(({ as, model }) => { started(); if (model && board.setModel(baseAgent, model)) presence(); return board.status(who(as)); })
   );
 
   tool(

@@ -195,5 +195,19 @@ const ct = tools.tools.find((t) => t.name === 'create_task');
 check('create_task description carries the stats', /On this board so far/.test(ct?.description || ''), (ct?.description || '').slice(-200));
 check('report_usage_limit is a listed tool', tools.tools.some((t) => t.name === 'report_usage_limit'));
 
+// ================= model reported by the agent =================
+check('model is null in presence when never reported', (await agentP('ana')).model === null, JSON.stringify((await agentP('ana')).model));
+await ana('board_status', { model: 'Claude Sonnet 5.5' });
+check('model passed to board_status appears in presence', (await agentP('ana')).model === 'Claude Sonnet 5.5', (await agentP('ana')).model);
+await ben('board_status', { model: '  GPT-5.6\u0007\n\tx' + 'y'.repeat(200) });
+const bm = (await agentP('ben')).model;
+check('long/garbage model is sanitized (no control chars, max 60, trimmed)', typeof bm === 'string' && bm.length <= 60 && !/[\u0000-\u001f]/.test(bm) && bm.startsWith('GPT-5.6 x'), bm);
+await ana('board_status', { model: ' \n ' });
+check('blank model keeps the earlier value', (await agentP('ana')).model === 'Claude Sonnet 5.5');
+await ana('board_status');
+check('calling board_status without model keeps it and works as before', (await agentP('ana')).model === 'Claude Sonnet 5.5');
+const pm = await agent('pm');
+check('another agent that never reports a model stays null', (await agentP('pm')).model === null);
+
 fs.rmSync(tmp, { recursive: true, force: true });
 await finish(R, { board });
