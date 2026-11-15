@@ -29,7 +29,7 @@ const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'))
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
 const PUBLIC_DIR = path.join(ROOT, 'public');
 
-// Which claude-board code this server runs (git commit), so join/doctor can spot an outdated board.
+// Which Agent Board code this server runs (git commit), so join/doctor can spot an outdated board.
 const VERSION = (() => {
   const r = spawnSync('git', ['-C', ROOT, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' });
   return r.status === 0 ? r.stdout.trim() : 'unknown';
@@ -313,7 +313,7 @@ function createBoardRuntime(slug, dir) {
   // ---------- MCP (stateless streamable HTTP) ----------
   router.post('/mcp', auth, async (req, res) => {
     if (req.role === 'viewer') return res.status(403).json({ jsonrpc: '2.0', error: { code: -32001, message: 'The viewer token is read-only.' }, id: null });
-    // A Claude that just came online: nudge web boards to refresh (SSE {kind:'presence'}).
+    // An agent that just came online: nudge web boards to refresh (SSE {kind:'presence'}).
     // ?probe=1: a connection check (join/doctor), not a running agent, so it doesn't count as presence.
     const probe = req.query.probe === '1';
     const cameOnline = !probe && board.touch(agentFrom(req), 'agent');
@@ -385,7 +385,7 @@ function createBoardRuntime(slug, dir) {
       version: VERSION,
       board: { slug, name: registry.get(slug)?.name || slug, default: isDefault(), path: p },
       agent_tools: AGENT_TOOLS,
-      clone_command: 'git clone https://github.com/DL4P1N/agent-board claude-board && cd claude-board',
+      clone_command: 'git clone https://github.com/DL4P1N/agent-board && cd agent-board',
       join_commands: list.map((a) => ({
         label: a.label,
         ip: a.ip,
@@ -555,8 +555,9 @@ function createBoardRuntime(slug, dir) {
     // Text written by agents goes into these messages: no channel-wide pings from it.
     if (k === 'slack') init = { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: slackEscape(full) }) };
     else if (k === 'discord') init = { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: full.slice(0, 1900), allowed_mentions: { parse: [] } }) };
-    else if (k === 'ntfy') init = { headers: { 'Content-Type': 'text/plain; charset=utf-8', Title: 'Claude Board', Tags: kind === 'test' ? 'bell' : kind, Click: link }, body: text };
-    else init = { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, kind, board: 'claude-board', url: link }) };
+    else if (k === 'ntfy') init = { headers: { 'Content-Type': 'text/plain; charset=utf-8', Title: 'Agent Board', Tags: kind === 'test' ? 'bell' : kind, Click: link }, body: text };
+    // Generic webhook: board stays 'claude-board' (its value before the rename to Agent Board) so receivers that filter on it keep working.
+    else init = { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, kind, board: 'claude-board', app: 'agent-board', url: link }) };
     try {
       await checkNotifyTarget(url);
       // No redirects: a public URL answering 307 to an internal address must not reach it.
@@ -621,7 +622,7 @@ function createBoardRuntime(slug, dir) {
   }));
   api.post('/notify/test', humanToken, h(async () => {
     if (!rawSetting('_notify_url')) return { ok: false, status: 0, error: 'Set a webhook URL first.' };
-    return deliver('Test from Claude Board: notifications reach this channel.', 'test');
+    return deliver('Test from Agent Board: notifications reach this channel.', 'test');
   }));
 
   // ---------- token rotation (a link with the token leaked) ----------
@@ -788,7 +789,7 @@ function createBoardRuntime(slug, dir) {
   // End-of-day write-up (markdown) and a full JSON backup of the board.
   api.get('/summary', (_req, res) => res.type('text/markdown; charset=utf-8').send(board.summary()));
   api.get('/export', (_req, res) => {
-    res.set('Content-Disposition', `attachment; filename="claude-board-${slug}-${new Date().toISOString().slice(0, 10)}.json"`);
+    res.set('Content-Disposition', `attachment; filename="agent-board-${slug}-${new Date().toISOString().slice(0, 10)}.json"`);
     res.json(board.exportAll());
   });
 
@@ -938,7 +939,9 @@ function boardLinks(slug) {
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
-app.get('/health', (_req, res) => res.json({ ok: true, app: 'claude-board', version: VERSION, boards: runtimes.size }));
+// app stays 'claude-board' (the name before the rename to Agent Board): older join/doctor/start scripts and
+// people's monitoring check it. name is the display name.
+app.get('/health', (_req, res) => res.json({ ok: true, app: 'claude-board', name: 'Agent Board', version: VERSION, boards: runtimes.size }));
 
 // ---------- managing boards (the host, with the admin token) ----------
 // The admin token only manages boards; it never works as a board token, and board tokens never work here.
@@ -1050,7 +1053,7 @@ const httpServer = app.listen(PORT, HOST, () => {
   const best = bestBase();
   const rt = defaultRuntime();
   const line = '─'.repeat(64);
-  console.log(`\n${line}\n Claude Board is running  (version ${VERSION}, port ${PORT})\n${line}`);
+  console.log(`\n${line}\n Agent Board is running  (version ${VERSION}, port ${PORT})\n${line}`);
   if (rt) {
     const name = registry.get(rt.slug)?.name || rt.slug;
     console.log(`\n 1. Open the web board${runtimes.size > 1 ? ` "${name}"` : ''}. It walks everyone through setup:`);
@@ -1059,14 +1062,14 @@ const httpServer = app.listen(PORT, HOST, () => {
       console.log('\n    ⚠ No network address found, so teammates can\'t reach this laptop. Join the wifi, start Tailscale, or use  npm run tunnel');
     }
     console.log('\n 2. Teammates connect their laptop. First time only, get the tool:');
-    console.log('      git clone https://github.com/DL4P1N/agent-board claude-board && cd claude-board');
-    console.log('    (already have the claude-board folder? run git pull in it instead)');
-    console.log('    Then, in the claude-board folder (it asks the rest):');
+    console.log('      git clone https://github.com/DL4P1N/agent-board && cd agent-board');
+    console.log('    (already have an agent-board folder, or an older claude-board one? run git pull in it instead)');
+    console.log('    Then, in the agent-board folder (it asks the rest):');
     console.log(`      npm run join -- --url ${best}/b/${rt.slug} --token ${rt.token}`);
     for (const a of addrs.slice(1)) console.log(`      (or ${a.base}/b/${rt.slug} if that doesn't connect: ${a.label})`);
     console.log('\n The token in these links is the board\'s password: share it only with your team.');
     if (!PUBLIC_URL) console.log(' Teammates on another network? Stop this (Ctrl+C) and run  npm run tunnel  instead.');
-    console.log(' A teammate can\'t connect? They run  npm run doctor  in their claude-board folder.');
+    console.log(' A teammate can\'t connect? They run  npm run doctor  in their agent-board folder.');
   } else {
     console.log('\n No board is live. Create one or restore one on the boards page below.');
   }
@@ -1088,7 +1091,7 @@ httpServer.on('error', async (e) => {
   if (e.code !== 'EADDRINUSE') throw e;
   let other = null;
   try { other = await (await fetch(`http://localhost:${PORT}/health`, { signal: AbortSignal.timeout(2000) })).json(); } catch {}
-  if (other?.app === 'claude-board') {
+  if (other?.app === 'claude-board' || other?.app === 'agent-board') {
     console.error(`\n✗ A board is already running on port ${PORT} (version ${other.version}).`);
     console.error(other.version !== VERSION
       ? `  It's running different code than this folder (${VERSION}). Close its window (Ctrl+C there) and run npm start again.`

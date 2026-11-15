@@ -12,7 +12,7 @@ const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' 
 const board = await startBoard();
 const port = board.port;
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-ju-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-ju-'));
 const repo = path.join(tmp, 'hack');
 const git = (...a) => spawnSync('git', a, { encoding: 'utf8' });
 git('init', '-q', repo);
@@ -24,7 +24,7 @@ fs.writeFileSync(gitCfg, '[user]\n\tname = Zed Quill\n\temail = z@q\n');
 const envFor = (name, extra = {}) => {
   const home = path.join(tmp, name); fs.mkdirSync(home, { recursive: true });
   const env = { ...process.env, HOME: home, USERPROFILE: home, APPDATA: path.join(home, 'AppData', 'Roaming'), LOCALAPPDATA: path.join(home, 'AppData', 'Local'), XDG_CONFIG_HOME: path.join(home, '.config'), GIT_CONFIG_GLOBAL: gitCfg, GIT_CONFIG_NOSYSTEM: '1', INIT_CWD: ROOT, ...extra };
-  for (const k of ['GEMINI_CLI_HOME', 'CODEX_HOME', 'COPILOT_HOME', 'CLAUDE_CONFIG_DIR', 'CLAUDE_BOARD_JOIN_ASK']) if (!(k in extra)) delete env[k];
+  for (const k of ['GEMINI_CLI_HOME', 'CODEX_HOME', 'COPILOT_HOME', 'CLAUDE_CONFIG_DIR', 'AGENT_BOARD_JOIN_ASK', 'CLAUDE_BOARD_JOIN_ASK']) if (!(k in extra)) delete env[k];
   return { home, env };
 };
 const JOIN = path.join(ROOT, 'scripts', 'join.mjs');
@@ -34,9 +34,9 @@ const base = ['--tool', 'other', '--wait', '0'];
 // ---- JOIN-1: an unreachable board stops join, unless --offline ----
 const l1 = envFor('down');
 const down = run(l1.env, ['--url', 'http://localhost:1', '--token', TOKEN, '--name', 'ann', ...base]);
-check('unreachable board: exit 1, says so, nothing set up', down.status === 1 && /Can't reach the board at http:\/\/localhost:1/.test(down.out) && /Nothing was set up\. To set up anyway, add --offline/.test(down.out) && !fs.existsSync(path.join(l1.home, '.claude-board.json')), down.out.slice(-500));
+check('unreachable board: exit 1, says so, nothing set up', down.status === 1 && /Can't reach the board at http:\/\/localhost:1/.test(down.out) && /Nothing was set up\. To set up anyway, add --offline/.test(down.out) && !fs.existsSync(path.join(l1.home, '.agent-board.json')), down.out.slice(-500));
 const off = run(l1.env, ['--url', 'http://localhost:1', '--token', TOKEN, '--name', 'ann', '--offline', ...base]);
-check('--offline sets up anyway, and exits 1 because doctor finds problems', off.status === 1 && /Setting up anyway \(--offline\)/.test(off.out) && fs.existsSync(path.join(l1.home, '.claude-board.json')), off.out.slice(-500));
+check('--offline sets up anyway, and exits 1 because doctor finds problems', off.status === 1 && /Setting up anyway \(--offline\)/.test(off.out) && fs.existsSync(path.join(l1.home, '.agent-board.json')), off.out.slice(-500));
 check('summary: "1 problem" / "N problems", never "problem(s)"', /⚠ \d+ problems? above\./.test(off.out) && !/problem\(s\)/.test(off.out), (off.out.match(/⚠.*$/m) || [''])[0]);
 
 // ---- JOIN-2: address typos ----
@@ -109,11 +109,11 @@ check('"Host Person" → told: You\'ll appear as "hostperson"', /You'll appear a
 const plain = run(l8.env, ['--url', board.base, '--token', TOKEN, '--name', 'Hostperson', ...base]);
 check('only a change of case: no notice', !/You'll appear as/.test(plain.out));
 
-// ---- answering the questions (piped answers; CLAUDE_BOARD_JOIN_ASK makes join ask without a terminal) ----
+// ---- answering the questions (piped answers; AGENT_BOARD_JOIN_ASK makes join ask without a terminal) ----
 // steps: [prompt regex, answer]. Stops (kills join) after the last step when stopAfter is set.
 function converse(env, args, steps, { stopAfter = false } = {}) {
   return new Promise((resolve) => {
-    const p = spawn(process.execPath, [JOIN, ...args], { cwd: ROOT, env: { ...env, CLAUDE_BOARD_JOIN_ASK: '1' } });
+    const p = spawn(process.execPath, [JOIN, ...args], { cwd: ROOT, env: { ...env, AGENT_BOARD_JOIN_ASK: '1' } });
     let out = ''; let seen = 0; let i = 0;
     const timer = setTimeout(() => p.kill(), 60e3);
     const onData = (d) => {

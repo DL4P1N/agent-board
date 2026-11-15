@@ -112,7 +112,7 @@ check('cli list shows the boards', l.status === 0 && /main \(default\)/.test(l.s
 const n = cli('new', 'Next Event');
 check('cli new', n.status === 0 && /next-event/.test(n.stdout) && fs.existsSync(path.join(board.dataDir, 'boards', 'next-event', 'token')), n.stdout + n.stderr);
 // A saved board folder (board.db + token) to import, like test-data/kubecon-2026.
-const saved = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-saved-'));
+const saved = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-saved-'));
 for (const f of ['board.db', 'board.db-wal', 'board.db-shm']) if (fs.existsSync(path.join(board.dataDir, f))) fs.copyFileSync(path.join(board.dataDir, f), path.join(saved, f));
 fs.writeFileSync(path.join(saved, 'token'), 'savedtok');
 const imp = cli('import', saved, 'Old Event');

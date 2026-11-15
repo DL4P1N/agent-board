@@ -46,7 +46,7 @@
   addEventListener('storage', function (e) { if (e.key === 'board-theme') apply(e.newValue); });
 })();
 </script>
-<title>Boards · Claude Board</title>
+<title>Boards · Agent Board</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23ffb86b'/><rect x='3' y='4' width='3' height='8' fill='%232a1600'/><rect x='7' y='4' width='3' height='5' fill='%232a1600'/><rect x='11' y='4' width='2' height='6' fill='%232a1600'/></svg>">
 <style>
   /* Same tokens as the board (index.html): change them there first, then here. The office demo's pixel look:
@@ -434,7 +434,7 @@ document.addEventListener('click', async (ev) => {
     } else if (act === 'copy-join' || act === 'copy-link') {
       const r = await api(`/boards/${encodeURIComponent(slug)}/open`);
       if (act === 'copy-link') { const url = new URL(r.url, location.origin); url.searchParams.set('token', r.token); return copy(url.href, `Link to ${b?.name || slug} copied. It includes the board token.`); }
-      return copy(r.join_command || `npm run join -- --url ${new URL(r.url, location.origin).href.replace(/\/$/, '')} --token ${r.token}`, 'Join command copied. Teammates run it in their claude-board folder.');
+      return copy(r.join_command || `npm run join -- --url ${new URL(r.url, location.origin).href.replace(/\/$/, '')} --token ${r.token}`, 'Join command copied. Teammates run it in their agent-board folder.');
     } else if (act === 'default') {
       await api(`/boards/${encodeURIComponent(slug)}/default`, { method: 'POST' }); toast(`${b?.name || slug} is now the default board (also at the server's root address).`); await load(); focusCard(slug, '[data-act="open"]');
     } else if (act === 'archive') {

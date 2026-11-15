@@ -188,7 +188,7 @@ async function main() {
   const run = tools.filter((t) => installed[t]);
   if (!run.length) { log('✗ No agent tool to run (install Claude Code or Codex, or pass --tools).'); return 1; }
 
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-rehearsal-'));
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-rehearsal-'));
   log(`Rehearsal: ${run.join(' + ')} for ${MINUTES} min${DRY ? ' (dry run: nothing is started that spends quota)' : ''}`);
   log(`  temp folder: ${tmp}`);
   log("  uses your existing ~/.claude and ~/.codex settings (nothing is written to them); the board's Stop hook isn't installed, so it isn't tested here");

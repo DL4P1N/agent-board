@@ -224,7 +224,7 @@ try {
   await page.click('#help-dlg [data-act="export-md"]'); await sleep(800);
   await page.click('#help-dlg [data-act="export-json"]'); await sleep(800);
   const files = fs.readdirSync(dl);
-  const mdf = files.find((f) => /^claude-board-summary-.*\.md$/.test(f)); const jsf = files.find((f) => /^claude-board-backup-.*\.json$/.test(f));
+  const mdf = files.find((f) => /^agent-board-summary-.*\.md$/.test(f)); const jsf = files.find((f) => /^agent-board-backup-.*\.json$/.test(f));
   check('download buttons save the .md and .json files', !!mdf && !!jsf && /^# Team board summary/.test(fs.readFileSync(path.join(dl, mdf), 'utf8')) && !!JSON.parse(fs.readFileSync(path.join(dl, jsf), 'utf8')).tasks, files.join(','));
   await page.keyboard.press('Escape');
 

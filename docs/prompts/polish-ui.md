@@ -1,6 +1,6 @@
-# Prompt: polish the Claude Board web UI
+# Prompt: polish the Agent Board web UI
 
-Polish Claude Board's web UI until it feels crafted, calm and clear: one consistent design system, careful typography,
+Polish Agent Board's web UI until it feels crafted, calm and clear: one consistent design system, careful typography,
 quiet motion, and screens that explain themselves. Keep every feature and behaviour.
 
 ## Use the design skills

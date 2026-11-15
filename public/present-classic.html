@@ -412,7 +412,7 @@ function render() {
   const seg = (k) => (n[k] ? `<span class="s-${k}" data-seg="${k}" style="width:${(n[k] / total) * 100}%"></span>` : '');
   const key = (k, label) => `<span><i class="s-${k}" aria-hidden="true"></i>${label} <b>${n[k]}</b></span>`;
   const html = `
-    <header><span class="brand"><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" fill="var(--mark)"/><rect x="3" y="4" width="2.6" height="8" fill="var(--mark-ink)"/><rect x="6.7" y="4" width="2.6" height="5" fill="var(--mark-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" fill="var(--mark-ink)"/></svg>Claude Board</span><span class="live"><span class="dot ${live ? 'live' : ''}" aria-hidden="true"></span>${live ? 'Live' : lastErr ? esc(lastErr) : 'Connecting…'}</span><span class="sp"></span>
+    <header><span class="brand"><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" fill="var(--mark)"/><rect x="3" y="4" width="2.6" height="8" fill="var(--mark-ink)"/><rect x="6.7" y="4" width="2.6" height="5" fill="var(--mark-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" fill="var(--mark-ink)"/></svg>Agent Board</span><span class="live"><span class="dot ${live ? 'live' : ''}" aria-hidden="true"></span>${live ? 'Live' : lastErr ? esc(lastErr) : 'Connecting…'}</span><span class="sp"></span>
       ${ciPill || needPills ? `<div class="pills">${ciPill}${needPills}</div>` : ''}</header>
     <h1 class="goal${state.settings?.goal ? '' : ' unset'}" title="${esc(plain(state.settings?.goal))}">${esc(goalHead(state.settings?.goal) || 'No goal set yet')}</h1>
     <div class="row">

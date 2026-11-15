@@ -11,11 +11,11 @@ const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
 const board = await startBoard();
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-doc-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-doc-'));
 const home = path.join(tmp, 'home'); fs.mkdirSync(home);
 const env = { ...process.env, HOME: home, USERPROFILE: home, APPDATA: path.join(home, 'AppData', 'Roaming'), LOCALAPPDATA: path.join(home, 'AppData', 'Local'), XDG_CONFIG_HOME: path.join(home, '.config') };
 for (const k of ['GEMINI_CLI_HOME', 'CODEX_HOME', 'COPILOT_HOME', 'CLAUDE_CONFIG_DIR']) delete env[k];
-const cfgPath = path.join(home, '.claude-board.json');
+const cfgPath = path.join(home, '.agent-board.json');
 const join = (...extra) => {
   const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'join.mjs'), '--url', board.base, '--token', TOKEN, '--name', 'Vera', '--wait', '0', ...extra], { cwd: ROOT, env, encoding: 'utf8', input: '', timeout: 90e3 });
   return { ...r, out: `${r.stdout}${r.stderr}` };

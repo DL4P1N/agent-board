@@ -23,7 +23,7 @@ const tokenB = created.token;
 check('second board created', !!slug && !!tokenB && /\/b\//.test(created.join_command || ''), JSON.stringify(created).slice(0, 200));
 
 // A fake home and a hackathon repo with an origin (a local bare repo, so doctor's dry-run push works).
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-jb-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-jb-'));
 const home = path.join(tmp, 'home'); fs.mkdirSync(home);
 const bare = path.join(tmp, 'origin.git');
 const repo = path.join(tmp, 'hack');
@@ -40,7 +40,7 @@ const join = (url, token, tools, extra = []) => spawnSync(process.execPath, [pat
 const readJ = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
 const gemini = () => readJ(path.join(home, '.gemini', 'settings.json')).mcpServers?.board?.httpUrl || '';
 const cursor = () => readJ(path.join(home, '.cursor', 'mcp.json')).mcpServers?.board?.url || '';
-const cfg = () => readJ(path.join(home, '.claude-board.json'));
+const cfg = () => readJ(path.join(home, '.agent-board.json'));
 
 // ---- 1. join board A (root) with two tools ----
 const r1 = join(A, TOKEN, 'gemini,cursor');
@@ -59,7 +59,7 @@ check('Gemini MCP URL keeps the board path /b/<board>/mcp', gemini().startsWith(
 check('Cursor still on board A', cursor().startsWith(`${A}/mcp?`), cursor());
 const c2 = cfg();
 const g2 = c2.agents.find((a) => a.tool === 'gemini'); const cu2 = c2.agents.find((a) => a.tool === 'cursor');
-check('~/.claude-board.json: each agent remembers its own board', g2?.url === B && g2?.board === 'Team B' && cu2?.url === A && cu2?.board === 'Main board' && g2.token === agentTokenFor(tokenB) && cu2.token === agentTokenFor(TOKEN), JSON.stringify(c2.agents));
+check('~/.agent-board.json: each agent remembers its own board', g2?.url === B && g2?.board === 'Team B' && cu2?.url === A && cu2?.board === 'Main board' && g2.token === agentTokenFor(tokenB) && cu2.token === agentTokenFor(TOKEN), JSON.stringify(c2.agents));
 check('the web link join prints keeps the board path and signs in as tess', o2.includes(`Web board:  ${B}/?token=${encodeURIComponent(tokenB)}&name=tess`), (o2.match(/Web board:.*$/m) || [''])[0]);
 check('doctor (run by join): each tool connected to its own board', /Gemini CLI is connected to board "Team B"/.test(o2) && /Cursor is connected to board "Main board"/.test(o2) && !/points at a different board/.test(o2), o2.slice(o2.indexOf('Checking'), o2.indexOf('Checking') + 1200));
 

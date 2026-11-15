@@ -86,13 +86,13 @@ async function host({ dataDir, home, answer }) {
   const until = async (re, ms = 10e3) => { const t = Date.now(); while (!re.test(out) && Date.now() - t < ms) await sleep(50); return re.test(out); };
   await until(/Keep this window open/);
   await until(/\[(Y\/n|y\/N)\]|run any time|connected as/, 3000);
-  if (answer !== undefined && /\[(Y\/n|y\/N)\]/.test(out)) { child.stdin.write(answer); await until(/Skipped|Kept the other board|claude-board join|Which/, 4000); }
+  if (answer !== undefined && /\[(Y\/n|y\/N)\]/.test(out)) { child.stdin.write(answer); await until(/Skipped|Kept the other board|Which/, 4000); }
   await sleep(200);
   const done = new Promise((r) => child.once('exit', r));
   child.kill(); await done;
   return out;
 }
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-test-'));
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-test-'));
 const home1 = tmp(); const data1 = tmp();
 const first = await host({ dataDir: data1, home: home1, answer: 'n\n' });
 check('banner: the token is the board\'s password', /The token in these links is the board's password: share it only with your team\./.test(first), first.slice(0, 200));
@@ -103,6 +103,7 @@ check('host-join: "n" skips and is remembered', /Skipped/.test(first) && fs.exis
 const second = await host({ dataDir: data1, home: home1 });
 check('host-join: after "n", no prompt but the join command is printed', !/\[(Y\/n|y\/N)\]/.test(second) && /run any time:\s+npm run join -- --url http:\/\/localhost:\d+\/b\/main --token \S+/.test(second), second.split('\n').filter((l) => /join/.test(l)).join(' | '));
 const home2 = tmp(); const data2 = tmp();
+// ~/.claude-board.json: a laptop that joined before the rename to Agent Board. The host still reads it.
 fs.writeFileSync(path.join(home2, '.claude-board.json'), JSON.stringify({ url: 'http://elsewhere:4000/b/other', token: 'some-other-board', agent: 'dee-claude', agents: [{ tool: 'claude', agent: 'dee-claude', token: 'some-other-board' }] }));
 const third = await host({ dataDir: data2, home: home2, answer: '\n' });
 check('host-join: already on another board, the prompt defaults to No', /connected to another board as "dee-claude"\. .*\[y\/N\]/.test(third), third.split('\n').filter((l) => /\[/.test(l)).join(' | '));

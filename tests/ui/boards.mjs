@@ -17,7 +17,7 @@ const freePort = () => new Promise((resolve) => { const s = net.createServer(); 
 const PORT = await freePort();
 const BASE = `http://localhost:${PORT}`;
 const ADMIN = 'adm';
-const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-boards-'));
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-boards-'));
 let child = null;
 // Starts the server (again, on the same port and data) and fails loudly if it doesn't come up.
 async function startServer() {

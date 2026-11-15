@@ -13,7 +13,7 @@ const PALETTES: { id: VisualSettings['palette']; label: string }[] = [
 ];
 
 export function createTopbar(ctx: UICtx, actions: { about(): void; togglePanels(): void; resetLayout(): void }): Panel {
-  const logo = h('div', { class: 'brand' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, icon('orchestrator')), h('span', { class: 'brand-name' }, 'Claude Board'), h('span', { class: 'chip warn sim-chip', title: 'Everything here is simulated: no real agents, tasks or bills' }, 'Demo'));
+  const logo = h('div', { class: 'brand' }, h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, icon('orchestrator')), h('span', { class: 'brand-name' }, 'Agent Board'), h('span', { class: 'chip warn sim-chip', title: 'Everything here is simulated: no real agents, tasks or bills' }, 'Demo'));
 
   const copyRoom = h('button', { type: 'button', class: 'btn tiny', title: 'Copy room code', 'aria-label': 'Copy room code', onClick: async () => { flash(copyRoom, (await copyText(ROOM_CODE)) ? 'Copied' : 'Press Ctrl+C'); } }, 'Copy');
   const room = h('div', { class: 'room-chip', title: 'Shared room code (mock)' }, h('span', { class: 'dim' }, 'ROOM'), h('code', {}, ROOM_CODE), copyRoom);

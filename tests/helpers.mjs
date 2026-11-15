@@ -24,7 +24,7 @@ export const freePort = () => new Promise((resolve, reject) => {
 // restart() replaces it with a fresh, empty board on the same port.
 // env: extra environment for the server, e.g. { PUBLIC_URL }.
 // Optional: port (default: a free one), token (default 'testtok'), prefix (temp folder name; the demo uses its own).
-export async function startBoard({ env = {}, port: wantPort, token = TOKEN, prefix = 'claude-board-test-' } = {}) {
+export async function startBoard({ env = {}, port: wantPort, token = TOKEN, prefix = 'agent-board-test-' } = {}) {
   const port = wantPort || await freePort();
   const board = { port, base: `http://localhost:${port}`, token, dataDir: '', child: null };
   const launch = async (keepData = false) => {

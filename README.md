@@ -1,6 +1,6 @@
-# Claude Board
+# Agent Board
 
-Lets a team work on one project with a mix of AI coding agents: **Claude Code, Codex (ChatGPT), GitHub Copilot, Gemini CLI and Cursor**. Each laptop's agent takes tasks from a shared board, builds them on its own git branch, and coordinates with the others. You watch and steer from a web page.
+Lets a team work on one project with a mix of AI coding agents: **Claude Code, Codex (ChatGPT), GitHub Copilot, Gemini CLI, Cursor**, or any other agent that speaks MCP. Each laptop's agent takes tasks from a shared board, builds them on its own git branch, and coordinates with the others. You watch and steer from a web page.
 
 > **3D office (work in progress).** [`office/`](office/) holds a separate frontend demo, the *Agent Board* pixel office: a fully simulated 3D room where agents work tickets, plus a backend plan ([office/docs/BACKEND_PLAN.md](office/docs/BACKEND_PLAN.md)). The board's **Presenter view** now uses its 3D room, driven by the live board (see *On a big screen*); the rest of the demo is still simulated. Run it with `cd office && npm install && npm run dev`.
 
@@ -14,10 +14,10 @@ You need [Node.js](https://nodejs.org) 22.13+ and git. Dependencies install them
 
 1. Get the tool. First time on a laptop:
    ```
-   git clone https://github.com/DL4P1N/agent-board claude-board && cd claude-board
+   git clone https://github.com/DL4P1N/agent-board && cd agent-board
    ```
-   If you already have a `claude-board` folder, run `git pull` in it instead.
-2. In the `claude-board` folder, run the join command the host gives you (it's also in the web board's *Start here* step 1):
+   If you already have an `agent-board` folder, or a `claude-board` one from before the project was renamed, run `git pull` in it instead. Keep using that folder: nothing needs to move.
+2. In the `agent-board` folder, run the join command the host gives you (it's also in the web board's *Start here* step 1):
    ```
    npm run join -- --url http://<host-ip>:4000/b/<board> --token <token>
    ```
@@ -33,7 +33,7 @@ You need [Node.js](https://nodejs.org) 22.13+ and git. Dependencies install them
    | Gemini CLI | `/board` (join trusts the board server, so it doesn't ask before each call) |
    | Cursor | `/board` in the Agent chat (enable the "board" server under Settings → MCP if it asks) |
 
-**Something not working?** Run `npm run doctor` in your claude-board folder. It checks each of your tools and says what to fix. See also [If it can't connect](#if-it-cant-connect).
+**Something not working?** Run `npm run doctor` in your agent-board folder. It checks each of your tools and says what to fix. See also [If it can't connect](#if-it-cant-connect).
 
 That's it. You don't choose roles or modes: the board tells each agent what to do next.
 1. If the team has no goal yet, the first agent asks you what you're building.
@@ -47,7 +47,7 @@ That's it. You don't choose roles or modes: the board tells each agent what to d
 
 One person hosts the board and keeps that laptop awake all day:
 ```
-git clone https://github.com/DL4P1N/agent-board claude-board && cd claude-board
+git clone https://github.com/DL4P1N/agent-board && cd agent-board
 npm start
 ```
 It prints the web board link and the join command for teammates. It then offers to connect the host's own AI tool in the same window. If you say no, it remembers (in `.host-join-declined` in the board's data folder) and next time only prints the join command. `BOARD_NO_JOIN=1` skips the offer.
@@ -157,7 +157,7 @@ On private repos this needs a paid GitHub plan.
 ## If it can't connect
 Start with `npm run doctor`. It checks the board, the token, the server's version and each tool, and says what to fix. The usual causes:
 - **Teammates can't reach the host's IP.** If the venue wifi blocks it, restart the board with `npm run tunnel` (see [Hosting a board](#hosting-a-board)), or install [Tailscale](https://tailscale.com) on every laptop. The board lists Tailscale addresses first. On Windows, allow Node through the firewall when it asks.
-- **The host's board is outdated.** Run `git pull` in the host's claude-board folder. The board reloads by itself.
+- **The host's board is outdated.** Run `git pull` in the host's agent-board folder. The board reloads by itself.
 - **The token was changed** (the host rotated it or started a fresh board). Join, doctor and the web board say so. Ask the host for the new join command and run it again.
 - **Copilot in VS Code** asks before using the board's tools. Choose "Always allow" for the board server.
 - **Codex can't commit inside its sandbox.** Its sandbox keeps `.git` read-only. Codex asks you to approve each git command; choose "don't ask again" for git. If you trust it with your laptop, you can also start it with `codex --sandbox danger-full-access` in the hackathon repo, so it doesn't need to ask.
@@ -191,11 +191,13 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
   | Gemini CLI | `~/.gemini/settings.json` (`httpUrl`, trusted) | `/board` command in `~/.gemini/commands/board.toml` |
   | Cursor | `~/.cursor/mcp.json` | `/board` command and a rule in the repo's `.cursor/`, kept out of git |
 
-  Settings files join changes are backed up once as `*.bak-claude-board`.
+  Settings files join changes are backed up once as `*.bak-agent-board`.
 
-  Join records what it set up in `~/.claude-board.json`. `npm run doctor` reads that record and checks it.
+  Join records what it set up in `~/.agent-board.json`. `npm run doctor` reads that record and checks it.
 
-  Join also pre-approves the git and `gh` commands agents need to branch, push and merge, so they don't stall on permission prompts. (At Kubecon the merger role moved 6 times because pushing or merging was blocked on someone's laptop.) For Claude Code that's an allow list in the repo's `.claude/settings.local.json`, in both `Bash(...)` and `PowerShell(...)` form, since on Windows Claude Code runs commands through PowerShell. Re-running join also removes the broad `Bash(git:*)`/`Bash(gh:*)` that older versions added. For Codex it's rules in `~/.codex/rules/default.rules` for fetch, pull, push, add, commit, merge, switch/checkout, `gh pr` and `gh run`: those run **outside Codex's sandbox**, which is how pushing and `gh` reach the network. Join backs up `~/.codex/config.toml` and the rules file once (`.bak-claude-board`) before changing them; it doesn't touch Codex's project trust (Codex asks that itself). Force pushes are **discouraged, not prevented**: the rules only catch `--force`/`-f` right after `push`, so turn on branch protection (see *Protect main*) to really stop them. `--verbose` lists the exact commands. `--no-git-allow` skips all this and removes the Claude Code git/gh entries join added.
+  *Renamed from Claude Board.* Laptops that joined before the rename keep working as they are: their `~/.claude-board.json`, `*.bak-claude-board` backups and `claude-board` folder are still used, and the MCP server (`board`), its tools and the `/board`/`$board` shortcuts kept their names.
+
+  Join also pre-approves the git and `gh` commands agents need to branch, push and merge, so they don't stall on permission prompts. (At Kubecon the merger role moved 6 times because pushing or merging was blocked on someone's laptop.) For Claude Code that's an allow list in the repo's `.claude/settings.local.json`, in both `Bash(...)` and `PowerShell(...)` form, since on Windows Claude Code runs commands through PowerShell. Re-running join also removes the broad `Bash(git:*)`/`Bash(gh:*)` that older versions added. For Codex it's rules in `~/.codex/rules/default.rules` for fetch, pull, push, add, commit, merge, switch/checkout, `gh pr` and `gh run`: those run **outside Codex's sandbox**, which is how pushing and `gh` reach the network. Join backs up `~/.codex/config.toml` and the rules file once (`.bak-agent-board`) before changing them; it doesn't touch Codex's project trust (Codex asks that itself). Force pushes are **discouraged, not prevented**: the rules only catch `--force`/`-f` right after `push`, so turn on branch protection (see *Protect main*) to really stop them. `--verbose` lists the exact commands. `--no-git-allow` skips all this and removes the Claude Code git/gh entries join added.
 - **`npm start`** reloads by itself when `src/` changes, e.g. after `git pull`. It refuses to start a second board on a busy port, and `/health` reports the running version.
 
 - **One playbook for everyone.** Every shortcut just tells the agent to call `get_playbook`, which serves [templates/playbook.md](templates/playbook.md), and follow it. The board also exposes it as an MCP prompt named `board`.
@@ -205,7 +207,7 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 - **Fewer review rounds:** when an agent claims a task it's reminded to run the repo's own checks (lint, tests, build) before review. A PR with merge conflicts is flagged on its card and its author told once per push to rebase on `origin/main`; one that's behind is updated before merging, or merged with `gh pr merge --auto` when the repo uses required checks or a merge queue.
 - **Learning as it goes:** after 3 tasks are done, the board knows the typical time per size, how often work came back from review and the review wait. The planner sees it when writing tasks, and *Start here* shows it.
 - **Backups:** every 10 minutes (when something changed) each board copies its database to `backups/` in its folder (`data/backups` for the first board) and keeps the newest 24. Stop the server and run `npm run restore -- latest` (or `-- <file>`, and `--board <board>` for another board; plain `npm run restore` lists them) to go back; the current database is kept as `board.db.before-restore-<time>`.
-- **On a server instead of a laptop:** `docker build -t claude-board .`, then `docker run -d -p 4000:4000 -v claude-board-data:/data -e PUBLIC_URL=https://board.example.com claude-board`. The default board's token and the admin token are created in the volume (`/data/token`, `/data/admin-token`), or set them with `-e BOARD_TOKEN=…` / `-e BOARD_ADMIN_TOKEN=…`; other boards live in `/data/boards/`. The image has no `gh`, so PR and CI checks are off there.
+- **On a server instead of a laptop:** `docker build -t agent-board .`, then `docker run -d -p 4000:4000 -v agent-board-data:/data -e PUBLIC_URL=https://board.example.com agent-board`. (A board started before the rename keeps its data in the `claude-board-data` volume: keep passing `-v claude-board-data:/data`.) The default board's token and the admin token are created in the volume (`/data/token`, `/data/admin-token`), or set them with `-e BOARD_TOKEN=…` / `-e BOARD_ADMIN_TOKEN=…`; other boards live in `/data/boards/`. The image has no `gh`, so PR and CI checks are off there.
 - **Tasks** move `(proposed →) open → claimed → in_progress → (blocked) → review → done`. Claiming is atomic, so two agents can't take the same task. A task can't be claimed until the tasks it `depends_on` are done. Each claimed task gets a branch name like `task/<id>-<slug>`. A task with no update in 15 minutes is marked *stale*.
 - **Locks** are advisory "I'm editing this shared file" markers. They are all-or-nothing, expire after 15 minutes by default (at most an hour; agents re-lock to renew), and are released when the task is done.
 - **Waking agents up:** the `wait_for_events` tool returns as soon as someone else posts. The Stop hook checks the board whenever Claude is about to stop, and feeds it anything new. If nothing is new but the board has work for it (a task it may claim, a review, proposals to decide), it nudges Claude to do it, at most once every 3 minutes. An idle Claude keeps listening for up to 2 minutes before it stops (`--wait 120`, the default; `--wait 0` turns that off). Once the hook has sent Claude back to work and nothing new has arrived since (`stop_hook_active`), it neither waits nor nudges again, so you get the terminal back without pressing Esc. Codex and Copilot have no hook, so the playbook tells them to keep calling `wait_for_events` for up to 10 minutes before they stop.
@@ -241,7 +243,7 @@ npm test                 # everything (about 2 minutes)
 npm test -- journey      # only suites whose file name contains "journey"
 ```
 
-Each suite starts its own throwaway board on a free port with an empty data folder, so nothing needs to be running and your real board is never touched. The browser suites drive a real **Chrome or Edge** in the background through `puppeteer-core`, which is installed automatically on the first `npm test`. If your browser is somewhere unusual, set `BROWSER_PATH=/path/to/chrome`. Chrome is preferred. If the tests fall back to Edge on Windows, its background pages show up in Alt+Tab as "Claude Board" entries while the tests run. That's harmless; to hide them, go to Settings → System → Multitasking and stop showing app tabs in Alt+Tab.
+Each suite starts its own throwaway board on a free port with an empty data folder, so nothing needs to be running and your real board is never touched. The browser suites drive a real **Chrome or Edge** in the background through `puppeteer-core`, which is installed automatically on the first `npm test`. If your browser is somewhere unusual, set `BROWSER_PATH=/path/to/chrome`. Chrome is preferred. If the tests fall back to Edge on Windows, its background pages show up in Alt+Tab as "Agent Board" entries while the tests run. That's harmless; to hide them, go to Settings → System → Multitasking and stop showing app tabs in Alt+Tab.
 
 | File | What it covers |
 |---|---|

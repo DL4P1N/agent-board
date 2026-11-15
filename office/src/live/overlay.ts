@@ -51,7 +51,7 @@ export class Overlay {
     const s = this.state;
     const simple = `<a class="simple" href="${esc(this.simpleHref())}" title="The classic presenter: big text, no 3D">Simple view</a>`;
     const status = `<span class="status"><span class="dot${this.live ? ' on' : ''}" aria-hidden="true"></span>${this.live ? 'Live' : this.note ? esc(this.note) : 'Connecting…'}</span>`;
-    const brand = `<div class="brand-row"><span class="brand">${MARK}Claude Board</span>${status}<span class="sp"></span>${simple}</div>`;
+    const brand = `<div class="brand-row"><span class="brand">${MARK}Agent Board</span>${status}<span class="sp"></span>${simple}</div>`;
     this.els.root.classList.toggle('has-msg', !!this.message || !s);
     if (this.message || !s) {
       const a = this.put('msg', `<p>${this.message ?? 'Loading the board…'}</p>`);

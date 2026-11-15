@@ -66,7 +66,7 @@ export function createTechView(ctx: UICtx): Panel {
   // ---------------------------------------------------------------- intro (first visit)
   const intro = h('div', { class: 'tv-intro', role: 'note' },
     h('span', { class: 'chip warn' }, 'Demo'),
-    h('span', {}, 'This is a simulated Claude Board: the agents, tasks and costs are made up so you can try the layout.'),
+    h('span', {}, 'This is a simulated Agent Board: the agents, tasks and costs are made up so you can try the layout.'),
     h('span', { class: 'grow' }),
     h('button', { type: 'button', class: 'btn tiny', onClick: () => ctx.openAbout() }, 'What am I looking at?'),
     h('button', { type: 'button', class: 'btn tiny', onClick: () => { ctx.prefs.introSeen = true; ctx.savePrefs(); intro.remove(); } }, 'Got it'));

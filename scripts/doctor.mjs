@@ -38,7 +38,7 @@ export async function runDoctor({ header = true } = {}) {
 
   let cfg;
   try { cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch {
-    bad('This laptop hasn\'t joined a board yet.', 'Copy the join command from the web board (Start here → step 1) and run it in your claude-board folder.');
+    bad('This laptop hasn\'t joined a board yet.', 'Copy the join command from the web board (Start here → step 1) and run it in your agent-board folder.');
     return problems;
   }
   // Each agent remembers its own board (a laptop's tools can be on different boards); older configs
@@ -75,7 +75,7 @@ export async function runDoctor({ header = true } = {}) {
     }
     b.outdated = !health.version;
     if (b.outdated) {
-      bad('the board server runs an old version of Agent Board.', 'Host: git pull in the claude-board folder, then close the npm start window (Ctrl+C) and run npm start again.');
+      bad('the board server runs an old version of Agent Board.', 'Host: git pull in the agent-board folder, then close the npm start window (Ctrl+C) and run npm start again.');
     } else if (mine && health.version !== 'unknown' && health.version !== mine) {
       console.log(`  • the board runs Agent Board ${health.version}; this folder has ${mine}. If either side is behind, run git pull there (the board reloads by itself).`);
     }
@@ -123,7 +123,7 @@ export async function runDoctor({ header = true } = {}) {
       tools = (await r.json()).result?.tools?.map((t) => t.name) || [];
     } catch {}
     if (!tools.length) bad('    the board did not answer as this agent', 'Run npm run join again.');
-    else if (!tools.includes('get_playbook')) { if (!outdated) bad('    the board server is outdated (no get_playbook tool)', 'Host: git pull in the claude-board folder; the board reloads by itself (or restart npm start).'); }
+    else if (!tools.includes('get_playbook')) { if (!outdated) bad('    the board server is outdated (no get_playbook tool)', 'Host: git pull in the agent-board folder; the board reloads by itself (or restart npm start).'); }
     else ok(`    board answers (${tools.length} tools)`);
 
     if (BIN[a.tool] && !onPath(BIN[a.tool][0])) {

@@ -15,7 +15,7 @@ const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---- the fake gh on PATH ----
-const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-fakegh-'));
+const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-fakegh-'));
 fs.copyFileSync(path.join(ROOT, 'tests', 'fixtures', 'fake-gh.cjs'), path.join(bin, 'fake-gh.cjs'));
 const stateFile = path.join(bin, 'state.json');
 const ghState = (st) => fs.writeFileSync(stateFile, JSON.stringify({ auth: true, branch: 'main', prs: {}, runs: [], ...st }));

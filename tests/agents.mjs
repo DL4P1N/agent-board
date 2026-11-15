@@ -73,7 +73,7 @@ function runHook(transcript, agentName = 'ana', extra = {}) {
   fs.writeFileSync(tp, transcript.join('\n') + '\n');
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [path.join(ROOT, 'hooks', 'board-stop-hook.mjs')], {
-      // HOME pointed at an empty folder: the hook must use the env config, not a real ~/.claude-board.json.
+      // HOME pointed at an empty folder: the hook must use the env config, not a real ~/.agent-board.json.
       env: { ...process.env, HOME: tmp, USERPROFILE: tmp, TMPDIR: tmp, TEMP: tmp, TMP: tmp, BOARD_URL: board.base, BOARD_TOKEN: AGENT_TOKEN, BOARD_AGENT: agentName, BOARD_HOOK_WAIT: '0', ...extra },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -122,6 +122,15 @@ await unmark('ana');
 await runHook(same);
 const n2 = (await state()).events.filter((e) => /hit its usage limit/.test(e.text)).length;
 check('hook: the same notice is not reported twice', n1 > before && n2 === n1 && !(await agentP('ana')).limited, `${before} → ${n1} → ${n2}`);
+// Hook state saved before the rename to Agent Board (claude-board-cursor-…) is carried over, not lost:
+// with its mark under the old name, the same notice is still not reported again.
+const ours = fs.readdirSync(tmp).filter((f) => f.startsWith('agent-board-cursor-ana-'));
+for (const f of ours) fs.renameSync(path.join(tmp, f), path.join(tmp, f.replace(/^agent-board-/, 'claude-board-')));
+await runHook(same);
+const n3 = (await state()).events.filter((e) => /hit its usage limit/.test(e.text)).length;
+check('hook: state files from before the rename (claude-board-cursor-…) are carried over',
+  ours.length > 0 && n3 === n1 && ours.every((f) => fs.existsSync(path.join(tmp, f))) && !fs.readdirSync(tmp).some((f) => f.startsWith('claude-board-cursor-')),
+  `${ours.join(',')} ${n1} → ${n3}`);
 
 // ================= 2b. hook: only Claude Code's own notice, only as the last assistant entry =================
 // Review finding: ordinary work text used to match ("rate limit", "resets 3 …", "usage limit banner").

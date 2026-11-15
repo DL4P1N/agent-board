@@ -46,11 +46,11 @@ window.applyTheme = function (t) {
 };
 try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 </script>
-<title>Claude Board</title>
+<title>Agent Board</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23ffb86b'/><rect x='3' y='4' width='3' height='8' fill='%232a1600'/><rect x='7' y='4' width='3' height='5' fill='%232a1600'/><rect x='11' y='4' width='2' height='6' fill='%232a1600'/></svg>">
 <style>
   /* ==========================================================================
-     Claude Board design system: the pixel look of the office demo (office/src/styles.css), kept calm.
+     Agent Board design system: the pixel look of the office demo (office/src/styles.css), kept calm.
      One set of tokens for the board (index.html); the classic presenter (present-classic.html) and the
      boards page (boards.html) copy them. Change a value here, never in a component rule.
 
@@ -1226,7 +1226,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   <p class="lede">Tell the host: they can restore a backup (<code>npm run restore -- --board &lt;board&gt;</code>) or archive it on the Boards page. This page checks again by itself.</p>
 </section>
 <form id="gate" class="gate" hidden novalidate>
-  <h1><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" rx=".6" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" rx=".6" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" rx=".6" fill="var(--accent-ink)"/></svg>Claude Board</h1>
+  <h1><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" rx=".6" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" rx=".6" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" rx=".6" fill="var(--accent-ink)"/></svg>Agent Board</h1>
   <p class="lede">Your hackathon team's shared task board. Every teammate's AI coding agent (Claude Code, Codex, GitHub Copilot, Gemini CLI, Cursor or any MCP tool) takes tasks from here; on this page you watch progress, answer the agents' questions and steer.</p>
   <label for="g-token">Board token</label>
   <input id="g-token" autocomplete="off" spellcheck="false" required>
@@ -1244,7 +1244,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   <a class="skip" href="#board" data-skip="tasks">Skip to tasks</a>
   <a class="skip" href="#msg" data-skip="chat">Skip to chat</a>
   <header>
-    <h1><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" rx=".6" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" rx=".6" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" rx=".6" fill="var(--accent-ink)"/></svg>Claude Board</h1>
+    <h1><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" rx=".6" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" rx=".6" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" rx=".6" fill="var(--accent-ink)"/></svg>Agent Board</h1>
     <span class="bname" id="bname" hidden></span>
     <div class="vseg" id="vseg" role="group" aria-label="View" hidden><button type="button" data-vset="board" aria-pressed="true" tabindex="-1" title="The task board">Board</button><button type="button" data-vset="office" aria-pressed="false" aria-label="3D office" title="The team's agents in a live 3D office, with what needs you, the agents and the tasks around it">3D<span class="lt"> office</span></button></div>
     <span class="tagline">your team's AI coding agents, on one task board</span>
@@ -1421,7 +1421,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 <dialog id="help-dlg" aria-labelledby="hd-title">
   <div class="dh"><h2 id="hd-title">What everything means</h2><button type="button" class="x" data-close aria-label="Close">×</button></div>
   <dl class="gloss">
-    <dt>Claude Board</dt>
+    <dt>Agent Board</dt>
     <dd>A shared to-do list for a hackathon team that builds with AI coding agents. Each teammate's agent takes tasks from here, works on them in its own git branch, and reports back. Humans watch, answer questions and steer from this page.</dd>
     <dt>Agent (and which tool)</dt>
     <dd>The AI coding tool on a teammate's laptop, connected to this board. A team can mix tools: <b>Claude Code</b>, <b>Codex (ChatGPT)</b>, <b>GitHub Copilot in VS Code</b>, <b>GitHub Copilot CLI</b>, <b>Gemini CLI</b> or <b>Cursor</b> (or any MCP tool). The small label next to a name (e.g. <span class="pill tool">Codex</span>) shows which one; it appears once that agent has connected.</dd>
@@ -1736,14 +1736,14 @@ function showUnavailable(kind, info = '') {
   $('app').hidden = true; $('gate').hidden = true;
   for (const id of UNAVAILABLE) $(id).hidden = id !== kind;
   const name = state?.board?.name || SLUG || 'this board';
-  if (kind === 'archived') { $('arch-name').textContent = name; document.title = `Archived · ${SLUG ? name + ' · ' : ''}Claude Board`; }
+  if (kind === 'archived') { $('arch-name').textContent = name; document.title = `Archived · ${SLUG ? name + ' · ' : ''}Agent Board`; }
   if (kind === 'moved') {
     const to = String(info).replace(/\/+$/, '');
     const url = new URL(to + '/', location.origin); url.searchParams.set('token', token); if (me) url.searchParams.set('name', me);
     $('moved-link').textContent = new URL(to + '/', location.origin).href; $('moved-link').href = url.href; $('moved-open').href = url.href;
-    document.title = 'Board moved · Claude Board';
+    document.title = 'Board moved · Agent Board';
   }
-  if (kind === 'failed') { $('failed-msg').textContent = String(info).replace(/^(This|The default) board failed to open:\s*/i, ''); document.title = `Couldn't open · ${SLUG ? name + ' · ' : ''}Claude Board`; }
+  if (kind === 'failed') { $('failed-msg').textContent = String(info).replace(/^(This|The default) board failed to open:\s*/i, ''); document.title = `Couldn't open · ${SLUG ? name + ' · ' : ''}Agent Board`; }
   clearInterval(recoverTimer); recoverTimer = setInterval(tryRecover, 4000);
 }
 async function tryRecover() {
@@ -2099,7 +2099,7 @@ async function exportFile(kind, btn) {
     const day = new Date().toISOString().slice(0, 10);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([text], { type: kind === 'json' ? 'application/json' : 'text/markdown' }));
-    a.download = kind === 'json' ? `claude-board-backup-${day}.json` : kind === 'retro' ? `claude-board-retro-${day}.md` : `claude-board-summary-${day}.md`;
+    a.download = kind === 'json' ? `agent-board-backup-${day}.json` : kind === 'retro' ? `agent-board-retro-${day}.md` : `agent-board-summary-${day}.md`;
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     toast(kind === 'json' ? 'Backup downloaded (JSON).' : kind === 'retro' ? 'Retro downloaded (markdown): what took long, review bounces, where it got stuck.' : 'Summary downloaded (markdown).');
@@ -2168,7 +2168,7 @@ function checkNotify() {
   notifyCursor = Math.max(notifyCursor, maxId);
   if (!fresh.length || notifyState() !== 'on' || !document.hidden) return;
   const notes = fresh.map(noteFor).filter(Boolean);
-  const shown = notes.length > 3 ? [{ title: 'Claude Board', body: `${notes.length} things need you: ${notes.map((n) => n.title).join('; ')}`, tag: 'many', go: focusNow }] : notes;
+  const shown = notes.length > 3 ? [{ title: 'Agent Board', body: `${notes.length} things need you: ${notes.map((n) => n.title).join('; ')}`, tag: 'many', go: focusNow }] : notes;
   for (const n of shown) {
     try {
       const x = new Notification(n.title, { body: n.body, tag: n.tag });
@@ -2220,7 +2220,7 @@ function render() {
   prevQIds = new Set(qOpen.map((q) => q.id));
   const unread = unreadMentions();
   if (ui.tab === 'me' && unread.length) { markMentionsSeen(); return render(); }
-  document.title = (qOpen.length + unread.length ? `(${qOpen.length + unread.length}) ` : '') + (SLUG ? `${state.board?.name || SLUG} · ` : '') + 'Claude Board';
+  document.title = (qOpen.length + unread.length ? `(${qOpen.length + unread.length}) ` : '') + (SLUG ? `${state.board?.name || SLUG} · ` : '') + 'Agent Board';
   if (SLUG && state.board?.name) { const b = $('bname'); if (b.textContent !== state.board.name) { b.textContent = state.board.name; b.title = `Board "${state.board.name}" (/b/${SLUG}/) on this server`; } }
   renderNeeds(qOpen, unread);
   renderClock(); renderBell();
@@ -2458,10 +2458,10 @@ function boardLink() {
 function inviteText() {
   const su = state.setup || {}; const best = su.join_commands?.[0]; const S = state.settings;
   const join = best?.command || 'npm run join -- --url <board address> --token <token>  (ask the host)';
-  const L = ['Join our hackathon board (Claude Board). On your laptop:', ''];
+  const L = ['Join our hackathon board (Agent Board). On your laptop:', ''];
   let n = 1;
-  L.push(`${n++}. First time only, get the board tool:`, `   ${su.clone_command || 'git clone https://github.com/DL4P1N/agent-board claude-board && cd claude-board'}`, '   (already have the claude-board folder? run git pull in it)');
-  L.push(`${n++}. In the claude-board folder, connect your laptop (it asks your name, AI tool and project folder):`, `   ${join}`);
+  L.push(`${n++}. First time only, get the board tool:`, `   ${su.clone_command || 'git clone https://github.com/DL4P1N/agent-board && cd agent-board'}`, '   (already have an agent-board folder, or an older claude-board one? run git pull in it)');
+  L.push(`${n++}. In the agent-board folder, connect your laptop (it asks your name, AI tool and project folder):`, `   ${join}`);
   if (S.repo) L.push(`${n++}. Get the project repo (if you don't have it yet):`, `   git clone ${S.repo}`);
   L.push(`${n++}. Then open your AI tool in the project repo and type /board`, `   (Codex: $board · Copilot CLI: start it with  ${copilotLaunch()}  then type /board)`);
   L.push('   (Gemini CLI: /board · Cursor: /board in the Agent chat)');
@@ -2477,8 +2477,8 @@ function stepInvite(si) {
   const onlyLocal = best.ip === 'localhost';
   return `<p>Everyone who'll run an AI agent (you too) connects their laptop once, in a terminal. It takes about a minute.</p>
     <div class="inl mt-2"><button type="button" data-act="copy-invite" data-fk="s-invite">Copy invite message</button><span class="muted t-meta">One message for your team chat with every step below${state.settings.repo ? ' and the project repo' : ''}.</span></div>
-    <div class="sub"><b>First time on this laptop?</b> Get the board tool first. Skip this if you already have a <code>claude-board</code> folder (then run <code>git pull</code> in it, so it's up to date).</div>${cmdBox(su.clone_command, 'clone', 'download command')}
-    <div class="sub"><b>Connect to this board:</b> run it inside the <code>claude-board</code> folder. It asks your name, which AI tool(s) you use and where your project is, then tests the connection.</div>${cmdBox(best.command, 'join', 'join command')}
+    <div class="sub"><b>First time on this laptop?</b> Get the board tool first. Skip this if you already have an <code>agent-board</code> folder (or an older <code>claude-board</code> one) (then run <code>git pull</code> in it, so it's up to date).</div>${cmdBox(su.clone_command, 'clone', 'download command')}
+    <div class="sub"><b>Connect to this board:</b> run it inside the <code>agent-board</code> folder. It asks your name, which AI tool(s) you use and where your project is, then tests the connection.</div>${cmdBox(best.command, 'join', 'join command')}
     ${onlyLocal ? '<p class="note">No network address found, so teammates can\'t reach this laptop yet. Join the same wifi, start Tailscale, or restart the board with <code>npm run tunnel</code>.</p>' : `<p class="hint" title="${esc(best.label)}">${esc(addrText(best))}.</p>`}
     ${rest.length ? `<button type="button" class="link muted t-meta mt-1" data-act="addrs" data-fk="addrs" aria-expanded="${ui.addrs}">${ui.addrs ? '▾' : '▸'} Other addresses (if that one doesn't connect)</button>
       ${ui.addrs ? rest.map((a, i) => `<div class="sub" title="${esc(a.label)}">${esc(addrText(a))}</div>${cmdBox(a.command, 'alt' + i, 'join command: ' + addrText(a))}`).join('') : ''}` : ''}
@@ -2611,7 +2611,7 @@ function stepStart(si) {
       return `<li class="tool-r"><span class="tn">${esc(t.name)}</span>${cmds}<span class="tw">${esc(launch ? 'Run both in the hackathon repo.' : t.where || '')}</span></li>`;
     }).join('')}</ul>
     <p class="hint">Two tools on one laptop? Start each one in the folder join printed for it.</p>
-    <p class="muted">That session becomes the laptop's <b>main agent</b> (the "orchestrator"): it takes tasks from this board and builds each one in its own git branch. Claude Code can also hand tasks to several subagents at once; the other tools work one task at a time. If the tool doesn't know the command or can't see the board, run <code>npm run doctor</code> in the claude-board folder: it checks the connection and says what to fix.</p>
+    <p class="muted">That session becomes the laptop's <b>main agent</b> (the "orchestrator"): it takes tasks from this board and builds each one in its own git branch. Claude Code can also hand tasks to several subagents at once; the other tools work one task at a time. If the tool doesn't know the command or can't see the board, run <code>npm run doctor</code> in the agent-board folder: it checks the connection and says what to fix.</p>
     <p>${si.startedA.length ? `Started: ${si.startedA.map(label).join(', ')}` : 'No agent started yet. It shows up here a few seconds after someone types the start command.'}</p>
     ${teamCapHtml(true)}
     ${si.waitingA.length ? `<p class="ns-txt">Connected but not started: ${si.waitingA.map((a) => `${label(a)} — type <code>${esc(startCmd(a.client))}</code> in it`).join('; ')}</p>` : ''}`;

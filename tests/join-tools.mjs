@@ -12,7 +12,7 @@ const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' 
 const board = await startBoard();
 
 // A fake home, a hackathon repo with an origin (a local bare repo, so doctor's dry-run push works).
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-board-jt-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-jt-'));
 const home = path.join(tmp, 'home'); fs.mkdirSync(home);
 const bare = path.join(tmp, 'origin.git');
 const repo = path.join(tmp, 'hack');
@@ -45,7 +45,7 @@ const gUrl = gs.mcpServers?.board?.httpUrl || '';
 check('Gemini: board in settings.json as httpUrl, trusted', gUrl.startsWith(`${board.base}/mcp?`) && gs.mcpServers.board.trust === true, JSON.stringify(gs.mcpServers?.board));
 check('Gemini: URL carries agent tess-gemini, person, laptop, agent token (not the board token)', /agent=tess-gemini/.test(gUrl) && /person=tess/.test(gUrl) && /laptop=[a-z0-9]+/.test(gUrl) && !gUrl.includes(`token=${TOKEN}&`) && !gUrl.endsWith(`token=${TOKEN}`), gUrl);
 check('Gemini: the user\'s own settings are kept', gs.theme === 'Dracula' && gs.mcpServers.mine?.command === 'x');
-check('Gemini: original settings.json backed up', fs.existsSync(path.join(home, '.gemini', 'settings.json.bak-claude-board')) && !readJ(path.join(home, '.gemini', 'settings.json.bak-claude-board')).mcpServers.board);
+check('Gemini: original settings.json backed up', fs.existsSync(path.join(home, '.gemini', 'settings.json.bak-agent-board')) && !readJ(path.join(home, '.gemini', 'settings.json.bak-agent-board')).mcpServers.board);
 const toml = fs.readFileSync(path.join(home, '.gemini', 'commands', 'board.toml'), 'utf8');
 check('Gemini: /board command (TOML: description + prompt that calls get_playbook, takes {{args}})', /^description = "/m.test(toml) && /^prompt = '''$/m.test(toml) && /get_playbook/.test(toml) && /\{\{args\}\}/.test(toml) && /You are Gemini CLI/.test(toml), toml.slice(0, 200));
 check('Gemini: TOML literal string is closed once (no stray quotes)', (toml.match(/'''/g) || []).length === 2);
@@ -54,7 +54,7 @@ check('Gemini: TOML literal string is closed once (no stray quotes)', (toml.matc
 const cm = readJ(path.join(home, '.cursor', 'mcp.json'));
 const cUrl = cm.mcpServers?.board?.url || '';
 check('Cursor: board in ~/.cursor/mcp.json as url', cUrl.startsWith(`${board.base}/mcp?`) && /agent=tess-cursor/.test(cUrl) && /person=tess/.test(cUrl), JSON.stringify(cm.mcpServers?.board));
-check('Cursor: the user\'s other MCP server is kept, original backed up', cm.mcpServers.other?.url === 'https://example.com/mcp' && fs.existsSync(path.join(home, '.cursor', 'mcp.json.bak-claude-board')));
+check('Cursor: the user\'s other MCP server is kept, original backed up', cm.mcpServers.other?.url === 'https://example.com/mcp' && fs.existsSync(path.join(home, '.cursor', 'mcp.json.bak-agent-board')));
 // Two tools on one laptop: each gets its own worktree; Cursor's is the second one.
 const cDir = `${repo}-cursor`;
 const cmd = path.join(cDir, '.cursor', 'commands', 'board.md');
@@ -68,8 +68,8 @@ check('Cursor: its files are kept out of git (.git/info/exclude)', excl.includes
 check('Cursor: git status stays clean in its worktree', git('-C', cDir, 'status', '--porcelain').stdout.trim() === '', git('-C', cDir, 'status', '--porcelain').stdout);
 
 // ---- join's record + doctor ----
-const cfg = readJ(path.join(home, '.claude-board.json'));
-check('~/.claude-board.json records both agents (lowercase person)', cfg.person === 'tess' && cfg.agents.map((a) => `${a.tool}:${a.agent}`).join(',') === 'gemini:tess-gemini,cursor:tess-cursor', JSON.stringify(cfg.agents));
+const cfg = readJ(path.join(home, '.agent-board.json'));
+check('~/.agent-board.json records both agents (lowercase person)', cfg.person === 'tess' && cfg.agents.map((a) => `${a.tool}:${a.agent}`).join(',') === 'gemini:tess-gemini,cursor:tess-cursor', JSON.stringify(cfg.agents));
 check('doctor (run by join): Gemini CLI and Cursor connected, shortcuts present', /Gemini CLI \(as "tess-gemini"\)/.test(out1) && /Gemini CLI is connected/.test(out1) && /Cursor \(as "tess-cursor"\)/.test(out1) && /Cursor is connected/.test(out1) && !/start shortcut is missing/.test(out1), out1.slice(out1.indexOf('Checking'), out1.indexOf('Checking') + 900));
 check('doctor: how to start each tool', /Gemini CLI\s+in ".*hack": open Gemini CLI there and type {2}\/board/.test(out1) && /Cursor\s+in ".*hack-cursor": open the folder in Cursor, Agent chat, type {2}\/board/.test(out1));
 check('join says the tools aren\'t installed yet (config ready)', /`gemini` is not installed yet/.test(out1));
@@ -79,7 +79,7 @@ const before = { g: fs.readFileSync(path.join(home, '.gemini', 'settings.json'),
 const r2 = join();
 check('re-run exits cleanly', r2.status === 0, `${r2.stdout}${r2.stderr}`.slice(-400));
 check('re-run: same configs (no duplicates), same shortcut files', fs.readFileSync(path.join(home, '.gemini', 'settings.json'), 'utf8') === before.g && fs.readFileSync(path.join(home, '.cursor', 'mcp.json'), 'utf8') === before.c && fs.readFileSync(path.join(home, '.gemini', 'commands', 'board.toml'), 'utf8') === before.t && fs.readFileSync(rule, 'utf8') === before.m);
-check('re-run: backups still hold the user\'s originals', !readJ(path.join(home, '.gemini', 'settings.json.bak-claude-board')).mcpServers.board && !readJ(path.join(home, '.cursor', 'mcp.json.bak-claude-board')).mcpServers.board);
+check('re-run: backups still hold the user\'s originals', !readJ(path.join(home, '.gemini', 'settings.json.bak-agent-board')).mcpServers.board && !readJ(path.join(home, '.cursor', 'mcp.json.bak-agent-board')).mcpServers.board);
 check('re-run: exclude lines not duplicated', fs.readFileSync(path.join(repo, '.git', 'info', 'exclude'), 'utf8') === before.x);
 
 // ---- doctor on its own ----
@@ -94,6 +94,24 @@ check('doctor: Cursor pointing at another name is reported', d2.status !== 0 && 
 fs.writeFileSync(path.join(home, '.gemini', 'settings.json'), '{ not json');
 const r3 = join();
 check('broken Gemini settings.json is left alone with a clear message', fs.readFileSync(path.join(home, '.gemini', 'settings.json'), 'utf8') === '{ not json' && /isn't valid JSON, so it was left alone/.test(`${r3.stdout}${r3.stderr}`));
+
+// ---- a laptop that joined before the rename to Agent Board ----
+// Its ~/.claude-board.json, *.bak-claude-board backups and shortcut files with the old marker stay in use.
+const old = path.join(tmp, 'old-home'); fs.mkdirSync(path.join(old, '.gemini', 'commands'), { recursive: true });
+const oldGemini = path.join(old, '.gemini', 'settings.json');
+fs.writeFileSync(oldGemini, JSON.stringify({ mcpServers: { board: { httpUrl: 'http://old/mcp' } } }));
+fs.writeFileSync(`${oldGemini}.bak-claude-board`, JSON.stringify({ theme: 'original' }));
+fs.writeFileSync(path.join(old, '.gemini', 'commands', 'board.toml'), '# <!-- claude-board -->\nprompt = "old"\n');
+fs.writeFileSync(path.join(old, '.claude-board.json'), JSON.stringify({ person: 'lee', laptop_id: 'abcdef123456', agents: [] }));
+const oldEnv = { ...env, HOME: old, USERPROFILE: old, APPDATA: path.join(old, 'AppData', 'Roaming'), LOCALAPPDATA: path.join(old, 'AppData', 'Local'), XDG_CONFIG_HOME: path.join(old, '.config') };
+const r4 = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'join.mjs'), '--url', board.base, '--token', TOKEN, '--tool', 'gemini', '--name', 'Lee', '--repo', repo, '--wait', '0'],
+  { cwd: ROOT, env: oldEnv, encoding: 'utf8', input: '', timeout: 90e3 });
+const oldCfg = fs.existsSync(path.join(old, '.claude-board.json')) ? readJ(path.join(old, '.claude-board.json')) : {};
+check('old laptop: join updates ~/.claude-board.json in place (no second record)', r4.status === 0 && oldCfg.laptop_id === 'abcdef123456' && oldCfg.agents?.some((a) => a.agent === 'lee-gemini') && !fs.existsSync(path.join(old, '.agent-board.json')), `${r4.stdout}${r4.stderr}`.slice(-400));
+check('old laptop: its .bak-claude-board backup is kept as the original (no new backup)', readJ(`${oldGemini}.bak-claude-board`).theme === 'original' && !fs.existsSync(`${oldGemini}.bak-agent-board`));
+check('old laptop: a shortcut with the old marker is still ours and gets updated', /<!-- agent-board -->/.test(fs.readFileSync(path.join(old, '.gemini', 'commands', 'board.toml'), 'utf8')));
+const d3 = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'doctor.mjs')], { cwd: ROOT, env: oldEnv, encoding: 'utf8', timeout: 60e3 });
+check('old laptop: doctor reads ~/.claude-board.json', /Gemini CLI \(as "lee-gemini"\)/.test(d3.stdout) && /Gemini CLI is connected/.test(d3.stdout), `${d3.stdout}`.slice(-400));
 
 // Clean up the worktree registration before removing the temp folder.
 git('-C', repo, 'worktree', 'remove', '--force', cDir);

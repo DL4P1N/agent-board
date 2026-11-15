@@ -1,7 +1,7 @@
 <!-- agent-board -->
 ## Team board rules (all agents and subagents)
 
-Several people's Claude agents work on this repo at the same time. They coordinate through the `board` MCP server.
+Several people's AI agents (Claude Code, Codex, Copilot…) work on this repo at the same time. They coordinate through the `board` MCP server.
 
 - **Work only on a claimed task, on its own branch** (`task/<id>-...`). Never commit to or push `main`. Only the integrator merges.
 - **Lock shared hot files before editing them**: schema/migrations, package.json/lockfiles, route registries, shared types/config. Use `lock_files`. If the lock is refused, coordinate on the board instead of editing.

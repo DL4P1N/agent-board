@@ -10,7 +10,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const [major, minor] = process.versions.node.split('.').map(Number);
 if (major < 22 || (major === 22 && minor < 13)) {
-  console.error(`✗ claude-board needs Node.js 22.13 or newer (you have ${process.versions.node}).`);
+  console.error(`✗ Agent Board needs Node.js 22.13 or newer (you have ${process.versions.node}).`);
   console.error('  Install the current LTS from https://nodejs.org and try again.');
   process.exit(1);
 }
@@ -23,7 +23,7 @@ if (missing.length) {
   console.log(`Installing dependencies (first run: ${missing.join(', ')})…`);
   const r = spawnSync('npm install --no-audit --no-fund', { cwd: ROOT, shell: true, stdio: 'inherit' });
   if (r.status !== 0) {
-    console.error('✗ npm install failed. Check your internet connection and run `npm install` in the claude-board folder.');
+    console.error('✗ npm install failed. Check your internet connection and run `npm install` in the agent-board folder.');
     process.exit(1);
   }
 }

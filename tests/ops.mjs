@@ -54,14 +54,14 @@ const shapes = async (kind) => {
   return { t, g };
 };
 let s = await shapes('slack');
-check('Slack: {text} with the board link', s.t.body.ok && /Test from Claude Board/.test(json(s.g)?.text) && /\nhttps?:\/\/\S+:\d+\/b\/main$/.test(json(s.g)?.text), JSON.stringify(s));
+check('Slack: {text} with the board link', s.t.body.ok && /Test from Agent Board/.test(json(s.g)?.text) && /\nhttps?:\/\/\S+:\d+\/b\/main$/.test(json(s.g)?.text), JSON.stringify(s));
 check('Slack: no token in the link', !String(s.g?.body).includes(board.token));
 r = await call('/notify');
 check('GET shows the kind and a masked URL', r.body.kind === 'slack' && /^http:\/\/localhost:\d+\/…/.test(r.body.url) && !r.body.url.includes('secretpart'), JSON.stringify(r.body));
 s = await shapes('discord');
-check('Discord: {content}', s.t.body.ok && /Test from Claude Board/.test(json(s.g)?.content) && json(s.g)?.text === undefined, s.g?.body);
+check('Discord: {content}', s.t.body.ok && /Test from Agent Board/.test(json(s.g)?.content) && json(s.g)?.text === undefined, s.g?.body);
 s = await shapes('ntfy');
-check('ntfy: plain text body with Title + Tags headers', s.t.body.ok && /^Test from Claude Board/.test(s.g?.body) && s.g?.headers.title === 'Claude Board' && !!s.g?.headers.tags, JSON.stringify(s.g?.headers));
+check('ntfy: plain text body with Title + Tags headers', s.t.body.ok && /^Test from Agent Board/.test(s.g?.body) && s.g?.headers.title === 'Agent Board' && !!s.g?.headers.tags, JSON.stringify(s.g?.headers));
 s = await shapes('generic');
 check('generic: {text, kind, board, url}', s.t.body.ok && json(s.g)?.board === 'claude-board' && json(s.g)?.kind === 'test' && /Test from/.test(json(s.g)?.text) && /^https?:\/\//.test(json(s.g)?.url), s.g?.body);
 r = await call('/notify/test', 'POST');

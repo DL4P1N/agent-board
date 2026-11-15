@@ -761,7 +761,7 @@ export class Board {
   }
 
   // ---------- presence ----------
-  // A person's Claude ("agent") and their browser ("human") are tracked separately, even under the same name.
+  // A person's AI agent ("agent") and their browser ("human") are tracked separately, even under the same name.
   // Returns true when an agent comes online (new, or silent for 10+ min), so callers can push a live update.
   touch(name, kind) {
     const root = agentRootOf(normName(name));

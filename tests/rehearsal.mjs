@@ -308,7 +308,7 @@ check("retro counts the demo task's two bounces", new RegExp(`^- #${T.demo.id} [
   const env = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, TEMP: temp, TMP: temp, TMPDIR: temp };
   const script = fileURLToPath(new URL('../scripts/rehearse.mjs', import.meta.url));
   const dry = (extra) => spawnSync(process.execPath, [script, '--dry-run', '--tools', 'claude', ...extra], { env, encoding: 'utf8', timeout: 60e3, windowsHide: true });
-  const leftovers = () => fs.readdirSync(temp).filter((n) => n.startsWith('claude-board-rehearsal-'));
+  const leftovers = () => fs.readdirSync(temp).filter((n) => n.startsWith('agent-board-rehearsal-'));
   let r = dry([]);
   const out = `${r.stdout}${r.stderr}`;
   check('dry run exits 0', r.status === 0, out.slice(-400));
@@ -316,7 +316,7 @@ check("retro counts the demo task's two bounces", new RegExp(`^- #${T.demo.id} [
   check('dry run says the temp folder is deleted', /temp folder is deleted \(use --keep to keep it\)/.test(out), out.slice(-300));
   check('dry run leaves no temp folder behind', leftovers().length === 0, leftovers().join(', '));
   r = dry(['--keep']);
-  check('dry run with --keep keeps the temp folder and says where', r.status === 0 && leftovers().length === 1 && /temp folder is kept: .*claude-board-rehearsal-/.test(r.stdout), `${r.stdout}${r.stderr}`.slice(-300));
+  check('dry run with --keep keeps the temp folder and says where', r.status === 0 && leftovers().length === 1 && /temp folder is kept: .*agent-board-rehearsal-/.test(r.stdout), `${r.stdout}${r.stderr}`.slice(-300));
   try { fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {}
 }
 

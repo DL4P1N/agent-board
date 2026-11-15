@@ -14,10 +14,10 @@ const playbook = () => fs.readFileSync(PLAYBOOK_PATH, 'utf8');
 export function buildMcpServer(board, baseAgent) {
   baseAgent = normName(baseAgent);
   const server = new McpServer(
-    { name: 'claude-board', version: '1.0.0' },
+    { name: 'agent-board', version: '1.0.0' },
     {
       instructions:
-        'Shared coordination board for a team of humans and Claude agents working on one git repo. ' +
+        'Agent Board: a shared coordination board for a team of humans and their AI coding agents (Claude Code, Codex, Copilot, Cursor, Gemini or any MCP client) working on one git repo. ' +
         'If you were asked to join or work on the board, call get_playbook first and follow it. ' +
         'Then use board_status: its next_action field tells you exactly what to do now (set the goal, plan, claim work, or merge). ' +
         'Claim a task before working on it; work on its branch, never on main (unless you are the integrator). ' +
