@@ -68,10 +68,12 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     --e2: 0 6px 20px rgba(24, 24, 20, .14), 0 1px 3px rgba(24, 24, 20, .08);
     --e3: 0 24px 64px rgba(24, 24, 20, .24), 0 2px 8px rgba(24, 24, 20, .1);
 
+    --tool-claude: #a8492a; --tool-codex: #0b6e65; --tool-copilot: #6d3fd6; --tool-gemini: #c2185b; --tool-cursor: #7a5500; --tool-other: #52525b;
     --t-fast: 100ms; --t-base: 160ms; --t-slow: 240ms; --ease: cubic-bezier(.2, .7, .2, 1);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
+      --tool-claude: #d97757; --tool-codex: #2dd4bf; --tool-copilot: #a78bfa; --tool-gemini: #f472b6; --tool-cursor: #facc15; --tool-other: #9ca3af;
       --bg: #141413; --sunken: #191918; --panel: #1d1d1b; --raised: #232321; --chip: #262624;
       --ink: #ecebe6; --muted: #a09f98; --line: #31312d; --line-strong: #4b4a44; --field-line: #75746c;
       --accent: #8f9dff; --accent-hover: #a5b0ff; --accent-ink: #111111; --accent-soft: #252a4a; --accent-line: #3d4580;
@@ -86,6 +88,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     }
   }
   :root[data-theme="dark"] {
+    --tool-claude: #d97757; --tool-codex: #2dd4bf; --tool-copilot: #a78bfa; --tool-gemini: #f472b6; --tool-cursor: #facc15; --tool-other: #9ca3af;
     --bg: #141413; --sunken: #191918; --panel: #1d1d1b; --raised: #232321; --chip: #262624;
     --ink: #ecebe6; --muted: #a09f98; --line: #31312d; --line-strong: #4b4a44; --field-line: #75746c;
     --accent: #8f9dff; --accent-hover: #a5b0ff; --accent-ink: #111111; --accent-soft: #252a4a; --accent-line: #3d4580;
@@ -172,6 +175,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 
   /* Pills: small facts. Colour only when it means something. */
   .pill { display: inline-block; font-size: var(--fs-micro); font-weight: 500; line-height: 18px; padding: 0 6px; border-radius: var(--r-full); background: var(--chip); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .tdot { display: inline-block; width: 7px; height: 7px; border-radius: var(--r-full); margin-right: 5px; vertical-align: 1px; background: var(--tool-other); }
+  .tdot.claude { background: var(--tool-claude); } .tdot.codex { background: var(--tool-codex); } .tdot.copilot { background: var(--tool-copilot); }
+  .tdot.gemini { background: var(--tool-gemini); } .tdot.cursor { background: var(--tool-cursor); }
   .pill.warn, .pill.ns, .pill.s-review { background: var(--warn-soft); color: var(--warn); }
   .pill.bad, .pill.s-blocked { background: var(--bad-soft); color: var(--bad); }
   .pill.s-in_progress, .pill.s-claimed, .pill.role, .pill.full, .pill.rsv { background: var(--accent-soft); color: var(--accent); }
@@ -812,8 +818,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     </div>
     <div id="td-err" class="err" role="alert"></div>
     <div class="hist" id="td-hist-wrap"><div class="sec-h">Activity on this task</div><div class="feed" id="td-history"></div></div>
+    <div id="td-cancel-row" hidden><label for="td-cancel-reason">Reason for cancelling (optional)</label><input id="td-cancel-reason" maxlength="300" placeholder="e.g. duplicate of #4" autocomplete="off" aria-describedby="td-cancel-hint"><p class="hint" id="td-cancel-hint">Removes the task from the board and posts the reason in the feed, notifying the assignee if there is one.</p></div>
     <div class="df">
       <button type="button" class="ghost" id="td-mention" hidden>Message assignee</button>
+      <button type="button" class="ghost" id="td-cancel" hidden>Cancel task</button>
       <button type="button" class="ghost" id="td-delete" hidden>Delete task</button>
       <span class="sp"></span>
       <button type="button" class="ghost" data-close>Cancel</button>
@@ -2091,14 +2099,20 @@ function chipName(a, person, all, base) {
 const conflictText = (a) => `${a.name} is connected from ${a.conflict?.laptops || 2} laptops: two people may be using the same name. One of them should re-run join with another name.`;
 // Where an agent's person comes from, for tooltips.
 const personSourceText = (a) => ({ human: 'set here on the web board', join: 'from join', guess: 'guessed from the name' }[a.personSource] || 'guessed from the name');
+function toolDot(a) {
+  const c = String(a.client || '').toLowerCase();
+  const k = c.includes('claude') ? 'claude' : c.includes('codex') ? 'codex' : c.includes('copilot') ? 'copilot' : c.includes('gemini') ? 'gemini' : c.includes('cursor') ? 'cursor' : 'other';
+  return `<span class="tdot ${k}" data-tool="${k}" aria-hidden="true"></span>`;
+}
 function toolChipState(a, st, lbl, onLbl = a.plan || lbl) {
-  if (st === 'limited') return `<span class="pill warn" title="${esc(a.name)} hit its usage limit${a.limited.by === 'agent' ? ' (reported by the agent)' : ''}${a.limited.note ? `: ${esc(a.limited.note)}` : ''}. Other agents may take over its tasks.">${esc(lbl)} · ${esc(limitText(a))}</span>`;
+  const D = toolDot(a);
+  if (st === 'limited') return `<span class="pill warn" title="${esc(a.name)} hit its usage limit${a.limited.by === 'agent' ? ' (reported by the agent)' : ''}${a.limited.note ? `: ${esc(a.limited.note)}` : ''}. Other agents may take over its tasks.">${D}${esc(lbl)} · ${esc(limitText(a))}</span>`;
   if (st === 'online') {
     const full = a.active >= a.slots;
-    return `<span class="pill ${full ? 'full' : 'ok'}" title="${esc(capTip(a))} Running on the board.">${esc(onLbl)} · <span class="cap">${capText(a)}</span><span class="capw"> tasks</span></span>`;
+    return `<span class="pill ${full ? 'full' : 'ok'}" title="${esc(capTip(a))} Running on the board.">${D}${esc(onLbl)} · <span class="cap">${capText(a)}</span><span class="capw"> tasks</span></span>`;
   }
-  if (st === 'waiting') return `<span class="pill ns" title="${esc(a.name)}: ${esc(notStartedText(a))}">${esc(lbl)} · not started — type ${esc(startCmd(a.client))}</span>`;
-  return `<span class="pill" title="${esc(a.name)}: no contact for 10+ minutes (last seen ${a.last ? ago(a.last) : 'never'})">${esc(lbl)} · offline</span>`;
+  if (st === 'waiting') return `<span class="pill ns" title="${esc(a.name)}: ${esc(notStartedText(a))}">${D}${esc(lbl)} · not started — type ${esc(startCmd(a.client))}</span>`;
+  return `<span class="pill" title="${esc(a.name)}: no contact for 10+ minutes (last seen ${a.last ? ago(a.last) : 'never'})">${D}${esc(lbl)} · offline</span>`;
 }
 // Per-agent controls in its People row: how many tasks it may hold, and "hit its usage limit".
 function agentControls(a) {
@@ -3105,6 +3119,7 @@ function openTask(id) {
   $('td-history')._html = undefined;
   $('td-mention').hidden = !t?.assignee;
   $('td-delete').hidden = !t; resetDelete();
+  $('td-cancel').hidden = !t || t.status === 'done'; resetCancel();
   if (!dlg.open) dlg.showModal();
   renderDialogLive();
   $('td-name').focus();
@@ -3172,6 +3187,24 @@ $('td-delete').onclick = async () => {
     await api(`/tasks/${t.id}`, { method: 'DELETE' });
     dlg.close(); toast(`Deleted #${t.id} ${t.title}`); scheduleReload();
   } catch (e) { $('td-err').textContent = `Couldn't delete: ${e.message}`; }
+};
+// Cancel: like delete it removes the task, but records why in the feed and @-mentions the assignee. Two clicks.
+let cancelArmed = null;
+function resetCancel() { clearTimeout(cancelArmed); cancelArmed = null; $('td-cancel').textContent = 'Cancel task'; $('td-cancel').classList.remove('danger'); $('td-cancel-row').hidden = true; $('td-cancel-reason').value = ''; }
+$('td-cancel').onclick = async () => {
+  const t = editing; if (!t) return;
+  if (!cancelArmed) {
+    $('td-cancel').textContent = `Click again to cancel #${t.id}`; $('td-cancel').classList.add('danger');
+    $('td-cancel-row').hidden = false; $('td-cancel-reason').focus();
+    cancelArmed = setTimeout(() => { if (document.activeElement !== $('td-cancel-reason') && !$('td-cancel-reason').value) resetCancel(); }, 15000);
+    return;
+  }
+  const reason = $('td-cancel-reason').value.trim();
+  resetCancel();
+  try {
+    await api(`/tasks/${t.id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) });
+    dlg.close(); toast(`Cancelled #${t.id} ${t.title}`); scheduleReload();
+  } catch (e) { $('td-err').textContent = `Couldn't cancel: ${e.message}`; }
 };
 $('task-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
