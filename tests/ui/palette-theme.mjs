@@ -33,7 +33,7 @@ try {
 
   await page.click('#help-btn'); await page.waitForSelector('#help-dlg[open]');
   check('help offers Auto and the four palettes, each with a swatch', await page.evaluate(() => [...document.querySelectorAll('#help-dlg [data-theme-set]')].map((b) => b.dataset.themeSet + (b.querySelector('.sw') ? '+' : '')).join()) === 'auto+,dusk+,day+,night+,terminal+');
-  await page.click('[data-theme-set="dusk"]'); await sleep(100);
+  await page.click('#help-dlg [data-theme-set="dusk"]'); await sleep(100);
   check('Dusk button sets data-theme=dusk and the Dusk tokens, even with an OS in light', (await attr()) === 'dusk' && (await bg()) === 'rgb(27, 21, 48)', `${await attr()} ${await bg()}`);
   check('Dusk button is pressed, the others are not', await page.evaluate(() => [...document.querySelectorAll('#help-dlg [data-theme-set]')].map((b) => b.getAttribute('aria-pressed')).join()) === 'false,true,false,false,false');
   const m = await metas();
@@ -63,7 +63,7 @@ try {
     await page.screenshot({ path: `${out}/${t}-help.png` });
   }
   check('four palettes, four different ink colours', inks.size === 4, [...inks].join(' '));
-  await page.click('[data-theme-set="dusk"]'); await sleep(80);
+  await page.click('#help-dlg [data-theme-set="dusk"]'); await sleep(80);
   await page.screenshot({ path: `${out}/dark-help.png` });
   await page.keyboard.press('Escape');
 
@@ -88,10 +88,10 @@ try {
 
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
   await page.click('#help-btn'); await page.waitForSelector('#help-dlg[open]');
-  await page.click('[data-theme-set="day"]'); await sleep(100);
+  await page.click('#help-dlg [data-theme-set="day"]'); await sleep(100);
   check('Day wins over an OS in dark', (await attr()) === 'day' && (await bg()) === 'rgb(207, 227, 242)', `${await attr()} ${await bg()}`);
   await page.screenshot({ path: `${out}/light-help.png` });
-  await page.click('[data-theme-set="auto"]'); await sleep(100);
+  await page.click('#help-dlg [data-theme-set="auto"]'); await sleep(100);
   check('Auto removes data-theme and follows the OS again', (await attr()) === null && (await bg()) === 'rgb(27, 21, 48)' && (await metas()).scheme === 'light dark', `${await attr()} ${await bg()}`);
   check('Auto is saved', await page.evaluate(() => localStorage.getItem('board-theme')) === 'auto');
   await page.keyboard.press('Escape');
