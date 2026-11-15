@@ -5,7 +5,7 @@
   color-scheme: light;
   --bg: #cfe3f2; --panel: #fff7e8; --chip: #efe3cc; --ink: #2c2114; --muted: #67563e; --line: #7a5f3d; --field-line: #7a5f3d;
   --outline: #3a2a14; --hi: rgba(255, 255, 255, .7); --lo: rgba(80, 50, 10, .16); --shade: 1px 1px 0 rgba(255, 255, 255, .6);
-  --accent: #135fa8; --accent-ink: #fff7e8; --ok: #1a6e2d; --warn: #845407; --warn-soft: #f8e8c6; --bad: #b42335; --bad-soft: #f9e0dc;
+  --accent: #135fa8; --mark: #9a4a14; --mark-ink: #fff7e8; --accent-ink: #fff7e8; --ok: #1a6e2d; --warn: #845407; --warn-soft: #f8e8c6; --bad: #b42335; --bad-soft: #f9e0dc;
   --pl: 28%; --ps: 60%;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -20,7 +20,7 @@
     color-scheme: dark;
     --bg: #1b1530; --panel: #241c40; --chip: #342a5a; --ink: #f1e9ff; --muted: #b0a2d2; --line: #5b4b8a; --field-line: #8e7fc6;
     --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --shade: 2px 2px 0 rgba(0, 0, 0, .35);
-    --accent: #6ec1ff; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
+    --accent: #6ec1ff; --mark: #ffb86b; --mark-ink: #2a1600; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
     --pl: 74%; --ps: 70%;
   }
 }
@@ -28,7 +28,7 @@
   color-scheme: dark;
   --bg: #1b1530; --panel: #241c40; --chip: #342a5a; --ink: #f1e9ff; --muted: #b0a2d2; --line: #5b4b8a; --field-line: #8e7fc6;
   --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --shade: 2px 2px 0 rgba(0, 0, 0, .35);
-  --accent: #6ec1ff; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
+  --accent: #6ec1ff; --mark: #ffb86b; --mark-ink: #2a1600; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
   --pl: 74%; --ps: 70%;
 }
 * { box-sizing: border-box; }

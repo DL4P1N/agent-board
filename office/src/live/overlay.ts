@@ -2,10 +2,11 @@
  * The calm overlay around the 3D office: goal, deadline verdict and countdown on top; done count, questions waiting
  * and who is stuck below. Read-only, large type for a screen across the room, in the board's Dusk / Day look.
  */
-import { agentRoot, countdown, hueOf, outlook, personOf, plain, plural, timeNow, type BoardState } from './board';
+import { agentRoot, countdown, goalHead, hueOf, outlook, personOf, plain, plural, timeNow, type BoardState } from './board';
 
 const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const MARK = '<svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" fill="var(--accent-ink)"/></svg>';
+// The board's mark, in the board's accent (amber / burnt orange), not the presenter's blue.
+const MARK = '<svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" fill="var(--mark)"/><rect x="3" y="4" width="2.6" height="8" fill="var(--mark-ink)"/><rect x="6.7" y="4" width="2.6" height="5" fill="var(--mark-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" fill="var(--mark-ink)"/></svg>';
 const BLOCKED_MAX = 3;
 
 export interface OverlayEls { top: HTMLElement; bottom: HTMLElement; msg: HTMLElement; root: HTMLElement }
@@ -63,15 +64,17 @@ export class Overlay {
     const tasks = (s.tasks || []).filter((t) => t.status !== 'proposed');
     const by = (st: string) => tasks.filter((t) => t.status === st).length;
     const done = by('done'); const total = tasks.length;
-    const goal = plain(s.settings?.goal);
+    // The heading is the goal's first line (or sentence); the whole goal is its tooltip.
+    const goal = plain(s.settings?.goal); const head = goalHead(s.settings?.goal);
     const t = timeNow(s, now);
     // The verdict and the clock's kind (no time / counting / finished) are part of the layout; the digits are not.
     const cd = countdown(s, now);
     const ol = outlook(s, t, now);
-    const vd = ol?.label ? `<span class="pill ${ol.verdict === 'ok' ? 'ok' : ol.verdict === 'tight' ? 'warn' : 'bad'}" id="verdict" title="${esc(ol.why)}.">${esc(ol.label)}</span>` : '';
+    // Amber, not red, even when behind: the room (judges, other teams) sees it; it's a pace note for the team.
+    const vd = ol?.label ? `<span class="pill ${ol.verdict === 'ok' ? 'ok' : 'warn'}" id="verdict" title="${esc(ol.why)}.">${esc(ol.label)}</span>` : '';
     const top = `${brand}
       <div class="head">
-        <h1 class="goal${goal ? '' : ' unset'}" id="goal" title="${esc(goal)}">${esc(goal || 'No goal set yet')}</h1>
+        <h1 class="goal${goal ? '' : ' unset'}" id="goal" title="${esc(goal)}">${esc(head || 'No goal set yet')}</h1>
         <section class="card time ${cd.cls === 'none' ? 'quiet' : ''}" aria-label="Time to the demo">
           ${vd}<div class="clock" id="clock"></div><div class="sub" id="clock-sub"></div>
         </section>
@@ -94,7 +97,7 @@ export class Overlay {
       <section class="card prog" aria-labelledby="h-prog"><h2 id="h-prog">Progress</h2>
         <div class="count" id="done-count">${done} of ${total} done</div>
         <div class="bar" role="progressbar" aria-label="Tasks done" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}">${total ? (['done', 'review', 'blocked', 'doing', 'claimed'] as const).map(seg).join('') : ''}</div>
-        <div class="cols">${key('open', 'Open')}${key('claimed', 'Claimed')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}</div>
+        <div class="cols">${key('done', 'Done')}${key('open', 'Open')}${key('claimed', 'Claimed')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}</div>
       </section>
       <section class="card needs" aria-labelledby="h-needs"><h2 id="h-needs">Needs a human</h2>
         ${needs.length ? `<ul class="list" id="needs">${needs.join('')}</ul>` : '<p class="empty" id="needs">Nothing is waiting on a human, and nobody is stuck.</p>'}

@@ -67,6 +67,13 @@ export const hueOf = (name: string, presence: BoardPresence[]): number => HUES[n
 
 /** The goal is often pasted from a doc: plain words (no `code`, **bold**, [links](…) or # headings). */
 export const plain = (s: unknown): string => String(s || '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/`+|\*\*|__/g, '').replace(/^\s*#+\s+/gm, '').replace(/\s+/g, ' ').trim();
+/** The goal's first line, or its first sentence when that line is long: a heading for the big screen. Keep in sync with
+ *  goalHead() in public/present-classic.html. */
+export function goalHead(s: unknown): string {
+  const line = plain(String(s || '').split('\n').find((l) => l.trim()) || '');
+  const m = line.length > 60 ? line.match(/^(.{20,}?[.!?])\s/) : null;
+  return m ? m[1] : line;
+}
 export const plural = (n: number, w: string, ws = w + 's'): string => `${n} ${n === 1 ? w : ws}`;
 export const clock = (ts: number): string => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 

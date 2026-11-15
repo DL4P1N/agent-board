@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Board presenter</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%233d5afe'/><rect x='3' y='4' width='3' height='8' fill='white'/><rect x='7' y='4' width='3' height='5' fill='white'/><rect x='11' y='4' width='2' height='6' fill='white'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23ffb86b'/><rect x='3' y='4' width='3' height='8' fill='%232a1600'/><rect x='7' y='4' width='3' height='5' fill='%232a1600'/><rect x='11' y='4' width='2' height='6' fill='%232a1600'/></svg>">
 <meta name="description" content="Read-only big-screen view of the team board for the room or the demo">
 <script>
 // The board's theme choice (Auto / Light / Dark, per browser), like the board and the 3D presenter.
@@ -19,7 +19,7 @@ try { const t = localStorage.getItem('board-theme'); if (t === 'light' || t === 
     color-scheme: light;
     --bg: #cfe3f2; --panel: #fff7e8; --chip: #efe3cc; --ink: #2c2114; --muted: #67563e; --line: #7a5f3d; --field-line: #7a5f3d;
     --outline: #3a2a14; --hi: rgba(255, 255, 255, .7); --lo: rgba(80, 50, 10, .16); --shade: 1px 1px 0 rgba(255, 255, 255, .6);
-    --accent: #135fa8; --accent-ink: #fff7e8; --ok: #1a6e2d; --warn: #845407; --warn-soft: #f8e8c6; --bad: #b42335; --bad-soft: #f9e0dc;
+    --accent: #135fa8; --accent-ink: #fff7e8; --mark: #9a4a14; --mark-ink: #fff7e8; --ok: #1a6e2d; --warn: #845407; --warn-soft: #f8e8c6; --bad: #b42335; --bad-soft: #f9e0dc;
     --pl: 28%; --ps: 60%;
     /* The board's pixel look (office demo): square corners, 2px borders, bevelled panels, Dusk / Day palettes; monospace for labels and numbers. */
     --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif;
@@ -35,7 +35,7 @@ try { const t = localStorage.getItem('board-theme'); if (t === 'light' || t === 
       color-scheme: dark;
       --bg: #1b1530; --panel: #241c40; --chip: #342a5a; --ink: #f1e9ff; --muted: #b0a2d2; --line: #5b4b8a; --field-line: #8e7fc6;
       --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --shade: 2px 2px 0 rgba(0, 0, 0, .35);
-      --accent: #6ec1ff; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
+      --accent: #6ec1ff; --accent-ink: #1b1530; --mark: #ffb86b; --mark-ink: #2a1600; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
       --pl: 74%; --ps: 70%;
     }
   }
@@ -43,7 +43,7 @@ try { const t = localStorage.getItem('board-theme'); if (t === 'light' || t === 
     color-scheme: dark;
     --bg: #1b1530; --panel: #241c40; --chip: #342a5a; --ink: #f1e9ff; --muted: #b0a2d2; --line: #5b4b8a; --field-line: #8e7fc6;
     --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --shade: 2px 2px 0 rgba(0, 0, 0, .35);
-    --accent: #6ec1ff; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
+    --accent: #6ec1ff; --accent-ink: #1b1530; --mark: #ffb86b; --mark-ink: #2a1600; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
     --pl: 74%; --ps: 70%;
   }
   * { box-sizing: border-box; }
@@ -88,6 +88,8 @@ try { const t = localStorage.getItem('board-theme'); if (t === 'light' || t === 
   ul.list .when { margin-left: auto; color: var(--muted); font-size: .8em; flex: 0 0 auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .empty, .more { color: var(--muted); }
   ul.list .tag { color: var(--warn); font-weight: 600; white-space: nowrap; }
+  .stuck { color: var(--bad); font-weight: 700; }
+  #verdict { display: inline-block; margin-bottom: .5em; }
   .pills { display: flex; flex-wrap: wrap; gap: 8px; }
   .pill { border-radius: var(--r-full); padding: .25em .8em; background: var(--chip); color: var(--muted); font-weight: 700; white-space: nowrap; }
   .pill.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent); }
@@ -134,6 +136,61 @@ const clock = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', min
 function ago(ts) { const m = Math.round((Date.now() - ts) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : `${Math.floor(m / 60)}h ${m % 60}m ago`; }
 // The goal is often pasted from a doc: show it as plain words (no `code`, **bold**, [links](…) or # headings).
 const plain = (s) => String(s || '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/`+|\*\*|__/g, '').replace(/^\s*#+\s+/gm, '').replace(/\s+/g, ' ').trim();
+// The goal's first line, or its first sentence when that line is long. Keep in sync with goalHead() in office/src/live/board.ts.
+function goalHead(s) {
+  const line = plain(String(s || '').split('\n').find((l) => l.trim()) || '');
+  const m = line.length > 60 ? line.match(/^(.{20,}?[.!?])\s/) : null;
+  return m ? m[1] : line;
+}
+// The deadline verdict, as on the board and the 3D presenter. Keep in sync with outlook() / teamSlots() in
+// office/src/live/board.ts and outlook() in public/index.html. Slots: agents started, online and not out of usage.
+const skipName = (n) => !n || n === 'board' || n === 'anonymous';
+const limitedNow = (p, now) => !!p.limited && (!p.limited.until || p.limited.until > now);
+function teamSlots(now) {
+  const m = new Map(); const low = (n) => String(n || '').split('/')[0].toLowerCase();
+  const get = (n) => { n = String(n).toLowerCase(); if (!m.has(n)) m.set(n, { slots: 0, extra: 0, base: 0, override: null, client: null, online: false, started: false, limited: null }); return m.get(n); };
+  for (const p of state.presence || []) {
+    if (p.kind !== 'agent' || skipName(p.name)) continue;
+    const a = get(p.name); if (p.client) a.client = String(p.client);
+    a.extra = Number(p.extra_slots) || 0;
+    if (p.slots) a.slots = (Number(p.slots) || 0) - a.extra;
+    if (p.base_slots) a.base = Number(p.base_slots) || 0;
+    if (p.slots_override != null) a.override = Number(p.slots_override) || null;
+    if (p.limited) a.limited = p.limited;
+    a.online = a.online || !!p.online; a.started = a.started || !!p.started;
+  }
+  for (const e of state.events || []) {
+    const n = low(e.author); if (skipName(n)) continue;
+    if (['task_claimed', 'lock', 'question'].includes(e.kind) || String(e.author).includes('/')) { const a = get(n); a.started = true; if (now - e.ts < 10 * 60e3) a.online = true; }
+  }
+  for (const t of state.tasks || []) if (t.assignee && !skipName(low(t.assignee))) get(low(t.assignee)).started = true;
+  for (const t of state.tasks || []) if (t.status === 'review' && t.reviewer && !skipName(low(t.reviewer))) get(low(t.reviewer)).started = true;
+  let slots = 0;
+  for (const [name, a] of m) {
+    if (!a.base) a.base = a.client === 'Claude Code' ? 2 : 1;
+    if (!a.slots) a.slots = a.override || a.base;
+    const p = (state.presence || []).find((x) => x.kind === 'agent' && String(x.name).toLowerCase() === name);
+    if (a.started && (p ? !!p.online : a.online) && !limitedNow(a, now)) slots += a.slots;
+  }
+  return slots;
+}
+const plural = (n, w, ws = w + 's') => `${n} ${n === 1 ? w : ws}`;
+function durWords(ms) { const m = Math.max(1, Math.ceil(ms / 60e3)); const h = Math.floor(m / 60); return h >= 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : h ? `${h}h ${m % 60}m` : `${m}m`; }
+function outlook(now = Date.now()) {
+  const deadline = Number(state.settings?.deadline) || 0; if (!deadline || now >= deadline) return null;
+  const freezeAt = deadline - (Number(state.settings?.freeze_minutes) || 0) * 60e3; const frozen = now >= freezeAt;
+  const left = (state.tasks || []).filter((x) => ['open', 'claimed', 'in_progress', 'review', 'blocked'].includes(x.status));
+  if (!left.length) return null;
+  const m = state.stats?.minutes || {}; const known = Object.values(m); if (!known.length) return null;
+  const slots = teamSlots(now); if (!slots) return null;
+  const fallback = m.M ?? known.reduce((a, c) => a + c, 0) / known.length;
+  const work = left.reduce((n, x) => n + (m[x.size] ?? fallback), 0);
+  const mins = Math.max(1, ((frozen ? deadline : freezeAt) - now) / 60e3); const eta = work / slots; const ratio = eta / mins;
+  const shortBy = ratio > 1 ? Math.max(1, Math.round(left.length * (1 - mins / eta))) : 0;
+  const verdict = ratio <= 0.9 ? 'ok' : ratio <= 1.1 ? 'tight' : 'behind';
+  return { verdict, label: verdict === 'ok' ? 'On track' : verdict === 'tight' ? 'Tight' : `Behind by ~${plural(shortBy, 'task')}`,
+    why: `About ${durWords(eta * 60e3)} of work left (${plural(left.length, 'task')} at this board's median time per size, over ${plural(slots, 'agent slot')} online) and ${durWords(mins * 60e3)} to the ${frozen ? 'demo' : 'freeze'}` };
+}
 function dur(ms) { const t = Math.max(0, Math.round(ms / 1000)); const h = Math.floor(t / 3600); const m = Math.floor((t % 3600) / 60); const s = t % 60; return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}:${String(s).padStart(2, '0')}`; }
 
 async function load() {
@@ -182,12 +239,20 @@ function render() {
   const agents = (state.presence || []).filter((p) => p.kind === 'agent');
   const agentOf = (n) => agents.find((a) => a.name === agentRoot(n));
   const groups = new Map(); // person -> { items: [], out: bool, h: hue }
-  const add = (name, text) => { const k = personOf(name); if (!groups.has(k)) groups.set(k, { items: [], out: false, h: hue(name) }); const g = groups.get(k); if (text) g.items.push(text); if (agentOf(name)?.limited) g.out = true; };
+  const add = (name, text, stuck = false) => { const k = personOf(name); if (!groups.has(k)) groups.set(k, { items: [], out: false, h: hue(name) }); const g = groups.get(k); if (text) g.items.push({ text, stuck }); if (agentOf(name)?.limited) g.out = true; };
   const holders = new Set();
-  for (const t of tasks) if (['claimed', 'in_progress', 'blocked'].includes(t.status) && t.assignee) { holders.add(agentRoot(t.assignee)); add(t.assignee, `#${t.id} ${t.title}${t.status === 'blocked' ? ' (blocked)' : ''}`); }
+  for (const t of tasks) if (['claimed', 'in_progress', 'blocked'].includes(t.status) && t.assignee) { holders.add(agentRoot(t.assignee)); add(t.assignee, `#${t.id} ${t.title}`, t.status === 'blocked'); }
   for (const a of agents) if (a.online && a.doing && !a.limited && !holders.has(a.name) && !/^working \(last board call/.test(a.doing)) add(a.name, a.doing);
   const people = [...groups].filter(([, g]) => g.items.length).sort((a, b) => a[0].localeCompare(b[0]));
-  const NOW_MAX = 4;
+  // Everyone who holds work (a big screen has room for a team), stuck tasks first and marked.
+  const NOW_MAX = 6;
+  for (const [, g] of groups) g.items.sort((a, b) => b.stuck - a.stuck);
+  const itemsText = (g) => g.items.map((i) => (i.stuck ? `Stuck: ${i.text}` : i.text)).join('; ');
+  const itemsHtml = (g) => g.items.map((i) => (i.stuck ? `<b class="stuck">Stuck</b> ${esc(i.text)}` : esc(i.text))).join('; ');
+  const ol = outlook();
+  // Amber, not red, even when behind: the room (judges, other teams) sees it; it's a pace note for the team.
+  const vd = ol ? `<span class="pill ${ol.verdict === 'ok' ? 'ok' : 'warn'}" id="verdict" title="${esc(ol.why)}.">${esc(ol.label)}</span>` : '';
+  const nStuck = tasks.filter((t) => t.status === 'blocked').length;
   const taskTitle = (id) => (state.tasks || []).find((t) => t.id === id)?.title || '';
   const merges = (state.events || []).filter((e) => e.kind === 'task_updated' && e.data?.status === 'done' && /→ done/.test(e.text || '')).slice(-4).reverse();
   const qOpen = (state.questions || []).filter((q) => !q.answer).length;
@@ -197,18 +262,18 @@ function render() {
   const seg = (k) => (n[k] ? `<span class="s-${k}" data-seg="${k}" style="width:${(n[k] / total) * 100}%"></span>` : '');
   const key = (k, label) => `<span><i class="s-${k}" aria-hidden="true"></i>${label} <b>${n[k]}</b></span>`;
   const html = `
-    <header><span class="brand"><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" rx=".6" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" rx=".6" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" rx=".6" fill="var(--accent-ink)"/></svg>Claude Board</span><span class="live"><span class="dot ${live ? 'live' : ''}" aria-hidden="true"></span>${live ? 'Live' : lastErr ? esc(lastErr) : 'Connecting…'}</span><span class="sp"></span>
-      ${ciPill || qOpen ? `<div class="pills">${ciPill}${qOpen ? `<span class="pill warn">${qOpen} question${qOpen > 1 ? 's' : ''} waiting for a human</span>` : ''}</div>` : ''}</header>
-    <h1 class="goal${state.settings?.goal ? '' : ' unset'}" title="${esc(plain(state.settings?.goal))}">${esc(plain(state.settings?.goal) || 'No goal set yet')}</h1>
+    <header><span class="brand"><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" fill="var(--mark)"/><rect x="3" y="4" width="2.6" height="8" fill="var(--mark-ink)"/><rect x="6.7" y="4" width="2.6" height="5" fill="var(--mark-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" fill="var(--mark-ink)"/></svg>Claude Board</span><span class="live"><span class="dot ${live ? 'live' : ''}" aria-hidden="true"></span>${live ? 'Live' : lastErr ? esc(lastErr) : 'Connecting…'}</span><span class="sp"></span>
+      ${ciPill || qOpen || nStuck ? `<div class="pills">${ciPill}${qOpen ? `<span class="pill warn">${qOpen} question${qOpen > 1 ? 's' : ''} waiting for a human</span>` : ''}${nStuck ? `<span class="pill bad">${plural(nStuck, 'task')} stuck</span>` : ''}</div>` : ''}</header>
+    <h1 class="goal${state.settings?.goal ? '' : ' unset'}" title="${esc(plain(state.settings?.goal))}">${esc(goalHead(state.settings?.goal) || 'No goal set yet')}</h1>
     <div class="row">
-      <section class="card" aria-labelledby="h-time"><h2 id="h-time">Time</h2><div class="clock ${cd.cls}" id="clock">${esc(cd.big)}</div><div class="sub" id="clock-sub">${esc(cd.sub)}</div></section>
+      <section class="card" aria-labelledby="h-time"><h2 id="h-time">Time</h2>${vd}<div class="clock ${cd.cls}" id="clock">${esc(cd.big)}</div><div class="sub" id="clock-sub">${esc(cd.sub)}</div></section>
       <section class="card" aria-labelledby="h-prog"><h2 id="h-prog">Progress</h2><div class="prog">${done} of ${total} done</div>
         <div class="bar" role="progressbar" aria-label="Tasks done" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}">${total ? ['done', 'review', 'blocked', 'doing', 'claimed'].map(seg).join('') : ''}</div>
-        <div class="cols">${key('open', 'Open')}${key('claimed', 'Claimed')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}${key('done', 'Done')}</div></section>
+        <div class="cols">${key('done', 'Done')}${key('open', 'Open')}${key('claimed', 'Claimed')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}</div></section>
     </div>
     <div class="row">
       <section class="card" aria-labelledby="h-now"><h2 id="h-now">Now working on</h2>
-        ${people.length ? `<ul class="list">${people.slice(0, NOW_MAX).map(([person, g]) => `<li style="--h:${g.h}"><span class="who">${esc(person)}</span><span class="what" title="${esc(g.items.join('; '))}">${esc(g.items.join('; '))}</span>${g.out ? '<span class="when tag">out of usage</span>' : ''}</li>`).join('')}</ul>${people.length > NOW_MAX ? `<p class="more">and ${people.length - NOW_MAX} more</p>` : ''}` : '<p class="empty">Nobody is working on a task right now.</p>'}</section>
+        ${people.length ? `<ul class="list">${people.slice(0, NOW_MAX).map(([person, g]) => `<li style="--h:${g.h}"><span class="who">${esc(person)}</span><span class="what" title="${esc(itemsText(g))}">${itemsHtml(g)}</span>${g.out ? '<span class="when tag">out of usage</span>' : ''}</li>`).join('')}</ul>${people.length > NOW_MAX ? `<p class="more">and ${people.length - NOW_MAX} more</p>` : ''}` : '<p class="empty">Nobody is working on a task right now.</p>'}</section>
       <section class="card" aria-labelledby="h-merged"><h2 id="h-merged">Just merged</h2>
         ${merges.length ? `<ul class="list">${merges.map((e) => `<li style="--h:${hue(e.author)}"><span class="who">#${esc(e.task_id)}</span><span class="what">${esc(taskTitle(e.task_id) || String(e.text || '').replace(/^#\d+\s*/, ''))}</span><span class="when">${esc(ago(e.ts))}</span></li>`).join('')}</ul>` : '<p class="empty">Nothing merged yet. Finished tasks show up here.</p>'}</section>
     </div>`;
