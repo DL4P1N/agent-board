@@ -8,7 +8,13 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const CONFIG_PATH = path.join(os.homedir(), '.claude-board.json');
+// What join set up on this laptop: ~/.agent-board.json. Laptops that joined before the rename to Agent Board
+// have ~/.claude-board.json; that file keeps being used (read and updated) so nothing has to move.
+export const CONFIG_PATH = (() => {
+  const file = path.join(os.homedir(), '.agent-board.json');
+  const legacy = path.join(os.homedir(), '.claude-board.json');
+  return !fs.existsSync(file) && fs.existsSync(legacy) ? legacy : file;
+})();
 export const START = {
   claude: 'open Claude Code there and type  /board',
   codex: 'open Codex there and type  $board',
@@ -69,9 +75,9 @@ export async function runDoctor({ header = true } = {}) {
     }
     b.outdated = !health.version;
     if (b.outdated) {
-      bad('the board server runs an old version of claude-board.', 'Host: git pull in the claude-board folder, then close the npm start window (Ctrl+C) and run npm start again.');
+      bad('the board server runs an old version of Agent Board.', 'Host: git pull in the claude-board folder, then close the npm start window (Ctrl+C) and run npm start again.');
     } else if (mine && health.version !== 'unknown' && health.version !== mine) {
-      console.log(`  • the board runs claude-board ${health.version}; this folder has ${mine}. If either side is behind, run git pull there (the board reloads by itself).`);
+      console.log(`  • the board runs Agent Board ${health.version}; this folder has ${mine}. If either side is behind, run git pull there (the board reloads by itself).`);
     }
     const st = await fetch(`${url}/api/state`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) }).catch(() => null);
     if (st?.status === 401) {
@@ -196,7 +202,7 @@ function checkPush(dir, origin, ok, bad) {
   }
   // A dry run sends nothing: it only checks that git can log in and would be allowed to push.
   // --no-verify: pre-push hooks (husky running the tests, say) would make it slow or fail for other reasons.
-  const dry = run('git', ['-C', dir, 'push', '--dry-run', '--no-verify', 'origin', 'HEAD:refs/heads/claude-board-push-check']);
+  const dry = run('git', ['-C', dir, 'push', '--dry-run', '--no-verify', 'origin', 'HEAD:refs/heads/agent-board-push-check']);
   const msg = `${dry.stderr || ''}${dry.stdout || ''}`;
   if (dry.status === 0) ok('    git can push to origin (dry run)');
   else if (dry.error?.code === 'ETIMEDOUT' || dry.signal) bad('    git push (dry run) didn\'t finish: it may be waiting for a login', gh ? 'Run  gh auth login  and then  gh auth setup-git , or push once by hand to save your login.' : 'Push once by hand to save your login.');
@@ -205,7 +211,7 @@ function checkPush(dir, origin, ok, bad) {
   else bad(`    git push (dry run) failed: ${msg.trim().split('\n').pop()}`, 'Check the network and the origin URL.');
 }
 
-// The MCP address join gives a tool (same parameters, same order), rebuilt from ~/.claude-board.json.
+// The MCP address join gives a tool (same parameters, same order), rebuilt from ~/.agent-board.json.
 function mcpUrlFor(a, cfg) {
   const p = { agent: a.agent, token: a.token, ...(cfg.person ? { person: cfg.person } : {}), ...(cfg.laptop_id ? { laptop: cfg.laptop_id } : {}), ...(a.plan ? { plan: a.plan } : {}), ...(a.slots ? { slots: String(a.slots) } : {}) };
   return `${a.url}/mcp?${new URLSearchParams(p)}`;

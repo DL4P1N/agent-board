@@ -35,7 +35,10 @@ import { agentTokenFor } from '../src/tokens.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEMPLATES = path.join(ROOT, 'templates');
-const MARKER = '<!-- claude-board -->';
+const MARKER = '<!-- agent-board -->';
+// Files join installed before the rename to Agent Board carry the old marker; they are still ours.
+const OLD_MARKER = '<!-- claude-board -->';
+const isOurs = (text) => text.includes(MARKER) || text.includes(OLD_MARKER);
 const PLANS = {
   claude: [['pro', 'Claude Pro', 1], ['max5', 'Claude Max 5x', 2], ['max20', 'Claude Max 20x', 3], ['team', 'Claude Team / Enterprise / API', 3]],
   codex: [['plus', 'ChatGPT Plus', 1], ['edu', 'ChatGPT Edu', 1], ['business', 'ChatGPT Business / Enterprise', 1], ['pro', 'ChatGPT Pro', 1]],
@@ -117,8 +120,8 @@ try {
 }
 
 // ---------- questions (only for what wasn't passed) ----------
-// CLAUDE_BOARD_JOIN_ASK=1 asks even without a terminal (the tests answer through a pipe).
-const interactive = (process.stdin.isTTY || process.env.CLAUDE_BOARD_JOIN_ASK === '1') && !args.yes;
+// AGENT_BOARD_JOIN_ASK=1 (or the older CLAUDE_BOARD_JOIN_ASK=1) asks even without a terminal (the tests answer through a pipe).
+const interactive = (process.stdin.isTTY || process.env.AGENT_BOARD_JOIN_ASK === '1' || process.env.CLAUDE_BOARD_JOIN_ASK === '1') && !args.yes;
 const rl = interactive ? readline.createInterface({ input: process.stdin, output: process.stdout }) : null;
 const ask = async (q, def) => {
   if (!rl) return def;
@@ -241,7 +244,7 @@ for (const t of tools) {
   if (args.slots) planFor[t].slots = Math.max(1, Math.min(5, Number(args.slots) || 1));
 }
 
-// The team's project repo (if the host set it on the board): suggest an existing copy next to claude-board, or offer to clone it.
+// The team's project repo (if the host set it on the board): suggest an existing copy next to this folder, or offer to clone it.
 const projectUrl = boardState?.settings?.repo || '';
 const projectName = projectUrl ? path.basename(projectUrl.replace(/\.git$/, '').replace(/[\\/]+$/, '')) : '';
 const sibling = projectName ? path.resolve(ROOT, '..', projectName) : '';
@@ -411,7 +414,7 @@ function setupClaude({ mcpUrl, dir }) {
   if (args.shared) {
     const mdPath = path.join(dir, 'CLAUDE.md');
     const existing = fs.existsSync(mdPath) ? fs.readFileSync(mdPath, 'utf8') : '';
-    if (!existing.includes(MARKER)) {
+    if (!isOurs(existing)) {
       const snippet = fs.readFileSync(path.join(TEMPLATES, 'CLAUDE.board.md'), 'utf8');
       fs.writeFileSync(mdPath, existing + (existing && !existing.endsWith('\n') ? '\n' : '') + (existing ? '\n' : '') + snippet);
       ok(`appended team rules to ${mdPath}. Commit it so teammates get them`);
@@ -456,16 +459,17 @@ function setupCodex({ mcpUrl, dir }) {
   ].filter((r) => !cur.includes(r));
   if (want.length) {
     fs.mkdirSync(path.dirname(rulesPath), { recursive: true });
-    fs.appendFileSync(rulesPath, `${cur && !cur.endsWith('\n') ? '\n' : ''}# claude-board: git/gh commands the board playbook uses; they run outside Codex's sandbox\n${want.join('\n')}\n`);
+    fs.appendFileSync(rulesPath, `${cur && !cur.endsWith('\n') ? '\n' : ''}# agent-board: git/gh commands the board playbook uses; they run outside Codex's sandbox\n${want.join('\n')}\n`);
   }
   ok('git and gh commands pre-approved for Codex (they run outside its sandbox, so push and gh reach the network). Skip with --no-git-allow');
   if (args.verbose) console.log(`    git ${CODEX_GIT_ALLOW.join(', ')}; gh ${CODEX_GH_ALLOW.map((c) => c.join(' ')).join(', ')} (in ${rulesPath}). ${FORCE_NOTE[0].toUpperCase()}${FORCE_NOTE.slice(1)}.`);
 }
 
-// A copy of a config file before join first changes it: <file>.bak-claude-board.
+// A copy of a config file before join first changes it: <file>.bak-agent-board. A <file>.bak-claude-board
+// (made before the rename to Agent Board) already holds the original, so no second copy is made.
 function backupOnce(file) {
-  const bak = `${file}.bak-claude-board`;
-  if (fs.existsSync(file) && !fs.existsSync(bak)) fs.copyFileSync(file, bak);
+  const bak = `${file}.bak-agent-board`;
+  if (fs.existsSync(file) && !fs.existsSync(bak) && !fs.existsSync(`${file}.bak-claude-board`)) fs.copyFileSync(file, bak);
 }
 
 // A tool join can't configure: print what to add, so any MCP-capable agent can join.
@@ -513,7 +517,7 @@ function KICKOFF(tool) {
 
 Keep looping (board_status → work → wait_for_events) until the playbook says there is nothing left. Don't stop after a single step.
 
-If the \`board\` MCP tools (get_playbook, board_status, …) are not available to you, do not improvise: no raw HTTP calls, no reading token files. Tell the human: "This tool isn't connected to the team board yet. Run \`npm run doctor\` in your claude-board folder; it says what to fix." Then stop.`;
+If the \`board\` MCP tools (get_playbook, board_status, …) are not available to you, do not improvise: no raw HTTP calls, no reading token files. Tell the human: "This tool isn't connected to the team board yet. Run \`npm run doctor\` in your agent-board folder; it says what to fix." Then stop.`;
 }
 
 // Gemini CLI: the board in ~/.gemini/settings.json (trusted, so its tools run without a prompt each time)
@@ -559,7 +563,7 @@ function setupCursor({ mcpUrl, dir }) {
   keepOutOfGit(cmdPath, cmdCreated, dir);
   const rulePath = path.join(dir, '.cursor', 'rules', 'board.mdc');
   const ruleCreated = !fs.existsSync(rulePath);
-  installOurText(`---\ndescription: Joining the team board (claude-board). Use when the user types /board or asks to join or work on the board.\nalwaysApply: false\n---\n${MARKER}\n\nWhen the user types "/board" or asks you to join or work on the team board:\n\n${KICKOFF('Cursor')}\n`,
+  installOurText(`---\ndescription: Joining the team board (Agent Board). Use when the user types /board or asks to join or work on the board.\nalwaysApply: false\n---\n${MARKER}\n\nWhen the user types "/board" or asks you to join or work on the team board:\n\n${KICKOFF('Cursor')}\n`,
     rulePath, 'the board rule');
   keepOutOfGit(rulePath, ruleCreated, dir);
   console.log('  • In Cursor, enable the "board" MCP server (Settings → MCP) if it asks, and allow its tools.');
@@ -569,7 +573,7 @@ function setupCursor({ mcpUrl, dir }) {
 // Write generated text unless the destination exists and isn't one of ours.
 function installOurText(text, dest, what) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  if (fs.existsSync(dest) && !fs.readFileSync(dest, 'utf8').includes(MARKER)) {
+  if (fs.existsSync(dest) && !isOurs(fs.readFileSync(dest, 'utf8'))) {
     bad(`${dest} already exists and isn't ours, so it was left alone (${what} not installed)`);
     return;
   }
@@ -580,7 +584,7 @@ function installOurText(text, dest, what) {
 // Copy a template unless the destination exists and isn't one of ours.
 function installOurFile(src, dest, what) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  if (fs.existsSync(dest) && !fs.readFileSync(dest, 'utf8').includes(MARKER)) {
+  if (fs.existsSync(dest) && !isOurs(fs.readFileSync(dest, 'utf8'))) {
     bad(`${dest} already exists and isn't ours, so it was left alone (${what} not installed)`);
     return;
   }
@@ -634,7 +638,7 @@ function defaultName() {
   return raw.toLowerCase().replace(/[^\w.-]/g, '');
 }
 
-// The git repo of the folder join was started from (npm sets INIT_CWD), unless that is claude-board itself.
+// The git repo of the folder join was started from (npm sets INIT_CWD), unless that is this board tool's own folder.
 function hereRepo() {
   const r = sh(`git -C ${q(process.env.INIT_CWD || process.cwd())} rev-parse --show-toplevel`, true);
   if (r.status !== 0 || !r.stdout.trim()) return '';

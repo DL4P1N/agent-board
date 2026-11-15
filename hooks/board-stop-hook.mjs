@@ -10,7 +10,8 @@
 // transcript), the hook tells the board (the agent is marked out of usage, so teammates take its tasks
 // over) and lets it stop.
 //
-// Config (env vars override ~/.claude-board.json written by `npm run join`):
+// Config (env vars override ~/.agent-board.json written by `npm run join`; laptops that joined
+// before the rename to Agent Board keep their ~/.claude-board.json, which is read the same way):
 //   BOARD_URL, BOARD_TOKEN, BOARD_AGENT
 //   BOARD_HOOK_WAIT  seconds to long-poll for new events before letting Claude stop (0 = don't wait)
 //   BOARD_HOOK=off   disable the hook
@@ -28,7 +29,9 @@ const NUDGE_EVERY_MS = 3 * 60e3;
 
 async function main() {
   let cfg = {};
-  try { cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude-board.json'), 'utf8')); } catch {}
+  for (const f of ['.agent-board.json', '.claude-board.json']) {
+    try { cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), f), 'utf8')); break; } catch {}
+  }
   const url = (process.env.BOARD_URL || cfg.url || '').replace(/\/$/, '');
   const token = process.env.BOARD_TOKEN || cfg.token;
   // Board names are case-insensitive (the server stores them lowercase).
@@ -45,7 +48,12 @@ async function main() {
   // One cursor per board + agent, so a different (or freshly wiped) board doesn't inherit an old position.
   // A hash of the whole URL, path included: two boards on one host (/b/<a>, /b/<b>) never share a cursor.
   const boardKey = crypto.createHash('sha256').update(url).digest('hex').slice(0, 16);
-  const cursorFile = path.join(os.tmpdir(), `claude-board-cursor-${agent.replace(/[^\w.-]/g, '_')}-${boardKey}`);
+  const cursorName = (app) => path.join(os.tmpdir(), `${app}-cursor-${agent.replace(/[^\w.-]/g, '_')}-${boardKey}`);
+  const cursorFile = cursorName('agent-board');
+  // Cursor files from before the rename to Agent Board: carry them over once, so nothing is reported twice.
+  for (const s of ['', '-limit', '-nudge']) {
+    try { if (!fs.existsSync(cursorFile + s)) fs.renameSync(cursorName('claude-board') + s, cursorFile + s); } catch {}
+  }
   const get = async (p) => {
     // The laptop id lets the board know this name's owner is still here while its agent works quietly.
     const laptop = /^[a-z0-9]{8,16}$/.test(cfg.laptop_id || '') ? { 'X-Laptop': cfg.laptop_id } : {};

@@ -1,4 +1,4 @@
-<!-- claude-board -->
+<!-- agent-board -->
 ## Team board rules (all agents and subagents)
 
 Several people's Claude agents work on this repo at the same time. They coordinate through the `board` MCP server.

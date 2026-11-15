@@ -1111,7 +1111,10 @@ function offerHostJoin() {
     return;
   }
   let cfg = null;
-  try { cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude-board.json'), 'utf8')); } catch {}
+  // ~/.agent-board.json, or ~/.claude-board.json on laptops that joined before the rename to Agent Board.
+  for (const f of ['.agent-board.json', '.claude-board.json']) {
+    try { cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), f), 'utf8')); break; } catch {}
+  }
   const ours = (t) => t === TOKEN || t === rt.agentToken;
   if (ours(cfg?.token)) {
     console.log(` This laptop is connected as "${cfg.agent}". (Re-run setup any time: npm run join -- --url http://localhost:${PORT}/b/${rt.slug} --token ${TOKEN})\n`);
