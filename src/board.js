@@ -63,7 +63,7 @@ function describeSetting(key, val, cur) {
   if (key === 'require_approval') return val ? 'turned on plan approval: agents wait for a human OK before starting tasks' : 'turned off plan approval';
   if (key === 'plan_approved') return val ? 'approved the task list: agents can start' : 'withdrew approval of the task list';
   if (key === 'integrator') return val === ANYONE ? 'integrator → whoever is free (any agent with room merges reviewed work)' : `integrator → ${val || 'nobody (the first agent with work in review takes it)'}`;
-  if (key === 'planner_extra') return `the planner may take up to ${val} extra task(s) with helpers when nobody else is free`;
+  if (key === 'planner_extra') return `the planner may take up to ${val} extra task(s) with subagents when nobody else is free`;
   return `${key} → ${val || 'nobody'}`;
 }
 
@@ -165,7 +165,7 @@ export class Board {
     // Which laptop owns each agent name: the first one whose agent connected (via 'agent') while no other
     // laptop's agent is online under it, or the laptop that ran join with it (via 'join', a reservation).
     // Helpers: subagents that pass `as` on their calls, one row per "<agent>/<as>". model: what the helper says it runs (null = unknown);
-    // done_at: it marked itself finished (helper_done); doing: its set_activity note.
+    // done_at: it marked itself finished (subagent_done); doing: its set_activity note.
     this.db.exec('CREATE TABLE IF NOT EXISTS helpers (parent TEXT NOT NULL, name TEXT NOT NULL, model TEXT, started_at INTEGER NOT NULL, last_seen INTEGER NOT NULL, done_at INTEGER, doing TEXT, doing_at INTEGER, PRIMARY KEY (parent, name))');
     this.db.exec('CREATE TABLE IF NOT EXISTS name_owners (name TEXT PRIMARY KEY, laptop TEXT NOT NULL, person TEXT, via TEXT NOT NULL, seen_at INTEGER NOT NULL)');
     this.lowercaseNames();
@@ -1124,7 +1124,7 @@ export class Board {
 
   // ---------- helpers (subagents) ----------
   // Any call that passes `as` records the helper "<parent>/<as>". Returns true when it (re)started: new, back after
-  // helper_done, or back after the idle window, so callers can push a live update.
+  // subagent_done, or back after the idle window, so callers can push a live update.
   touchHelper(parent, name) {
     parent = agentRootOf(normName(parent));
     name = normName(name);

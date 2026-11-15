@@ -1,5 +1,5 @@
 // Helpers (subagents that pass `as`): recorded on their first call, their own model, finishing with
-// helper_done, going idle, and the shape in /api/state (presence[].helpers). Starts its own throwaway board
+// subagent_done, going idle, and the shape in /api/state (presence[].helpers). Starts its own throwaway board
 // with a short helper idle window (BOARD_HELPER_IDLE_MS). Run all suites with: npm test
 import { startBoard, finish, rest, agent } from './helpers.mjs';
 
@@ -67,18 +67,18 @@ check('as with a slash cannot pose as another agent (kept as a helper of ana)', 
 
 // ---- done ----
 const ev2 = presenceEvents;
-const d = await ana('helper_done', { as: 'auth-worker' });
+const d = await ana('subagent_done', { as: 'auth-worker' });
 const hd = await helper('auth-worker');
-check('helper_done marks the helper inactive with done_at', d.done === true && hd.active === false && hd.done_at > 0, JSON.stringify(hd));
+check('subagent_done marks the helper inactive with done_at', d.done === true && hd.active === false && hd.done_at > 0, JSON.stringify(hd));
 check('the other helper stays active', (await helper('ui-worker')).active === true);
 await sleep(200);
 check('finishing sends a presence event', presenceEvents > ev2, `${ev2} -> ${presenceEvents}`);
-const noAs = await ana('helper_done').catch((e) => String(e));
-check('helper_done without as is refused', typeof noAs === 'string' || noAs.done !== true, JSON.stringify(noAs));
+const noAs = await ana('subagent_done').catch((e) => String(e));
+check('subagent_done without as is refused', typeof noAs === 'string' || noAs.done !== true, JSON.stringify(noAs));
 await ana('board_status', { as: 'auth-worker' });
 const back = await helper('auth-worker');
 check('a later call with the same as starts the helper again', back.active === true && back.done_at === null, JSON.stringify(back));
-await ana('helper_done', { as: 'auth-worker' });
+await ana('subagent_done', { as: 'auth-worker' });
 
 // ---- idle window ----
 await sleep(IDLE_MS + 400);

@@ -41,7 +41,7 @@ Before your first task, in the folder you were started in: run `git fetch`, chec
    - Duplicates or work that's no longer needed: `cancel_task(id, reason)` (e.g. "duplicate of #19"). Never mark them done.
 3. Post a short summary of the plan in `general`, then work as a normal worker.
 4. **Proposals:** other agents' new tasks arrive as proposals that @mention you. Decide them promptly with `decide_proposal(id, approve, note)`: approve (adjust `priority`, `size` or `reserved_for` if needed), or reject with a reason; the proposer is told either way.
-5. **Extra helpers (Claude Code planner):** when `next_action` says nobody else is free, you may take extra S/M tasks (up to the number it gives) and run them with helpers. Never L tasks this way, and stop taking extra ones as soon as another agent frees up.
+5. **Extra subagents (Claude Code planner):** when `next_action` says nobody else is free, you may take extra S/M tasks (up to the number it gives) and run them with subagents. Never L tasks this way, and stop taking extra ones as soon as another agent frees up.
 
 ## Doing a task
 1. Run `claim_task(id)`. It returns a branch name. Then `get_task(id)` for the full description.
@@ -58,11 +58,11 @@ Before your first task, in the folder you were started in: run `git fetch`, chec
 ## Tool-specific notes
 - **Claude Code:** you can work on as many tasks in parallel as your plan allows. Claim one per subagent and launch each with the Agent tool using `isolation: "worktree"` and `run_in_background: true`. Give each subagent a self-contained prompt:
   - the task and goal, the branch, and steps 2–7 above
-  - "pass `as: \"<short-name>\"` on every board tool call; first call `board_status` with that `as` and `model` (the model you are running), so the board shows you as a helper with its model"
-  - "when you are finished (task in review, or nothing left), call `helper_done` with the same `as`"
-  - "run every command from your own working folder, the worktree you start in. Don't prefix commands with `cd <folder> &&`; background helpers can't ask for permission, and such commands get refused"
+  - "pass `as: \"<short-name>\"` on every board tool call; first call `board_status` with that `as` and `model` (the model you are running), so the board shows you as a subagent with your model"
+  - "when you are finished (task in review, or nothing left), call `subagent_done` with the same `as`"
+  - "run every command from your own working folder, the worktree you start in. Don't prefix commands with `cd <folder> &&`; background subagents can't ask for permission, and such commands get refused"
 
-  While they work, run the loop yourself and pass human answers on to them with SendMessage. After a helper's task is merged, remove its worktree: `git worktree remove <path>`.
+  While they work, run the loop yourself and pass human answers on to them with SendMessage. After a subagent's task is merged, remove its worktree: `git worktree remove <path>`.
 - **Codex, GitHub Copilot, or any agent without background subagents:** do **one task at a time** yourself, following the steps above in the repo checkout. Between tasks, call `board_status` again. If your session is about to end, post where you stopped so teammates know.
 - **Gemini CLI, Cursor:** work like Codex and Copilot, one task at a time. If every board tool call asks for approval, ask the human to allow the `board` tools once for the session.
 - **Codex:** its sandbox makes `.git` read-only, so `git fetch`, `commit` and `push` fail inside it. When that happens, ask the human to approve running the git command outside the sandbox. Never work around it by cloning the repo into a subfolder or anywhere else.
