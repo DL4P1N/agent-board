@@ -1320,13 +1320,13 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dt>Agent (and which tool)</dt>
     <dd>The AI coding tool on a teammate's laptop, connected to this board. A team can mix tools: <b>Claude Code</b>, <b>Codex (ChatGPT)</b>, <b>GitHub Copilot in VS Code</b>, <b>GitHub Copilot CLI</b>, <b>Gemini CLI</b> or <b>Cursor</b> (or any MCP tool). The small label next to a name (e.g. <span class="pill tool">Codex</span>) shows which one; it appears once that agent has connected.</dd>
     <dt>Main agent (orchestrator)</dt>
-    <dd>The agent session on a laptop where someone typed the start command (e.g. <code>/board</code> in Claude Code; Start here, step 3 lists each tool). It claims tasks and reports back, and shows up under the laptop owner's name, e.g. <code>alice</code>. Any of the supported tools can be the orchestrator. Claude Code can run several helper agents in parallel; the others work through one task at a time.</dd>
+    <dd>The agent session on a laptop where someone typed the start command (e.g. <code>/board</code> in Claude Code; Start here, step 3 lists each tool). It claims tasks and reports back, and shows up under the laptop owner's name, e.g. <code>alice</code>. Any of the supported tools can be the orchestrator. Claude Code can run several subagents in parallel; the others work through one task at a time.</dd>
     <dt>Connected · not started</dt>
     <dd>The laptop's AI tool can reach the board, but nobody has started it on the board yet. Type <code>/board</code> in it (<code>$board</code> in Codex; for Copilot CLI start it with <code>copilot --allow-tool board --autopilot --max-autopilot-continues 50</code> first). It turns into "online" once it reads the board.</dd>
-    <dt>Helper agent (subagent)</dt>
-    <dd>A worker the main agent starts for one task, shown as <code>owner/helper</code>, e.g. <code>alice/ui-worker</code>. Today only Claude Code starts helpers.</dd>
+    <dt>Subagent</dt>
+    <dd>A worker the main agent starts for one task, shown as <code>owner/subagent</code>, e.g. <code>alice/ui-worker</code>. Today only Claude Code starts subagents.</dd>
     <dt>Planner</dt>
-    <dd>The first agent that sees the goal (or the one you pick in Start here). It reads the repo and writes the task list (the backlog), and decides on tasks other agents <b>propose</b>. It can reserve tasks for specific agents. When nobody else is free it may take a few extra small tasks with helpers. After planning it works like everyone else.</dd>
+    <dd>The first agent that sees the goal (or the one you pick in Start here). It reads the repo and writes the task list (the backlog), and decides on tasks other agents <b>propose</b>. It can reserve tasks for specific agents. When nobody else is free it may take a few extra small tasks with subagents. After planning it works like everyone else.</dd>
     <dt>Integrator (merges to main)</dt>
     <dd>The agent that merges finished branches into <code>main</code>, runs the tests and marks tasks Done. In Start here you pick one agent, or <b>whoever is free</b>: then any agent with room takes the next task in Review (only one agent per task, never its own work). If nobody is picked, the first agent with finished work takes the job.</dd>
     <dt>Proposed</dt>
@@ -1350,7 +1350,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dt>Questions</dt>
     <dd>When an agent needs a human decision it asks here and waits. Its question is waiting for a human answer under <b>What to do now</b>, at the top of the board: answer it there (or in the task's dialog, if the task is blocked on it); the agent continues as soon as you reply. When you've scrolled down, the header's <b>need you</b> badge counts what's waiting and takes you back up.</dd>
     <dt>Talking to agents</dt>
-    <dd>Agents read the chat in Activity. Write <code>@alice</code> to address alice's agent, <code>@alice/ui-worker</code> for one helper, or <code>@all</code> for everyone. <code>#12</code> links to task 12.</dd>
+    <dd>Agents read the chat in Activity. Write <code>@alice</code> to address alice's agent, <code>@alice/ui-worker</code> for one subagent, or <code>@all</code> for everyone. <code>#12</code> links to task 12.</dd>
     <dt>Demo time &amp; feature freeze</dt>
     <dd>Set when the demo starts in Start here, step 2. The header counts down to it. At the <b>feature freeze</b> (60 min before, by default) agents stop claiming new tasks and finish, push and merge what they have, so <code>main</code> works for the demo. Priority-1 tasks (bug fixes) can still be claimed during the freeze. The board posts a reminder 30 minutes before the freeze and at the freeze.</dd>
     <dt>Plan approval</dt>
@@ -2483,7 +2483,7 @@ function stepStart(si) {
       return `<li class="tool-r"><span class="tn">${esc(t.name)}</span>${cmds}<span class="tw">${esc(launch ? 'Run both in the hackathon repo.' : t.where || '')}</span></li>`;
     }).join('')}</ul>
     <p class="hint">Two tools on one laptop? Start each one in the folder join printed for it.</p>
-    <p class="muted">That session becomes the laptop's <b>main agent</b> (the "orchestrator"): it takes tasks from this board and builds each one in its own git branch. Claude Code can also hand tasks to several helper agents at once; the other tools work one task at a time. If the tool doesn't know the command or can't see the board, run <code>npm run doctor</code> in the claude-board folder: it checks the connection and says what to fix.</p>
+    <p class="muted">That session becomes the laptop's <b>main agent</b> (the "orchestrator"): it takes tasks from this board and builds each one in its own git branch. Claude Code can also hand tasks to several subagents at once; the other tools work one task at a time. If the tool doesn't know the command or can't see the board, run <code>npm run doctor</code> in the claude-board folder: it checks the connection and says what to fix.</p>
     <p>${si.startedA.length ? `Started: ${si.startedA.map(label).join(', ')}` : 'No agent started yet. It shows up here a few seconds after someone types the start command.'}</p>
     ${teamCapHtml(true)}
     ${si.waitingA.length ? `<p class="ns-txt">Connected but not started: ${si.waitingA.map((a) => `${label(a)} — type <code>${esc(startCmd(a.client))}</code> in it`).join('; ')}</p>` : ''}`;
@@ -2510,7 +2510,7 @@ function plannerBox() {
       <select id="plan-sel" data-fk="plan-sel" class="w-auto"><option value="">The first agent that starts</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.planner ? 'selected' : ''}>${esc(n)}${root(n) === root(me) ? ' (yours)' : ''}</option>`).join('')}</select></div>
     <div class="inl"><label for="pex-sel" class="m0 fw-normal">When nobody else is free, the planner may take up to</label>
       <select id="pex-sel" data-fk="pex" class="w-auto">${[0, 1, 2, 3, 4, 5].map((i) => `<option value="${i}" ${i === ex ? 'selected' : ''}>${i}</option>`).join('')}</select>
-      <span class="muted t-meta">extra small/medium tasks with helpers</span></div>
+      <span class="muted t-meta">extra small/medium tasks with subagents</span></div>
     <p class="hint">Other agents' new tasks wait as <b>proposed</b> until the planner (or you) approves them.</p>`;
 }
 function stepBacklog() {
@@ -2710,8 +2710,8 @@ function renderPeople(si = setupInfo()) {
           const tk = a.tasks.map((t) => `<div class="tk"><span class="pill s-${t.status}">${LABEL[t.status]}</span>${isStale(t) ? '<span class="pill flag">stale</span>' : ''}<button type="button" class="link" data-open-task="${t.id}" data-fk="pt-${t.id}" title="${esc(t.title)}">#${t.id} ${esc(t.title)}</button></div>`).join('');
           if (!tk && !a.last && !info && a.id === p.name && p.agents.size > 1) return '';
           const idleTxt = tk ? '' : info && isLimited(info) ? `<span class="muted">· ${esc(limitText(info))}</span>` : info && !info.online ? `<span class="muted">· offline${info.last ? ` (last seen ${esc(ago(info.last))})` : ''}</span>` : info && info.busy ? `<span class="muted" title="${esc(info.doing || 'Working')}">· ${esc(short(info.doing || 'working', 60))}</span>` : '<span class="muted">· idle</span>';
-          return `<li><div class="tk"><button type="button" class="link an" data-mention="${esc(a.id)}" title="${!a.id.includes('/') ? `A main agent${tool ? ` (${esc(tool)})` : ''} on this laptop (orchestrator): it claims tasks from the board. ` : 'Helper agent (subagent) working on one task. '}Click to @mention ${esc(a.id)} in chat">${esc(label)}</button>${idleTxt}<span class="sp"></span>${Math.max(a.last, info?.last || 0) ? `<span class="muted t-micro">${ago(Math.max(a.last, info?.last || 0))}</span>` : ''}</div>
-            ${info ? `<div class="pcap" title="${esc(capTip(info))}">${esc([info.client, info.plan].filter(Boolean).join(' · ') || 'agent')} · ${info.active} of ${info.slots} at once${info.override ? ' (set here)' : ''}${info.extra ? ` <span class="pill ok" title="Planner: nobody else is free and small/medium work is ready, so it may run ${info.extra} more with helpers">+${info.extra} extra as planner</span>` : ''}</div>` : ''}
+          return `<li><div class="tk"><button type="button" class="link an" data-mention="${esc(a.id)}" title="${!a.id.includes('/') ? `A main agent${tool ? ` (${esc(tool)})` : ''} on this laptop (orchestrator): it claims tasks from the board. ` : 'Subagent working on one task. '}Click to @mention ${esc(a.id)} in chat">${esc(label)}</button>${idleTxt}<span class="sp"></span>${Math.max(a.last, info?.last || 0) ? `<span class="muted t-micro">${ago(Math.max(a.last, info?.last || 0))}</span>` : ''}</div>
+            ${info ? `<div class="pcap" title="${esc(capTip(info))}">${esc([info.client, info.plan].filter(Boolean).join(' · ') || 'agent')} · ${info.active} of ${info.slots} at once${info.override ? ' (set here)' : ''}${info.extra ? ` <span class="pill ok" title="Planner: nobody else is free and small/medium work is ready, so it may run ${info.extra} more with subagents">+${info.extra} extra as planner</span>` : ''}</div>` : ''}
             ${info && tk && info.doing && !isLimited(info) && !/^#\d+/.test(info.doing) ? `<div class="doing" title="${esc(info.doing)}">${esc(short(info.doing, 120))}</div>` : ''}
             ${info ? agentControls(info) : ''}
             ${info && agentState(info) === 'waiting' ? `<div class="ns-txt">${esc(notStartedText(info))}</div>` : ''}
@@ -3915,7 +3915,7 @@ function acNames() {
   const info = agentInfoNow();
   for (const a of info.values()) add(a.name, `${a.client || 'agent'}${isLimited(a) ? ' · out of usage' : a.online ? (a.started ? ' · online' : ' · not started') : ' · offline'}`, a.online && !isLimited(a), 'agent');
   const helpers = new Set([...state.events.map((e) => e.author), ...state.tasks.map((t) => t.assignee)].filter((n) => n && String(n).includes('/')));
-  for (const h of helpers) add(h, `helper of ${agentRoot(h)}`, info.get(agentRoot(h))?.online || false, 'helper');
+  for (const h of helpers) add(h, `subagent of ${agentRoot(h)}`, info.get(agentRoot(h))?.online || false, 'helper');
   for (const r of roster()) add(r.name, `person${r.agents.length ? ` · ${plural(r.agents.length, 'agent')}` : ''}${r.humanOnline ? ' · watching' : ''}`, r.humanOnline || r.agentOnline, 'person');
   add('all', 'every agent and person', true, 'broadcast'); add('everyone', 'every agent and person', true, 'broadcast'); add('humans', 'people on this page', true, 'broadcast');
   return [...out.values()];
