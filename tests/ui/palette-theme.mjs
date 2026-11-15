@@ -26,14 +26,14 @@ try {
 
   // ---- theme ----
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
-  check('auto: no data-theme, follows the OS (light)', (await attr()) === null && (await bg()) === 'rgb(245, 245, 242)', await bg());
+  check('auto: no data-theme, follows the OS (light)', (await attr()) === null && (await bg()) === 'rgb(207, 227, 242)', await bg());
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
-  check('auto: follows the OS (dark)', (await attr()) === null && (await bg()) === 'rgb(20, 20, 19)', await bg());
+  check('auto: follows the OS (dark)', (await attr()) === null && (await bg()) === 'rgb(27, 21, 48)', await bg());
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
 
   await page.click('#help-btn'); await page.waitForSelector('#help-dlg[open]');
   await page.click('[data-theme-set="dark"]'); await sleep(100);
-  check('Dark button sets data-theme=dark and the dark tokens, even with an OS in light', (await attr()) === 'dark' && (await bg()) === 'rgb(20, 20, 19)', `${await attr()} ${await bg()}`);
+  check('Dark button sets data-theme=dark and the dark tokens, even with an OS in light', (await attr()) === 'dark' && (await bg()) === 'rgb(27, 21, 48)', `${await attr()} ${await bg()}`);
   check('Dark button is pressed, the others are not', await page.evaluate(() => [...document.querySelectorAll('[data-theme-set]')].map((b) => b.getAttribute('aria-pressed')).join()) === 'false,false,true');
   const m = await metas();
   check('color-scheme and theme-color metas follow the forced theme', m.scheme === 'dark' && m.dark === 'all' && m.light === 'not all', JSON.stringify(m));
@@ -42,7 +42,7 @@ try {
   await page.keyboard.press('Escape');
 
   await page.reload(); await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 8000 });
-  check('after a reload the theme is still dark', (await attr()) === 'dark' && (await bg()) === 'rgb(20, 20, 19)', `${await attr()} ${await bg()}`);
+  check('after a reload the theme is still dark', (await attr()) === 'dark' && (await bg()) === 'rgb(27, 21, 48)', `${await attr()} ${await bg()}`);
   const firstPaint = await (async () => { // the attribute is there before the app script runs (inline script in <head>)
     const p2 = await browser.newPage();
     await p2.evaluateOnNewDocument(() => { document.addEventListener('readystatechange', () => { if (!window.__early) window.__early = document.documentElement.getAttribute('data-theme'); }); });
@@ -53,10 +53,10 @@ try {
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
   await page.click('#help-btn'); await page.waitForSelector('#help-dlg[open]');
   await page.click('[data-theme-set="light"]'); await sleep(100);
-  check('Light wins over an OS in dark', (await attr()) === 'light' && (await bg()) === 'rgb(245, 245, 242)', `${await attr()} ${await bg()}`);
+  check('Light wins over an OS in dark', (await attr()) === 'light' && (await bg()) === 'rgb(207, 227, 242)', `${await attr()} ${await bg()}`);
   await page.screenshot({ path: `${out}/light-help.png` });
   await page.click('[data-theme-set="auto"]'); await sleep(100);
-  check('Auto removes data-theme and follows the OS again', (await attr()) === null && (await bg()) === 'rgb(20, 20, 19)' && (await metas()).scheme === 'light dark', `${await attr()} ${await bg()}`);
+  check('Auto removes data-theme and follows the OS again', (await attr()) === null && (await bg()) === 'rgb(27, 21, 48)' && (await metas()).scheme === 'light dark', `${await attr()} ${await bg()}`);
   check('Auto is saved', await page.evaluate(() => localStorage.getItem('board-theme')) === 'auto');
   await page.keyboard.press('Escape');
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
