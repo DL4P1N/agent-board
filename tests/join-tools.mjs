@@ -107,7 +107,7 @@ const oldEnv = { ...env, HOME: old, USERPROFILE: old, APPDATA: path.join(old, 'A
 const r4 = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'join.mjs'), '--url', board.base, '--token', TOKEN, '--tool', 'gemini', '--name', 'Lee', '--repo', repo, '--wait', '0'],
   { cwd: ROOT, env: oldEnv, encoding: 'utf8', input: '', timeout: 90e3 });
 const oldCfg = fs.existsSync(path.join(old, '.claude-board.json')) ? readJ(path.join(old, '.claude-board.json')) : {};
-check('old laptop: join updates ~/.claude-board.json in place (no second record)', r4.status === 0 && oldCfg.laptop_id === 'abcdef123456' && oldCfg.agents?.some((a) => a.agent === 'lee-gemini') && !fs.existsSync(path.join(old, '.agent-board.json')), `${r4.stdout}${r4.stderr}`.slice(-400));
+check('old laptop: join updates ~/.claude-board.json in place (no second record)', r4.status === 0 && oldCfg.laptop_id === 'abcdef123456' && oldCfg.agents?.some((a) => a.agent === 'lee') && !fs.existsSync(path.join(old, '.agent-board.json')), `${r4.stdout}${r4.stderr}`.slice(-400));
 check('old laptop: its .bak-claude-board backup is kept as the original (no new backup)', readJ(`${oldGemini}.bak-claude-board`).theme === 'original' && !fs.existsSync(`${oldGemini}.bak-agent-board`));
 check('old laptop: a shortcut with the old marker is still ours and gets updated', /<!-- agent-board -->/.test(fs.readFileSync(path.join(old, '.gemini', 'commands', 'board.toml'), 'utf8')));
 const d3 = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'doctor.mjs')], { cwd: ROOT, env: oldEnv, encoding: 'utf8', timeout: 60e3 });
