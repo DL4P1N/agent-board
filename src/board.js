@@ -10,6 +10,10 @@ import path from 'node:path';
 const STATUSES = ['proposed', 'open', 'claimed', 'in_progress', 'blocked', 'review', 'done'];
 const STALE_MS = 15 * 60 * 1000;
 const AGENT_ONLINE_MS = 10 * 60 * 1000;
+// A helper (subagent, "<agent>/<as>") with no call for this long counts as gone; BOARD_HELPER_IDLE_MS lets tests shorten it.
+const HELPER_IDLE_MS = Number(process.env.BOARD_HELPER_IDLE_MS) || AGENT_ONLINE_MS;
+// Helpers finished or idle for longer than this drop out of /api/state.
+const HELPER_KEEP_MS = 6 * 60 * 60 * 1000;
 // How long a laptop keeps an agent name after it was last seen, when its agent holds no active tasks.
 const NAME_LEASE_MS = 30 * 60 * 1000;
 // An agent that made a real board call (not just waiting/reading) this recently counts as busy.
@@ -160,6 +164,9 @@ export class Board {
     if (!tcols.includes('pr_url')) this.db.exec('ALTER TABLE tasks ADD COLUMN pr_url TEXT');
     // Which laptop owns each agent name: the first one whose agent connected (via 'agent') while no other
     // laptop's agent is online under it, or the laptop that ran join with it (via 'join', a reservation).
+    // Helpers: subagents that pass `as` on their calls, one row per "<agent>/<as>". model: what the helper says it runs (null = unknown);
+    // done_at: it marked itself finished (helper_done); doing: its set_activity note.
+    this.db.exec('CREATE TABLE IF NOT EXISTS helpers (parent TEXT NOT NULL, name TEXT NOT NULL, model TEXT, started_at INTEGER NOT NULL, last_seen INTEGER NOT NULL, done_at INTEGER, doing TEXT, doing_at INTEGER, PRIMARY KEY (parent, name))');
     this.db.exec('CREATE TABLE IF NOT EXISTS name_owners (name TEXT PRIMARY KEY, laptop TEXT NOT NULL, person TEXT, via TEXT NOT NULL, seen_at INTEGER NOT NULL)');
     this.lowercaseNames();
     this.backfillPrLinks();
@@ -1109,10 +1116,71 @@ export class Board {
   // The model an agent says it runs, e.g. "Claude Sonnet 5.5". Control chars stripped, trimmed, max 60 chars; empty keeps what we have.
   setModel(name, model) {
     const root = agentRootOf(normName(name));
-    const m = String(model ?? '').replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
+    const m = cleanModel(model);
     if (!root || !m) return false;
     const r = this.db.prepare("UPDATE presence_v2 SET model = ? WHERE name = ? AND kind = 'agent' AND (model IS NULL OR model != ?)").run(m, root, m);
     return r.changes > 0;
+  }
+
+  // ---------- helpers (subagents) ----------
+  // Any call that passes `as` records the helper "<parent>/<as>". Returns true when it (re)started: new, back after
+  // helper_done, or back after the idle window, so callers can push a live update.
+  touchHelper(parent, name) {
+    parent = agentRootOf(normName(parent));
+    name = normName(name);
+    if (!parent || !name || parent === 'anonymous' || parent === 'board') return false;
+    const now = Date.now();
+    const prev = this.db.prepare('SELECT * FROM helpers WHERE parent = ? AND name = ?').get(parent, name);
+    if (!prev) {
+      this.db.prepare('INSERT INTO helpers (parent, name, started_at, last_seen) VALUES (?,?,?,?)').run(parent, name, now, now);
+      this.db.prepare('DELETE FROM helpers WHERE COALESCE(done_at, last_seen) < ?').run(now - 4 * HELPER_KEEP_MS);
+      return true;
+    }
+    const gone = !!prev.done_at || now - prev.last_seen >= HELPER_IDLE_MS;
+    if (gone) this.db.prepare('UPDATE helpers SET started_at = ?, last_seen = ?, done_at = NULL, doing = NULL, doing_at = NULL WHERE parent = ? AND name = ?').run(now, now, parent, name);
+    else this.db.prepare('UPDATE helpers SET last_seen = ? WHERE parent = ? AND name = ?').run(now, parent, name);
+    return gone;
+  }
+
+  // The model a helper says it runs (same cleaning as setModel). Returns true when it changed.
+  setHelperModel(parent, name, model) {
+    const m = cleanModel(model);
+    if (!m) return false;
+    return this.db.prepare('UPDATE helpers SET model = ? WHERE parent = ? AND name = ? AND (model IS NULL OR model != ?)').run(m, agentRootOf(normName(parent)), normName(name), m).changes > 0;
+  }
+
+  // The helper says it is finished. Calling the board again with the same `as` starts it again.
+  finishHelper(parent, name) {
+    parent = agentRootOf(normName(parent));
+    name = normName(name);
+    this.touchHelper(parent, name);
+    return this.db.prepare('UPDATE helpers SET done_at = ?, doing = NULL, doing_at = NULL WHERE parent = ? AND name = ? AND done_at IS NULL').run(Date.now(), parent, name).changes > 0;
+  }
+
+  setHelperDoing(parent, name, doing) {
+    const text = String(doing ?? '').replace(/\s+/g, ' ').trim().slice(0, 200) || null;
+    this.db.prepare('UPDATE helpers SET doing = ?, doing_at = ? WHERE parent = ? AND name = ?').run(text, text ? Date.now() : null, agentRootOf(normName(parent)), normName(name));
+    return text;
+  }
+
+  // Helpers by parent agent, for presence(): active ones first; those finished or idle for 6+ hours are left out.
+  helpersByParent(tasks) {
+    const now = Date.now();
+    const by = new Map();
+    for (const h of this.db.prepare('SELECT * FROM helpers ORDER BY started_at, name').all()) {
+      const active = !h.done_at && now - h.last_seen < HELPER_IDLE_MS;
+      if (!active && now - (h.done_at || h.last_seen) > HELPER_KEEP_MS) continue;
+      const full = `${h.parent}/${h.name}`;
+      const task = tasks.find((t) => t.assignee && normName(t.assignee) === full && ['claimed', 'in_progress', 'blocked', 'review'].includes(t.status));
+      const list = by.get(h.parent) || [];
+      list.push({
+        name: h.name, model: h.model || null, active, started_at: h.started_at, last_seen: h.last_seen, done_at: h.done_at || null,
+        task_id: task?.id ?? null, doing: active && h.doing && now - (h.doing_at || 0) < ACTIVITY_MS ? h.doing : null,
+      });
+      by.set(h.parent, list);
+    }
+    for (const list of by.values()) list.sort((a, b) => (b.active - a.active) || a.started_at - b.started_at);
+    return by;
   }
 
   // Agents count as online if they called the board in the last 10 min (orchestrators can be busy for a while).
@@ -1121,6 +1189,7 @@ export class Board {
     const tasks = this.listTasks();
     const settings = this.getSettings();
     const known = this.knownPeople(rows);
+    const helpers = this.helpersByParent(tasks);
     const out = rows.map((r) => {
       if (r.kind !== 'agent') return { name: r.name, person: r.name, kind: r.kind, client: r.client || null, last_seen: r.last_seen, online: humansOnline.has(r.name) };
       const limited = this.isLimited(r.name) ? { since: r.limited_at, until: r.limited_until || null, note: r.limited_note || null, by: r.limited_by || 'human' } : null;
@@ -1135,6 +1204,7 @@ export class Board {
         kind: r.kind,
         client: r.client || null,
         model: r.model || null,
+        helpers: helpers.get(r.name) || [],
         plan: r.plan || null,
         slots: cap.slots,
         // What its plan (or its tool's default) allows, before a human's override.
@@ -1595,6 +1665,11 @@ export function sameTeam(a, b) {
 // "alice/auth-worker" -> "alice"
 export function agentRootOf(name) {
   return String(name || '').split('/')[0];
+}
+
+// A model name as the agent gave it: control chars stripped, spaces collapsed, max 60 chars; '' when empty.
+function cleanModel(model) {
+  return String(model ?? '').replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
 }
 
 // How many tasks an agent may hold at once: a human's override, else its plan, else the tool's default.

@@ -29,13 +29,13 @@ export function buildMcpServer(board, baseAgent) {
 
   // First real use of the board (someone typed /board): show this agent as started on the web board.
   const started = () => { if (board.markStarted(baseAgent)) board.bus.emit('event', { id: 0, kind: 'presence', text: '' }); };
-  const who = (as) => {
-    if (!as) return baseAgent;
-    // Helper names: short, plain characters only (no slashes, so nobody can pose as another agent).
+  // Helper (subagent) name from `as`: short, plain characters only (no slashes, so nobody can pose as another agent); '' = the agent itself.
+  const helperOf = (as) => {
+    if (!as) return '';
     const clean = normName(as).replace(/\s+/g, '-').replace(/^.*\//, '').replace(/[^\w.-]/g, '').slice(0, 40);
-    if (!clean) return baseAgent;
-    return clean === baseAgent ? baseAgent : `${baseAgent}/${clean}`;
+    return clean === baseAgent ? '' : clean;
   };
+  const who = (as) => { const h = helperOf(as); return h ? `${baseAgent}/${h}` : baseAgent; };
   const asArg = z.string().optional().describe('Optional sub-identity, e.g. your subagent name. Attributed as "<agent>/<as>".');
   const ok = (obj) => ({ content: [{ type: 'text', text: typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2) }] });
   const fail = (e) => ({ isError: true, content: [{ type: 'text', text: String(e?.message || e) }] });
@@ -46,6 +46,8 @@ export function buildMcpServer(board, baseAgent) {
   const presence = () => board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
   const tool = (name, def, handler) => server.registerTool(name, def, async (args, extra) => {
     try { if (board.noteToolCall(baseAgent, name)) presence(); } catch {}
+    // Any call that passes `as` records (or refreshes) that helper; a new or returning one reloads the web board.
+    try { const h = helperOf(args?.as); if (h && board.touchHelper(baseAgent, h)) presence(); } catch {}
     return handler(args, extra);
   });
 
@@ -56,10 +58,15 @@ export function buildMcpServer(board, baseAgent) {
       description:
         'Call this first, and again whenever you are unsure what to do. Returns next_action (plain-language instructions for you right now), ' +
         'the team phase (needs_goal, needs_plan, building, all_done), the project goal, roles (planner, integrator), your role, your tasks, open tasks, locks, questions, recent activity, and the event cursor. ' +
-        'Pass `model` (the model you are running) so the board can show it.',
+        'Pass `model` (the model you are running) so the board can show it; a subagent passes its `as` too, and the model is recorded for that helper.',
       inputSchema: { as: asArg, model: z.string().optional().describe('The model you are running, e.g. "Claude Sonnet 5.5" or "GPT-5.6". Optional; leave it out if you do not know.') },
     },
-    wrap(({ as, model }) => { started(); if (model && board.setModel(baseAgent, model)) presence(); return board.status(who(as)); })
+    wrap(({ as, model }) => {
+      started();
+      const h = helperOf(as);
+      if (model && (h ? board.setHelperModel(baseAgent, h, model) : board.setModel(baseAgent, model))) presence();
+      return board.status(who(as));
+    })
   );
 
   tool(
@@ -313,10 +320,32 @@ export function buildMcpServer(board, baseAgent) {
     'set_activity',
     {
       title: 'Say what you are doing',
-      description: 'Tell the board what you are working on when it is not a board task (e.g. something a human asked you in your terminal), so the web board shows you as busy, not idle. Shown for up to 30 minutes; set_activity("") clears it.',
-      inputSchema: { doing: z.string().describe('Short, e.g. "fixing the CI config Dana asked for"') },
+      description: 'Tell the board what you are working on when it is not a board task (e.g. something a human asked you in your terminal), so the web board shows you as busy, not idle. Shown for up to 30 minutes; set_activity("") clears it. A subagent passes its `as` to say what that helper is doing.',
+      inputSchema: { doing: z.string().describe('Short, e.g. "fixing the CI config Dana asked for"'), as: asArg },
     },
-    wrap(({ doing }) => board.setActivity(baseAgent, doing))
+    wrap(({ doing, as }) => {
+      const h = helperOf(as);
+      if (!h) return board.setActivity(baseAgent, doing);
+      const text = board.setHelperDoing(baseAgent, h, doing);
+      presence();
+      return { you: who(as), doing: text };
+    })
+  );
+
+  tool(
+    'helper_done',
+    {
+      title: 'Helper done',
+      description: 'A subagent calls this when it has finished (its task is in review, or it has nothing left), with the same `as` it used on every call. The board then shows the helper as finished instead of waiting for it to go idle. A later call with that `as` starts it again.',
+      inputSchema: { as: z.string().optional().describe('Your subagent name, the same `as` you pass on every call (required).') },
+    },
+    wrap(({ as }) => {
+      const h = helperOf(as);
+      if (!h) throw new Error('Pass the same `as` (your subagent name) you use on every board call. The main agent does not need helper_done.');
+      board.finishHelper(baseAgent, h);
+      presence();
+      return { helper: who(as), done: true };
+    })
   );
 
   tool(

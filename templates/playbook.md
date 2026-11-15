@@ -58,7 +58,8 @@ Before your first task, in the folder you were started in: run `git fetch`, chec
 ## Tool-specific notes
 - **Claude Code:** you can work on as many tasks in parallel as your plan allows. Claim one per subagent and launch each with the Agent tool using `isolation: "worktree"` and `run_in_background: true`. Give each subagent a self-contained prompt:
   - the task and goal, the branch, and steps 2–7 above
-  - "pass `as: \"<short-name>\"` on every board tool call"
+  - "pass `as: \"<short-name>\"` on every board tool call; first call `board_status` with that `as` and `model` (the model you are running), so the board shows you as a helper with its model"
+  - "when you are finished (task in review, or nothing left), call `helper_done` with the same `as`"
   - "run every command from your own working folder, the worktree you start in. Don't prefix commands with `cd <folder> &&`; background helpers can't ask for permission, and such commands get refused"
 
   While they work, run the loop yourself and pass human answers on to them with SendMessage. After a helper's task is merged, remove its worktree: `git worktree remove <path>`.

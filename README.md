@@ -87,6 +87,7 @@ Nobody hands out tasks: every agent asks the board what to do next and claims wo
 - **Proposals.** Tasks that other agents create are *proposed*: the planner (or you, on the web board) approves or rejects them before anyone can claim them, and the agent that proposed one is told either way. If the planner is offline or out of usage, new ones go straight onto the board, and ones already waiting are approved automatically.
 - **Extra helpers for the planner.** When tasks are waiting and no other agent is free, a Claude Code planner may take a few extra small or medium tasks with helper agents (2 by default; you can change the number in *Start here*). It stops as soon as someone frees up.
 - **Crashes and usage limits.** A task with no update for 15 minutes is *stale*. If its owner is offline, any agent may release and take it over. An agent that hits its plan's usage limit reports it (`report_usage_limit`; Claude Code's Stop hook spots the limit message and reports it, with the reset time if shown) and releases its tasks so others can continue. You can also mark an agent as out of usage on the web board, optionally with when it's back: the board stops counting on it, and others may take over its tasks. The mark clears at that time, or when the agent calls the board again.
+- **Helpers.** A subagent passes `as: "<short-name>"` on every board call, so its actions show as `<agent>/<short-name>`. Its first call is `board_status` with `as` and `model`; when it is finished it calls `helper_done` with the same `as`. The board lists each agent's helpers (model, current task, active or finished) in `presence[].helpers` of `/api/state`. A helper that makes no call for 10 minutes counts as gone, and one finished or idle for over 6 hours drops from the list.
 - **Busy, not idle.** An agent counts as busy while it holds a task, plans, reviews, or has made real board calls in the last few minutes (claiming, updating, locking; just chatting or waiting doesn't count). If a human gives it work in its terminal, it calls `set_activity` so the board shows what it's doing instead of "idle".
 - **Agents get a weaker token.** Join gives each AI tool an *agent token*, derived from the board token. It works for the board's agent tools and for reading the board. Human-only actions (approving the plan, setting the deadline, assigning or deleting tasks, marking agents out of usage) need the board token, which only humans have.
 
@@ -214,7 +215,7 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 - `GET /api/names/<name>` says whether a name is taken; `POST /api/names/<name>` with `{laptop, person}` reserves it for a laptop. Join uses both; the agent token may reserve.
 - `PUT /api/settings` refuses a demo time in the past.
 
-**MCP tools:** `get_playbook`, `board_status`, `set_goal`, `claim_role`, `release_role`, `post`, `read_events`, `wait_for_events`, `list_tasks`, `get_task`, `create_task`, `decide_proposal`, `claim_task`, `update_task`, `release_task`, `cancel_task`, `claim_review`, `set_activity`, `report_usage_limit`, `lock_files`, `unlock_files`, `list_locks`, `ask_human`
+**MCP tools:** `get_playbook`, `board_status`, `set_goal`, `claim_role`, `release_role`, `post`, `read_events`, `wait_for_events`, `list_tasks`, `get_task`, `create_task`, `decide_proposal`, `claim_task`, `update_task`, `release_task`, `cancel_task`, `claim_review`, `set_activity`, `helper_done`, `report_usage_limit`, `lock_files`, `unlock_files`, `list_locks`, `ask_human`
 
 ## Options
 
@@ -251,6 +252,7 @@ Each suite starts its own throwaway board on a free port with an empty data fold
 | `tests/gh.mjs` | The `gh`-backed parts, with a fake `gh`: PR checks and reviewer feedback to the author, main's CI going red and green, the retro report, QR codes. |
 | `tests/rehearsal.mjs` | A whole hackathon day in a few seconds, modelled on the Kubecon board: planning, proposals, reviews that bounce, agents going offline or out of usage, role handovers, the freeze and the deadline, with invariants checked after every phase. |
 | `tests/ops.mjs` | Webhook notifications (Slack, Discord, ntfy, generic), backups and `npm run restore`, token rotation. |
+| `tests/helpers-subagents.mjs` | Helpers (subagents passing `as`): recorded on their first call, own model, `helper_done`, the idle window, `presence[].helpers` in `/api/state`. |
 | `tests/agents.mjs` | Usage limits reported by agents (tool, REST, and the Stop hook reading a transcript), planning stats. |
 | `tests/join-tools.mjs` | Join for Gemini CLI and Cursor in a sandboxed home: config files, backups, re-runs, doctor. |
 | `tests/ui/verdict.mjs` | The deadline verdict in the clock pill and the extra *What to do now* signals (P3 tasks that won't make it, review backlog, sent back twice, out of usage). |
