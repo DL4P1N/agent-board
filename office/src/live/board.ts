@@ -50,6 +50,8 @@ export interface BoardState {
   stats?: { minutes?: Record<string, number> } | null;
   phase?: string;
   board?: { slug: string; name: string; default: boolean; path: string };
+  /** The board page's status word per agent (its Agents row's: "working", "idle", "Question"...): the name tag shows it. */
+  agentStatus?: Record<string, string>;
 }
 
 /** Not a person's agent: the board itself, or a call without a name. */

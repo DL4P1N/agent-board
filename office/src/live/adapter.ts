@@ -158,6 +158,7 @@ export class LiveWorld {
       a.role = role; a.owner = person; a.ownerColor = ownerColor; a.deskIndex = desk;
       a.pos = { x: where.x, z: where.z }; a.heading = where.heading;
       a.phase = look.phase; a.pose = look.pose; a.bubble = look.bubble; a.ticketId = look.ticketId;
+      a.status = b.agentStatus?.[id] ?? null;
       a.phaseProgress = look.phase === 'working' ? 0.5 : 0;
       a.stats.done = tasks.filter((t) => t.status === 'done' && t.assignee && agentRoot(t.assignee) === id).length;
       a.stats.merged = a.stats.done;

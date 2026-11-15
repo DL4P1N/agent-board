@@ -487,7 +487,7 @@ export class OfficeScene {
       e.fx = (this._v.x * 0.5 + 0.5) * w; e.fy = (-this._v.y * 0.5 + 0.5) * h;
       const L = e.label;
       L.name = a.name; L.provider = a.provider; L.tier = a.config.tier; L.model = a.config.model; L.owner = a.owner; L.ownerColor = a.ownerColor ?? '#9a8ac0';
-      L.skills = a.skills ?? []; L.phase = a.phase; L.ticketId = a.ticketId; L.cost = a.usage?.costUsd ?? 0; L.burn = a.burnUsdPerMin ?? 0;
+      L.skills = a.skills ?? []; L.phase = a.phase; L.ticketId = a.ticketId; L.status = a.status; L.cost = a.usage?.costUsd ?? 0; L.burn = a.burnUsdPerMin ?? 0;
       L.bubble = a.bubble; L.x = e.sx; L.y = e.sy; L.visible = vis; L.selected = a.id === this.selected;
       items.push(L);
     }

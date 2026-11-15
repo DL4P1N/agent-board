@@ -111,6 +111,8 @@ export interface AgentState {
   /** Hex colour of this agent's human owner (OWNER_COLORS) - worn as a cap band/lanyard + name-tag stripe. */
   ownerColor: string;
   ticketId: string | null;
+  /** The status word the board shows for this agent (live office only: its Agents row's word), or absent. */
+  status?: string | null;
   config: AgentConfig;
   /** True when the user pinned model/subagents via the UI instead of auto-by-difficulty. */
   overridden: boolean;

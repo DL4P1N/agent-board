@@ -5,7 +5,7 @@ export interface FlightTagItem { key: string; text: string; color: string; x: nu
 
 export interface LabelItem {
   id: string; name: string; provider: ProviderId; tier: string; model: string; owner: string; ownerColor: string;
-  skills: string[]; phase: string; ticketId: string | null; cost: number; burn: number; bubble: string | null;
+  skills: string[]; phase: string; ticketId: string | null; status?: string | null; cost: number; burn: number; bubble: string | null;
   x: number; y: number; visible: boolean; selected: boolean;
 }
 
@@ -129,7 +129,9 @@ export class LabelLayer {
         });
         this.set(e, 'sel', it.selected ? '1' : '0', () => { e.card.classList.toggle('sel', it.selected); e.more.style.display = it.selected ? 'flex' : 'none'; });
         if (it.selected) {
-          this.set(e, 'l1', `${it.ticketId ?? '--'} ${it.phase}`, () => { e.l1.textContent = `${it.ticketId ?? 'no task'} · ${it.phase.replace(/_/g, ' ')}`; });
+          // The live office passes the board's own status word (its Agents row's), so the tag never says something else.
+          const l1 = it.status != null ? [it.ticketId, it.status].filter(Boolean).join(' · ') : `${it.ticketId ?? 'no task'} · ${it.phase.replace(/_/g, ' ')}`;
+          this.set(e, 'l1', l1, () => { e.l1.textContent = l1; });
           // No cost line when nothing is known (the live office doesn't track spend): never a "$0.00".
           const paid = it.cost > 0.005 || it.burn > 0.005;
           this.set(e, 'l2', paid ? fmtMoney(it.cost) + '|' + (it.burn > 0.005 ? it.burn.toFixed(2) : '') : '-', () => { e.l2.style.display = paid ? '' : 'none'; e.l2.textContent = paid ? fmtMoney(it.cost) + (it.burn > 0.005 ? `  $${it.burn.toFixed(2)}/min` : '') : ''; });

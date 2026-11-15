@@ -1013,6 +1013,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-agent .o-r1, .o-agent .o-r2 { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
   .o-agent .o-an { flex: 1 1 auto; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .o-agent .o-r2 { color: var(--muted); font-size: var(--fs-meta); }
+  .o-agent .o-r2[hidden] { display: none; } /* expanded: its detail below says it */
   .o-agent .o-r2 .o-tk { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .o-agent .o-r2 .o-tk.bad { color: var(--bad); }
   .o-agent .o-r2 .o-cl { flex: 0 0 auto; min-width: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2340,7 +2341,7 @@ function render() {
   renderDocks(qOpen, si);
   if ($('task-dlg').open) renderDialogLive();
   checkNotify(); announceActivity();
-  if (boardView === 'office') { office.mod?.update(state); renderOffice(); }
+  if (boardView === 'office') { office.mod?.update(officeState()); renderOffice(); }
 }
 
 // ---------- one vocabulary and one counting rule: the Board view, the 3D view and both presenters ----------
@@ -2881,6 +2882,12 @@ function subagentsOf(a, qOpen) {
     return { ...h, cls, word, t };
   });
 }
+// What the 3D view draws: the board's state, plus each agent's status word (its Agents row's, from oStatus()), so its
+// name tag in the room says the same thing as its row.
+function officeState() {
+  const q = openQuestions();
+  return { ...state, agentStatus: Object.fromEntries([...agentInfo().values()].map((a) => [a.name, oStatus(a, q)[1]])) };
+}
 // Per-agent controls (the selected agent): whose agent it is, how many tasks it may hold, and "hit its usage limit".
 function agentControls(a) {
   const k = esc(a.name);
@@ -2913,9 +2920,10 @@ function agentDetail(a, qOpen, lastText) {
   const row = (t, label, cls) => `<li><div class="tk"><span class="pill ${cls}">${label}</span>${isStale(t) ? '<span class="pill flag">stale</span>' : ''}${t.assignee && t.assignee.includes('/') ? `<span class="muted t-meta">${esc(t.assignee.split('/')[1])}</span>` : ''}<button type="button" class="link" data-open-task="${t.id}" data-fk="pt-${t.id}" title="${esc(t.title)}">#${t.id} ${esc(t.title)}</button></div></li>`;
   const lines = [...held.map((t) => row(t, LABEL[t.status], 's-' + t.status)), ...reviewing.map((t) => row(t, 'Merging', 's-review'))];
   const st = agentState(a);
-  const what = st === 'limited' ? limitText(a) : st === 'offline' ? `Offline${boardView === 'office' ? ': not in the room' : ''} (last seen ${a.last ? ago(a.last) : 'never'})` : st === 'waiting' ? notStartedText(a) : lines.length ? '' : 'No task right now';
+  // Its state is the row's word (oStatus): the detail only adds what the row doesn't say.
+  const what = st === 'limited' ? limitText(a) : st === 'offline' ? `Offline${boardView === 'office' ? ': not in the room' : ''} (last seen ${a.last ? ago(a.last) : 'never'})` : st === 'waiting' ? notStartedText(a) : '';
   const cap = `<div class="pcap" title="${esc(capTip(a))}">${esc([a.client, a.plan].filter(Boolean).join(' · ') || 'agent')} · ${a.active} of ${a.slots} at once${a.override ? ' (set here)' : ''}${a.model ? ` · ${esc(a.model)}` : ''}${a.extra ? ` <span class="pill ok" title="Planner: nobody else is free and small/medium work is ready, so it may run ${a.extra} more with subagents">+${a.extra} extra as planner</span>` : ''}</div>`;
-  const doing = lines.length && a.doing && !isLimited(a) && !/^#\d+/.test(a.doing) ? `<div class="doing" title="${esc(a.doing)}">${esc(short(a.doing, 120))}</div>` : '';
+  const doing = (lines.length || a.busy) && a.doing && !isLimited(a) && !/^#\d+/.test(a.doing) ? `<div class="doing" title="${esc(a.doing)}">${esc(short(a.doing, 120))}</div>` : '';
   return `<div class="o-det" id="o-det" role="group" aria-label="${esc(a.name)}">${cap}${what ? `<p class="muted">${esc(what)}</p>` : ''}${lines.length ? `<ul>${lines.join('')}</ul>` : ''}${doing}`
     + (q ? `<p><span class="pill warn">Question</span> ${esc(short(q.question, 110))}</p>` : '')
     + (lastText ? `<div class="last" title="${esc(lastText)}">${esc(short(lastText, 120))}</div>` : '')
@@ -2951,7 +2959,7 @@ function renderAgents(si, qOpen) {
     const sr = `<span class="vh">, ${esc([a.client || 'agent', a.plan].filter(Boolean).join(' on '))}: ${capText(a)} tasks</span>`;
     return `<li><button type="button" class="o-agent${cls === 'off' ? ' off' : ''}" ${hs(p.name)} data-o-agent="${esc(a.name)}" data-fk="oa-${esc(a.name)}" aria-pressed="${sel}" title="${esc(capTip(a))}${boardView === 'office' ? (a.online ? ' Click to show it in the room.' : ' Offline: not in the room.') : ''}">`
       + `<span class="o-r1">${toolDot(a)}<span class="o-an">${esc(a.name)}${sr}</span><span class="o-st ${cls}${badge ? ' bx' : ''}">${word}</span></span>`
-      + `<span class="o-r2"><span class="o-tk${a.conflict ? ' bad' : ''}">${esc(what || tm || 'AI tool not reported yet')}</span>${what && tm ? `<span class="o-cl" title="${esc([a.client, a.model].filter(Boolean).join(' · '))}">${esc(tm)}</span>` : ''}</span></button>`
+      + `<span class="o-r2"${sel ? ' hidden' : ''}><span class="o-tk${a.conflict ? ' bad' : ''}">${esc(what || tm || 'AI tool not reported yet')}</span>${what && tm ? `<span class="o-cl" title="${esc([a.client, a.model].filter(Boolean).join(' · '))}">${esc(tm)}</span>` : ''}</span></button>`
       + (subs.length ? `<ul class="o-helpers" aria-label="${esc(a.name)}'s subagents">${subs.map((h) => `<li><button type="button" class="link o-hn" data-mention="${esc(h.full)}" title="Subagent of ${esc(a.name)}: works on one task. Click to @mention ${esc(h.full)} in chat">${esc(h.name)}</button><span class="o-hs ${h.cls}">${h.word}</span><span class="o-tk">${h.t ? `#${h.t.id} ${esc(h.t.title)}` : h.doing ? esc(h.doing) : ''}</span>${h.model ? `<span class="o-hm" title="${esc(h.model)}">${esc(modelText(h.model))}</span>` : ''}</li>`).join('')}</ul>` : '')
       + `${sel ? agentDetail(a, qOpen, p.agents.get(a.name)?.lastText) : ''}</li>`;
   };
@@ -4378,7 +4386,7 @@ function setBoardView(v, { save = true, quiet = false } = {}) {
 // Anything that leads to a part of the board the office view hides (the task columns).
 function needBoard() { if (boardView === 'office') setBoardView('board'); }
 function showOffice() {
-  if (office.mod) { office.mod.setActive(true); if (state) office.mod.update(state); office.mod.select(ui.picked || null); return; }
+  if (office.mod) { office.mod.setActive(true); if (state) office.mod.update(officeState()); office.mod.select(ui.picked || null); return; }
   if (office.loading) return;
   const view = $('office-view'); view.classList.add('loading'); view.setAttribute('aria-busy', 'true');
   office.loading = import(BASE + '/office/embed.js').then((m) => {
