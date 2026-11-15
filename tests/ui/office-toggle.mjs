@@ -279,7 +279,7 @@ try {
     await page.click('#theme-btn'); await page.keyboard.press('ArrowRight');
     check('arrow keys move through the grid (Night -> Terminal), the room follows', await until(page, () => document.documentElement.dataset.theme === 'terminal' && office.mod.palette === 'terminal' && document.activeElement?.dataset.themeSet === 'terminal'));
     await page.keyboard.press('ArrowDown');
-    check('down a row (Terminal -> Ocean), the room follows', await until(page, () => document.documentElement.dataset.theme === 'ocean' && office.mod.palette === 'ocean' && document.activeElement?.dataset.themeSet === 'ocean'));
+    check('down a row (Terminal -> Sunset), the room follows', await until(page, () => document.documentElement.dataset.theme === 'sunset' && office.mod.palette === 'sunset' && document.activeElement?.dataset.themeSet === 'sunset'));
     await page.keyboard.press('Escape');
     check('Esc closes the picker, focus back on the theme button (still in 3D)', await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn')) && await view(page) === 'office');
     await page.evaluate(() => setTheme('auto'));

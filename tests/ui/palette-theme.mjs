@@ -45,15 +45,15 @@ try {
   check('one theme control on the page (in the header), no theme list in the help', await page.evaluate(() => document.querySelectorAll('[data-theme-set]').length === 16 && !!$('theme-btn').closest('header') && !document.querySelector('#help-dlg [data-theme-set], #help-dlg .sw')
     && ![...document.querySelectorAll('#help-dlg dd')].some((d) => /Dusk|Terminal|Sticky/.test(d.textContent))));
   await page.click('#theme-btn');
-  check('the theme button opens the chooser: one radio group of 16 tiles (the fifteen themes in order, then Auto), focus on the current one', await page.evaluate(() => !$('theme-pop').hidden && $('theme-btn').getAttribute('aria-expanded') === 'true' && $('theme-pop').getAttribute('role') === 'radiogroup'
-    && document.activeElement?.dataset.themeSet === 'auto' && document.activeElement.getAttribute('aria-checked') === 'true') && (await radios()).join() === [...IDS, 'auto'].join());
-  check('each tile is a tiny board in its own theme with its name (Auto: Dark and Light side by side)', await page.evaluate((names) => {
+  check('the theme button opens the chooser: one radio group of 16 tiles (Auto, then the light themes, then the dark ones), focus on the current one', await page.evaluate(() => !$('theme-pop').hidden && $('theme-btn').getAttribute('aria-expanded') === 'true' && $('theme-pop').getAttribute('role') === 'radiogroup'
+    && document.activeElement?.dataset.themeSet === 'auto' && document.activeElement.getAttribute('aria-checked') === 'true') && (await radios()).join() === ['auto', ...IDS.filter((t) => LIGHT.has(t)), ...IDS.filter((t) => !LIGHT.has(t))].join());
+  check('each tile is a tiny board in its own theme with its name (Auto: Dark and Light side by side)', await page.evaluate((names, ids) => {
     const tiles = [...document.querySelectorAll('#theme-pop [role="radio"]')];
-    const own = tiles.slice(0, 15).every((b, i) => b.querySelector('.mini')?.dataset.tp === b.dataset.themeSet && b.textContent.trim() === names[i]
+    const own = tiles.slice(1).every((b) => b.querySelector('.mini')?.dataset.tp === b.dataset.themeSet && b.textContent.trim() === names[ids.indexOf(b.dataset.themeSet)]
       && getComputedStyle(b.querySelector('.mini')).backgroundColor === getComputedStyle(b.querySelector('.mini')).getPropertyValue('--bg').trim().replace(/^#(..)(..)(..)$/, (m, r, g, bb) => `rgb(${[r, g, bb].map((x) => parseInt(x, 16)).join(', ')})`));
-    const auto = tiles[15]; const minis = [...auto.querySelectorAll('.mini[data-tp]')].map((m) => m.dataset.tp);
+    const auto = tiles[0]; const minis = [...auto.querySelectorAll('.mini[data-tp]')].map((m) => m.dataset.tp);
     return own && minis.join() === 'dark,light' && auto.textContent.trim() === 'Auto';
-  }, NAMES));
+  }, NAMES, IDS));
   const fit = await page.evaluate(() => { const p = $('theme-pop'), r = p.getBoundingClientRect(); return { cols: getComputedStyle($('tp-grid')).gridTemplateColumns.split(' ').length, fits: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth && p.scrollHeight <= p.clientHeight + 1, under: r.top >= $('theme-btn').getBoundingClientRect().bottom }; });
   check('the chooser is a 4-column grid under the button and fits the window without scrolling', fit.cols === 4 && fit.fits && fit.under, JSON.stringify(fit));
   await page.screenshot({ path: `${out}/chooser.png` });
@@ -65,14 +65,15 @@ try {
   // each move applies the theme and keeps the chooser open; one Tab stop.
   await page.click('#theme-btn');
   const at = () => page.evaluate(() => ({ f: document.activeElement?.dataset.themeSet, t: document.documentElement.getAttribute('data-theme') ?? 'auto', open: !$('theme-pop').hidden, stops: [...document.querySelectorAll('#theme-pop [role="radio"]')].filter((b) => b.tabIndex === 0).length }));
-  const keys = [['ArrowRight', 'day'], ['ArrowDown', 'paper'], ['ArrowLeft', 'contrast'], ['ArrowUp', 'dusk'], ['ArrowUp', 'dusk'], ['End', 'auto'], ['ArrowDown', 'auto'], ['ArrowRight', 'dark'], ['ArrowLeft', 'auto'], ['ArrowUp', 'coral'], ['Home', 'dark'], ['ArrowDown', 'night']];
+  // Rows: Auto, Light, Day, Paper | Sticky Note, Coral, Cotton Candy | Dark, Dusk, Night, Terminal | High Contrast, Synthwave, Ocean, Sunset | Forest.
+  const keys = [['ArrowRight', 'night'], ['ArrowDown', 'ocean'], ['ArrowLeft', 'synthwave'], ['ArrowUp', 'dusk'], ['End', 'forest'], ['ArrowDown', 'forest'], ['ArrowRight', 'auto'], ['ArrowUp', 'auto'], ['ArrowLeft', 'forest'], ['ArrowUp', 'contrast'], ['Home', 'auto'], ['ArrowDown', 'sticky']];
   const walk = [];
   for (const [k, want] of keys) { await page.keyboard.press(k); await sleep(40); const a = await at(); walk.push(`${k}:${a.f}`); if (a.f !== want || a.t !== want || !a.open || a.stops !== 1) { walk.push(`(want ${want}, got ${JSON.stringify(a)})`); break; } }
   check('arrow keys move through the grid (left/right wrap, up/down by a row), Home/End; each applies and keeps it open, one Tab stop', !walk.some((w) => w.startsWith('(')), walk.join(' '));
   await page.keyboard.press('ArrowRight'); await page.keyboard.press('Enter'); await sleep(80);
-  check('Enter keeps the focused theme (Terminal) and closes the chooser, focus back on the button', (await attr()) === 'terminal' && await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn')));
+  check('Enter keeps the focused theme (Coral) and closes the chooser, focus back on the button', (await attr()) === 'coral' && await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn')));
   await page.keyboard.press('Enter'); await sleep(80); await page.keyboard.press('ArrowLeft'); await page.keyboard.press(' '); await sleep(80);
-  check('the button opens it from the keyboard; Space picks (Night) and closes it', (await attr()) === 'night' && await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn')));
+  check('the button opens it from the keyboard; Space picks (Sticky Note) and closes it', (await attr()) === 'sticky' && await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn')));
   await page.click('#theme-btn'); await page.keyboard.press('Escape'); await sleep(80);
   check('Esc closes the chooser, focus back on the theme button', await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn') && $('theme-btn').getAttribute('aria-expanded') === 'false'));
   await page.click('#theme-btn'); await page.mouse.click(300, 900); await sleep(80);

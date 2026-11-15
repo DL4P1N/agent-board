@@ -38,11 +38,11 @@ try {
   page.on('console', (m) => m.type() === 'error' && errors.push('console: ' + m.text()));
   await page.evaluateOnNewDocument((t) => { try { localStorage.setItem('board-token', t); localStorage.setItem('board-name', 'hostp'); } catch {} }, board.token);
   await page.goto(board.base + '/');
-  await page.waitForSelector('#people .person');
+  await page.waitForSelector('#people'); // hostp has no agent yet, so no row of its own
   await sleep(400);
 
   // ---- WB-7: a person's colour doesn't change when others join ----
-  const before = await hueOf('hostp');
+  const before = await page.evaluate(() => String(hue('hostp')));
   check('no colour legend: an agent\'s state is a word in its row (Agents, both views)', !(await page.$('#p-legend')));
   const carol = await agent('carol-codex', { client: 'codex-mcp-client' });
   const dave = await agent('dave', { client: 'omp-agent' });
@@ -53,7 +53,7 @@ try {
   await rest(board, 'ghosty', '/messages', 'POST', { text: 'hello' }); // a name typed once on the page
   await page.waitForFunction(() => document.querySelectorAll('#people .person').length >= 8, { timeout: 8000 });
   await sleep(300);
-  const after = await hueOf('hostp');
+  const after = await page.evaluate(() => String(hue('hostp')));
   check('hostp keeps its colour when 8 more people join', before !== '' && before === after, `${before} → ${after}`);
   check('the colour comes from the name alone', Number(after) === (await page.evaluate(() => HUES[nameHash('hostp') % HUES.length])), after);
   check('every hue in the palette is at least 20° from the next', await page.evaluate(() => HUES.every((h, i) => i === 0 || h - HUES[i - 1] >= 20)));

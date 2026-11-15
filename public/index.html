@@ -467,6 +467,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     background: var(--raised); color: var(--ink); border: 2px solid var(--line); box-shadow: none; font-weight: 400; }
   button.tile:hover { background: var(--chip); border-color: var(--field-line); }
   button.tile:active { transform: none; box-shadow: none; }
+  button.tile.row { grid-column-start: 1; } /* the dark themes start a row of their own, under Auto and the light ones */
   button.tile[aria-checked="true"] { border-color: var(--ink); background: var(--chip); }
   .tile .nm { display: flex; align-items: center; gap: var(--s2); font-size: var(--fs-meta); line-height: 1.3; }
   .tile[aria-checked="true"] .nm { font-weight: 700; }
@@ -689,6 +690,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .board-empty, .bnote { border: 2px solid var(--border); border-radius: var(--r-lg); padding: 10px var(--s6); margin-bottom: var(--s4); background: var(--panel); box-shadow: var(--bevel); }
   .board-empty { border-style: dashed; color: var(--muted); box-shadow: none; }
   .board-empty b { color: var(--ink); }
+  .board-empty .link, .o-nomatch .link { text-decoration: underline; }
+  .o-nomatch { grid-column: 1 / -1; margin: 0; padding: var(--s3); color: var(--muted); font-size: var(--fs-sm); }
   .bnote.k-appr { background: var(--accent-soft); border-color: var(--accent-line); }
   .bnote.k-freeze { background: var(--warn-soft); border-color: var(--warn-line); }
   .bnote.k-ci { background: var(--bad-soft); border-color: var(--bad-line); }
@@ -833,11 +836,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .x:hover { background: var(--chip); color: var(--ink); }
   .meta { font-size: var(--fs-meta); color: var(--muted); display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); margin-top: var(--s3); }
   .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 10px; }
-  .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 0 10px; align-items: start; }
-  .grid2 .hint { margin-top: 34px; }
-  @media (max-width: 520px) { .grid3, .grid2 { grid-template-columns: minmax(0, 1fr); } .grid2 .hint { margin-top: var(--s2); } }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 10px; align-items: start; }
+  @media (max-width: 520px) { .grid3, .grid2 { grid-template-columns: minmax(0, 1fr); } }
   .hist { margin-top: var(--s5); }
-  .hist .feed { height: auto; max-height: 26vh; border: 2px solid var(--border); border-radius: var(--r-md); padding: var(--s2); }
+  .hist .feed { height: auto; max-height: 26vh; }
   .df { display: flex; gap: var(--s4); margin-top: var(--s6); flex-wrap: wrap; align-items: center; }
   #task-dlg .df { position: sticky; bottom: calc(-1 * var(--dp)); z-index: 1; margin: var(--s6) calc(-1 * var(--dp)) calc(-1 * var(--dp)); padding: var(--s4) var(--dp) var(--dp); background: var(--panel); border-top: 2px solid var(--line); }
   #task-dlg .df .row label { margin-top: 0; }
@@ -994,6 +996,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-agent:hover { background: var(--raised); border-color: var(--line-strong); }
   .o-agent:active { transform: none; box-shadow: none; }
   .o-agent[aria-pressed="true"] { border-color: var(--line-strong); box-shadow: inset 4px 0 0 hsl(var(--h, 0) 60% var(--dl)); }
+  #o-agents.more-below { -webkit-mask-image: linear-gradient(to top, transparent, #000 28px); mask-image: linear-gradient(to top, transparent, #000 28px); }
   .o-agent .o-r1, .o-agent .o-r2 { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
   .o-agent .o-an { flex: 1 1 auto; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .o-agent .o-r2 { color: var(--muted); font-size: var(--fs-meta); }
@@ -1026,9 +1029,14 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 
   /* Activity: filters, the feed, the chat. File locks: folded to their title bar (with the count) by default. */
   .o-act > .o-body { display: flex; flex-direction: column; padding: var(--s3) var(--s5) var(--s4); overflow: hidden; }
-  .o-act .tabs { justify-content: flex-start; margin: 0 0 var(--s3); flex: 0 0 auto; }
+  .o-act .tabs { justify-content: flex-start; margin: 0 0 var(--s3); flex: 0 0 auto; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .o-act .tabs button { flex: 0 0 auto; }
+  /* "New activity" sits between the feed and the composer, not over the last event. */
+  .o-act .jump { position: static; translate: none; align-self: center; margin-top: var(--s2); }
+  .o-act .jump:active { translate: 1px 1px; }
   .o-act .tabs button { padding: 0 var(--s2); min-width: var(--ctl-xs); }
   .o-act .feedwrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  @media (max-height: 760px) { .o-rcol > .o-right { max-height: 34%; } } /* short screens: Activity keeps room for a few events */
   .o-act .feed { max-height: none; flex: 1 1 auto; min-height: 96px; }
   .o-locks .panel-hint { margin: 0 0 var(--s3); }
 
@@ -1430,18 +1438,19 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       <div><label for="td-prio">Priority</label>
         <select id="td-prio" aria-describedby="td-err"><option value="1">P1 · high</option><option value="2">P2 · normal</option><option value="3">P3 · low</option></select></div>
       <div><label for="td-size">Size</label>
-        <select id="td-size" aria-describedby="td-size-hint td-err"><option value="S">S · small, under 30 min</option><option value="M">M · medium, about an hour</option><option value="L">L · large, needs a strong plan</option></select></div>
+        <select id="td-size" aria-describedby="td-size-hint td-err" title="Agents on bigger plans (more tasks at once) take L tasks first; one-task-at-a-time agents take S first."><option value="S">S · small, under 30 min</option><option value="M">M · medium, about an hour</option><option value="L">L · large, needs a strong plan</option></select></div>
       <div id="td-status-wrap"><label for="td-status">Status</label><select id="td-status"></select></div>
-      <div id="td-deps-wrap"><label for="td-deps">Depends on</label><input id="td-deps" placeholder="e.g. 3, 5" autocomplete="off" aria-describedby="td-deps-hint td-err"></div>
+      <div id="td-deps-wrap"><label for="td-deps">Depends on</label><input id="td-deps" placeholder="e.g. 3, 5" autocomplete="off" aria-describedby="td-deps-hint td-err" title="Task ids that must be done before this can be claimed. Optional."></div>
     </div>
-    <p class="hint" id="td-size-hint">Agents on bigger plans (more tasks at once) take L tasks first; one-task-at-a-time agents take S first.</p>
+    <!-- Field help is each field's tooltip and description (read out), not a paragraph under every field. -->
+    <p class="hint vh" id="td-size-hint">Agents on bigger plans (more tasks at once) take L tasks first; one-task-at-a-time agents take S first.</p>
     <p class="hint" id="td-deps-hint"></p>
-    <p class="hint" id="td-status-hint"></p>
+    <p class="hint vh" id="td-status-hint"></p>
     <div class="grid2">
-      <div><label for="td-res">Reserve for</label><select id="td-res" aria-describedby="td-res-hint td-err"></select></div>
-      <p class="hint" id="td-res-hint">Only that agent can claim it; it's listed first for them. "Anyone" lets any agent take it.</p>
-      <div id="td-asg-wrap"><label for="td-asg">Assigned to</label><select id="td-asg" aria-describedby="td-asg-hint td-err"></select></div>
-      <p class="hint" id="td-asg-hint">Hand it to an agent directly. The agent is told on the board; it should pick it up on its next check.</p>
+      <div><label for="td-res">Reserve for</label><select id="td-res" aria-describedby="td-res-hint td-err" title="Only that agent can claim it; it's listed first for them. &quot;Anyone&quot; lets any agent take it."></select></div>
+      <p class="hint vh" id="td-res-hint">Only that agent can claim it; it's listed first for them. "Anyone" lets any agent take it.</p>
+      <div id="td-asg-wrap"><label for="td-asg">Assigned to</label><select id="td-asg" aria-describedby="td-asg-hint td-err" title="Hand it to an agent directly. The agent is told on the board; it should pick it up on its next check."></select></div>
+      <p class="hint vh" id="td-asg-hint">Hand it to an agent directly. The agent is told on the board; it should pick it up on its next check.</p>
     </div>
     <div id="td-err" class="err" role="alert"></div>
     <div class="hist" id="td-hist-wrap"><div class="sec-h">Activity on this task</div><div class="feed" id="td-history"></div></div>
@@ -2277,7 +2286,7 @@ function render() {
   renderBoardEmpty(si);
   renderBoardNote(); renderCi();
   renderQuestions(qOpen);
-  renderAgents(si, qOpen);
+  renderAgents(si, qOpen); requestAnimationFrame(fadeAgents);
   renderFilter();
   if (!ui.dragging) renderBoard();
   renderFeed(unread.length);
@@ -2914,6 +2923,10 @@ function renderAgents(si, qOpen) {
   }).join('') : '<li class="muted">Nobody yet. When a teammate\'s AI agent connects, it appears here with what it\'s working on.</li><li><button type="button" class="ghost sm" data-go="step-invite" data-fk="o-invite">Connect a laptop</button></li>');
 }
 
+// More rows below the Agents panel's edge: its foot fades, so a cut row reads as "more", not as a fragment.
+function fadeAgents() { const b = $('o-agents'); b.classList.toggle('more-below', b.scrollHeight - b.scrollTop - b.clientHeight > 2); }
+$('o-agents').addEventListener('scroll', fadeAgents, { passive: true });
+addEventListener('resize', () => requestAnimationFrame(fadeAgents));
 function renderFilter() {
   const ps = people().map((p) => p.name).filter((n) => n !== me);
   if (ui.filter && ui.filter !== 'me' && !ps.includes(ui.filter) && ui.filter !== root(me)) ui.filter = '';
@@ -3050,6 +3063,7 @@ function renderTable(visible) {
   patch($('tasktable'), `<table><caption class="vh">Tasks, sorted by ${tv.sort}</caption><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>${rows.length ? '' : `<p class="muted tt-empty">${tv.q.trim() ? 'No tasks match your search.' : 'No tasks to show.'}</p>`}`);
 }
 $('tsearch').addEventListener('input', () => { tv.q = $('tsearch').value; renderBoard(); renderOffice(); });
+const noMatchHtml = (fk) => `No tasks match “${esc(tv.q.trim())}”. <button type="button" class="link" data-act="clear-search" data-fk="${fk}">Clear search</button>`;
 $('viewtog').addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-view]'); if (!b) return;
   tv.view = b.dataset.view === 'table' ? 'table' : 'columns'; store.set('board-view', tv.view); renderBoard(); renderOffice();
@@ -3064,8 +3078,11 @@ function renderBoard() {
   const table = tv.view === 'table';
   $('viewtog').querySelectorAll('button').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.view === tv.view)); b.tabIndex = b.dataset.view === tv.view ? -1 : 0; });
   $('taskbar').classList.toggle('none', !state.tasks.length);
-  $('board').hidden = table; $('tasktable').hidden = !table || !state.tasks.length; $('cols-hint').hidden = table;
-  if (table) { if (state.tasks.length) renderTable(visible); return; }
+  // A search that matches nothing: one line with a way out, instead of "no matches" in every column.
+  const noMatch = state.tasks.length > 0 && !!tv.q.trim() && !visible.length;
+  if (state.tasks.length) { const be = $('board-empty'); be.hidden = !noMatch; patch(be, noMatch ? noMatchHtml('clear-search') : ''); }
+  $('board').hidden = table || noMatch; $('tasktable').hidden = !table || !state.tasks.length || noMatch; $('cols-hint').hidden = table || noMatch;
+  if (table) { if (state.tasks.length && !noMatch) renderTable(visible); return; }
   const dOpen = doneOpen();
   const tm = timeNow(); const frozen = tm.frozen && !tm.past;
   $('board').classList.toggle('none', !state.tasks.length);
@@ -3709,6 +3726,7 @@ function doAct(a, el) {
     return document.querySelector(`[data-fk="${open ? 'done-close' : 'done-tog'}"]`)?.focus({ preventScroll: true });
   }
   if (a === 'new-task') return openTask(null);
+  if (a === 'clear-search') { tv.q = ''; $('tsearch').value = ''; renderBoard(); renderOffice(); return $('tsearch').focus(); }
 }
 function goStep(key, focus) {
   const si = setupInfo();
@@ -3878,7 +3896,7 @@ function openTask(id) {
   $('td-status-wrap').hidden = !t;
   $('td-deps-wrap').hidden = !!t;
   $('td-deps').value = '';
-  $('td-err').textContent = ''; $('td-status-hint').textContent = t ? HINT[t.status] + '.' : '';
+  $('td-err').textContent = ''; $('td-status-hint').textContent = t ? HINT[t.status] + '.' : ''; $('td-status-hint').classList.add('vh'); $('td-status').title = t ? HINT[t.status] : '';
   for (const n of ['td-name', 'td-deps', 'td-prio', 'td-size', 'td-res']) $(n).removeAttribute('aria-invalid');
   $('td-conflict').hidden = true; $('td-discard').hidden = true;
   $('td-save').textContent = t ? 'Save changes' : 'Create task';
@@ -3894,7 +3912,7 @@ function openTask(id) {
 }
 function renderDialogLive() {
   const t = editing && taskById(editing.id);
-  if (!editing) { $('td-meta').innerHTML = ''; renderTaskBlock(null); $('td-deps-hint').textContent = 'Task ids that must be done before this can be claimed. Optional.'; resOptions(); return; }
+  if (!editing) { $('td-meta').innerHTML = ''; renderTaskBlock(null); $('td-deps-hint').textContent = 'Task ids that must be done before this can be claimed. Optional.'; $('td-deps-hint').classList.add('vh'); resOptions(); return; }
   if (!t) { $('td-conflict').hidden = false; $('td-conflict').textContent = 'This task no longer exists.'; return; }
   // Fields the human didn't touch follow the server; a warning only when one they DID edit changed underneath them.
   const mine = editedFields();
@@ -3913,7 +3931,6 @@ function renderDialogLive() {
     `<span>${LABEL[t.status]}</span>`,
     t.assignee ? `<span>assignee ${who(t.assignee)}</span>` : '<span>unassigned</span>',
     t.branch ? `<span>branch <code>${esc(t.branch)}</code></span>` : '',
-    t.status === 'proposed' ? `<span class="pill flag">proposed by ${esc(t.created_by)}: approve it on its card, or set the status to Open</span>` : '',
     (() => { const pr = prInfo(t); return pr ? `<span>pull request <a href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer">${esc(pr.url.replace(/^https?:\/\/(www\.)?/, ''))}</a>${pr.text ? ` <span class="pill ${pr.cls}">${esc(pr.text)}</span>` : ''}</span>${prFeedback(t)}` : ''; })(),
     t.status === 'review' && t.reviewer ? `<span>being merged by ${who(t.reviewer)}</span>` : '',
     t.assignee && HOLDING.includes(t.status) && agentLimited(t.assignee) ? '<span class="pill warn">owner out of usage — agents may take it over</span>' : '',
@@ -3921,7 +3938,7 @@ function renderDialogLive() {
     `<span>updated ${ago(t.updated_at)}</span>`,
     isStale(t) ? `<span class="pill flag">stale: no update for 15+ min${t.assignee && ownerOffline(t) ? ' · owner offline — agents may take it over' : ''}</span>` : '',
   ].join(''));
-  $('td-deps-hint').innerHTML = deps.length ? `Depends on ${deps.join(', ')}. Dependencies are fixed after creation.` : '';
+  $('td-deps-hint').innerHTML = deps.length ? `Depends on ${deps.join(', ')}. Dependencies are fixed after creation.` : ''; $('td-deps-hint').classList.remove('vh');
   const h = $('td-history'); const before = h._html;
   const evs = state.events.filter((e) => e.task_id === t.id);
   patch(h, evs.map((e, i) => evHtml(e, evs[i - 1])).join('') || '<div class="muted empty-note">No activity yet.</div>');
@@ -3956,7 +3973,9 @@ $('td-block').addEventListener('click', (ev) => {
 });
 $('td-status').addEventListener('change', () => {
   const s = $('td-status').value;
-  $('td-status-hint').textContent = HINT[s] + '.' + (s === 'open' && editing?.assignee ? ' Moving back to Open unassigns it and frees its file locks.' : s === 'done' ? ' Marking done frees any file locks held for this task.' : '');
+  const more = s === 'open' && editing?.assignee ? ' Moving back to Open unassigns it and frees its file locks.' : s === 'done' ? ' Marking done frees any file locks held for this task.' : '';
+  $('td-status-hint').textContent = HINT[s] + '.' + more; $('td-status').title = HINT[s];
+  $('td-status-hint').classList.toggle('vh', !more); // shown only when the change does something more than its name says
 });
 // Closing with unsaved edits asks first (inline, no browser popup).
 function requestCloseTask() { if (dlgDirty() && $('td-discard').hidden) { $('td-discard').hidden = false; $('td-keep').focus(); return; } dlg.close(); }
@@ -4191,19 +4210,20 @@ let resizeT; addEventListener('resize', () => { if (ui.doneOpen) return; clearTi
 // Auto (Dark or Light, following the OS) or one of the fifteen themes (window.THEMES in <head>, generated by
 // scripts/themes.mjs: id -> [name, page colour, 1 when light]). The saved value is shared with the presenters and the
 // Boards page; anything unknown reads as Auto (window.themeOf).
-const THEME_LIST = [...Object.entries(window.THEMES).map(([v, [l, , lt]]) => [v, l, lt ? 'light' : 'dark']), ['auto', 'Auto', 'Dark or Light, following the device']];
+const THEME_LIST = (() => { const all = Object.entries(window.THEMES).map(([v, [l, , lt]]) => [v, l, lt ? 'light' : 'dark']);
+  return [['auto', 'Auto', 'Dark or Light, following the device'], ...all.filter((t) => t[2] === 'light'), ...all.filter((t) => t[2] === 'dark')]; })();
 let themePref = 'auto';
 try { themePref = window.themeOf(localStorage.getItem('board-theme')); } catch {}
 // The chooser's tiles: a tiny board in each theme (Auto: Dark and Light side by side), its name under it.
 const miniBoard = (t) => `<span class="mini" data-tp="${t}"><span class="mp"><span class="mb a"></span><span class="mb"></span><span class="mb x"></span></span><span class="mp"><span class="mb"></span><span class="mb o"></span><span class="mb n"></span><span class="mb w"></span></span><span class="mp"><span class="mb"></span><span class="mb o"></span><span class="mb"></span></span></span>`;
-$('tp-grid').innerHTML = THEME_LIST.map(([v, l, d]) => `<button type="button" class="tile" role="radio" data-theme-set="${v}" aria-checked="false" tabindex="-1" title="${v === 'auto' ? d : `${l} (${d})`}"><span aria-hidden="true" class="${v === 'auto' ? 'mini split' : ''}">${v === 'auto' ? miniBoard('dark') + miniBoard('light') : miniBoard(v)}</span><span class="nm">${l}</span></button>`).join('');
+$('tp-grid').innerHTML = THEME_LIST.map(([v, l, d], i) => `<button type="button" class="tile${d === 'dark' && THEME_LIST[i - 1]?.[2] !== 'dark' ? ' row' : ''}" role="radio" data-theme-set="${v}" aria-checked="false" tabindex="-1" title="${v === 'auto' ? d : `${l} (${d})`}"><span aria-hidden="true" class="${v === 'auto' ? 'mini split' : ''}">${v === 'auto' ? miniBoard('dark') + miniBoard('light') : miniBoard(v)}</span><span class="nm">${l}</span></button>`).join('');
 function syncThemeButtons() {
   for (const b of document.querySelectorAll('[data-theme-set]')) {
     const on = b.dataset.themeSet === themePref;
     // The chooser is a radio group: one Tab stop, on the current theme.
     b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1;
   }
-  const l = THEME_LIST.find(([v]) => v === themePref) || THEME_LIST.at(-1);
+  const l = THEME_LIST.find(([v]) => v === themePref) || THEME_LIST[0];
   const sw = $('theme-sw'); sw.className = 'sw sw-' + l[0]; sw.dataset.tp = l[0];
   $('theme-btn').setAttribute('aria-label', `Theme: ${l[1]}. Change it`); $('theme-btn').title = `Theme: ${l[1]}`;
 }
@@ -4245,8 +4265,11 @@ $('theme-pop').addEventListener('keydown', (ev) => {
   if (ev.key === 'Tab') return themePop(false, false);
   const rs = [...$('theme-pop').querySelectorAll('[role="radio"]')]; const i = rs.indexOf(document.activeElement);
   if (i < 0) return;
-  const cols = Math.max(1, rs.filter((b) => b.offsetTop === rs[0].offsetTop).length), n = rs.length;
-  const to = { ArrowRight: (i + 1) % n, ArrowLeft: (i - 1 + n) % n, ArrowDown: i + cols < n ? i + cols : i, ArrowUp: i - cols >= 0 ? i - cols : i, Home: 0, End: n - 1 }[ev.key];
+  // Up / down: the tile in the row above / below nearest to this one's column (the rows aren't all full).
+  const tops = [...new Set(rs.map((b) => b.offsetTop))].sort((a, b) => a - b), n = rs.length;
+  const vert = (d) => { const r = tops[tops.indexOf(rs[i].offsetTop) + d]; if (r === undefined) return i;
+    const row = rs.filter((b) => b.offsetTop === r); const x = rs[i].offsetLeft; return rs.indexOf(row.reduce((m, b) => (Math.abs(b.offsetLeft - x) < Math.abs(m.offsetLeft - x) ? b : m))); };
+  const to = { ArrowRight: (i + 1) % n, ArrowLeft: (i - 1 + n) % n, ArrowDown: ev.key === 'ArrowDown' ? vert(1) : i, ArrowUp: ev.key === 'ArrowUp' ? vert(-1) : i, Home: 0, End: n - 1 }[ev.key];
   if (to === undefined) return;
   ev.preventDefault();
   if (to !== i) setTheme(rs[to].dataset.themeSet);
@@ -4496,6 +4519,7 @@ function renderOffice() {
   const table = tv.view === 'table' && state.tasks.length;
   $('o-cols').hidden = !!table;
   const tasks = state.tasks.filter(taskShown);
+  if (state.tasks.length && tv.q.trim() && !tasks.length) { patch($('o-cols'), `<p class="o-nomatch">${noMatchHtml('o-clear-search')}</p>`); return oFrame(); }
   if (patch($('o-cols'), O_COLS.map(([k, label]) => {
     let list = tasks.filter((t) => colOf(t) === k);
     list = k === 'open' ? list.sort((a, b) => (b.status === 'proposed') - (a.status === 'proposed') || a.priority - b.priority || a.id - b.id) : list.sort((a, b) => b.updated_at - a.updated_at);
@@ -4554,9 +4578,14 @@ addEventListener('resize', () => { oApply(); if (boardView === 'office') request
 // Select an agent (its row, or its character in the room); again: unselect. The selection is the same in both views.
 function pickAgent(id, fromRow = false) {
   ui.picked = id || null; office.mod?.select(ui.picked); render();
-  if (!ui.picked || fromRow) return;
-  oShow('right');
-  document.querySelector(`[data-fk="oa-${CSS.escape(ui.picked)}"]`)?.scrollIntoView({ block: 'nearest', behavior: smooth() });
+  if (!ui.picked) return;
+  if (!fromRow) oShow('right');
+  // The row and what opened under it, in view inside the panel (only the panel scrolls, never the page).
+  const b = $('o-agents'), row = document.querySelector(`[data-fk="oa-${CSS.escape(ui.picked)}"]`), det = $('o-det');
+  if (!row || !b.offsetHeight) return;
+  const br = b.getBoundingClientRect(), top = row.getBoundingClientRect().top, bottom = (det || row).getBoundingClientRect().bottom;
+  const dy = bottom > br.bottom ? Math.min(bottom - br.bottom + 8, top - br.top) : top < br.top ? top - br.top - 8 : 0;
+  if (dy) b.scrollBy({ top: dy, behavior: smooth() });
 }
 $('app').addEventListener('click', (ev) => {
   const t = ev.target.closest('button'); if (!t) return;
