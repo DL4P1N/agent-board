@@ -385,7 +385,7 @@ function createBoardRuntime(slug, dir) {
       version: VERSION,
       board: { slug, name: registry.get(slug)?.name || slug, default: isDefault(), path: p },
       agent_tools: AGENT_TOOLS,
-      clone_command: 'git clone https://github.com/DL4P1N/claude-board && cd claude-board',
+      clone_command: 'git clone https://github.com/DL4P1N/agent-board claude-board && cd claude-board',
       join_commands: list.map((a) => ({
         label: a.label,
         ip: a.ip,
@@ -1059,7 +1059,7 @@ const httpServer = app.listen(PORT, HOST, () => {
       console.log('\n    ⚠ No network address found, so teammates can\'t reach this laptop. Join the wifi, start Tailscale, or use  npm run tunnel');
     }
     console.log('\n 2. Teammates connect their laptop. First time only, get the tool:');
-    console.log('      git clone https://github.com/DL4P1N/claude-board && cd claude-board');
+    console.log('      git clone https://github.com/DL4P1N/agent-board claude-board && cd claude-board');
     console.log('    (already have the claude-board folder? run git pull in it instead)');
     console.log('    Then, in the claude-board folder (it asks the rest):');
     console.log(`      npm run join -- --url ${best}/b/${rt.slug} --token ${rt.token}`);

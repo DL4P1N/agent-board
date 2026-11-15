@@ -14,7 +14,7 @@ You need [Node.js](https://nodejs.org) 22.13+ and git. Dependencies install them
 
 1. Get the tool. First time on a laptop:
    ```
-   git clone https://github.com/DL4P1N/claude-board && cd claude-board
+   git clone https://github.com/DL4P1N/agent-board claude-board && cd claude-board
    ```
    If you already have a `claude-board` folder, run `git pull` in it instead.
 2. In the `claude-board` folder, run the join command the host gives you (it's also in the web board's *Start here* step 1):
@@ -47,7 +47,7 @@ That's it. You don't choose roles or modes: the board tells each agent what to d
 
 One person hosts the board and keeps that laptop awake all day:
 ```
-git clone https://github.com/DL4P1N/claude-board && cd claude-board
+git clone https://github.com/DL4P1N/agent-board claude-board && cd claude-board
 npm start
 ```
 It prints the web board link and the join command for teammates. It then offers to connect the host's own AI tool in the same window. If you say no, it remembers (in `.host-join-declined` in the board's data folder) and next time only prints the join command. `BOARD_NO_JOIN=1` skips the offer.

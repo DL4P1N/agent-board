@@ -2460,7 +2460,7 @@ function inviteText() {
   const join = best?.command || 'npm run join -- --url <board address> --token <token>  (ask the host)';
   const L = ['Join our hackathon board (Claude Board). On your laptop:', ''];
   let n = 1;
-  L.push(`${n++}. First time only, get the board tool:`, `   ${su.clone_command || 'git clone https://github.com/DL4P1N/claude-board && cd claude-board'}`, '   (already have the claude-board folder? run git pull in it)');
+  L.push(`${n++}. First time only, get the board tool:`, `   ${su.clone_command || 'git clone https://github.com/DL4P1N/agent-board claude-board && cd claude-board'}`, '   (already have the claude-board folder? run git pull in it)');
   L.push(`${n++}. In the claude-board folder, connect your laptop (it asks your name, AI tool and project folder):`, `   ${join}`);
   if (S.repo) L.push(`${n++}. Get the project repo (if you don't have it yet):`, `   git clone ${S.repo}`);
   L.push(`${n++}. Then open your AI tool in the project repo and type /board`, `   (Codex: $board · Copilot CLI: start it with  ${copilotLaunch()}  then type /board)`);
