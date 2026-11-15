@@ -144,9 +144,7 @@ try {
   await reload();
   now = await txt('#now');
   check('review backlog of 4 is listed', /4 tasks waiting in Review/.test(now), now);
-  check('an agent out of usage is listed', /alice is out of usage/.test(now), now);
-  await page.click('#now [data-go="limited"]'); await sleep(400);
-  check('clicking it selects alice in Agents (with It\'s back)', await page.evaluate(() => ui.picked === 'alice' && document.activeElement?.dataset.fk === 'ul-alice' && !!document.activeElement.closest('#o-det')), await page.evaluate(() => document.activeElement?.dataset.fk || ''));
+  check('an agent out of usage is not a to-do (Agents and its cards show it)', !/out of usage/.test(now), now);
   await page.click('#now [data-go="review"]'); await sleep(400);
   check('the review item jumps to the Review column', await page.evaluate(() => !!document.activeElement?.closest('#col-review')));
   await page.screenshot({ path: `${out}/signals-now.png`, clip: { x: 0, y: 0, width: 1440, height: 260 } });
@@ -156,7 +154,7 @@ try {
   await human(`/tasks/${bounce.id}`, 'PATCH', { status: 'done' });
   await reload();
   now = await txt('#now');
-  check('alone, the limit leads: "alice hit its usage limit"', /alice hit its usage limit: its tasks wait, or other agents take them over/.test(now), now);
+  check('alone, the limit is not a to-do either (Agents shows it)', !/usage limit/.test(now), now);
   check('no page errors', errors.length === 0, errors.join(' | '));
 } catch (e) {
   results.push(`CRASH ${e.stack}`);

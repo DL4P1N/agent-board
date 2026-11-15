@@ -544,6 +544,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .phases span.p.past { color: var(--ink); }
   .phases span.p.cur { color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--ink); }
   .phases .arr { color: var(--muted); }
+  /* Only the phase the team is in: the whole track is the tooltip (and read out), and Setup has the steps. */
+  .phases li:not(:has(.cur)), .phases .arr { display: none; }
   .phases ol { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1); list-style: none; margin: 0; padding: 0; flex: 1 1 0; min-width: 0; }
   .phases li { display: inline-flex; align-items: center; gap: var(--s1); }
 
@@ -882,6 +884,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
      accent is kept for what needs you (the need-you count, Answer, Approve, @me, "question waiting"). */
   .o-head h2, .o-h, .o-pill .o-t { font: 700 var(--fs-meta)/1.2 var(--mono); text-transform: uppercase; letter-spacing: .12em; text-shadow: var(--shade); color: var(--muted); }
   .o-head h2 { flex: 0 0 auto; white-space: nowrap; }
+  #o-left-sub { display: none; } /* open, the panel lists them; folded, its chip counts them */
   .o-head .o-sub { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font: var(--fs-meta) var(--mono); white-space: nowrap; }
   .o-head .o-ib:first-of-type { margin-left: auto; }
   .o-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--s4) var(--s5) var(--s5); scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
@@ -917,12 +920,14 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .tbc .o-ar { color: var(--muted); font-family: var(--mono); flex: 0 0 auto; }
   .tbc[aria-expanded="true"] .o-ar { transform: rotate(180deg); }
   .tbc .ci-pill { flex: 0 0 auto; }
-  .topbar .tb-goal { flex: 1 1 0; min-width: 9ch; }
-  .topbar .clock { flex: 0 1 auto; min-width: 9ch; }
-  .topbar .tb-merge { flex: 0 1 auto; min-width: 8ch; max-width: 260px; }
-  .topbar .repo-s { flex: 0 1 auto; min-width: 8ch; max-width: 220px; }
+  /* The goal gives way last (never under 16ch); the demo time, merges and Setup shrink first, cut with an ellipsis. */
+  .topbar .tb-goal { flex: 0 1 auto; min-width: 16ch; }
+  .topbar .clock { flex: 0 20 auto; min-width: 26ch; }
+  .topbar .tb-merge { flex: 0 20 auto; min-width: 19ch; max-width: 260px; }
+  .topbar .repo-s { flex: 0 20 auto; min-width: 8ch; max-width: 220px; }
   .topbar .stat { flex: 0 0 auto; font-weight: 600; }
-  .topbar .acts { display: flex; gap: var(--s3); flex: 0 0 auto; margin-left: auto; }
+  .topbar .acts { display: flex; gap: var(--s3); flex: 0 20 auto; min-width: 7ch; margin-left: auto; }
+  .topbar .acts .tbc { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   @media (min-width: 1101px) { #topbar.topbar { flex-wrap: nowrap; } }
   @media (max-width: 1800px) { .clock:has(.vd) .fz { display: none; } }
   @media (max-width: 1600px) { .topbar .repo-s, .clock .fz { display: none; } }
@@ -950,7 +955,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-left .now::after { display: none; }
   .o-left .now .nl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; margin: 0; padding: 0; border: 0; }
   .o-left .now .phases { margin: 0; padding: 0; border: 0; }
-  .o-left .now .phases .ph-l { display: none; }
   .o-left .now .na { flex: 0 0 auto; }
   .o-left .now .appr { align-self: flex-start; }
   .o-left .now .also { flex-direction: column; align-items: flex-start; gap: 0; }
@@ -1043,7 +1047,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   html:not([data-board-view="office"]) #o-left-pill { position: sticky; top: var(--top); margin: 2px; justify-self: start; }
   html:not([data-board-view="office"]) .topbar { margin: 2px; }
   .o-rcol { display: flex; flex-direction: column; gap: calc(var(--gap) + 4px); min-width: 0; min-height: 0; }
-  html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top); height: calc(100vh - var(--top) - var(--s5)); padding: 2px 6px 6px 2px; margin-right: -6px; }
+  html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top); height: calc(100vh - var(--top) - var(--s5)); padding: 2px 8px 6px 2px; margin-right: -6px; } /* its panels as wide as Needs you's, 14px from the edge */
   .o-rcol > .o-right { flex: 0 0 auto; min-height: 120px; max-height: 45%; } /* its rows up to 45%; Activity takes the rest, its feed scrolling */
   .o-rcol > .o-act { flex: 0 1 auto; min-height: 0; }
   .o-rcol > #o-right-pill:not([hidden]) + .o-act:not(.folded) { flex: 1 1 auto; } /* Agents folded: Activity takes the column */
@@ -1075,7 +1079,11 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   html[data-board-view="office"] body { overflow: hidden; }
   html[data-board-view="office"] #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
   html[data-board-view="office"] main { display: block; position: relative; flex: 1 1 auto; min-height: 0; width: 100%; max-width: none; padding: 0; overflow: hidden; background: var(--bg);
-    --o-gap: 8px; --o-bottom: var(--o-gap); --o-tasks-h: clamp(176px, 27%, 270px); --glass: color-mix(in srgb, var(--panel) 92%, transparent); }
+    /* The Board view's geometry, so a switch moves nothing: panels 14px from the sides (main's 12px padding and their
+       2px margin) and 10px under the header, docks as wide as the Board view's (its column less the margins), the top
+       bar and the Tasks window between them where the Board view's centre column is. */
+    --o-x: calc(var(--s5) + 2px); --o-y: calc(var(--s4) + 2px); --o-w: calc(var(--dock) - 4px); --o-c: calc(var(--dock) + var(--s5) * 2 + 2px);
+    --o-gap: 8px; --o-bottom: 18px; --o-tasks-h: clamp(176px, 27%, 270px); --glass: color-mix(in srgb, var(--panel) 92%, transparent); }
   html[data-board-view="office"] :is(.o-panel, .o-pill) { background: var(--glass); box-shadow: 4px 4px 0 rgba(0, 0, 0, .28);
     -webkit-backdrop-filter: blur(8px) saturate(1.15); backdrop-filter: blur(8px) saturate(1.15); }
   html[data-board-view="office"] :is(.o-agent, .o-det, .qcard) { background: color-mix(in srgb, var(--raised) 85%, transparent); }
@@ -1086,12 +1094,12 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .office-scene .ab-tagin { transform: translate(-50%, -100%) scale(1.35); transform-origin: 50% 100%; }
   .office-load { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; margin: 0; color: var(--muted); font: var(--fs-sm) var(--mono); }
   .office-view.loading .office-load { display: flex; }
-  html[data-board-view="office"] #o-left { position: absolute; z-index: 3; top: var(--o-gap); left: var(--o-gap); width: var(--dock); max-height: calc(100% - var(--o-gap) - var(--o-bottom)); } /* as tall as its content, like on the Board view */
-  html[data-board-view="office"] #o-left-pill { position: absolute; z-index: 3; top: var(--o-gap); left: var(--o-gap); }
-  html[data-board-view="office"] .o-rcol { position: absolute; z-index: 3; top: var(--o-gap); bottom: var(--o-bottom); right: var(--o-gap); width: var(--dock); pointer-events: none; }
+  html[data-board-view="office"] #o-left { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); width: var(--o-w); max-height: calc(100% - var(--o-y) - var(--o-bottom)); } /* as tall as its content, like on the Board view */
+  html[data-board-view="office"] #o-left-pill { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); }
+  html[data-board-view="office"] .o-rcol { position: absolute; z-index: 3; top: var(--o-y); bottom: var(--o-bottom); right: var(--o-x); width: var(--o-w); pointer-events: none; }
   html[data-board-view="office"] .o-rcol > * { pointer-events: auto; }
   /* The centre column keeps only the top bar (and the goal under it), between the docks. */
-  html[data-board-view="office"] .centre { position: absolute; top: var(--o-gap); left: calc(var(--dock) + var(--o-gap) * 2); right: calc(var(--dock) + var(--o-gap) * 2); display: block; pointer-events: none; }
+  html[data-board-view="office"] .centre { position: absolute; top: var(--o-y); left: var(--o-c); right: var(--o-c); display: block; pointer-events: none; }
   html[data-board-view="office"] .centre > :not(#topbar, #o-goal, #setup) { display: none !important; }
   /* Setup: a popover under the top bar, like the goal, scrolling inside itself. */
   html[data-board-view="office"] #setup { position: absolute; z-index: 7; top: calc(var(--tb-h, 48px) + var(--s4)); left: 0; right: 0; margin: 0; max-height: calc(100vh - var(--hdr, 54px) - var(--tb-h, 48px) - 40px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
@@ -1102,8 +1110,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   html[data-board-view="office"] .centre > .o-goal { left: 50%; translate: -50% 0; }
   /* Tasks: the board's columns (or its table) in a window between the docks at the bottom. Its title bar is the
      board's task bar: Tasks, search, Show and Columns / Table. Maximised, it covers the room under the top bar (still glass). */
-  .o-tasks { position: absolute; z-index: 3; left: calc(var(--dock) + var(--o-gap) * 2); right: calc(var(--dock) + var(--o-gap) * 2); bottom: var(--o-bottom); height: var(--o-tasks-h); }
-  .o-tasks.max { left: var(--o-gap); right: var(--o-gap); top: calc(var(--o-gap) * 2 + var(--tb-h, 48px)); height: auto; z-index: 6; } /* under the top bar, which stays */
+  .o-tasks { position: absolute; z-index: 3; left: var(--o-c); right: var(--o-c); bottom: var(--o-bottom); height: var(--o-tasks-h); }
+  .o-tasks.max { left: var(--o-x); right: var(--o-x); top: calc(var(--o-y) + var(--o-gap) + var(--tb-h, 48px)); height: auto; z-index: 6; } /* under the top bar, which stays */
   .o-tasks > .o-head { padding-left: var(--s4); }
   .o-tasks .taskbar { flex: 1 1 auto; min-width: 0; margin: 0; flex-wrap: nowrap; gap: var(--s4); }
   .o-tasks .taskbar .tsearch { flex: 0 1 240px; }
@@ -1112,7 +1120,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-tasks.folded .taskbar > #new-task-btn { display: none; }
   .o-tasks.folded .taskbar > :not(h2) { display: none; }
   /* Folded, the Tasks window is just its title bar, centred at the foot. */
-  .o-tasks.folded { left: 50%; right: auto; translate: -50% 0; width: max-content; height: auto; max-width: calc(100% - 2 * var(--dock) - 4 * var(--o-gap)); }
+  .o-tasks.folded { left: 50%; right: auto; translate: -50% 0; width: max-content; height: auto; max-width: calc(100% - 2 * var(--o-c)); }
   .o-tasks.folded > .o-head { gap: var(--s5); }
   .o-tasks.folded #o-tasks-max { display: none; }
   .o-cols { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--s3); height: 100%; min-height: 0; }
@@ -1204,7 +1212,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     .now .also { flex-direction: column; align-items: flex-start; gap: 0; }
     .now .also .link + .link::before { display: none; }
     .nyou > .attn { padding-top: var(--s3); }
-    .phases .ph-l { display: none; }
     .nyou:has(> #q-panel:not([hidden])) > .now { padding-bottom: var(--s4); }
     .step-b { margin-left: 0; }
     .step-s { flex-basis: 100%; padding-left: 32px; }
@@ -2289,7 +2296,7 @@ function render() {
 const colOf = (t) => (t.status === 'proposed' ? 'open' : t.status);
 // What to do now's links that stay in the 3D view (what they lead to is in its panels or the Setup popover); the rest
 // open the Board view (the task columns), and say so there.
-const STAYS = ['cut', 'rejected', 'now', 'questions', 'blocked', 'limited', 'conflict', 'compose', 'mentions', 'idle'];
+const STAYS = ['cut', 'rejected', 'now', 'questions', 'blocked', 'conflict', 'compose', 'mentions', 'idle'];
 // Setup steps stay too: Setup opens as a popover in the 3D view.
 const stays = (g) => STAYS.includes(g) || String(g).startsWith('step-');
 // "7 agents online · 1 out of usage" (board) / "7 online · 1 out of usage" (the 3D Agents dock): the same numbers.
@@ -2375,8 +2382,7 @@ function renderNow(qOpen, unread, si) {
   const reviewWait = review >= 4 && S.integrator;
   if (reviewWait) ranked.push({ kind: 'urgent', go: 'review', more: `${review} tasks waiting in Review`,
     text: `${review} tasks are waiting in Review: merging is the bottleneck. Help review and test${S.integrator === ANYONE ? '' : ', or let whoever is free merge (Setup, step 5)'}` });
-  if (si.limitedA.length) { const l = si.limitedA; ranked.push({ kind: 'setup', go: 'limited', more: l.length === 1 ? `${l[0].name} is out of usage` : `${l.length} agents out of usage`,
-    text: l.length === 1 ? `${l[0].name} hit its usage limit${l[0].limited?.until ? ` until ${clock(l[0].limited.until)}` : ''}: its tasks wait, or other agents take them over` : `${l.length} agents hit their usage limit: their tasks wait, or other agents take them over` }); }
+  // Out of usage isn't listed: nobody can do anything about it here. Agents shows it, and so does each card it holds.
   const top = over ? null : ranked[0];
   $('needs').classList.toggle('quiet', over);
   if (over) { kind = 'done'; go = 'wrapup'; text = 'The event is over. Download the summary and retro'; }
@@ -3426,13 +3432,6 @@ document.addEventListener('click', (ev) => {
     const b = $('o-blocked').querySelector('button'); b?.scrollIntoView({ behavior: smooth(), block: 'nearest' });
     return b?.focus({ preventScroll: true });
   }
-  if (d.go === 'limited') {
-    // Select the out-of-usage agent in Agents: its "out of usage" line, its tasks and "It's back".
-    const a = setupInfo().limitedA[0]; if (!a) return;
-    oShow('right'); pickAgent(a.name, true);
-    const el = document.querySelector(`[data-fk="ul-${CSS.escape(a.name)}"]`) || document.querySelector(`[data-fk="oa-${CSS.escape(a.name)}"]`);
-    el?.scrollIntoView({ behavior: smooth(), block: 'nearest' }); return el?.focus({ preventScroll: true });
-  }
   if (d.go === 'cut') {
     // Show (or hide) the P3 tasks that probably won't make it; with none to name, the demo time is the lever.
     if (!cutTasks()?.list.length) return doAct('clock', el);
@@ -4467,11 +4466,10 @@ function renderDocks(qOpen = openQuestions(), si = setupInfo()) {
   $('o-left-sub').textContent = needTxt; $('o-left-sub').title = needTxt;
   $('o-left-n').textContent = ui.needN ? String(ui.needN) : '';
   $('o-left-pill').setAttribute('aria-label', `Needs you${needTxt ? `: ${needTxt}` : ''}. Open the panel`);
-  // Under the questions: blocked tasks without a question (those are answered above) and agents out of usage, with why.
+  // Under the questions: blocked tasks without a question (those are answered above), with why.
   const alone = blockedSplit(qOpen).alone;
   patch($('o-blocked'), (alone.length ? `<section class="o-sec" aria-labelledby="o-bl-h"><h3 id="o-bl-h">Blocked</h3><ul class="o-list">${
-    alone.map((t) => `<li><button type="button" class="link tref" data-open-task="${t.id}" data-fk="ob-${t.id}">#${t.id} ${esc(short(t.title, 48))}</button>${t.assignee ? ` <span class="muted">·</span> ${nameTag(agentRoot(t.assignee))}` : ''}${blockedNote(t) ? `<span class="o-why bad">${esc(short(blockedNote(t), 140))}</span>` : ''}</li>`).join('')}</ul></section>` : '')
-    + (si.limitedA.length ? `<section class="o-sec" aria-labelledby="o-lim-h"><h3 id="o-lim-h">Out of usage</h3><ul class="o-list">${si.limitedA.map((a) => `<li>${nameTag(a.name)} <span class="o-why">${esc(limitText(a).replace(/^out of usage(?: · )?/, '') || 'until it talks to the board again')}${a.limited?.note ? `: ${esc(short(a.limited.note, 100))}` : ''}</span></li>`).join('')}</ul></section>` : ''));
+    alone.map((t) => `<li><button type="button" class="link tref" data-open-task="${t.id}" data-fk="ob-${t.id}">#${t.id} ${esc(short(t.title, 48))}</button>${t.assignee ? ` <span class="muted">·</span> ${nameTag(agentRoot(t.assignee))}` : ''}${blockedNote(t) ? `<span class="o-why bad">${esc(short(blockedNote(t), 140))}</span>` : ''}</li>`).join('')}</ul></section>` : ''));
   // Folded Activity: its title bar says the latest event.
   const last = state.events.reduce((m, e) => (!m || e.id > m.id ? e : m), null);
   const lt = last ? `${last.author}: ${last.kind === 'settings' ? settingsText(last) : last.text}` : 'Nothing yet';
