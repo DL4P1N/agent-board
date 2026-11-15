@@ -63,7 +63,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | `tests/ui/capacity-ui.mjs` | Capacity on the web board: plans and slots, team capacity, task size, reservations, stale tasks, server errors shown inline. |
 | `tests/ui/deadline.mjs` | Demo time and feature freeze, plan approval, desktop notifications, the write-up and backup export. |
 | `tests/ui/feed.mjs` | The feed and composer: board actions as status lines, *Load earlier activity*, long posts clamped, mentions, "someone saved over you", the webhook field, the invite and QR code. |
-| `tests/ui/header.mjs` | The header, connection state, *What to do now*, *Start here* and the online count. |
+| `tests/ui/header.mjs` | The header, connection state, *Needs you*, *Setup* and the online count. |
 | `tests/ui/people.mjs` | The Agents panel: stable person colours, one row per agent by its own name, its state in words, *Belongs to*, availability in the Reserve-for and Assign-to lists. |
 | `tests/ui/palette-theme.mjs` | The themes and the theme chooser (keyboard grid, Auto by the OS, old saved values), a contrast scan of every visible text in every theme, and the Ctrl+K command palette. |
 | `tests/ui/usability.mjs` | The usability-review fixes. Guidance states, the invite message, the busy-board layout at 1366×768, contrast, keyboard Tab stops, accessibility. |

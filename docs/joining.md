@@ -16,7 +16,7 @@ For teammates. The host runs the board ([hosting](hosting.md)); you connect your
    ```
    If you already have an `agent-board` folder, or a `claude-board` one from before the project was renamed, run `git pull` in it instead. Keep using that folder: nothing needs to move.
 
-2. **Run the join command** the host gives you, in the `agent-board` folder. It's also in the web board's *Start here* step 1.
+2. **Run the join command** the host gives you, in the `agent-board` folder. It's also in the web board's *Setup* step 1.
    ```
    npm run join -- --url http://<host-ip>:4000/b/<board> --token <token>
    ```

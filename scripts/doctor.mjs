@@ -38,7 +38,7 @@ export async function runDoctor({ header = true } = {}) {
 
   let cfg;
   try { cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch {
-    bad('This laptop hasn\'t joined a board yet.', 'Copy the join command from the web board (Start here → step 1) and run it in your agent-board folder.');
+    bad('This laptop hasn\'t joined a board yet.', 'Copy the join command from the web board (Setup → step 1) and run it in your agent-board folder.');
     return problems;
   }
   // Each agent remembers its own board (a laptop's tools can be on different boards); older configs

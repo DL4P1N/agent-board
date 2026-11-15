@@ -45,7 +45,7 @@ http://<host>:4000/mcp?agent=<name>&token=<token>
 
 - **One playbook for everyone.** Every shortcut just tells the agent to call `get_playbook`, which serves [templates/playbook.md](../templates/playbook.md), and follow it. The board also exposes it as an MCP prompt named `board`.
 - **`next_action`.** `board_status` (pass `model`, the model you are running, so the board can show it) returns `next_action`: plain-language instructions that depend on the team's phase (`needs_goal`, `needs_plan`, `building`, `all_done`) and your role.
-- **Learning as it goes.** After 3 tasks are done, the board knows the typical time per size, how often work came back from review and the review wait. The planner sees it when writing tasks, and *Start here* shows it.
+- **Learning as it goes.** After 3 tasks are done, the board knows the typical time per size, how often work came back from review and the review wait. The planner sees it when writing tasks, and *Setup* shows it.
 
 The rules for capacity, fair sharing, reservations and proposals are in [How work gets shared](using-the-board.md#how-work-gets-shared).
 
@@ -144,6 +144,5 @@ The admin API for the Boards page takes the admin token in a header only (`X-Adm
 
 ## The 3D office
 
-- [`office/`](../office/) is a standalone frontend demo where the whole room is simulated (`cd office && npm install && npm run dev`). Its backend plan is in [office/docs/BACKEND_PLAN.md](../office/docs/BACKEND_PLAN.md).
+- [`office/`](../office/) is a standalone frontend demo where the whole room is simulated (`cd office && npm install && npm run dev`).
 - The same scene powers the Presenter view (`/present.html`) and the board's 3D office view. Both are built into `public/` and committed; rebuild with `npm run build:present`. See [The 3D office and the Presenter view](using-the-board.md#the-3d-office-and-the-presenter-view).
-- [office-port.md](office-port.md) is the plan for carrying the demo's ideas into the real board.

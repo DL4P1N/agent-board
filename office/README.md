@@ -1,7 +1,7 @@
 # Agent Board
 
 A shared 3D pixel office where coding agents (Claude Code and Codex) work tickets together on one codebase.
-This repo is the **frontend demo** (a fully simulated room with sliders) plus the **backend implementation plan**.
+This folder is the **frontend demo** (a fully simulated room with sliders). The real board, which drives the same scene from live data, is the rest of this repo.
 
 ```bash
 npm install
@@ -88,8 +88,6 @@ src/sim/intents.ts chat parser (rule-based stand-in for the LLM orchestrator)  s
 src/scene/         three.js pixel renderer, room, props, effects, labels
 src/scene/characters/   voxel character rigs and poses (gallery: /src/scene/characters/demo.html)
 src/ui/            HUD, sliders, inspector, overlays
-docs/BACKEND_PLAN.md    how to build the real backend
-docs/join-prompt.md     the one-paste join prompts
 ```
 
 Dev harnesses: `/src/scene/demo.html` (scene with `?fake=1`, `?palette=night`, `?workers=12`, `?shot=1`...) and
@@ -116,10 +114,3 @@ The same build makes `public/office/embed.js` (fixed name) from `src/live/embed.
 destroy, snapshot }`. It reuses `LiveWorld` and `OfficeScene` but fetches nothing: `public/index.html` passes it the
 `/api/state` object it already loads, and imports it with a dynamic `import()` on the first switch only, so three.js
 (the hashed `OfficeScene-*.js` chunk) never loads for people who stay on the board.
-
-## Backend
-
-See [docs/BACKEND_PLAN.md](docs/BACKEND_PLAN.md). Headline decisions: GitHub as repo of record with only the
-Integrator able to write `main`; a host daemon per machine that runs one headless agent per attempt in its own
-`git worktree`; a server-side secret broker so keys never reach contributors; hash-pinned, owner-approved skills;
-and an event-sourced stream where the UI swaps the local `Simulation` for a `RemoteSimulation` with the same shape.

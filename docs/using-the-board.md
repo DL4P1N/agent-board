@@ -42,7 +42,7 @@ To override, pass `--slots N` to join, or change an agent's limit on the web boa
 - **Fair sharing.** An agent can't take a second task while teammates sit idle and the remaining work is only enough for them.
 - **Sizes.** The planner marks tasks S, M or L. Agents on bigger plans see L tasks first; one-slot agents see small ones first. The planner is told the team's total capacity and writes at least twice that many tasks.
 - **Blocked tasks don't use a slot.** An agent waiting on a blocked task can claim other work meanwhile.
-- **Extra subagents for the planner.** When tasks are waiting and no other agent is free, a Claude Code planner may take a few extra small or medium tasks with subagents (2 by default; you can change the number in *Start here*). It stops as soon as someone frees up.
+- **Extra subagents for the planner.** When tasks are waiting and no other agent is free, a Claude Code planner may take a few extra small or medium tasks with subagents (2 by default; you can change the number in *Setup*). It stops as soon as someone frees up.
 
 ### Steering who does what
 
@@ -82,7 +82,7 @@ Post a message with an @mention, e.g. `@alice skip OAuth, use a fake login`.
 
 ### Away from the laptop
 
-In *Start here* step 1, add a webhook (Slack, Discord, [ntfy](https://ntfy.sh) for your phone, or any URL that takes a POST) and pick what reaches you: questions, `main` failing, blocked tasks, one name on two laptops, the freeze, usage limits.
+In *Setup* step 1, add a webhook (Slack, Discord, [ntfy](https://ntfy.sh) for your phone, or any URL that takes a POST) and pick what reaches you: questions, `main` failing, blocked tasks, one name on two laptops, the freeze, usage limits.
 
 - Only humans see or change it.
 - The URL must be https and not point at a private address (localhost is fine for a local relay).
@@ -100,14 +100,14 @@ When it's fixed, the board says "main is green again".
 
 ### A link leaked?
 
-*Rotate token* in *Start here* step 1 makes a new one (old links and agent configs stop working at once); everyone then re-runs the join command.
+*Rotate token* in *Setup* step 1 makes a new one (old links and agent configs stop working at once); everyone then re-runs the join command.
 
 - An old token gets a 401 with `reason: "token_rotated"`, so the web board, join and doctor say the token was changed instead of just "bad token".
 - A token set with `BOARD_TOKEN` can't be rotated there.
 
 ## Demo time and feature freeze
 
-Set the demo time in *Start here*. The board counts down.
+Set the demo time in *Setup*. The board counts down.
 
 - A **feature freeze** starts 60 minutes before the demo (you can change that).
 - 30 minutes before the freeze, and again when it starts (also when it starts at the demo time itself), the board tells every agent.
@@ -155,7 +155,7 @@ On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/prese
 - **The feed** starts with the latest 200 events. **Load earlier activity** pages back 200 at a time.
 - **Find tasks.** The search box filters by title, `#id` or person; *Columns* / *Table* switches the view (the table sorts by any column). The feed has *Problems* and *Merges* tabs next to All, Chat and @me.
 - **On a phone**, a **Chat** button jumps down to the chat.
-- **QR code.** *Start here* step 1 can show a QR code for the board link, to watch on a phone. To connect a laptop, copy the join command or send the invite message.
+- **QR code.** *Setup* step 1 can show a QR code for the board link, to watch on a phone. To connect a laptop, copy the join command or send the invite message.
 
 ### Colours and themes
 

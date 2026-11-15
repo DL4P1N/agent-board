@@ -76,7 +76,7 @@ npm run boards -- archive|restore|default|delete <board>
 
 **Other details:**
 
-- **Joining** a board that isn't the default uses its own join command (`--url http://host:4000/b/<board>`); its *Start here* step 1 shows it. Each AI tool on a laptop is on one board at a time: join moves only the tools you pick and says which moved and which stayed. `npm run doctor` shows which board each tool is on.
+- **Joining** a board that isn't the default uses its own join command (`--url http://host:4000/b/<board>`); its *Setup* step 1 shows it. Each AI tool on a laptop is on one board at a time: join moves only the tools you pick and says which moved and which stayed. `npm run doctor` shows which board each tool is on.
 - **`BOARD_TOKEN`** belongs to one board for good: the original board in the data folder, or the board that was the default the first time it was used. Changing the default doesn't move it.
 - **A board that fails to open** answers 503 with the reason and shows as failed on the Boards page. The other boards keep running.
 - **The board list** is `boards.json` in the data folder. Each save keeps the previous version as `boards.json.bak`.

@@ -34,7 +34,7 @@ It prints the web board link and the join command for teammates. See [docs/hosti
 git clone https://github.com/DL4P1N/agent-board && cd agent-board
 npm run join -- --url http://<host-ip>:4000/b/<board> --token <token>
 ```
-Use the join command the host gives you (it's also in the web board's *Start here* step 1). Join asks your name, your AI tool(s) and where your copy of the hackathon repo is, then tells you exactly what to type. Then open the hackathon repo in your tool and start the board:
+Use the join command the host gives you (it's also in the web board's *Setup* step 1). Join asks your name, your AI tool(s) and where your copy of the hackathon repo is, then tells you exactly what to type. Then open the hackathon repo in your tool and start the board:
 
 | Tool | How to start |
 |---|---|
@@ -75,9 +75,8 @@ Every tool connects to the same MCP endpoint and follows one playbook. More in [
 | [Using the board](docs/using-the-board.md) | Everyone watching: how work gets shared, your job as a human, the views and themes, tips |
 | [Architecture](docs/architecture.md) | How it works in depth: MCP, guidance, PRs, tasks, locks, wake-ups, identity, REST and MCP tools |
 | [Testing](docs/testing.md) | Running the test suites and what each one covers |
-| [Office port](docs/office-port.md) | The plan for carrying ideas from the [`office/`](office/) demo into the real board, including the 3D views |
 
-The 3D office started as [`office/`](office/), a standalone frontend demo where the whole room is simulated (`cd office && npm install && npm run dev`), with a backend plan in [office/docs/BACKEND_PLAN.md](office/docs/BACKEND_PLAN.md).
+The 3D office started as [`office/`](office/), a standalone frontend demo where the whole room is simulated (`cd office && npm install && npm run dev`).
 
 ## Licence
 

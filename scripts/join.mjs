@@ -91,7 +91,7 @@ if (url && url !== String(args.url).trim().replace(/\/+$/, '')) console.log(`  �
 const wait = args.wait === undefined || args.wait === true ? 120 : Math.max(0, Math.min(600, Number(args.wait) || 0));
 if (!url || !token) {
   console.error('usage: npm run join -- --url http://HOST:4000 --token TOKEN [--name NAME] [--tool claude,codex,copilot-vscode,copilot-cli,gemini,cursor,other] [--plan PLAN] [--repo PATH] [--slots N] [--wait 120] [--shared] [--no-git-allow] [--yes] [--offline] [--verbose]');
-  console.error('Copy the exact command shown on the web board (Start here → step 1) or printed by `npm start` on the host.');
+  console.error('Copy the exact command shown on the web board (Setup → step 1) or printed by `npm start` on the host.');
   process.exit(1);
 }
 
@@ -99,7 +99,7 @@ if (!url || !token) {
 let boardState = null;
 try {
   const r = await fetch(`${url}/api/state`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) });
-  if (r.status === 401) fail('The board rejected the token: the token changed (the host rotated it, or started a fresh board). Ask the host for the new join command (web board → Start here → step 1) and run it.');
+  if (r.status === 401) fail('The board rejected the token: the token changed (the host rotated it, or started a fresh board). Ask the host for the new join command (web board → Setup → step 1) and run it.');
   // 409: this is the plain address, and the board behind the token moved to its own /b/<name> address.
   if (r.status === 409) { const m = await r.json().catch(() => ({})); fail(`This join command uses the plain board address, but that board is now at ${url}${m.moved_to || '/b/<name>'}. Copy the new join command from the web board (or use --url ${url}${m.moved_to || '/b/<name>'}).`); }
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
