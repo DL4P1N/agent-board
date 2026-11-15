@@ -114,11 +114,11 @@ try {
 
   // Mentions: only direct ones count; they clear once seen in the feed
   await erin('post', { text: '@all standup in 5' }); await erin('post', { text: '@everyone ship it' }); await sleep(500);
-  check('A @all/@everyone not counted', (await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label'))) === '@me' && !(await page.$('#needs .m')));
+  check('A @all/@everyone not counted', (await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label'))) === '@me' && !/mention/.test(await page.$eval('#needs', (e) => e.querySelector('button')?.getAttribute('aria-label') || '')));
   await erin('post', { text: '@dana can you check the goal?' }); await sleep(500);
   check('A direct @dana counted; @me accessible name', (await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label'))) === '@me, 1 unread');
   await sleep(2600);
-  check('A mention cleared after being visible in the feed', (await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label'))) === '@me' && !(await page.$('#needs .m')));
+  check('A mention cleared after being visible in the feed', (await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label'))) === '@me' && !/mention/.test(await page.$eval('#needs', (e) => e.querySelector('button')?.getAttribute('aria-label') || '')));
 
   // Tasks + my own agent → setup collapses, calm state suggests picking a merger
   // A human adds it: an agent's own create_task would count as recent work and make it busy, not idle.
@@ -139,7 +139,7 @@ try {
   await page.$eval('#feed', (f) => { f.scrollTop = 0; });
   for (const t of [t1, t1b]) await rest('dana', `/tasks/${t.id}`, 'PATCH', { status: 'done' });
   await erin('post', { text: '@dana all merged!' }); await sleep(500);
-  check('A all-done outranks mentions', /Every task is done/.test(await txt(page, '#now')) && !!(await page.$('#needs .m')), await txt(page, '#now'));
+  check('A all-done outranks mentions (the mention follows under Also)', /Every task is done/.test(await txt(page, '#now .na')) && !!(await page.$('#now .also [data-go="mentions"]')), await txt(page, '#now'));
   await page.close();
 
   // ================= Part B: busy board =================
@@ -251,9 +251,15 @@ try {
   check('B first card within 30 Tab stops (was 39)', stops <= 30, `${stops} stops`);
   await p.reload(); await p.waitForFunction(() => document.querySelectorAll('.card').length > 20); await sleep(300);
   await p.keyboard.press('Tab');
+  const sk0 = await p.evaluate(() => document.activeElement?.textContent);
+  await p.keyboard.press('Tab');
   const sk = await p.evaluate(() => document.activeElement?.textContent);
   await p.keyboard.press('Enter'); await sleep(200);
+  check('B first skip link is "Skip to what needs you"', sk0 === 'Skip to what needs you', sk0);
   check('B skip link "Skip to tasks" focuses the first card', sk === 'Skip to tasks' && await p.evaluate(() => document.activeElement?.classList.contains('card')), sk);
+  await p.reload(); await p.waitForFunction(() => document.querySelectorAll('.card').length > 20); await sleep(300);
+  await p.keyboard.press('Tab'); await p.keyboard.press('Enter'); await sleep(200);
+  check('B "Skip to what needs you" focuses the What to do now lead', await p.evaluate(() => !!document.activeElement?.closest('#now')), await p.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
 
   // Answering a question moves focus to the next one; live region announces new questions
   const q1 = await p.$eval('.qcard textarea', (t) => t.id);

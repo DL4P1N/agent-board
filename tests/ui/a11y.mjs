@@ -82,11 +82,21 @@ try {
   // ---- Phone: badges, chat button, touch targets ----
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
   await page.evaluate(() => window.scrollTo(0, 0)); await sleep(400);
-  const hdr = await page.evaluate(() => ({ ov: document.documentElement.scrollWidth - innerWidth, clipped: [...document.querySelectorAll('#needs button')].filter((b) => b.getBoundingClientRect().right > innerWidth).map((b) => b.textContent), n: document.querySelectorAll('#needs button').length }));
-  check('MO-1 phone: every needs badge fits on screen (they wrap)', hdr.n >= 3 && !hdr.clipped.length, JSON.stringify(hdr));
+  const hdr = await page.evaluate(() => ({ ov: document.documentElement.scrollWidth - innerWidth, clipped: [...document.querySelectorAll('#needs button')].filter((b) => b.offsetWidth && b.getBoundingClientRect().right > innerWidth).map((b) => b.textContent), hidden: $('needs').hidden }));
+  // One "need you" badge, hidden while What to do now is on screen: no third header row on a phone.
+  check('MO-1 phone: no badge row in the header while What to do now is on screen, nothing cut off', hdr.hidden && !hdr.clipped.length, JSON.stringify(hdr));
   check('phone: no horizontal overflow at 390px', hdr.ov <= 0, hdr.ov + 'px');
   await page.screenshot({ path: `${out}/phone-top.png` });
-  check('MO-2 phone: Chat button shows at the top of the page', await page.$eval('#tochat', (b) => !b.hidden && getComputedStyle(b).display !== 'none' && b.getBoundingClientRect().bottom <= innerHeight));
+  // The floating Chat button never sits on a question's Answer button or answer box (review M5).
+  const covered = [];
+  for (const y of [0, 150, 300, 450, 600, 750]) {
+    await page.evaluate((y) => window.scrollTo(0, y), y); await sleep(250);
+    covered.push(...await page.evaluate(() => { const c = $('tochat'); if (c.hidden || getComputedStyle(c).display === 'none') return []; const r = c.getBoundingClientRect();
+      return [...document.querySelectorAll('#questions button, #questions textarea')].filter((b) => { const q = b.getBoundingClientRect(); return q.right > r.left && q.left < r.right && q.bottom > r.top && q.top < r.bottom; }).map((b) => `${scrollY}: ${b.textContent || b.tagName}`); }));
+  }
+  check('MO-2 phone: the Chat button never covers an Answer button or answer box', !covered.length, covered.join(' | '));
+  await page.evaluate(() => $('p-h').scrollIntoView({ block: 'start' })); await sleep(400);
+  check('MO-2 phone: Chat button shows once the questions are out of the way', await page.$eval('#tochat', (b) => !b.hidden && getComputedStyle(b).display !== 'none' && b.getBoundingClientRect().bottom <= innerHeight));
   await page.click('#tochat'); await sleep(600);
   const chat = await page.evaluate(() => ({ top: $('f-h').getBoundingClientRect().top, hidden: $('tochat').hidden }));
   check('MO-2 phone: Chat button jumps to the activity panel and then hides', chat.top >= -2 && chat.top < 200 && chat.hidden, JSON.stringify(chat));

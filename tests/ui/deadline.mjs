@@ -98,13 +98,16 @@ try {
   check('frozen: header says "Feature freeze — finish & merge"', /frozen/.test(fz.c) && /^Feature freeze — finish & merge · demo in (29|30)m$/.test(fz.t), JSON.stringify(fz));
   const nowF = await txt(page, '#now');
   check('frozen: What to do now mentions the freeze, merge and test', /Feature freeze: agents won't start new tasks\. Help merge and test/.test(nowF) && /Write-up for your submission/.test(nowF), nowF);
-  check('frozen: board banner explains + offers the write-up', await page.evaluate(() => { const n = $('board-note'); return !n.hidden && n.classList.contains('k-freeze') && /Feature freeze since/.test(n.innerText) && !!n.querySelector('[data-act="export-md"]') && !!n.querySelector('[data-act="export-json"]'); }));
+  // The freeze has no banner above the board any more (M3/M7 of the 2026-11-14 review): What to do now explains it, the
+  // Open column says what can still start and dims the rest, and the write-up link opens the export buttons in the help.
+  check('frozen: no banner; the Open column dims what won\'t start', await page.evaluate(() => $('board-note').hidden && document.querySelectorAll('#col-open .card.held').length >= 1 && !document.querySelector(`#col-open .card.held[data-id="${state.tasks.find((t) => t.priority === 1)?.id}"]`)));
   // t1 is priority 1 (bug fixes stay claimable during the freeze), so try a normal-priority task.
   const refused = await alice('claim_task', { id: t2.id });
   check('frozen: an agent claim is refused', /Feature freeze/.test(errText(refused)), errText(refused).slice(0, 120));
-  check('frozen: banner says priority-1 bug fixes can still be claimed', /Priority-1 tasks \(bug fixes\) can still be claimed/.test(await txt(page, '#board-note')));
+  check('frozen: the Open column says priority-1 bug fixes can still be claimed', /Priority-1 tasks \(bug fixes\) can still be claimed/.test(await txt(page, '#col-open .cd')));
   await page.click('#now [data-go="wrapup"]'); await sleep(400);
   check('"Write-up for your submission" jumps to the export buttons', await page.evaluate(() => document.activeElement?.dataset.act === 'export-md'));
+  await page.keyboard.press('Escape'); await sleep(200); // before the demo they are in the help dialog
   await shots(page, 'frozen');
 
   // ================= plan approval =================

@@ -55,12 +55,15 @@ try {
   }));
   check('no three.js or office code requested on load', officeReqs(reqs).length === 0 && !(await page.$('canvas')), officeReqs(reqs).join(' '));
 
-  // ---- Header stays on one row with the switch (ONB-9 widths) ----
-  for (const w of [1366, 1440, 1600]) {
+  // ---- Header stays on one row with the switch (ONB-9 widths), also scrolled down, where the "need you" badge shows ----
+  for (const w of [1366, 1440, 1600, 1920]) {
     await page.setViewport({ width: w, height: 900 }); await sleep(300);
-    const hd = await page.evaluate(() => { const h = document.querySelector('#app > header'); const v = $('vseg').getBoundingClientRect(); const b = $('help-btn').getBoundingClientRect(); return { h: h.offsetHeight, same: Math.abs(v.top - b.top) < 12, vis: v.width > 0, badges: /mention/.test($('needs').innerText) && /question/.test($('needs').innerText) && !$('clock').hidden }; });
-    check(`${w}px: header on one row with the view switch, the clock and a mention badge`, hd.vis && hd.same && hd.h < 70 && hd.badges, JSON.stringify(hd));
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await sleep(400);
+    const hd = await page.evaluate(() => { const h = document.querySelector('#app > header'); const v = $('vseg').getBoundingClientRect(); const b = $('help-btn').getBoundingClientRect(); const n = $('needs'); return { h: h.offsetHeight, same: Math.abs(v.top - b.top) < 12, vis: v.width > 0, badge: !n.hidden && n.offsetWidth > 0 && /question/.test(n.querySelector('button')?.getAttribute('aria-label') || '') && !$('clock').hidden }; });
+    check(`${w}px: header on one row with the view switch, the clock and the need-you badge`, hd.vis && hd.same && hd.h < 70 && hd.badge, JSON.stringify(hd));
   }
+  await page.evaluate(() => window.scrollTo(0, 0)); await sleep(300);
+  check('the need-you badge hides while What to do now is on screen', await page.$eval('#needs', (n) => n.hidden));
   await page.setViewport({ width: 1440, height: 900 }); await sleep(200);
 
   // ---- Switch to the office ----
@@ -114,9 +117,9 @@ try {
     await page.keyboard.press('Enter');
     check('the office comes back without reloading its code', await until(page, () => document.documentElement.dataset.boardView === 'office') && officeReqs(reqs).filter((u) => /embed\.js/.test(u)).length === 1);
 
-    // A header badge that leads to the task columns switches back to the board first.
-    await page.click('#needs [data-go="blocked"]');
-    check('a needs badge (blocked) opens the board view', await until(page, () => document.documentElement.dataset.boardView === 'board'));
+    // A What to do now link that leads to the task columns switches back to the board first.
+    await page.click('#now [data-go="blocked"]');
+    check('a link to the Blocked column (What to do now) opens the board view', await until(page, () => document.documentElement.dataset.boardView === 'board'));
 
     // Remembered across reloads; ?view= overrides.
     await page.click('#vseg [data-vset="office"]');

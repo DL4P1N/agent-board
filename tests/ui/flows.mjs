@@ -41,8 +41,15 @@ check('gate submits with Enter, SSE live', true, page.url());
 const qCount = await page.$$eval('.qcard', (q) => q.length);
 check('two open questions shown in attention panel', qCount === 2);
 check('document title counts what needs me', (await page.title()).startsWith('('), await page.title());
-const needs = await page.$eval('#needs', (e) => e.innerText.replace(/\s+/g, ' '));
-check('header needs-badges', /question/.test(needs) && /mention/.test(needs) && /blocked/.test(needs) && /stale/.test(needs), needs);
+// One "N need you" header badge, hidden while What to do now (the home of these facts) is on screen. The blocked task
+// waits on one of the questions, so it is counted once, as the question.
+check('header: no needs badge while What to do now is on screen', await page.$eval('#needs', (e) => e.hidden));
+await page.evaluate(() => window.scrollTo(0, 900)); await sleep(400);
+const needs = await page.$eval('#needs', (e) => ({ hidden: e.hidden, t: e.innerText.replace(/\s+/g, ' '), label: e.querySelector('button')?.getAttribute('aria-label') || '' }));
+check('header need-you badge when scrolled: questions and the mention, the blocked-on-a-question task not counted twice', !needs.hidden && /^3 need you/.test(needs.t) && /2 questions/.test(needs.label) && /1 new mention/.test(needs.label) && !/blocked/.test(needs.label), JSON.stringify(needs));
+await page.click('#needs button'); await sleep(600);
+check('the badge goes back up to What to do now', await page.evaluate(() => !!document.activeElement?.closest('#now') && $('needs').hidden));
+await page.evaluate(() => window.scrollTo(0, 0));
 check('XSS text rendered as text', await page.evaluate(() => [...document.querySelectorAll('.ev .eb')].some((e) => e.textContent.includes('<script>alert(1)</script>'))));
 await sleep(300);
 await page.screenshot({ path: `${out}/v2-desktop-dark.png` });
@@ -68,7 +75,7 @@ check('feedback toast after answer', /Answer sent/.test(toastTxt), toastTxt);
 // mentions
 const mBadge = await page.$eval('[data-tab="me"]', (e) => e.innerText);
 check('@me tab shows unread count', /\d/.test(mBadge), mBadge);
-await domClick('#needs .m');
+await domClick('#now [data-go="mentions"]'); // mentions follow the lead under "Also"
 await sleep(200);
 const meFeed = await page.$$eval('#feed .ev', (e) => e.length);
 const mBadge2 = await page.$eval('[data-tab="me"]', (e) => e.innerText);

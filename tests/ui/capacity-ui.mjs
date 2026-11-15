@@ -166,7 +166,8 @@ try {
   check('stale (20 min) card shows Release + owner offline', /Release to Open/.test(off) && /owner offline — agents may take it over/.test(off), off);
   const on = await cardTxt(T[0].id);
   check('stale card of an online owner says ping first', /Release to Open/.test(on) && /still online: ping it first/.test(on) && !/owner offline/.test(on), on);
-  check('header counts both stale tasks', /2 stale/.test(await txt('#needs')), await txt('#needs'));
+  // Stale tasks live on their cards (one home per fact), no longer in the header.
+  check('both stale tasks flagged on the board', await page.$$eval('#board .card.stale', (c) => c.length) === 2);
   await openCard(T[2].id);
   check('dialog meta: stale + owner offline', /owner offline/.test(await txt('#td-meta')), await txt('#td-meta'));
   await page.keyboard.press('Escape');
@@ -174,8 +175,10 @@ try {
 
   // ---- 6. freeze mentions priority-1 bug fixes ----
   await human('/settings', 'PUT', { deadline: Date.now() + 30 * 60e3, freeze_minutes: 60 });
-  await page.waitForFunction(() => !document.getElementById('board-note').hidden, { timeout: 5000 });
-  check('freeze banner: priority-1 bug fixes can still be claimed', /Priority-1 tasks \(bug fixes\) can still be claimed/.test(await txt('#board-note')), await txt('#board-note'));
+  // No freeze banner any more: the Open column says what can still start, and dims the rest.
+  await page.waitForFunction(() => /Feature freeze/.test(document.querySelector('#col-open .cd')?.textContent || ''), { timeout: 5000 });
+  check('freeze: the Open column says priority-1 bug fixes can still be claimed', /Priority-1 tasks \(bug fixes\) can still be claimed/.test(await txt('#col-open .cd')), await txt('#col-open .cd'));
+  check('freeze: no banner above the board', await page.$eval('#board-note', (n) => n.hidden));
   check('freeze What to do now mentions P1', /P1 bug fixes can still be claimed/.test(await txt('#now')), await txt('#now'));
 
   // ---- empty answer: inline error, nothing sent ----

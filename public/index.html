@@ -21,7 +21,7 @@ window.applyTheme = function (t) {
 try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 </script>
 <title>Claude Board</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%233d5afe'/><rect x='3' y='4' width='3' height='8' fill='white'/><rect x='7' y='4' width='3' height='5' fill='white'/><rect x='11' y='4' width='2' height='6' fill='white'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23ffb86b'/><rect x='3' y='4' width='3' height='8' fill='%232a1600'/><rect x='7' y='4' width='3' height='5' fill='%232a1600'/><rect x='11' y='4' width='2' height='6' fill='%232a1600'/></svg>">
 <style>
   /* ==========================================================================
      Claude Board design system: the pixel look of the office demo (office/src/styles.css), kept calm.
@@ -135,7 +135,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   ::selection { background: var(--accent-soft); }
   /* The demo's monospace stays where it labels or counts: titles, tiles, column heads, chips, ids, times. Content is sans. */
-  header h1, .panel > h2, .sec-h h2, .setup > .sh h2, .now .nl, .tile, .col h3, .needs, .clock, .phases, time, .conn { font-family: var(--mono); }
+  header h1, .panel > h2, .sec-h h2, .setup > .sh h2, .now .nl, .col h3, .needs, .clock, .phases, time, .conn { font-family: var(--mono); }
   .attn > h2 { font-family: var(--font); }
 
   /* ---------- controls ---------- */
@@ -229,7 +229,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   @media (max-width: 1600px) {
     #link-btn .lt { display: none; }
     #link-btn { min-width: var(--ctl); padding: 0 var(--s3); justify-content: center; }
-    :is(.filter > span, .needs .lt) { display: none; }
+    .filter > span { display: none; }
   }
   /* Server lost: the header turns red too, so it shows wherever you've scrolled. */
   header.down { border-bottom-color: var(--bad); }
@@ -239,17 +239,15 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .conn.down { color: var(--bad); }
   .conn.down::before { background: var(--bad); }
   .conn[data-saving]::after { content: "· Saving…"; color: var(--muted); }
-  /* Needs badges: counts of things waiting, each jumps to its place. */
-  .needs { display: flex; flex-wrap: wrap; align-items: center; padding: 0 var(--s2); border: 2px solid var(--line); background: var(--sunken); }
+  /* "N need you": one badge for what waits on a human (questions, mentions, blocked tasks, name clashes). It shows only
+     while What to do now is scrolled out of view (that panel is the home of those facts) and jumps back up to it. */
+  .needs { display: flex; align-items: center; min-width: 0; }
   .needs:empty { display: none; }
-  .needs button { font-size: var(--fs-meta); font-weight: 400; padding: 0 var(--s2); min-height: var(--ctl-xs); background: transparent; color: var(--ink); border: 0; box-shadow: none; font-variant-numeric: tabular-nums; }
-  .needs button + button::before { content: "·"; color: var(--muted); margin-right: var(--s3); }
-  .needs button:hover { background: transparent; text-decoration: underline; }
+  .needs button { font-size: var(--fs-meta); font-weight: 700; padding: 0 var(--s3); min-height: var(--ctl-xs); background: var(--sunken); color: var(--warn); border: 2px solid var(--warn-line); box-shadow: none; font-variant-numeric: tabular-nums; }
+  .needs button:hover { background: var(--warn-soft); }
   .needs button:active { transform: none; box-shadow: none; }
-  .needs .q { color: var(--warn); font-weight: 700; }
-  .needs .b { color: var(--bad); }
-  /* After the event: the counts stay, but nothing is urgent any more. */
-  .needs.quiet button { color: var(--muted); font-weight: 400; }
+  /* After the event: the count stays, but nothing is urgent any more. */
+  .needs.quiet button { color: var(--muted); font-weight: 400; border-color: var(--line); }
   .clock { font-size: var(--fs-meta); padding: 0 var(--s3); min-height: var(--ctl-sm); border-radius: var(--r-full); background: transparent; color: var(--ink); border: 2px solid var(--line); box-shadow: none; font-weight: 400; white-space: nowrap; display: inline-flex; align-items: center; gap: var(--s3); font-variant-numeric: tabular-nums; }
   .clock:hover { background: var(--sunken); border-color: var(--line-strong); }
   .clock.warn, .clock.frozen { color: var(--warn); border-color: var(--warn-line); font-weight: 700; }
@@ -269,7 +267,16 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .filter { display: flex; align-items: center; gap: var(--s3); margin: 0; font-weight: 400; color: var(--muted); font-size: var(--fs-sm); }
   .filter select { width: auto; max-width: 160px; font-size: var(--fs-ctl); }
   #me-btn b { font-weight: 700; }
-  .hacts { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; justify-content: flex-end; }
+  .hacts { display: flex; align-items: center; gap: var(--s3); flex-wrap: nowrap; justify-content: flex-end; }
+  /* Laptop widths and up: the sticky header never wraps to a second row (a jump when a badge arrives reads as the page
+     breaking). The clock gives way first, cut with an ellipsis; its full text is its tooltip. */
+  @media (min-width: 1100px) {
+    header { flex-wrap: nowrap; }
+    header > * { flex-shrink: 0; }
+    header > .sp { flex-shrink: 1; }
+    header > .clock { flex-shrink: 1; min-width: 6rem; overflow: hidden; }
+    header > .clock > span { overflow: hidden; text-overflow: ellipsis; }
+  }
   .hpair { display: inline-flex; gap: var(--s3); align-items: center; flex-wrap: nowrap; }
   a.plink { display: inline-flex; align-items: center; gap: var(--s3); text-decoration: none; color: var(--ink); background: var(--raised); border: 2px solid var(--line-strong); border-radius: var(--r-sm); padding: 0 var(--s5); font-size: var(--fs-ctl); min-height: var(--ctl); transition: background-color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
   .bname { font-size: var(--fs-sm); font-weight: 700; color: var(--accent); background: var(--sunken); border: 2px solid var(--border); border-radius: var(--r-sm); padding: 1px var(--s3); max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -293,29 +300,12 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .panel-hint { font-size: var(--fs-meta); color: var(--muted); margin: calc(-1 * var(--s2)) 0 var(--s4); }
   .step, .panel, .col, #now, .nyou { scroll-margin-top: 68px; }
 
-  /* Board at a glance: the demo's stat tiles, one compact row (two columns on a phone). Read-only, no Tab stops. */
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: var(--gap); padding: 2px; margin: 0; list-style: none; }
-  .tiles .tv b { line-height: 1.25; }
-  .tile { position: relative; display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 4px var(--s5) 5px; background: var(--panel); border: 2px solid var(--border); box-shadow: var(--e2); }
-  .tile .tl { font-size: var(--fs-meta); color: var(--muted); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: var(--s3); }
-  .tile .tv { display: flex; align-items: baseline; gap: var(--s4); min-width: 0; white-space: nowrap; }
-  .tile .tv b { font-size: 1.125rem; line-height: 1.35; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
-  .tile .tv span { font-size: var(--fs-meta); color: var(--muted); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  .tile.t-dl { grid-column: span 2; }
-  .tile.t-dl .tl::before { content: ""; width: 8px; height: 8px; background: var(--field-line); box-shadow: 0 0 0 2px var(--outline); flex: 0 0 auto; }
-  .tile.ok .tl::before { background: var(--ok); } .tile.ok .tv b { color: var(--ok); }
-  .tile.warn .tv b { color: var(--warn); } .tile.warn .tl::before { background: var(--warn); }
-  .tile.bad .tv b { color: var(--bad); } .tile.bad .tl::before { background: var(--bad); }
-  /* Done: a progress bar along the bottom edge, inside the border. */
-  .tile .tbar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--field); }
-  .tile .tbar i { display: block; height: 100%; background: var(--ok); }
-
   /* What needs you: one pixel window with the line that leads the page, what's next, and the agents' questions. */
   .nyou { background: var(--panel); border: 2px solid var(--border); box-shadow: var(--e2); margin: 2px; min-width: 0; transition: border-color var(--t-slow) var(--ease); }
   .now { display: flex; align-items: center; gap: var(--s3) var(--s5); flex-wrap: wrap; padding: 0 var(--s5) var(--s5); }
   /* Title bar: "What to do now" on the left, the phase track on the right. */
-  .now .nl { order: -3; flex: 1 0 auto; align-self: stretch; display: inline-flex; align-items: center; gap: var(--s4); margin: 0 0 var(--s3) calc(-1 * var(--s5)); padding: var(--s2) var(--s5); min-height: 32px; border-bottom: 2px solid var(--line); font-size: .8125rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
-  .now .phases { order: -2; align-self: stretch; margin: 0 calc(-1 * var(--s5)) var(--s3) calc(-1 * var(--s5)); padding: var(--s2) var(--s5) var(--s2) 0; border-bottom: 2px solid var(--line); }
+  .now .nl { order: -3; flex: 1 0 auto; align-self: stretch; display: inline-flex; align-items: center; gap: var(--s4); margin: 0 0 var(--s1) calc(-1 * var(--s5)); padding: var(--s2) var(--s5); min-height: 32px; border-bottom: 2px solid var(--line); font-size: .8125rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
+  .now .phases { order: -2; align-self: stretch; margin: 0 calc(-1 * var(--s5)) var(--s1) calc(-1 * var(--s5)); padding: var(--s2) var(--s5) var(--s2) 0; border-bottom: 2px solid var(--line); }
   .now::after { content: ""; order: -1; flex: 0 0 100%; height: 0; margin-bottom: calc(-1 * var(--s3)); }
   /* The lead: the demo's first "needs you" row, bigger, with a status flag. */
   .now .na { position: relative; font-size: var(--fs-lead); font-weight: 600; line-height: var(--lh-tight); flex: 1 1 260px; min-width: 0; padding-left: 20px; }
@@ -342,7 +332,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .phases li { display: inline-flex; align-items: center; gap: var(--s1); }
 
   /* Questions: the one thing that must not be missed. Inside the same window, under a dashed rule. */
-  .nyou > .attn { margin: 0; border: 0; box-shadow: none; background: transparent; padding: 0 var(--s5) var(--s5); }
+  .nyou > .attn { margin: 0; border: 0; box-shadow: none; background: transparent; padding: 0 var(--s5) var(--s4); }
+  /* With questions below it, the lead row sits closer to them (every pixel here pushes the board down). */
+  .nyou:has(> #q-panel:not([hidden])) > .now { padding-bottom: var(--s3); }
   .attn > h2 { color: var(--warn); font-size: var(--fs-sm); line-height: var(--lh-tight); margin-bottom: var(--s3); text-transform: none; letter-spacing: 0; }
   .attn > h2 .muted { font-weight: 400; font-size: var(--fs-meta); margin-left: var(--s2); }
   .qs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: var(--s4); }
@@ -375,6 +367,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .step-b { margin: var(--s2) 0 var(--s4) 34px; max-width: 860px; }
   .step-b p { margin: var(--s2) 0; }
   .step-b p.hint { margin: var(--s2) 0 0; }
+  .step-b > button.link { display: block; }
   .sub { font-size: var(--fs-meta); color: var(--muted); margin: var(--s4) 0 var(--s1); }
   .cmd { display: flex; gap: var(--s3); align-items: stretch; margin: var(--s2) 0 var(--s3); min-width: 0; }
   .cmd code { flex: 1 1 auto; display: block; padding: 7px var(--s4); min-width: 0; border-radius: var(--r-sm); }
@@ -422,6 +415,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .sumbar .goal { flex: 1 1 0; min-width: 9ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sumbar .goal.repo-s { flex: 1 1 0; max-width: 300px; }
   .sumbar .acts { display: flex; gap: var(--s3); }
+  .mbar { display: inline-block; width: 48px; height: 8px; background: var(--field); box-shadow: 0 0 0 1px var(--line-strong); }
+  .mbar i { display: block; height: 100%; background: var(--ok); }
   .sumbar .acts button { min-height: var(--ctl-sm); padding: 0 var(--s4); font-size: var(--fs-meta); }
   .ci-pill { margin-left: var(--s3); }
 
@@ -439,8 +434,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .person .ptog[aria-expanded="true"] .chev::before { content: "▾"; }
   .person .ptog .pc { font-size: var(--fs-body); overflow: hidden; text-overflow: ellipsis; }
   .person .pcap { font-size: var(--fs-meta); color: var(--muted); }
-  .person .pchips { display: flex; gap: var(--s1) var(--s2); align-items: center; min-width: 0; min-height: 26px; overflow: hidden; flex: 1 1 auto; flex-wrap: nowrap; }
-  .person .pchips > * { flex: 0 0 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  /* Chips wrap to a second line rather than being cut off (a chip cut to "1" reads as a bug). */
+  .person .pchips { display: flex; gap: 0 var(--s2); align-items: center; min-width: 0; min-height: 26px; flex: 1 1 auto; flex-wrap: wrap; }
+  .person .pchips > * { flex: 0 1 auto; max-width: 100%; }
+  .person .pchips > .pill { white-space: normal; }
   .person .pwhen { color: var(--muted); font-size: var(--fs-micro); line-height: 26px; white-space: nowrap; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
   .person .pd { border-top: 2px dashed var(--line); margin-top: 3px; padding: var(--s3) 0 var(--s3) 18px; }
   .person .pd .inl { margin-top: var(--s2); }
@@ -484,7 +481,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .col h3 > span:last-child { margin-left: auto; display: inline-flex; align-items: center; gap: var(--s2); color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
   .col.s-blocked.has h3 > span:last-child { color: var(--bad); font-weight: 700; }
   .col.s-review.has h3 > span:last-child { color: var(--warn); font-weight: 700; }
-  /* One line (the full text is its tooltip), so cards start above the fold at 1366×768. */
+  /* What a column means: the heading's tooltip and screen readers (aria-describedby); on screen only when it says
+     something about now (the feature freeze, on Open). One line, the full text is its tooltip. */
+  .col .cd:not(.fz-note) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; margin: 0; }
   .col .cd { font-size: var(--fs-meta); line-height: var(--lh-tight); color: var(--muted); margin: 0 var(--s1) var(--s3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .col .empty { font-size: var(--fs-meta); color: var(--muted); padding: var(--s2); }
   .col.collapsed { padding: var(--s2); }
@@ -492,7 +491,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .dtog:hover { background: none; color: var(--ink); }
   .dtog:active { transform: none; box-shadow: none; }
   @media (max-width: 760px) { .dtog { writing-mode: horizontal-tb; min-height: var(--ctl-sm); padding: var(--s2); } .col.collapsed { min-height: 0; } }
-  .col h3 .dclose { background: none; border: 0; box-shadow: none; padding: 0 var(--s3); color: var(--muted); font-size: var(--fs-meta); min-height: calc(var(--ctl-xs) - 4px); }
+  .col h3 .dclose { background: none; border: 0; box-shadow: none; padding: 0 var(--s3); color: var(--muted); font-size: var(--fs-meta); min-height: calc(var(--ctl-xs) - 4px); margin-block: calc(-1 * var(--s3)); } /* keeps the Done heading as tall as the others */
   .col h3 .dclose:hover { background: none; color: var(--ink); }
   .more { width: 100%; margin-top: var(--s3); min-height: var(--ctl-sm); font-size: var(--fs-meta); }
   .board-empty, .bnote { border: 2px solid var(--border); border-radius: var(--r-lg); padding: 10px var(--s6); margin-bottom: var(--s4); background: var(--panel); box-shadow: var(--bevel); }
@@ -515,16 +514,29 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .card.dragging { opacity: .4; }
   .card.stale { background: var(--stale); }
   .card.proposed { box-shadow: inset 0 0 0 2px var(--line); }
+  /* Feature freeze: open tasks that won't start sink into the column (text stays readable, muted). */
+  .card.held { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+  .card.held .ct { color: var(--muted); font-weight: 400; }
+  .col .cd.fz-note { color: var(--warn); }
   .card .ct { font-size: var(--fs-sm); font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
   .card .ct .id { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
   .card .bn { font-size: var(--fs-meta); color: var(--bad); margin-top: var(--s2); white-space: pre-wrap; }
   .card .cm { color: var(--muted); font-size: var(--fs-meta); margin-top: var(--s3); display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); align-items: center; font-variant-numeric: tabular-nums; }
   .card .mv { margin-left: auto; font-size: var(--fs-micro); font-weight: 400; padding: 0 6px; min-height: calc(var(--ctl-xs) - 2px); background: transparent; color: var(--muted); border: 2px solid var(--line); box-shadow: none; border-radius: var(--r-sm); }
   .card .mv:hover, .card .mv[aria-expanded="true"] { background: var(--chip); color: var(--ink); border-color: var(--field-line); }
+  /* With a mouse, Move… shows on the card under the pointer or with focus (it stays in the Tab order and for screen
+     readers); twenty of them at once were the loudest repeated shape on the board. Touch screens always show it. */
+  @media (hover: hover) and (pointer: fine) {
+    .card .mv { opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+    .card:hover .mv, .card:focus-within .mv, .card .mv[aria-expanded="true"] { opacity: 1; }
+  }
+  /* The PR link is a target of its own: at least 24px. */
+  .card .cm a.pill { display: inline-flex; align-items: center; min-height: var(--ctl-xs); padding: 0 var(--s2); }
   .card .ca { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); align-items: center; }
   .card .ca button, .card .qb, .mvmenu button { font-size: var(--fs-meta); padding: 0 var(--s4); min-height: var(--ctl-xs); }
-  .card .qb { background: var(--warn-soft); color: var(--warn); font-weight: 700; border: 0; box-shadow: none; }
-  .card .qb:hover { background: var(--warn-soft); text-decoration: underline; }
+  /* The jump to the card's question: plain amber text (the question card itself is the loud one). */
+  .card .qb { background: none; color: var(--warn); font-weight: 700; border: 0; box-shadow: none; padding: 0 var(--s1); text-decoration: underline; text-underline-offset: 2px; }
+  .card .qb:hover { background: none; text-decoration-thickness: 2px; }
   .card .own { font-size: var(--fs-meta); color: var(--muted); width: 100%; }
   .card .own.off { color: var(--warn); }
   .card .rj { display: flex; gap: var(--s2); width: 100%; }
@@ -564,6 +576,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .feedwrap { position: relative; }
   .feed { position: relative; max-height: min(64vh, 640px); overflow-y: auto; overflow-anchor: none; display: flex; flex-direction: column; gap: var(--s1); padding-right: var(--s1); scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
   @media (max-width: 1100px) { .feed { max-height: 50vh; } }
+  #feed.more-above { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 28px); mask-image: linear-gradient(to bottom, transparent, #000 28px); }
   .ev { font-size: var(--fs-sm); padding: var(--s2) var(--s3); border-radius: var(--r-sm); overflow-wrap: anywhere; border-left: 2px solid transparent; }
   .ev .eh { display: flex; gap: var(--s3); align-items: baseline; flex-wrap: wrap; }
   .ev time { color: var(--muted); font-size: var(--fs-micro); margin-left: auto; white-space: nowrap; }
@@ -608,7 +621,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .prfb li { margin: var(--s1) 0; overflow-wrap: anywhere; }
 
   /* ---------- dialogs ---------- */
-  dialog { border: 2px solid var(--border); border-radius: var(--r-lg); background: var(--panel); color: var(--ink); width: min(680px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: var(--s6); box-shadow: var(--e3);
+  dialog { --dp: var(--s6); border: 2px solid var(--border); border-radius: var(--r-lg); background: var(--panel); color: var(--ink); width: min(680px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: var(--dp); box-shadow: var(--e3);
     opacity: 0; transform: translateY(8px) scale(.98);
     transition: opacity 120ms ease-in, transform 120ms ease-in, overlay 120ms allow-discrete, display 120ms allow-discrete; }
   dialog[open] { opacity: 1; transform: none; transition: opacity var(--t-base) var(--ease), transform var(--t-slow) var(--ease), overlay var(--t-slow) allow-discrete, display var(--t-slow) allow-discrete; }
@@ -628,7 +641,19 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   @media (max-width: 520px) { .grid3, .grid2 { grid-template-columns: minmax(0, 1fr); } .grid2 .hint { margin-top: var(--s2); } }
   .hist { margin-top: var(--s5); }
   .hist .feed { height: auto; max-height: 26vh; border: 2px solid var(--border); border-radius: var(--r-md); padding: var(--s2); }
-  .df { display: flex; gap: var(--s4); margin-top: var(--s6); flex-wrap: wrap; }
+  .df { display: flex; gap: var(--s4); margin-top: var(--s6); flex-wrap: wrap; align-items: center; }
+  #task-dlg .df { position: sticky; bottom: calc(-1 * var(--dp)); z-index: 1; margin: var(--s6) calc(-1 * var(--dp)) calc(-1 * var(--dp)); padding: var(--s4) var(--dp) var(--dp); background: var(--panel); border-top: 2px solid var(--line); }
+  #task-dlg .df .row label { margin-top: 0; }
+  /* Destructive, but not the main action: red text, filled red only once armed ("Click again to …"). */
+  .df button.dz:not(.danger) { color: var(--bad); border-color: var(--bad-line); }
+  /* A blocked task: why, its open question with an answer box, and the way back to In progress, above the form. */
+  .tdblock { margin-top: var(--s4); padding: var(--s4) var(--s5); background: var(--bad-soft); border: 2px solid var(--bad-line); font-size: var(--fs-sm); }
+  .tdblock .tb-why b { color: var(--bad); }
+  .tdblock .tb-q { margin-top: var(--s4); padding-top: var(--s4); border-top: 1px solid var(--bad-line); }
+  .tdblock .tb-q .qt { white-space: pre-wrap; overflow-wrap: anywhere; margin: var(--s2) 0 var(--s3); }
+  .tdblock .tb-qa { display: flex; gap: var(--s3); align-items: flex-end; }
+  .tdblock .tb-qa textarea { background: var(--field); }
+  .tdblock .inl { margin-top: var(--s4); }
   .discard { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4); }
   .discard .sp { min-width: var(--s4); }
   .discard button { min-height: var(--ctl-sm); font-size: var(--fs-meta); }
@@ -725,26 +750,21 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     .filter select { width: 100%; max-width: none; }
     #link-btn .lt { display: none; }
     #link-btn { width: var(--ctl); padding: 0; justify-content: center; }
-    main { padding: var(--s4) var(--s4) var(--s6); gap: var(--gap); }
+    main { padding: var(--s4) var(--s4) 72px; gap: var(--gap); } /* room under the last item for the Chat button */
     .filter span, .person .last, .person .pwhen { display: none; }
     .person .pchips { flex-wrap: wrap; padding: var(--s1) 0; }
-    .tile.t-dl { grid-column: 1 / -1; }
-    .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .tile { padding-left: var(--s4); padding-right: var(--s4); }
     .now .also { flex-direction: column; align-items: flex-start; gap: 0; }
     .now .also .link + .link::before { display: none; }
     .nyou > .attn { padding-top: var(--s3); }
     .phases .ph-l { display: none; }
     header h1 { font-size: .875rem; letter-spacing: .06em; }
-    .tile.t-dl .tv { flex-wrap: wrap; white-space: normal; }
-    .tile:last-child { grid-column: span 2; }
     .nyou:has(> #q-panel:not([hidden])) > .now { padding-bottom: var(--s4); }
     .step-b { margin-left: 0; }
     .step-s { flex-basis: 100%; padding-left: 32px; }
     .tool-r { grid-template-columns: minmax(0, 1fr); }
     .tool-r .tw { grid-column: 1; }
     .capw { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-    dialog { padding: var(--s5); }
+    dialog { --dp: var(--s5); }
     /* Chat sits far down on a phone: a button jumps to it, hidden while the chat is on screen. */
     .tochat { display: inline-flex; align-items: center; position: fixed; right: var(--s5); bottom: var(--s5); z-index: 40; min-height: var(--ctl); padding: 0 var(--s6); border-radius: var(--r-full); border: 2px solid var(--outline); background: var(--accent); color: var(--accent-ink); font-size: var(--fs-sm); font-weight: 700; text-decoration: none; box-shadow: var(--e2); }
   }
@@ -788,7 +808,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 </section>
 <form id="gate" class="gate" hidden novalidate>
   <h1><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="var(--accent)"/><rect x="3" y="4" width="2.6" height="8" rx=".6" fill="var(--accent-ink)"/><rect x="6.7" y="4" width="2.6" height="5" rx=".6" fill="var(--accent-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" rx=".6" fill="var(--accent-ink)"/></svg>Claude Board</h1>
-  <p class="lede">Your hackathon team's shared task board. Every teammate's AI coding agent (Claude Code, Codex, GitHub Copilot, Gemini CLI or Cursor (or any MCP tool)) takes tasks from here; on this page you watch progress, answer the agents' questions and steer.</p>
+  <p class="lede">Your hackathon team's shared task board. Every teammate's AI coding agent (Claude Code, Codex, GitHub Copilot, Gemini CLI, Cursor or any MCP tool) takes tasks from here; on this page you watch progress, answer the agents' questions and steer.</p>
   <label for="g-token">Board token</label>
   <input id="g-token" autocomplete="off" spellcheck="false" required>
   <p class="hint">The password for this board. It's in the link the host shared (<code>…?token=…</code>), or printed by <code>npm start</code> on the host laptop.</p>
@@ -801,6 +821,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 </form>
 
 <div id="app" hidden>
+  <a class="skip" href="#now" data-skip="now">Skip to what needs you</a>
   <a class="skip" href="#board" data-skip="tasks">Skip to tasks</a>
   <a class="skip" href="#msg" data-skip="chat">Skip to chat</a>
   <header>
@@ -829,11 +850,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   <div id="activity-live" class="vh" aria-live="polite" aria-atomic="true"></div>
   <a class="tochat" id="tochat" href="#f-h">Chat</a>
   <main>
-    <ul id="tiles" class="tiles" aria-label="The board at a glance" hidden></ul>
     <div class="nyou" id="nyou">
-      <section id="now" class="now" aria-label="What to do now"></section>
+      <section id="now" class="now" aria-labelledby="now-h"></section>
       <section id="q-panel" class="panel attn" aria-labelledby="q-h" hidden>
-        <h2 id="q-h"></h2>
+        <h2 id="q-h" class="vh"></h2>
         <div class="qs" id="questions"></div>
       </section>
     </div>
@@ -875,7 +895,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
               <button data-tab="chat" aria-pressed="false">Chat</button>
               <button data-tab="me" aria-pressed="false" aria-label="@me">@me</button>
               <button data-tab="problems" aria-pressed="false" title="Blocked or sent-back tasks, usage limits, name clashes">Problems</button>
-              <button data-tab="merges" aria-pressed="false" title="Tasks going to review, and merged into main">Merges and reviews</button>
+              <button data-tab="merges" aria-pressed="false" title="Merges and reviews: tasks going to review, and merged into main">Merges</button>
             </div>
           </div>
           <div class="feedwrap">
@@ -905,6 +925,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <div class="dh"><h2 id="td-title">New task</h2><button type="button" class="x" data-close aria-label="Close">×</button></div>
     <div class="meta" id="td-meta"></div>
     <div class="note" id="td-conflict" role="status" hidden></div>
+    <div class="tdblock" id="td-block" hidden></div>
     <div class="note discard" id="td-discard" role="alert" hidden><span>You have unsaved changes. Discard them?</span><span class="sp"></span><button type="button" class="ghost" id="td-keep">Keep editing</button><button type="button" class="danger" id="td-drop">Discard</button></div>
     <label for="td-name">Title</label>
     <input id="td-name" required maxlength="200" placeholder="Short, specific outcome" aria-describedby="td-err">
@@ -929,13 +950,15 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     </div>
     <div id="td-err" class="err" role="alert"></div>
     <div class="hist" id="td-hist-wrap"><div class="sec-h">Activity on this task</div><div class="feed" id="td-history"></div></div>
-    <div id="td-cancel-row" hidden><label for="td-cancel-reason">Reason for cancelling (optional)</label><input id="td-cancel-reason" maxlength="300" placeholder="e.g. duplicate of #4" autocomplete="off" aria-describedby="td-cancel-hint"><p class="hint" id="td-cancel-hint">Removes the task from the board and posts the reason in the feed, notifying the assignee if there is one.</p></div>
+    <!-- The footer stays in view while the dialog scrolls. Destructive actions sit on the left, apart from Close and Save;
+         Cancel task's reason field opens right above its button. -->
     <div class="df">
-      <button type="button" class="ghost" id="td-mention" hidden>Message assignee</button>
-      <button type="button" class="ghost" id="td-cancel" hidden>Cancel task</button>
-      <button type="button" class="ghost" id="td-delete" hidden>Delete task</button>
+      <div id="td-cancel-row" class="row" hidden><label for="td-cancel-reason">Reason for cancelling (optional)</label><input id="td-cancel-reason" maxlength="300" placeholder="e.g. duplicate of #4" autocomplete="off" aria-describedby="td-cancel-hint"><p class="hint" id="td-cancel-hint">Removes the task from the board and posts the reason in the feed, notifying the assignee if there is one.</p></div>
+      <button type="button" class="ghost dz" id="td-cancel" hidden>Cancel task…</button>
+      <button type="button" class="ghost dz" id="td-delete" hidden>Delete task</button>
       <span class="sp"></span>
-      <button type="button" class="ghost" data-close>Cancel</button>
+      <button type="button" class="ghost" id="td-mention" hidden>Message assignee</button>
+      <button type="button" class="ghost" data-close>Close</button>
       <button type="submit" id="td-save">Save</button>
     </div>
   </form>
@@ -977,7 +1000,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dt>File lock</dt>
     <dd>"I'm editing this shared file, don't touch it." Agents set these on busy files (like <code>package.json</code>) and they expire on their own. Release one only if its owner is gone.</dd>
     <dt>Questions</dt>
-    <dd>When an agent needs a human decision it asks here and waits. Answer in the <b>waiting for a human answer</b> panel at the top of the board; the agent continues as soon as you reply.</dd>
+    <dd>When an agent needs a human decision it asks here and waits. Its question is waiting for a human answer under <b>What to do now</b>, at the top of the board: answer it there (or in the task's dialog, if the task is blocked on it); the agent continues as soon as you reply. When you've scrolled down, the header's <b>need you</b> badge counts what's waiting and takes you back up.</dd>
     <dt>Talking to agents</dt>
     <dd>Agents read the chat in Activity. Write <code>@alice</code> to address alice's agent, <code>@alice/ui-worker</code> for one helper, or <code>@all</code> for everyone. <code>#12</code> links to task 12.</dd>
     <dt>Demo time &amp; feature freeze</dt>
@@ -1016,6 +1039,7 @@ const STATUSES = ['open', 'claimed', 'in_progress', 'blocked', 'review', 'done']
 const LABEL = { proposed: 'Proposed', open: 'Open', claimed: 'Claimed', in_progress: 'In progress', blocked: 'Blocked', review: 'Review', done: 'Done' };
 const HINT = { proposed: 'Proposed: waiting for the planner or you to approve', open: 'Ready for an agent to claim', claimed: 'Picked up, not started yet', in_progress: 'Being worked on', blocked: 'Stuck: needs help', review: 'Waiting to be merged', done: 'Merged / finished' };
 const COL_DESC = { open: 'Ready for an agent to pick up', claimed: 'An agent took it; not started yet', in_progress: 'An agent is working on it now', blocked: 'Stuck: needs a decision or help', review: 'Pushed to a branch, waiting for the integrator to merge', done: 'Merged into main' };
+const FROZEN_DESC = 'Feature freeze: only Priority-1 tasks (bug fixes) can still be claimed';
 const COL_EMPTY = { open: 'No open tasks. Add one with + New task.', claimed: 'None right now.', in_progress: 'None right now.', blocked: 'Nothing is blocked.', review: 'Nothing to merge.', done: 'Nothing merged yet.' };
 const PHASES = [['needs_goal', 'Set the goal'], ['needs_plan', 'Write tasks'], ['building', 'Build'], ['all_done', 'Done']];
 const ALL_PHASES = [['connect', 'Connect'], ...PHASES]; // 'connect' is client-side: shown while no laptop is connected yet
@@ -1568,13 +1592,16 @@ function renderClock() {
     main = `Demo in ${dur(t.deadline - now)}`; detail = t.fm ? ` · freeze ${t.warn ? 'in ' + dur(t.freezeAt - now) : when(t.freezeAt)}` : '';
     cls = t.warn ? 'warn' : ''; tip = `Demo at ${when(t.deadline)}${t.fm ? `; feature freeze at ${when(t.freezeAt)} (${t.fm} min before): agents stop taking new tasks then (priority-1 bug fixes still allowed)` : ''}. Click to change.`;
   }
-  const ol = outlook(t); const vd = ol?.label ? ol : null;
-  if (ol) tip = `${vd ? `${vd.label}. ` : ''}${ol.why}.
+  const ol = outlook(t);
+  // During the freeze the pill names the freeze; the verdict ("Behind by ~4 tasks" only means those won't start) moves
+  // to the tooltip. Narrower screens drop "finish & merge", never the countdown.
+  const vd = ol?.label && !t.frozen ? ol : null;
+  if (ol) tip = `${ol.label ? `${ol.label}. ` : ''}${ol.why}.
 ${tip}`;
-  // Frozen with a verdict: the countdown stays and the freeze words go (the colour and the board banner say it).
-  const [lead, tail] = t.frozen && vd ? [`Demo in ${dur(t.deadline - now)}`, ` · ${main}`] : [main, detail];
-  const text = `${vd ? vd.label + ' · ' : ''}${lead}${tail}`;
-  const html = CLOCK_ICO + `<span>${vd ? `<b class="vd ${vd.verdict}">${esc(vd.label)}</b> · ` : ''}${esc(lead)}${tail ? `<span class="fz">${esc(tail)}</span>` : ''}</span>`;
+  const text = `${vd ? vd.label + ' · ' : ''}${main}${detail}`;
+  const html = CLOCK_ICO + (t.frozen && !t.past
+    ? `<span>Feature freeze<span class="fz"> — finish &amp; merge</span>${esc(detail)}</span>`
+    : `<span>${vd ? `<b class="vd ${vd.verdict}">${esc(vd.label)}</b> · ` : ''}${esc(main)}${detail ? `<span class="fz">${esc(detail)}</span>` : ''}</span>`);
   if (b._html !== html) { b.innerHTML = html; b._html = html; }
   b.className = 'clock ' + cls; b.title = tip; b.setAttribute('aria-label', `${text}. Change the demo time`);
   // One polite announcement when the freeze starts while the page is open.
@@ -1587,7 +1614,7 @@ function tickTime() {
   if ($('app').hidden) return;
   const t = timeNow(); const key = `${t.deadline}|${t.warn}|${t.frozen}|${t.past}`;
   if (key !== timeKey) { timeKey = key; return render(); }
-  renderClock(); renderTiles(openQuestions(), setupInfo());
+  renderClock();
 }
 
 // ---------- export: write-up + backup ----------
@@ -1736,7 +1763,6 @@ function render() {
   renderClock(); renderBell();
   const si = setupInfo();
   renderNow(qOpen, unread, si);
-  renderTiles(qOpen, si);
   renderSetup(si);
   renderBoardEmpty(si);
   renderBoardNote(); renderCi();
@@ -1751,22 +1777,27 @@ function render() {
   if (boardView === 'office') { office.mod?.update(state); renderOfficeCard(); }
 }
 
-function renderNeeds(qOpen, unread) {
-  const blocked = state.tasks.filter((t) => t.status === 'blocked').length;
-  const stale = state.tasks.filter(isStale).length;
-  const props = state.tasks.filter((t) => t.status === 'proposed').length;
-  const clash = [...agentInfoNow().values()].filter((a) => a.conflict);
-  const ci = state.main_ci;
-  patch($('needs'), [
-    ci?.status === 'fail' ? `<button class="b" data-go="ci" data-fk="n-ci" title="${esc(`The latest CI run on main failed${ci.failing?.length ? ': ' + ci.failing.join(', ') : ''}`)}">main is failing</button>` : '',
-    clash.length ? `<button class="b" data-go="conflict" data-fk="n-c" title="${esc(clash.map(conflictText).join(' '))}">${clash.length === 1 ? `${esc(clash[0].name)} on 2 laptops` : `${clash.length} names on 2 laptops`}</button>` : '',
-    props ? `<button class="st" data-go="proposed" data-fk="n-p" title="Tasks agents proposed: approve or reject them (the planner can too)">${props} proposed</button>` : '',
-    qOpen.length ? `<button class="q" data-go="questions" data-fk="n-q" title="Agents are waiting for your answer">${qOpen.length} question${qOpen.length > 1 ? 's' : ''}<span class="lt"> waiting on you</span></button>` : '',
-    unread.length ? `<button class="m" data-go="mentions" data-fk="n-m">${unread.length} new mention${unread.length > 1 ? 's' : ''}</button>` : '',
-    blocked ? `<button class="b" data-go="blocked" data-fk="n-b" title="Show the Blocked column">${blocked} blocked</button>` : '',
-    stale ? `<button class="st" data-go="stale" data-fk="n-s" title="Claimed or in progress with no update for 15+ min">${stale} stale</button>` : '',
-  ].join(''));
+// Blocked tasks with an open question are waiting on that question: count them once, as the question.
+function blockedSplit(qOpen = openQuestions()) {
+  const asked = new Set(qOpen.map((q) => q.task_id).filter(Boolean));
+  const all = state.tasks.filter((t) => t.status === 'blocked');
+  return { asked: all.filter((t) => asked.has(t.id)), alone: all.filter((t) => !asked.has(t.id)) };
 }
+// The header's one "N need you" badge: what waits on a human. Shown only while What to do now (where each of these
+// is listed) is scrolled out of view; it jumps back up there.
+function renderNeeds(qOpen, unread) {
+  const blocked = blockedSplit(qOpen).alone.length;
+  const clash = [...agentInfoNow().values()].filter((a) => a.conflict).length;
+  const parts = [[qOpen.length, 'question'], [unread.length, 'new mention'], [blocked, 'blocked task'], [clash, 'name on 2 laptops', 'names on 2 laptops']].filter(([n]) => n);
+  const n = parts.reduce((a, [k]) => a + k, 0);
+  const list = parts.map(([k, w, ws]) => plural(k, w, ws));
+  patch($('needs'), n ? `<button type="button" data-go="now" data-fk="n-all" title="${esc(list.join(' · '))}" aria-label="${esc(`${n} ${n === 1 ? 'thing needs' : 'things need'} you: ${list.join(', ')}. Go to What to do now`)}">${n} need${n === 1 ? 's' : ''} you <span aria-hidden="true">↑</span></button>` : '');
+  syncNeeds();
+}
+// Hidden while What to do now is on screen (below the sticky header).
+let nowSeen = true;
+function syncNeeds() { $('needs').hidden = nowSeen; }
+if ('IntersectionObserver' in window) new IntersectionObserver(([e]) => { nowSeen = e.isIntersecting; syncNeeds(); }, { rootMargin: '-56px 0px 0px 0px' }).observe($('now'));
 
 const plural = (n, w, ws = w + 's') => `${n} ${n === 1 ? w : ws}`;
 const cmdBox = (text, key, what) => `<div class="cmd"><code>${esc(text)}</code><button type="button" class="ghost" data-copy="${esc(text)}" data-fk="cp-${key}" aria-label="Copy ${esc(what)}">Copy</button></div>`;
@@ -1786,7 +1817,8 @@ function cutTasks(tm = timeNow()) {
 function renderNow(qOpen, unread, si) {
   const S = state.settings; const T = state.tasks.length;
   const review = state.tasks.filter((t) => t.status === 'review').length;
-  const blocked = state.tasks.filter((t) => t.status === 'blocked').length;
+  // A blocked task with an open question is answered by answering it: counted once, with the question.
+  const bs = blockedSplit(qOpen); const blocked = bs.alone.length;
   let kind = 'ok', text, go = '', text2 = '', go2 = '', appr = false;
   const tm = timeNow();
   // After the event: the demo time has passed and no agent is on the board any more.
@@ -1800,7 +1832,11 @@ function renderNow(qOpen, unread, si) {
   if (approvalWait()) ranked.push({ kind: 'setup', go: 'board', appr: true, more: `Approve the plan${nOn ? ` (${plural(nOn, 'agent')} waiting)` : ''}`,
     text: `Review the task list (${plural(T, 'task')}), then approve it: ${nOn ? plural(nOn, 'agent waits', 'agents wait') : 'agents wait'} until you do` });
   if (review && !S.integrator) ranked.push({ kind: 'urgent', go: 'step-integrator', more: `Pick who merges (${review} in Review)`, text: `Pick who merges to main: ${plural(review, 'finished task is', 'finished tasks are')} waiting to be merged` });
-  if (qOpen.length) ranked.push({ kind: 'urgent', go: 'questions', more: `Answer ${plural(qOpen.length, 'question')}`, text: `Answer ${plural(qOpen.length, 'question')}: ${qOpen.length > 1 ? 'agents are' : 'an agent is'} waiting for you` });
+  if (qOpen.length) ranked.push({ kind: 'urgent', go: 'questions', more: `Answer ${plural(qOpen.length, 'question')}`,
+    text: `Answer ${plural(qOpen.length, 'question')}${bs.asked.length ? ` (${plural(bs.asked.length, 'task is', 'tasks are')} blocked on ${qOpen.length > 1 ? 'them' : 'it'})` : `: ${qOpen.length > 1 ? 'agents are' : 'an agent is'} waiting for you`}` });
+  // The feature freeze changes what humans should do, so it comes right after the questions.
+  if (tm.frozen && !tm.past && state.phase !== 'all_done') ranked.push({ kind: 'urgent', go: review ? 'review' : 'compose', go2: 'wrapup', text2: 'Write-up for your submission', more: 'Feature freeze: help merge and test',
+    text: `Feature freeze: agents won't start new tasks. Help merge and test ${review ? `the ${plural(review, 'task')} in Review` : 'main'}, then rehearse the demo. P1 bug fixes can still be claimed` });
   if (blocked) ranked.push({ kind: 'urgent', go: 'blocked', more: `Help with ${plural(blocked, 'blocked task')}`, text: `${plural(blocked, 'task is', 'tasks are')} blocked: read why and help` });
   // Tasks that keep coming back from review: the task (or its checks) is probably unclear.
   const bounced = bouncedTasks();
@@ -1816,8 +1852,6 @@ function renderNow(qOpen, unread, si) {
     text: `${review} tasks are waiting in Review: merging is the bottleneck. Help review and test${S.integrator === ANYONE ? '' : ', or let whoever is free merge (Start here, step 5)'}` });
   if (si.limitedA.length) { const l = si.limitedA; ranked.push({ kind: 'setup', go: 'limited', more: l.length === 1 ? `${l[0].name} is out of usage` : `${l.length} agents out of usage`,
     text: l.length === 1 ? `${l[0].name} hit its usage limit${l[0].limited?.until ? ` until ${clock(l[0].limited.until)}` : ''}: its tasks wait, or other agents take them over` : `${l.length} agents hit their usage limit: their tasks wait, or other agents take them over` }); }
-  if (tm.frozen && !tm.past && state.phase !== 'all_done') ranked.push({ kind: 'urgent', go: review ? 'review' : 'compose', go2: 'wrapup', text2: 'Write-up for your submission', more: 'Feature freeze: help merge and test',
-    text: `Feature freeze: agents won't start new tasks. Help merge and test ${review ? `the ${plural(review, 'task')} in Review` : 'main'}, then rehearse the demo. P1 bug fixes can still be claimed` });
   const top = over ? null : ranked[0];
   $('needs').classList.toggle('quiet', over);
   if (over) { kind = 'done'; go = 'wrapup'; text = 'The event is over. Download the summary and retro'; }
@@ -1848,7 +1882,9 @@ function renderNow(qOpen, unread, si) {
     else if (!S.integrator && T) { go2 = 'step-integrator'; text2 = 'While you wait: pick who merges to main'; }
   }
   // The next things in line, then setup that can happen meanwhile (at most three lines in all).
-  const more = over ? [] : ranked.slice(1).map((r) => ({ go: r.go, text: r.more }));
+  const more = over ? [] : ranked.slice(1).map((r) => ({ go: r.go, text: r.more, freeze: !!r.go2 }));
+  // Mentions lead only when nothing else does; otherwise they come next, after the freeze (also in the @me tab).
+  if (!over && unread.length && go !== 'mentions') more.splice(more[0]?.freeze ? 1 : 0, 0, { go: 'mentions', text: plural(unread.length, 'new mention') });
   if (!over && S.goal && !tm.deadline && !dlSkipped()) more.push({ act: 'clock', text: 'Set the demo time so agents stop on time' });
   if (si.cur === 'invite' && !S.goal) more.push({ go: 'step-goal', text: 'Meanwhile: write the goal (step 2)' });
   const moreHtml = more.length ? `<div class="also"><span class="n">Also:</span>${more.slice(0, 2).map((m, i) => `<button type="button" class="link" ${m.act ? `data-act="${m.act}"` : `data-go="${m.go}"`} data-fk="now-more-${i}">${esc(m.text)} <span aria-hidden="true">→</span></button>`).join('')}</div>` : '';
@@ -1862,46 +1898,21 @@ function renderNow(qOpen, unread, si) {
   // A list, so screen readers hear "Phase: Build, step 5 of 6" and each step as a list item.
   const phases = `<div class="phases" title="Where the team is: connect laptops → set a goal → the planner writes tasks${track !== ALL_PHASES ? ' → humans approve them' : ''} → agents build → everything merged"><span class="ph-l" aria-hidden="true">Phase</span><ol role="list" aria-label="${ci < 0 ? 'Phase' : `Phase: ${track[ci][1]}, step ${ci + 1} of ${track.length}`}">${track.map(([k, l], i) =>
     `<li>${i ? '<span class="arr" aria-hidden="true">›</span>' : ''}<span class="p ${k === curP ? 'cur' : i < ci ? 'past' : ''}" ${k === curP ? 'aria-current="step"' : ''}>${l}</span></li>`).join('')}</ol></div>`;
-  patch(el, `<span class="nl">What to do now</span>${go
+  patch(el, `<h2 class="nl" id="now-h">What to do now</h2>${go
     ? `<button type="button" class="link na" data-go="${go}" data-fk="now-go">${esc(text)} <span class="go" aria-hidden="true">→</span></button>`
     : `<span class="na">${esc(text)}</span>`}${appr ? '<button type="button" class="appr" data-act="approve" data-fk="now-appr">Approve plan &amp; start</button>' : ''}${text2 ? `<button type="button" class="link na2" data-go="${go2}" data-fk="now-go2">${esc(text2)} <span aria-hidden="true">→</span></button>` : ''}${cutHtml}${phases}${moreHtml}`);
-}
-
-// The board at a glance, the office demo's stat tiles: the deadline verdict (same outlook() as the clock), then counts.
-// Read-only (no Tab stops); hidden until there are tasks to count.
-const VERDICT_CLS = { ok: 'ok', tight: 'warn', behind: 'bad' };
-function renderTiles(qOpen, si) {
-  const T = state.tasks.filter((t) => t.status !== 'proposed'); const el = $('tiles');
-  el.hidden = !T.length; if (!T.length) return;
-  const n = (...st) => T.filter((t) => st.includes(t.status)).length;
-  const done = n('done'), work = n('claimed', 'in_progress'), review = n('review'), blocked = n('blocked');
-  const stale = state.tasks.filter(isStale).length;
-  const tm = timeNow(); const ol = outlook(tm);
-  let dl;
-  if (!tm.deadline) dl = { cls: '', v: 'Not set', sub: '' };
-  else if (tm.past) dl = { cls: '', v: 'Demo time passed', sub: when(tm.deadline) };
-  else {
-    const sub = `demo in ${dur(tm.deadline - Date.now())}${tm.frozen ? ', frozen' : ''}`;
-    dl = !ol ? { cls: 'ok', v: 'Nothing left', sub } : ol.verdict === 'unknown' ? { cls: '', v: 'Estimate coming', sub, tip: ol.why } : { cls: VERDICT_CLS[ol.verdict], v: ol.label, sub, tip: ol.why };
-  }
-  const pct = Math.round((done / T.length) * 100);
-  const tile = (cls, label, v, sub, extra = '', tip = '') => `<li class="tile ${cls}"${tip ? ` title="${esc(tip)}"` : ''}><span class="tl">${label}</span><span class="tv"><b>${v}</b>${sub ? `<span>${sub}</span>` : ''}</span>${extra}</li>`;
-  patch(el, [
-    tile(`t-dl ${dl.cls}`, 'Deadline', esc(dl.v), esc(dl.sub), '', dl.tip ? `${dl.tip}.` : ''),
-    tile('t-done', 'Done', `${done} of ${T.length}`, `${pct}%`, `<span class="tbar" aria-hidden="true"><i style="width:${pct}%"></i></span>`),
-    tile('', 'In progress', work, ''),
-    tile(review >= 4 ? 'warn' : '', 'In review', review, ''),
-    tile(blocked ? 'bad' : '', 'Blocked', blocked, stale ? `${stale} stale` : ''),
-    tile(qOpen.length ? 'warn' : '', 'Questions', qOpen.length, ''),
-  ].join(''));
 }
 
 function renderSetup(si) {
   const S = state.settings; const el = $('setup');
   if (!setupOpen(si.complete)) {
     const left = si.steps.find((s) => !s.done);
+    // Progress (was a row of tiles): done of all tasks except proposals, with a small bar.
+    const T = state.tasks.filter((t) => t.status !== 'proposed'); const done = T.filter((t) => t.status === 'done').length;
+    const pct = T.length ? Math.round((done / T.length) * 100) : 0;
     patch(el, `<div class="sumbar">
       <span class="goal" title="${esc(S.goal || 'No goal set yet')}"><b>Goal:</b> ${S.goal ? esc(S.goal) : '<span class="muted">not set</span>'}</span>
+      ${T.length ? `<span class="stat" id="done-count" title="${done} of ${T.length} tasks merged into main (${pct}%)"><b>${done} of ${T.length} done</b><span class="mbar" aria-hidden="true"><i style="width:${pct}%"></i></span></span>` : ''}
       ${S.repo ? `<span class="goal repo-s" title="Project repo: ${esc(S.repo)}"><b>Repo:</b> ${esc(S.repo)}</span>` : ''}
       <span title="The person whose agent merges finished branches into main">Merges to main: ${S.integrator === '*' ? 'whoever is free' : S.integrator ? `${nameTag(S.integrator)}${ownerOffline({ assignee: S.integrator }) || agentLimited(S.integrator) ? ' <span class="muted">(away: whoever is free merges meanwhile)</span>' : ''}` : '<span class="muted">not picked yet</span>'}${ciPill()}</span>
       <span title="Online = an agent someone started with /board, seen in the last 10 min and not out of usage. Not started = its tool is connected but nobody typed /board yet. Out of usage = hit its plan's limit. Offline = not seen for 10 min. Watching = people with this page open." class="stat" id="online-count"><span class="on ${si.onlineA.length ? 'y' : si.waitingA.length ? 'w' : ''}"></span>${plural(si.onlineA.length, 'agent')} online${si.waitingA.length ? ` · ${si.waitingA.length} not started` : ''}${si.limitedA.length ? ` · ${si.limitedA.length} out of usage` : ''}${si.offlineA.length ? ` · ${si.offlineA.length} offline` : ''} · ${si.watchers.length} watching</span>
@@ -1932,8 +1943,8 @@ function teamCapHtml(long = false) {
   if (!long) return `<span class="teamcap${low ? ' low' : ''}" title="${esc(tip)}">Team can run ${plural(c.slots, 'task')} at once · ${c.running} running${esc(idleTxt)}</span>`;
   return `<p class="capline${low ? ' low' : ''}" title="${esc(tip)}"><b>Team capacity:</b> ${plural(c.slots, 'task')} at once across ${plural(c.agents.length, 'started agent')} · ${c.running} running · ${plural(c.ready, 'open task', 'open tasks')} ready${low ? `. ${plural(c.idle.length, 'agent has', 'agents have')} nothing to do: add tasks, or ask the planner for more.` : ''}</p>`;
 }
-function chips(si) {
-  return `<div class="chips">${si.ros.filter((r) => r.agent || r.humanOnline).map((r) => {
+function chips(si, laptops = false) {
+  return `<div class="chips">${si.ros.filter((r) => r.agent || (!laptops && r.humanOnline)).map((r) => {
     const bits = r.agents.map((a) => { const st = agentState(a); return `${a.plan || a.client || 'agent'} ${st === 'waiting' ? notStartedText(a) : st === 'online' ? `online · ${capText(a)} tasks` : st}`; });
     if (r.humanOnline) bits.push(r.name === me ? 'you' : 'watching');
     const tip = (r.agent ? r.agents.map((a) => { const st = agentState(a); const nm = `${a.name}${a.client ? ` (${a.client})` : ''}`;
@@ -1980,7 +1991,8 @@ function stepInvite(si) {
     <button type="button" class="link muted t-meta mt-1" data-act="qr" data-fk="qr-tog" aria-expanded="${!!ui.qr}" aria-controls="qr-codes">${ui.qr ? '▾ Hide QR code' : '▸ Show QR code (scan with a phone)'}</button>
     ${ui.qr ? `<div class="qrs" id="qr-codes">
       <figure><img src="${esc(qrSrc(best.web_url))}" alt="QR code for this board's link, ${esc(best.web_url)}" width="180" height="180"><figcaption>Board link: open it on a phone to watch. To connect a laptop, copy the join command above or send the invite message.</figcaption></figure></div>` : ''}
-    <div class="sub">Connected now</div>${chips(si)}
+    <div class="sub">Laptops connected</div>${si.ros.some((r) => r.agent) ? chips(si, true) : '<p class="muted t-meta m0">None yet.</p>'}
+    ${(() => { const w = si.ros.filter((r) => r.humanOnline && !r.agent); return w.length ? `<p class="muted t-meta mt-1">Watching this page: ${w.map((r) => `${nameTag(r.name)}${r.name === me ? ' (you)' : ''}`).join(', ')}</p>` : ''; })()}
     ${notifyBox()}
     <button type="button" class="link muted t-meta mt-2" data-act="sec-go" data-fk="sec-go">Link leaked? Rotate the token under Board security, below the steps</button>`;
 }
@@ -2088,7 +2100,7 @@ function deadlineBlock() {
       <input id="dl-in" type="datetime-local" data-keep="dl" value="${esc(localInput(t.deadline || defaultDeadline()))}" step="60" aria-describedby="dl-hint dl-err" ${ui.dlErr ? 'aria-invalid="true"' : ''}>
       <label for="fz-in">Feature freeze</label><input id="fz-in" type="number" data-keep="fz" value="${esc(fm)}" min="0" max="600" step="5" inputmode="numeric" aria-describedby="fz-u dl-hint"><span class="u" id="fz-u">min before</span>
       <button type="submit" class="ghost sm" data-fk="dl-save">Save time</button>${!t.deadline && !dlSkipped() ? '<button type="button" class="ghost sm" data-act="dl-skip" data-fk="dl-skip">No demo time</button>' : ''}${t.deadline ?'<button type="button" class="ghost sm" data-act="dl-cancel" data-fk="dl-cancel">Cancel</button><button type="button" class="ghost sm" data-act="dl-clear" data-fk="dl-clear">Remove deadline</button>' : ''}
-      <p class="hint row m0" id="dl-hint">When the demo starts. The header counts down to it. At the feature freeze agents stop taking new tasks (except priority-1 bug fixes) and get what they have merged, so main works for the demo.</p>
+      <p class="hint row m0" id="dl-hint">${t.deadline ? '' : '<b>Not set yet:</b> the time shown is a suggestion until you press Save time. '}When the demo starts. The header counts down to it. At the feature freeze agents stop taking new tasks (except priority-1 bug fixes) and get what they have merged, so main works for the demo.</p>
       <div class="err row m0" id="dl-err">${esc(ui.dlErr || '')}</div></form>`;
 }
 function stepStart(si) {
@@ -2165,7 +2177,7 @@ function renderBoardEmpty(si) {
   patch(el, msg);
 }
 
-// A banner above the board: waiting for plan approval, the feature freeze, or the end-of-day write-up.
+// A banner above the board: waiting for plan approval, or the end-of-day write-up.
 // main's CI failed: a banner above the board, so nobody merges on top of a broken main unnoticed.
 function renderCi() {
   const el = $('ci-note'); const ci = state.main_ci;
@@ -2198,18 +2210,17 @@ function renderBoardNote() {
     kind = 'freeze';
     html = `<p><b>The demo time (${esc(when(t.deadline))}) has passed.</b> Agents have been told to wrap up and merge what they have. Write-up for your submission: the goal, who built what, the decisions you made and what's unfinished.</p>
       <div class="inl">${exportBtns('bn')}</div>`;
-  } else if (t.frozen && !t.past) {
-    kind = 'freeze';
-    html = `<p><b>Feature freeze since ${esc(when(t.freezeAt))}</b> (demo at ${esc(when(t.deadline))}). Agents have been told not to claim new tasks: they finish, push and merge what they have. Priority-1 tasks (bug fixes) can still be claimed, so file a bug as a P1 task. Help test <code>main</code> and get Review merged.</p>
-      <div class="inl"><span class="muted t-meta">Write-up for your submission:</span>${exportBtns('bn')}</div>`;
   }
+  // The feature freeze has no banner: the header clock names it, What to do now says what to do, and the Open column
+  // dims what won't start.
   el.hidden = !html; el.className = 'bnote' + (kind ? ' k-' + kind : '');
   patch(el, html);
 }
 
 function renderQuestions(qOpen) {
   $('q-panel').hidden = !qOpen.length;
-  patch($('q-h'), qOpen.length ? `${qOpen.length === 1 ? 'An agent is' : `${qOpen.length} agents are`} waiting for a human answer <span class="muted">they may be blocked until someone replies</span>` : '');
+  // Screen readers only: the lead line above already says it.
+  patch($('q-h'), qOpen.length ? `${qOpen.length === 1 ? 'An agent is' : `${qOpen.length} agents are`} waiting for a human answer` : '');
   patch($('questions'), qOpen.map((q) => {
     const t = q.task_id && taskById(q.task_id);
     const old = Date.now() - q.created_at > 5 * 60e3;
@@ -2285,13 +2296,15 @@ function renderPeople() {
   const ps = people();
   $('p-legend').hidden = !ps.some((p) => p.r.agents?.length);
   const r = filterRoot(); const S = state.settings;
+  const asked = new Set(openQuestions().map((q) => q.task_id).filter(Boolean));
   patch($('people'), ps.length ? ps.map((p) => {
     // Main agents (one per AI tool) first, each followed by its helpers.
     const agents = [...p.agents.values()].sort((a, b) => agentRoot(a.id).localeCompare(agentRoot(b.id)) || a.id.includes('/') - b.id.includes('/') || b.last - a.last);
     const sel = r === p.name; const open = ui.openPeople.has(p.name); const key = esc(p.name);
     const hasAgent = p.r.agent || p.agents.size > 1 || agents.some((a) => a.tasks.length);
     const tasks = agents.flatMap((a) => a.tasks);
-    const nBlocked = tasks.filter((t) => t.status === 'blocked').length; const nStale = tasks.filter(isStale).length;
+    // Blocked on a question: the question card says who is waiting, so only other blocked tasks get a chip here.
+    const nBlocked = tasks.filter((t) => t.status === 'blocked' && !asked.has(t.id)).length; const nStale = tasks.filter(isStale).length;
     const hasCap = (p.r.agents || []).some((a) => agentState(a) === 'online'); const nReview = tasks.filter((t) => t.status === 'review').length;
     const summary = [
       hasAgent ? (p.r.agents?.length ? p.r.agents.map((a) => toolChip(a, p.name, p.r.agents)).join('') : '<span class="pill">agent</span>') : `<span class="muted t-meta">${p.r.humanOnline ? 'watching · ' : ''}no AI agent</span>`,
@@ -2303,7 +2316,6 @@ function renderPeople() {
         : tasks.length ? `<span class="pill s-in_progress" title="Tasks claimed, in progress, blocked or in review">${tasks.length} active</span>` : hasAgent && (p.r.agents || []).some((a) => a.online) ? `<span class="muted t-meta">${(p.r.agents || []).some((a) => a.busy) ? 'working' : 'idle'}</span>` : '',
       nBlocked ? `<span class="pill bad">${nBlocked} blocked</span>` : '',
       nStale ? '<span class="pill warn" title="No update for 15+ minutes">' + nStale + ' stale</span>' : '',
-      p.asks ? `<button type="button" class="pill warn" data-go="questions" tabindex="-1" title="Answer it at the top of the page">${p.asks} question${p.asks > 1 ? 's' : ''} for you</button>` : '',
     ].join('');
     let detail = '';
     if (open) {
@@ -2421,14 +2433,16 @@ function card(t) {
   const pr = prInfo(t);
   const merging = t.status === 'review' && t.reviewer;
   const prio = t.priority === 1 ? 'P1, high priority' : t.priority >= 3 ? 'low priority' : 'normal priority';
-  const aria = `#${t.id} ${t.title}. ${LABEL[t.status]}${prop ? ` by ${t.created_by}, waiting for approval` : ''}, ${t.assignee ? 'assigned to ' + t.assignee : 'unassigned'}, ${prio}${waiting.length ? `, waits on ${waiting.map((d) => '#' + d.id).join(' and ')}` : ''}${size !== 'M' ? `, size ${size}` : ''}${rsv ? `, reserved for ${t.reserved_for}` : ''}${pr ? `, pull request${pr.text ? ': ' + pr.text : ''}` : ''}${merging ? `, being merged by ${t.reviewer}` : ''}${stale ? `, stale: no update for 15+ minutes${off ? ', owner offline: agents may take it over' : ''}` : ''}${outU ? ', owner out of usage: agents may take it over' : ''}${q ? ', question waiting' : ''}${note ? `, blocked: ${note}` : ''}. Press Enter to open`;
+  // Feature freeze: an open task that isn't a P1 bug fix won't be started before the demo.
+  const tm = timeNow(); const held = tm.frozen && !tm.past && (t.status === 'open' || prop) && t.priority !== 1;
+  const aria = `#${t.id} ${t.title}. ${LABEL[t.status]}${prop ? ` by ${t.created_by}, waiting for approval` : ''}, ${t.assignee ? 'assigned to ' + t.assignee : 'unassigned'}, ${prio}${waiting.length ? `, waits on ${waiting.map((d) => '#' + d.id).join(' and ')}` : ''}${size !== 'M' ? `, size ${size}` : ''}${rsv ? `, reserved for ${t.reserved_for}` : ''}${pr ? `, pull request${pr.text ? ': ' + pr.text : ''}` : ''}${merging ? `, being merged by ${t.reviewer}` : ''}${stale ? `, stale: no update for 15+ minutes${off ? ', owner offline: agents may take it over' : ''}` : ''}${outU ? ', owner out of usage: agents may take it over' : ''}${q ? ', question waiting' : ''}${note ? `, blocked: ${note}` : ''}${held ? ', on hold for the feature freeze' : ''}. Press Enter to open`;
   const menu = ui.moveMenu === t.id ? `<div class="mvmenu" role="group" aria-label="Move #${t.id} to"><span class="ml">Move to:</span>${STATUSES.filter((s) => s !== t.status).map((s) => `<button type="button" class="ghost" data-move-to="${s}" data-move-id="${t.id}" data-fk="mt-${t.id}-${s}">${LABEL[s]}</button>`).join('')}</div>` : '';
   const ask = ui.moveAsk?.id === t.id ? `<div class="mvmenu mvask" role="group" aria-label="Who is #${t.id} for?"><span class="ml">${LABEL[ui.moveAsk.to]} needs an owner. Who is it for?</span>${askAgents(t).map((a) => `<button type="button" class="ghost" data-ask-to="${esc(a)}" data-ask-id="${t.id}" data-fk="ask-${t.id}-${esc(a)}">${esc(a)}</button>`).join('')}<button type="button" class="ghost" data-ask-cancel="${t.id}" data-fk="askc-${t.id}">Cancel</button></div>` : '';
   const rej = ui.rejecting === t.id;
   const propActs = prop ? (rej
     ? `<form class="rj" data-rjform="${t.id}"><label class="vh" for="rj-${t.id}">Why reject #${t.id}? (optional)</label><input id="rj-${t.id}" data-keep="rj-${t.id}" placeholder="Why? (optional, sent to ${esc(t.created_by)})" maxlength="300"><button type="submit" class="danger" data-fk="rjy-${t.id}">Reject</button><button type="button" class="ghost" data-reject-no="${t.id}" data-fk="rjn-${t.id}">Cancel</button></form>`
     : `<button type="button" data-approve="${t.id}" data-fk="ap-${t.id}" title="Make it a normal open task agents can claim">Approve</button><button type="button" class="ghost" data-reject="${t.id}" data-fk="rj-b-${t.id}" title="Remove it; ${esc(t.created_by)} is told why">Reject…</button>`) : '';
-  return `<article class="card ${t.assignee ? 'has-owner' : ''} ${stale ? 'stale' : ''} ${prop ? 'proposed' : ''}" ${t.assignee ? hs(t.assignee) : ''} data-id="${t.id}" data-fk="card-${t.id}" tabindex="0" draggable="true" aria-label="${esc(aria)}">
+  return `<article class="card ${t.assignee ? 'has-owner' : ''} ${stale ? 'stale' : ''} ${prop ? 'proposed' : ''} ${held ? 'held' : ''}" ${t.assignee ? hs(t.assignee) : ''} data-id="${t.id}" data-fk="card-${t.id}" tabindex="0" draggable="true" aria-label="${esc(aria)}">
     <div class="ct" title="${esc(t.title)}"><span class="id">#${t.id}</span> ${esc(t.title)}</div>
     ${note ? `<div class="bn" title="Latest note when it got blocked">“${esc(short(note, 140))}”</div>` : ''}
     <div class="cm">${t.priority === 1 ? '<span class="pill bad" title="Priority 1: do first (often something other tasks build on)">P1</span>' : t.priority >= 3 ? '<span class="pill" title="Priority 3: low, nice to have">P3</span>' : ''}
@@ -2495,6 +2509,7 @@ function renderBoard() {
   $('board').hidden = table; $('tasktable').hidden = !table || !state.tasks.length;
   if (table) { if (state.tasks.length) renderTable(visible); return; }
   const dOpen = doneOpen();
+  const tm = timeNow(); const frozen = tm.frozen && !tm.past;
   $('board').classList.toggle('none', !state.tasks.length);
   $('board').classList.toggle('done-closed', !dOpen);
   const html = STATUSES.map((s) => {
@@ -2519,7 +2534,9 @@ function renderBoard() {
       items = shown;
     }
     const empty = !state.tasks.length ? '' : tv.q.trim() && !total ? 'No matches' : filterRoot() && !total ? `None for ${esc(filterRoot())}` : COL_EMPTY[s];
-    return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}" role="region" aria-labelledby="colh-${s} colc-${s}" aria-describedby="cold-${s}"><h3 title="${HINT[s]}"><span id="colh-${s}">${LABEL[s]}<span class="vh">,</span></span><span><span id="colc-${s}">${total}<span class="vh"> ${total === 1 ? 'task' : 'tasks'}</span></span>${s === 'done' ? '<button type="button" class="dclose" data-act="done-toggle" data-fk="done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse">«</button>' : ''}</span></h3><p class="cd" id="cold-${s}" title="${COL_DESC[s]}">${COL_DESC[s]}</p>
+    // Feature freeze: Open says what can still start.
+    const desc = s === 'open' && frozen ? FROZEN_DESC : COL_DESC[s];
+    return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}" role="region" aria-labelledby="colh-${s} colc-${s}" aria-describedby="cold-${s}"><h3 title="${COL_DESC[s]}"><span id="colh-${s}">${LABEL[s]}<span class="vh">,</span></span><span><span id="colc-${s}">${total}<span class="vh"> ${total === 1 ? 'task' : 'tasks'}</span></span>${s === 'done' ? '<button type="button" class="dclose" data-act="done-toggle" data-fk="done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse">«</button>' : ''}</span></h3><p class="cd${desc !== COL_DESC[s] ? ' fz-note' : ''}" id="cold-${s}" title="${desc}">${desc}</p>
       ${items.length ? `<ul class="cards">${items.map((t) => `<li>${card(t)}</li>`).join('')}</ul>` : empty ? `<div class="empty">${empty}</div>` : ''}${more}</div>`;
   }).join('');
   const el = $('board');
@@ -2662,6 +2679,7 @@ function renderFeed(unreadCount) {
     if (!older.quiet) $('jump').hidden = false;
   }
   older.quiet = false;
+  requestAnimationFrame(fadeFeed);
   if (before !== feed._html) observeMentions();
 }
 // The feed starts with the last 200 events; "Load earlier activity" pages back 200 at a time. Once a
@@ -2686,7 +2704,9 @@ document.addEventListener('click', (ev) => {
   render();
   document.querySelector(`#${b.closest('#td-history') ? 'td-history' : 'feed'} [data-more="${id}"]`)?.focus({ preventScroll: true });
 });
-$('feed').addEventListener('scroll', () => { const f = $('feed'); if (f.scrollHeight - f.scrollTop - f.clientHeight < 40) $('jump').hidden = true; });
+$('feed').addEventListener('scroll', () => { const f = $('feed'); if (f.scrollHeight - f.scrollTop - f.clientHeight < 40) $('jump').hidden = true; fadeFeed(); });
+// Older items above the top edge: fade it, so a cut-off line reads as "more above", not as a fragment.
+function fadeFeed() { const f = $('feed'); f.classList.toggle('more-above', f.scrollTop > 2); }
 $('jump').onclick = () => { $('feed').scrollTop = $('feed').scrollHeight; $('jump').hidden = true; };
 
 // A mention counts as read once it has been visible in the feed for a moment.
@@ -2754,20 +2774,37 @@ function goBoard() {
   const c = $('board').querySelector('.card'); $('b-h').parentElement.scrollIntoView({ behavior: smooth(), block: 'start' });
   (c || $('board')).focus({ preventScroll: true });
 }
+// Answer an agent's question (the top panel, or a blocked task's dialog). It disappears at once (optimistic).
+async function sendAnswer(qid, asker, answer) {
+  await api(`/questions/${qid}/answer`, { method: 'POST', body: JSON.stringify({ answer }) });
+  toast(`Answer sent to ${asker}`); scheduleReload();
+  const q = state.questions.find((x) => x.id === qid); if (q) q.answer = answer;
+  render();
+}
 function goWrapup() {
   const n = $('board-note');
-  if (n.hidden) return openHelp();
+  // Before the demo (e.g. during the freeze) the write-up buttons live in the help dialog.
+  if (n.hidden) { openHelp(); const b = helpDlg.querySelector('[data-act="export-md"]'); b?.scrollIntoView({ block: 'center' }); return b?.focus(); }
   n.scrollIntoView({ behavior: smooth(), block: 'center' });
   (n.querySelector('[data-act^="export"]') || n).focus({ preventScroll: true });
 }
 function skipTo(where) {
+  if (where === 'now') { $('nyou').scrollIntoView({ block: 'start' }); return focusNow(); }
   needBoard();
   if (where === 'chat') { $('msg').scrollIntoView({ block: 'center' }); return $('msg').focus({ preventScroll: true }); }
   const c = $('board').querySelector('.card'); ($('board').hidden || !state.tasks.length ? $('board-empty') : $('board')).scrollIntoView({ block: 'start' });
   if (c) c.focus({ preventScroll: true }); else { $('board').focus({ preventScroll: true }); }
 }
-// Phones: the floating Chat button (CSS shows it under 600px) hides while the Activity panel is on screen.
-if ('IntersectionObserver' in window) new IntersectionObserver(([e]) => { $('tochat').hidden = e.isIntersecting; }).observe($('f-h').closest('.panel'));
+// Phones: the floating Chat button (CSS shows it under 600px) hides while the Activity panel is on screen, while the
+// questions reach the bottom of the screen where it floats (it would cover an Answer button), and while an answer is typed.
+const chatHide = { feed: false, q: false, typing: false };
+const syncChat = () => { $('tochat').hidden = chatHide.feed || chatHide.q || chatHide.typing; };
+if ('IntersectionObserver' in window) {
+  new IntersectionObserver(([e]) => { chatHide.feed = e.isIntersecting; syncChat(); }).observe($('f-h').closest('.panel'));
+  new IntersectionObserver(([e]) => { chatHide.q = e.isIntersecting; syncChat(); }, { rootMargin: '-80% 0px 0px 0px' }).observe($('q-panel'));
+}
+const answering = () => { chatHide.typing = !!document.activeElement?.closest?.('#questions textarea'); syncChat(); };
+document.addEventListener('focusin', answering); document.addEventListener('focusout', () => setTimeout(answering));
 document.addEventListener('click', (ev) => {
   const sk = ev.target.closest('[data-skip]'); if (sk) { ev.preventDefault(); return skipTo(sk.dataset.skip); }
   if (ev.target.closest('a[href]')) return; // links (PRs, URLs in chat) open by themselves
@@ -2832,6 +2869,7 @@ document.addEventListener('click', (ev) => {
     el?.scrollIntoView({ behavior: smooth(), block: 'center' }); return el?.focus({ preventScroll: true });
   }
   if (d.go === 'board') return goBoard();
+  if (d.go === 'now') { $('nyou').scrollIntoView({ behavior: smooth(), block: 'start' }); return focusNow(); }
   if (d.go === 'idle') {
     // Draft a request to the planner (not sent: the human reviews it), or add a task directly when nobody plans.
     const pl = state.settings.planner; if (!pl) return openTask(null);
@@ -2975,10 +3013,7 @@ document.addEventListener('submit', async (ev) => {
   const idx = openQuestions().findIndex((q) => q.id === qid);
   const sb = $('q-' + qid)?.querySelector('button[type=submit]') || btn; sb.disabled = true; sb.textContent = 'Sending…';
   try {
-    await api(`/questions/${qid}/answer`, { method: 'POST', body: JSON.stringify({ answer }) });
-    toast(`Answer sent to ${f.dataset.asker}`); scheduleReload();
-    const q = state.questions.find((x) => x.id === qid); if (q) q.answer = answer; // optimistic: it disappears now
-    render();
+    await sendAnswer(qid, f.dataset.asker, answer);
     // Keep going: next question's answer box, or the "what to do now" line when none are left.
     const rest = openQuestions(); const next = rest[Math.min(Math.max(idx, 0), rest.length - 1)];
     if (next) $('qa-' + next.id)?.focus(); else focusNow();
@@ -3101,6 +3136,7 @@ function goStep(key, focus) {
   ui.steps[key] = true; render();
   const li = $('step-' + key); if (!li) return;
   li.scrollIntoView({ behavior: smooth(), block: 'start' });
+  if (focus === 'dl' && !ui.editDeadline) { ui.editDeadline = true; render(); }
   if (focus === 'dl') { const n = li.querySelector('#dl-in, [data-fk="dl-edit"]'); if (n) { n.scrollIntoView({ behavior: smooth(), block: 'center' }); return n.focus({ preventScroll: true }); } }
   (li.querySelector('.step-b [data-act="copy-invite"], .step-b textarea, .step-b select, .step-b [data-copy]') || li.querySelector('.step-h'))?.focus({ preventScroll: true });
 }
@@ -3273,11 +3309,12 @@ function openTask(id) {
   $('td-cancel').hidden = !t || t.status === 'done'; resetCancel();
   if (!dlg.open) dlg.showModal();
   renderDialogLive();
-  $('td-name').focus();
+  // A blocked task with a question: the answer box is the job; otherwise the title.
+  ($('td-block').querySelector('textarea') || $('td-name')).focus();
 }
 function renderDialogLive() {
   const t = editing && taskById(editing.id);
-  if (!editing) { $('td-meta').innerHTML = ''; $('td-deps-hint').textContent = 'Task ids that must be done before this can be claimed. Optional.'; resOptions(); return; }
+  if (!editing) { $('td-meta').innerHTML = ''; renderTaskBlock(null); $('td-deps-hint').textContent = 'Task ids that must be done before this can be claimed. Optional.'; resOptions(); return; }
   if (!t) { $('td-conflict').hidden = false; $('td-conflict').textContent = 'This task no longer exists.'; return; }
   // Fields the human didn't touch follow the server; a warning only when one they DID edit changed underneath them.
   const mine = editedFields();
@@ -3290,6 +3327,7 @@ function renderDialogLive() {
   $('td-conflict').hidden = !clash.length;
   if (clash.length) $('td-conflict').textContent = `While you were editing, someone else changed the ${clash.map((f) => FNAME[f]).join(' and ')}${clash.includes('status') ? ` (now ${LABEL[t.status]})` : ''}. Saving replaces it with your version.`;
   $('td-mention').hidden = !t.assignee;
+  renderTaskBlock(t);
   const deps = t.depends_on.map((d) => { const x = taskById(d); return `<button type="button" class="link tref" data-open-task="${d}">#${d}</button> ${x ? `(${LABEL[x.status]})` : '(missing)'}`; });
   patch($('td-meta'), [
     `<span>${LABEL[t.status]}</span>`,
@@ -3309,6 +3347,33 @@ function renderDialogLive() {
   patch(h, evs.map((e, i) => evHtml(e, evs[i - 1])).join('') || '<div class="muted empty-note">No activity yet.</div>');
   if (before !== h._html) h.scrollTop = h.scrollHeight; // newest at the bottom, in view
 }
+// Blocked: the reason first, then the agent's open question with an answer box, then the way back to In progress.
+function renderTaskBlock(t) {
+  const el = $('td-block'); const blocked = t?.status === 'blocked';
+  el.hidden = !blocked;
+  if (!blocked) return patch(el, '');
+  const note = blockedNote(t); const q = openQuestions().find((x) => x.task_id === t.id);
+  patch(el, `<p class="tb-why"><b>Blocked:</b> ${note ? esc(note) : '<span class="muted">no reason given. Ask in chat with Message assignee.</span>'}</p>
+    ${q ? `<div class="tb-q"><div class="t-meta muted">${who(q.asker, true)} asked ${ago(q.created_at)}</div><div class="qt">${fmt(q.question, true)}</div>
+      <div class="tb-qa"><label class="vh" for="tdqa-${q.id}">Answer to ${esc(q.asker)}</label><textarea id="tdqa-${q.id}" data-keep="tdqa-${q.id}" data-tdq="${q.id}" data-asker="${esc(q.asker)}" rows="1" placeholder="Your answer (Enter to send)" title="Enter sends · Shift+Enter adds a new line" aria-describedby="tdqe-${q.id}"></textarea><button type="button" data-td-answer="${q.id}" data-fk="tdqb-${q.id}">Answer</button></div>
+      <div class="err" id="tdqe-${q.id}" role="alert"></div></div>` : ''}
+    <div class="inl"><button type="button" class="ghost sm" data-td-unblock data-fk="td-unblock" title="${t.assignee ? `Unblocked: ${esc(t.assignee)} carries on` : 'Unblocked: back to work'}">Back to In progress</button></div>`);
+}
+async function answerFromDialog(qid) {
+  const ta = $('tdqa-' + qid); const b = document.querySelector(`[data-td-answer="${qid}"]`); if (!ta || !b) return;
+  const answer = ta.value.trim(); const err = $('tdqe-' + qid);
+  if (!answer) { err.textContent = 'Type an answer first.'; ta.setAttribute('aria-invalid', 'true'); return ta.focus(); }
+  b.disabled = true; b.textContent = 'Sending…';
+  try { await sendAnswer(qid, ta.dataset.asker, answer); document.querySelector('[data-fk="td-unblock"]')?.focus(); }
+  catch (e) { b.disabled = false; b.textContent = 'Answer'; if (e.message !== 'Token rejected') { err.textContent = `Not sent: ${e.message}`; ta.focus(); } }
+}
+$('td-block').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && ev.target.dataset?.tdq) { ev.preventDefault(); answerFromDialog(Number(ev.target.dataset.tdq)); }
+});
+$('td-block').addEventListener('click', (ev) => {
+  const a = ev.target.closest('[data-td-answer]'); if (a) return answerFromDialog(Number(a.dataset.tdAnswer));
+  if (ev.target.closest('[data-td-unblock]')) { const t = editing && taskById(editing.id); if (t && t.status === 'blocked') { moveTask(t, 'in_progress'); render(); } }
+});
 $('td-status').addEventListener('change', () => {
   const s = $('td-status').value;
   $('td-status-hint').textContent = HINT[s] + '.' + (s === 'open' && editing?.assignee ? ' Moving back to Open unassigns it and frees its file locks.' : s === 'done' ? ' Marking done frees any file locks held for this task.' : '');
@@ -3341,7 +3406,7 @@ $('td-delete').onclick = async () => {
 };
 // Cancel: like delete it removes the task, but records why in the feed and @-mentions the assignee. Two clicks.
 let cancelArmed = null;
-function resetCancel() { clearTimeout(cancelArmed); cancelArmed = null; $('td-cancel').textContent = 'Cancel task'; $('td-cancel').classList.remove('danger'); $('td-cancel-row').hidden = true; $('td-cancel-reason').value = ''; }
+function resetCancel() { clearTimeout(cancelArmed); cancelArmed = null; $('td-cancel').textContent = 'Cancel task…'; $('td-cancel').classList.remove('danger'); $('td-cancel-row').hidden = true; $('td-cancel-reason').value = ''; }
 $('td-cancel').onclick = async () => {
   const t = editing; if (!t) return;
   if (!cancelArmed) {
@@ -3627,7 +3692,7 @@ document.addEventListener('click', (ev) => {
   if (boardView !== 'office') return;
   const el = ev.target.closest?.('[data-go], [data-skip], [data-act="clock"], [data-act="invite"], [data-act="sec-go"]');
   if (!el || el.closest('#office-view')) return;
-  if (['cut', 'rejected'].includes(el.dataset.go) || (el.dataset.go === 'questions' && !$('q-panel').hidden)) return;
+  if (['cut', 'rejected', 'now'].includes(el.dataset.go) || el.dataset.skip === 'now' || (el.dataset.go === 'questions' && !$('q-panel').hidden)) return;
   setBoardView('board');
 }, true);
 
