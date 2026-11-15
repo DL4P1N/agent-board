@@ -13,14 +13,14 @@
     color-scheme: light dark;
     --bg: #cfe3f2; --sunken: #f3e9d8; --panel: #fff7e8; --chip: #efe3cc; --field: #fffaf0;
     --ink: #2c2114; --muted: #67563e; --line: #d4c2a2; --line-strong: #a68f69; --field-line: #7a5f3d;
-    --border: #7a5f3d; --outline: #3a2a14; --hi: rgba(255, 255, 255, .7); --lo: rgba(80, 50, 10, .16); --grid: rgba(44, 33, 20, .07);
+    --border: #7a5f3d; --outline: #3a2a14; --hi: rgba(255, 255, 255, .7); --lo: rgba(80, 50, 10, .16);
     --accent: #9a4a14; --accent-hover: #823d0f; --accent-ink: #fff7e8; --accent-soft: #f7e2cb;
-    --ok: #1a6e2d; --ok-soft: #e2efd9; --warn: #845407; --warn-soft: #f8e8c6;
+    --ok: #1a6e2d; --ok-soft: #e2efd9;
     --bad: #b42335; --bad-hover: #991c2c; --bad-soft: #f9e0dc; --on-fill: #fff7e8;
     --toast: #fff7e8; --toast-ink: #2c2114; --shade: 1px 1px 0 rgba(255, 255, 255, .6);
     --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif;
     --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-    --fs-micro: .75rem; --fs-meta: .75rem; --fs-ctl: .8125rem; --fs-sm: .875rem; --fs-body: .875rem; --fs-lead: 1rem; --fs-title: 1.125rem;
+    --fs-micro: .75rem; --fs-meta: .75rem; --fs-ctl: .8125rem; --fs-sm: .875rem; --fs-body: .875rem; --fs-lead: 1rem;
     --lh: 1.45;
     --s2: 4px; --s3: 6px; --s4: 8px; --s5: 12px; --s6: 16px; --s7: 24px; --s8: 32px;
     --r-xs: 0; --r-sm: 0; --r-md: 0; --r-lg: 0; --r-full: 0;
@@ -34,9 +34,9 @@
     :root {
       --bg: #1b1530; --sunken: #201939; --panel: #241c40; --chip: #342a5a; --field: #130e24;
       --ink: #f1e9ff; --muted: #b0a2d2; --line: #44386c; --line-strong: #67589a; --field-line: #8e7fc6;
-      --border: #5b4b8a; --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --grid: rgba(241, 233, 255, .06);
+      --border: #5b4b8a; --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35);
       --accent: #ffb86b; --accent-hover: #ffc98c; --accent-ink: #2a1600; --accent-soft: #46344a;
-      --ok: #7ee081; --ok-soft: #2b3a45; --warn: #ffc857; --warn-soft: #3f3343;
+      --ok: #7ee081; --ok-soft: #2b3a45;
       --bad: #ff6b7a; --bad-hover: #ff8a96; --bad-soft: #432647; --on-fill: #1b1530;
       --toast: #2b2249; --toast-ink: #f1e9ff; --shade: 2px 2px 0 rgba(0, 0, 0, .35);
     }
@@ -99,12 +99,11 @@
   .card.archived { background: var(--sunken); box-shadow: none; }
   .ch { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--s4); min-width: 0; }
   .ch h3 { font-size: var(--fs-lead); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100%; }
-  .ch .slug { white-space: nowrap; }
-  .ch .slug { font: var(--fs-meta) var(--mono); color: var(--muted); }
+  .ch .slug { white-space: nowrap; font: var(--fs-meta) var(--mono); color: var(--muted); }
   .pill { display: inline-block; font-size: var(--fs-micro); font-weight: 600; line-height: 20px; padding: 0 6px; border-radius: var(--r-full); background: var(--chip); color: var(--muted); white-space: nowrap; }
   .pill.live { background: var(--ok-soft); color: var(--ok); }
-  .pill.bad { background: var(--bad-soft, #fdecec); color: var(--bad, #b91c1c); }
-  .failerr { font-size: var(--fs-meta); color: var(--bad, #b91c1c); margin-top: var(--s3, 8px); overflow-wrap: anywhere; }
+  .pill.bad { background: var(--bad-soft); color: var(--bad); }
+  .failerr { font-size: var(--fs-meta); color: var(--bad); margin-top: var(--s3); overflow-wrap: anywhere; }
   .pill.def { background: var(--accent-soft); color: var(--accent); }
   .facts { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); font-size: var(--fs-meta); color: var(--muted); }
   .facts b { color: var(--ink); font-weight: 700; }

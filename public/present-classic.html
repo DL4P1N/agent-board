@@ -18,7 +18,7 @@ try { const t = localStorage.getItem('board-theme'); if (t === 'light' || t === 
   :root {
     color-scheme: light;
     --bg: #cfe3f2; --panel: #fff7e8; --chip: #efe3cc; --ink: #2c2114; --muted: #67563e; --line: #7a5f3d; --field-line: #7a5f3d;
-    --outline: #3a2a14; --hi: rgba(255, 255, 255, .7); --lo: rgba(80, 50, 10, .16); --grid: rgba(44, 33, 20, .07); --shade: 1px 1px 0 rgba(255, 255, 255, .6);
+    --outline: #3a2a14; --hi: rgba(255, 255, 255, .7); --lo: rgba(80, 50, 10, .16); --shade: 1px 1px 0 rgba(255, 255, 255, .6);
     --accent: #135fa8; --accent-ink: #fff7e8; --ok: #1a6e2d; --warn: #845407; --warn-soft: #f8e8c6; --bad: #b42335; --bad-soft: #f9e0dc;
     --pl: 28%; --ps: 60%;
     /* The board's pixel look (office demo): square corners, 2px borders, bevelled panels, Dusk / Day palettes; monospace for labels and numbers. */
@@ -34,7 +34,7 @@ try { const t = localStorage.getItem('board-theme'); if (t === 'light' || t === 
     :root:not([data-theme="light"]) {
       color-scheme: dark;
       --bg: #1b1530; --panel: #241c40; --chip: #342a5a; --ink: #f1e9ff; --muted: #b0a2d2; --line: #5b4b8a; --field-line: #8e7fc6;
-      --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --grid: rgba(241, 233, 255, .06); --shade: 2px 2px 0 rgba(0, 0, 0, .35);
+      --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --shade: 2px 2px 0 rgba(0, 0, 0, .35);
       --accent: #6ec1ff; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
       --pl: 74%; --ps: 70%;
     }
@@ -42,7 +42,7 @@ try { const t = localStorage.getItem('board-theme'); if (t === 'light' || t === 
   :root[data-theme="dark"] {
     color-scheme: dark;
     --bg: #1b1530; --panel: #241c40; --chip: #342a5a; --ink: #f1e9ff; --muted: #b0a2d2; --line: #5b4b8a; --field-line: #8e7fc6;
-    --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --grid: rgba(241, 233, 255, .06); --shade: 2px 2px 0 rgba(0, 0, 0, .35);
+    --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --shade: 2px 2px 0 rgba(0, 0, 0, .35);
     --accent: #6ec1ff; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
     --pl: 74%; --ps: 70%;
   }
@@ -94,7 +94,6 @@ try { const t = localStorage.getItem('board-theme'); if (t === 'light' || t === 
   .pill.bad { color: var(--bad); background: var(--bad-soft); font-weight: 600; white-space: normal; }
   .pill.warn { color: var(--warn); background: var(--warn-soft); }
   .msg { max-width: 640px; margin: 15vh auto; padding: var(--pad); background: var(--panel); border: 2px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--e1); }
-  .msg code { font-size: .85em; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
@@ -176,7 +175,7 @@ function render() {
   if (!state || expired || unavailable) return;
   const tasks = (state.tasks || []).filter((t) => t.status !== 'proposed');
   const by = (s) => tasks.filter((t) => (Array.isArray(s) ? s : [s]).includes(t.status)).length;
-  const done = by('done'); const total = tasks.length; const pct = total ? Math.round((done / total) * 100) : 0;
+  const done = by('done'); const total = tasks.length;
   const cd = countdown();
   // Who is working on what, one row per person: every task their agents hold (online or not), then
   // what their other agents say they're doing (a review, planning). Never tool-call names.

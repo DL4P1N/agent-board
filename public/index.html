@@ -25,7 +25,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 <style>
   /* ==========================================================================
      Claude Board design system: the pixel look of the office demo (office/src/styles.css), kept calm.
-     One set of tokens for the board (index.html); the presenter view (present.html) and the
+     One set of tokens for the board (index.html); the classic presenter (present-classic.html) and the
      boards page (boards.html) copy them. Change a value here, never in a component rule.
 
      Surfaces  Two levels only: page, then panel. Panels (and the stat tiles, the kanban columns,
@@ -57,9 +57,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     /* Day */
     --bg: #cfe3f2; --sunken: #f3e9d8; --panel: #fff7e8; --raised: #fffcf6; --chip: #efe3cc; --field: #fffaf0;
     --ink: #2c2114; --muted: #67563e; --line: #d4c2a2; --line-strong: #a68f69; --field-line: #7a5f3d;
-    --border: #7a5f3d; --outline: #3a2a14; --hi: rgba(255, 255, 255, .7); --lo: rgba(80, 50, 10, .16); --grid: rgba(44, 33, 20, .07);
+    --border: #7a5f3d; --outline: #3a2a14; --hi: rgba(255, 255, 255, .7); --lo: rgba(80, 50, 10, .16);
     --accent: #9a4a14; --accent-hover: #823d0f; --accent-ink: #fff7e8; --accent-soft: #f7e2cb; --accent-line: #d29f75;
-    --info: #135fa8; --info-soft: #e0ebf5; --violet: #6a40c0;
+    --info: #135fa8;
     --ok: #1a6e2d; --warn: #845407; --warn-soft: #f8e8c6; --warn-line: #d3ab5e; --stale: #fbefd8;
     --bad: #b42335; --bad-hover: #991c2c; --bad-soft: #f9e0dc; --bad-line: #e2a3a3;
     --mention: #fbecb8; --mention-line: #c49f35; --on-fill: #fff7e8;
@@ -91,9 +91,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       --tool-claude: #d97757; --tool-codex: #2dd4bf; --tool-copilot: #a78bfa; --tool-gemini: #f472b6; --tool-cursor: #facc15; --tool-other: #9ca3af;
       --bg: #1b1530; --sunken: #201939; --panel: #241c40; --raised: #2b2249; --chip: #342a5a; --field: #130e24;
       --ink: #f1e9ff; --muted: #b0a2d2; --line: #44386c; --line-strong: #67589a; --field-line: #8e7fc6;
-      --border: #5b4b8a; --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --grid: rgba(241, 233, 255, .06);
+      --border: #5b4b8a; --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35);
       --accent: #ffb86b; --accent-hover: #ffc98c; --accent-ink: #2a1600; --accent-soft: #46344a; --accent-line: #9b7252;
-      --info: #6ec1ff; --info-soft: #283a63; --violet: #c4a0ff;
+      --info: #6ec1ff;
       --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --warn-line: #8d7240; --stale: #2f2540;
       --bad: #ff6b7a; --bad-hover: #ff8a96; --bad-soft: #432647; --bad-line: #93405a;
       --mention: #403545; --mention-line: #b39642; --on-fill: #1b1530;
@@ -103,12 +103,13 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     }
   }
   :root[data-theme="dark"] {
+    color-scheme: dark;
     --tool-claude: #d97757; --tool-codex: #2dd4bf; --tool-copilot: #a78bfa; --tool-gemini: #f472b6; --tool-cursor: #facc15; --tool-other: #9ca3af;
     --bg: #1b1530; --sunken: #201939; --panel: #241c40; --raised: #2b2249; --chip: #342a5a; --field: #130e24;
     --ink: #f1e9ff; --muted: #b0a2d2; --line: #44386c; --line-strong: #67589a; --field-line: #8e7fc6;
-    --border: #5b4b8a; --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --grid: rgba(241, 233, 255, .06);
+    --border: #5b4b8a; --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35);
     --accent: #ffb86b; --accent-hover: #ffc98c; --accent-ink: #2a1600; --accent-soft: #46344a; --accent-line: #9b7252;
-    --info: #6ec1ff; --info-soft: #283a63; --violet: #c4a0ff;
+    --info: #6ec1ff;
     --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --warn-line: #8d7240; --stale: #2f2540;
     --bad: #ff6b7a; --bad-hover: #ff8a96; --bad-soft: #432647; --bad-line: #93405a;
     --mention: #403545; --mention-line: #b39642; --on-fill: #1b1530;
@@ -117,7 +118,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     --shade: 2px 2px 0 rgba(0, 0, 0, .35);
   }
   :root[data-theme="light"] { color-scheme: light; }
-  :root[data-theme="dark"] { color-scheme: dark; }
   @media (prefers-contrast: more) { :root { --line: var(--field-line); --line-strong: var(--muted); } }
   /* Touch screens: larger targets, from the same three control sizes. */
   @media (hover: none) and (pointer: coarse) { :root { --ctl: 2.5rem; --ctl-sm: 2rem; --ctl-xs: 2rem; } }
@@ -130,13 +130,12 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   h1, h2, h3, p { margin: 0; }
   a { color: var(--accent); text-underline-offset: 2px; }
   b, strong { font-weight: 600; }
-  time, .num { font-variant-numeric: tabular-nums; }
+  time { font-variant-numeric: tabular-nums; }
   code { font: var(--fs-meta) var(--mono); background: var(--field); border: 1px solid var(--line); padding: 0 var(--s2); border-radius: var(--r-xs); overflow-wrap: anywhere; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   ::selection { background: var(--accent-soft); }
-  /* Short titles: uppercase, tracked, with the demo's hard text shadow. */
   /* The demo's monospace stays where it labels or counts: titles, tiles, column heads, chips, ids, times. Content is sans. */
-  header h1, .panel > h2, .sec-h h2, .setup > .sh h2, .now .nl, .tile, .col h3, .needs, .clock, .phases, time, .num, .conn { font-family: var(--mono); }
+  header h1, .panel > h2, .sec-h h2, .setup > .sh h2, .now .nl, .tile, .col h3, .needs, .clock, .phases, time, .conn { font-family: var(--mono); }
   .attn > h2 { font-family: var(--font); }
 
   /* ---------- controls ---------- */
@@ -179,7 +178,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .empty-note { color: var(--muted); font-size: var(--fs-sm); padding: var(--s3); }
   .sp { flex: 1; }
   .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .t-micro { font-size: var(--fs-micro); } .t-meta { font-size: var(--fs-meta); } .t-sm { font-size: var(--fs-sm); }
+  .t-micro { font-size: var(--fs-micro); } .t-meta { font-size: var(--fs-meta); }
   .fw-normal { font-weight: 400; }
   .m0 { margin: 0; } .mt-0 { margin-top: 0; } .mt-1 { margin-top: var(--s2); } .mt-2 { margin-top: var(--s3); }
   .row { flex-basis: 100%; } .grow { flex: 1; min-width: 140px; }
@@ -204,7 +203,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .pill.s-in_progress, .pill.s-claimed, .pill.full, .pill.rsv { color: var(--info); }
   .pill.role { color: var(--ink); font-weight: 700; }
   .pill.ok { color: var(--ok); }
-  .pill.tool, .pill.size { background: transparent; }
   .pill.size { font-weight: 700; }
   .pill.size.L { color: var(--ink); }
   a.pill { text-decoration: none; }
@@ -254,8 +252,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .needs.quiet button { color: var(--muted); font-weight: 400; }
   .clock { font-size: var(--fs-meta); padding: 0 var(--s3); min-height: var(--ctl-sm); border-radius: var(--r-full); background: transparent; color: var(--ink); border: 2px solid var(--line); box-shadow: none; font-weight: 400; white-space: nowrap; display: inline-flex; align-items: center; gap: var(--s3); font-variant-numeric: tabular-nums; }
   .clock:hover { background: var(--sunken); border-color: var(--line-strong); }
-  .clock.warn { color: var(--warn); border-color: var(--warn-line); font-weight: 700; }
-  .clock.frozen { color: var(--warn); border-color: var(--warn-line); font-weight: 700; }
+  .clock.warn, .clock.frozen { color: var(--warn); border-color: var(--warn-line); font-weight: 700; }
   .clock.past { color: var(--muted); }
   /* Deadline verdict ahead of the countdown; on narrower screens the freeze time moves to the tooltip. */
   .clock .vd { font-weight: 700; }
@@ -342,7 +339,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .phases li { display: inline-flex; align-items: center; gap: var(--s1); }
 
   /* Questions: the one thing that must not be missed. Inside the same window, under a dashed rule. */
-  .attn { background: var(--warn-soft); border-color: var(--warn-line); }
   .nyou > .attn { margin: 0; border: 0; box-shadow: none; background: transparent; padding: 0 var(--s5) var(--s5); }
   .attn > h2 { color: var(--warn); font-size: var(--fs-sm); line-height: var(--lh-tight); margin-bottom: var(--s3); text-transform: none; letter-spacing: 0; }
   .attn > h2 .muted { font-weight: 400; font-size: var(--fs-meta); margin-left: var(--s2); }
@@ -351,11 +347,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .qcard .qh { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); align-items: baseline; font-size: var(--fs-meta); }
   .qcard .qt { white-space: pre-wrap; overflow-wrap: anywhere; margin: var(--s2) 0 var(--s3); font-size: var(--fs-body); }
   .qcard form { display: flex; gap: var(--s3); align-items: flex-end; }
-  .qerr { flex-basis: 100%; margin-top: var(--s2); }
 
   /* ---------- Start here ---------- */
-  .setup > .sh { display: flex; align-items: baseline; gap: var(--s3) 10px; flex-wrap: wrap; }
-  .setup > .sh { margin: calc(-1 * var(--s4)) calc(-1 * var(--s5)) 0; padding: var(--s3) var(--s5); border-bottom: 2px solid var(--line); align-items: center; min-height: 32px; }
+  .setup > .sh { display: flex; align-items: center; gap: var(--s3) 10px; flex-wrap: wrap; margin: calc(-1 * var(--s4)) calc(-1 * var(--s5)) 0; padding: var(--s3) var(--s5); border-bottom: 2px solid var(--line); min-height: 32px; }
   .setup > .sh h2 { font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
   .setup > .sh .muted { font-size: var(--fs-meta); }
   .setup .intro { margin: var(--s3) 0 0; max-width: 820px; }
@@ -538,11 +532,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   /* ---------- activity ---------- */
   .side { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
   /* Toggle buttons, the demo's .seg: the pressed one is filled with the accent. Separate boxes, so a long row wraps cleanly. */
-  .tabs { display: flex; gap: var(--s2); margin-left: auto; padding: 0; }
+  .tabs { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); margin-left: auto; padding: 0; }
   .tabs button { font-size: var(--fs-meta); font-weight: 400; padding: 0 var(--s3); min-height: var(--ctl-xs); background: transparent; color: var(--muted); border: 0; box-shadow: none; border-radius: var(--r-sm); }
   .tabs button:hover { background: transparent; color: var(--ink); }
   .tabs button:active { transform: none; box-shadow: none; }
-  .tabs { flex-wrap: wrap; justify-content: flex-end; }
   .taskbar { display: flex; gap: var(--s4); align-items: center; flex-wrap: wrap; margin: 0 2px var(--s3); }
   .taskbar .tabs { margin-left: auto; }
   .tsearch { flex: 1 1 200px; max-width: 360px; margin: 0; }
@@ -591,8 +584,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .tref { color: var(--accent); font-variant-numeric: tabular-nums; }
   .jump { position: absolute; bottom: var(--s4); left: 50%; translate: -50% 0; font-size: var(--fs-meta); padding: 0 var(--s5); min-height: var(--ctl-sm); border-radius: var(--r-full); box-shadow: var(--e2); }
   .jump:active { translate: calc(-50% + 1px) 1px; transform: none; }
-  .composer { position: relative; display: flex; gap: var(--s3); margin-top: var(--s4); align-items: flex-end; }
-  .composer { flex-wrap: wrap; }
+  .composer { position: relative; display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s4); align-items: flex-end; }
   .composer select { width: auto; flex: 0 0 auto; }
   .composer #msg { order: -1; flex: 1 0 100%; }
   .composer #send { margin-left: auto; }
@@ -622,8 +614,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   dialog[open]::backdrop { background: var(--scrim); transition: background-color var(--t-slow) var(--ease), overlay var(--t-slow) allow-discrete, display var(--t-slow) allow-discrete; }
   @starting-style { dialog[open]::backdrop { background: transparent; } }
   dialog:not([open]), dialog:not([open])::backdrop { pointer-events: none; }
-  .dh { display: flex; align-items: center; gap: var(--s4); }
-  .dh { padding-bottom: var(--s4); border-bottom: 2px solid var(--border); }
+  .dh { display: flex; align-items: center; gap: var(--s4); padding-bottom: var(--s4); border-bottom: 2px solid var(--border); }
   .dh h2 { font-size: var(--fs-lead); font-weight: 700; line-height: var(--lh-tight); text-shadow: var(--shade); }
   .x { background: var(--raised); color: var(--muted); border-color: var(--border); font-size: 1.25rem; font-weight: 400; line-height: 1; width: var(--ctl); padding: 0; margin-left: auto; }
   .x:hover { background: var(--chip); color: var(--ink); }
@@ -695,7 +686,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     .clock { order: 2; }
     .filter, #new-task-btn, #present-link, #link-btn { order: 3; }
     .filter { flex: 1 1 140px; min-width: 0; }
-    .conn { font-size: 0; gap: 0; }
+    .conn { font-size: 0; gap: 0; border: 0; padding: 0; background: none; min-height: 0; }
     #me-btn { max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
     .filter select { width: 100%; max-width: none; }
     #link-btn .lt, #present-link .lt { display: none; }
@@ -709,13 +700,11 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     .now .also { flex-direction: column; align-items: flex-start; gap: 0; }
     .now .also .link + .link::before { display: none; }
     .nyou > .attn { padding-top: var(--s3); }
-    .conn { border: 0; padding: 0; background: none; min-height: 0; }
     .phases .ph-l { display: none; }
     header h1 { font-size: .875rem; letter-spacing: .06em; }
     .tile.t-dl .tv { flex-wrap: wrap; white-space: normal; }
     .tile:last-child { grid-column: span 2; }
     .nyou:has(> #q-panel:not([hidden])) > .now { padding-bottom: var(--s4); }
-    .nyou > .attn > h2 { position: static; max-width: none; white-space: normal; margin-bottom: var(--s3); padding: 0; background: none; border: 0; }
     .step-b { margin-left: 0; }
     .step-s { flex-basis: 100%; padding-left: 32px; }
     .tool-r { grid-template-columns: minmax(0, 1fr); }
@@ -1232,7 +1221,6 @@ function showUnavailable(kind, info = '') {
   if (kind === 'failed') { $('failed-msg').textContent = String(info).replace(/^(This|The default) board failed to open:\s*/i, ''); document.title = `Couldn't open · ${SLUG ? name + ' · ' : ''}Claude Board`; }
   clearInterval(recoverTimer); recoverTimer = setInterval(tryRecover, 4000);
 }
-const showArchived = () => showUnavailable('archived');
 async function tryRecover() {
   if (!unavailable || !token) return;
   let r; try { r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); } catch { return; }
