@@ -228,6 +228,14 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .clock.warn { background: var(--warn-soft); color: var(--warn); border-color: var(--warn-line); font-weight: 600; }
   .clock.frozen { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); font-weight: 600; }
   .clock.past { color: var(--muted); }
+  /* Deadline verdict ahead of the countdown; on narrower screens the freeze time moves to the tooltip. */
+  .clock .vd { font-weight: 600; }
+  .clock .vd.ok { color: var(--ok); }
+  .clock .vd.tight { color: var(--warn); }
+  .clock .vd.behind { color: var(--bad); }
+  @media (max-width: 1600px) { .clock:has(.vd) .fz { display: none; } }
+  .now .cut-list { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+  .now .cut-list .n { color: var(--muted); }
   .filter { display: flex; align-items: center; gap: var(--s3); margin: 0; font-weight: 400; color: var(--muted); font-size: var(--fs-sm); }
   .filter select { width: auto; max-width: 180px; }
   #me-btn b { font-weight: 600; }
@@ -1399,6 +1407,30 @@ function dur(ms) {
   return h ? `${h}h ${m % 60}m` : `${m}m`;
 }
 const approvalWait = () => state.phase === 'awaiting_approval';
+// Will the work left fit before the freeze (or the demo, once frozen)? Work left = every task not done or proposed,
+// at this board's median minutes for its size (state.stats, null until 3 are done), shared over the slots of the
+// agents online now. Same thresholds as the office demo: up to 0.9 of the time is on track, up to 1.1 tight.
+// null: no demo time, it has passed, or nothing is left. {verdict: 'unknown', why} when it can't be estimated yet.
+const LEFT_ST = ['open', 'claimed', 'in_progress', 'review', 'blocked'];
+function outlook(t = timeNow()) {
+  if (!t.deadline || t.past) return null;
+  const left = state.tasks.filter((x) => LEFT_ST.includes(x.status));
+  if (!left.length) return null;
+  const m = state.stats?.minutes || {}; const known = Object.values(m);
+  if (!known.length) return { verdict: 'unknown', why: 'Not enough finished tasks to estimate yet' };
+  const slots = teamCapacity().slots;
+  if (!slots) return { verdict: 'unknown', why: 'No agent is online to estimate with' };
+  // A size with too few finished samples counts as M, or as the average of the sizes we have.
+  const fallback = m.M ?? known.reduce((a, b) => a + b, 0) / known.length;
+  const work = left.reduce((n, x) => n + (m[x.size] ?? fallback), 0);
+  const to = t.frozen ? t.deadline : t.freezeAt;
+  const mins = Math.max(1, (to - Date.now()) / 60e3); const eta = work / slots; const ratio = eta / mins;
+  const shortBy = ratio > 1 ? Math.max(1, Math.round(left.length * (1 - mins / eta))) : 0;
+  const verdict = ratio <= 0.9 ? 'ok' : ratio <= 1.1 ? 'tight' : 'behind';
+  const label = verdict === 'ok' ? 'On track' : verdict === 'tight' ? 'Tight' : `Behind by ~${plural(shortBy, 'task')}`;
+  const why = `About ${dur(eta * 60e3)} of work left (${plural(left.length, 'task')} at this board's median time per size, over ${plural(slots, 'agent slot')} online) and ${dur(mins * 60e3)} to the ${t.frozen ? 'demo' : 'freeze'}`;
+  return { verdict, label, why, shortBy, left };
+}
 const CLOCK_ICO = '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.8V8l2.2 1.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
 let prevFrozen = null;
 function renderClock() {
@@ -1406,14 +1438,21 @@ function renderClock() {
   b.hidden = !t.deadline;
   if (!t.deadline) { prevFrozen = null; return; }
   const now = Date.now();
-  let text, cls = '', tip;
-  if (t.past) { text = 'Demo time passed'; cls = 'past'; tip = `The demo was at ${when(t.deadline)}. Click to change the time.`; }
-  else if (t.frozen) { text = `Feature freeze — finish & merge · demo in ${dur(t.deadline - now)}`; cls = 'frozen'; tip = `Feature freeze since ${when(t.freezeAt)}: agents don't take new tasks, except priority-1 bug fixes. Demo at ${when(t.deadline)}. Click to change the time.`; }
+  // main + detail: the detail (freeze time) hides on narrower screens when a verdict leads the pill.
+  let main, detail = '', cls = '', tip;
+  if (t.past) { main = 'Demo time passed'; cls = 'past'; tip = `The demo was at ${when(t.deadline)}. Click to change the time.`; }
+  else if (t.frozen) { main = 'Feature freeze — finish & merge'; detail = ` · demo in ${dur(t.deadline - now)}`; cls = 'frozen'; tip = `Feature freeze since ${when(t.freezeAt)}: agents don't take new tasks, except priority-1 bug fixes. Demo at ${when(t.deadline)}. Click to change the time.`; }
   else {
-    text = `Demo in ${dur(t.deadline - now)}${t.fm ? ` · freeze ${t.warn ? 'in ' + dur(t.freezeAt - now) : when(t.freezeAt)}` : ''}`;
+    main = `Demo in ${dur(t.deadline - now)}`; detail = t.fm ? ` · freeze ${t.warn ? 'in ' + dur(t.freezeAt - now) : when(t.freezeAt)}` : '';
     cls = t.warn ? 'warn' : ''; tip = `Demo at ${when(t.deadline)}${t.fm ? `; feature freeze at ${when(t.freezeAt)} (${t.fm} min before): agents stop taking new tasks then (priority-1 bug fixes still allowed)` : ''}. Click to change.`;
   }
-  const html = CLOCK_ICO + `<span>${esc(text)}</span>`;
+  const ol = outlook(t); const vd = ol?.label ? ol : null;
+  if (ol) tip = `${vd ? `${vd.label}. ` : ''}${ol.why}.
+${tip}`;
+  // Frozen with a verdict: the countdown stays and the freeze words go (the colour and the board banner say it).
+  const [lead, tail] = t.frozen && vd ? [`Demo in ${dur(t.deadline - now)}`, ` · ${main}`] : [main, detail];
+  const text = `${vd ? vd.label + ' · ' : ''}${lead}${tail}`;
+  const html = CLOCK_ICO + `<span>${vd ? `<b class="vd ${vd.verdict}">${esc(vd.label)}</b> · ` : ''}${esc(lead)}${tail ? `<span class="fz">${esc(tail)}</span>` : ''}</span>`;
   if (b._html !== html) { b.innerHTML = html; b._html = html; }
   b.className = 'clock ' + cls; b.title = tip; b.setAttribute('aria-label', `${text}. Change the demo time`);
   // One polite announcement when the freeze starts while the page is open.
@@ -1609,6 +1648,16 @@ const plural = (n, w, ws = w + 's') => `${n} ${n === 1 ? w : ws}`;
 const cmdBox = (text, key, what) => `<div class="cmd"><code>${esc(text)}</code><button type="button" class="ghost" data-copy="${esc(text)}" data-fk="cp-${key}" aria-label="Copy ${esc(what)}">Copy</button></div>`;
 const nameTag = (n) => `<b class="pc" ${hs(n)}>${esc(n)}</b>`;
 
+// Not-done tasks sent back from review twice or more (state.rejects: {id: times}), most bounced first.
+const bouncedTasks = () => state.tasks.filter((t) => t.status !== 'done' && (state.rejects?.[t.id] || 0) >= 2)
+  .map((t) => ({ id: t.id, title: t.title, n: state.rejects[t.id] })).sort((a, b) => b.n - a.n || a.id - b.id);
+// Behind the deadline: up to shortBy unstarted P3 tasks (newest first), capped at half of what's left. null when not behind.
+function cutTasks(tm = timeNow()) {
+  const ol = outlook(tm); if (ol?.verdict !== 'behind') return null;
+  const n = Math.min(ol.shortBy, Math.ceil(ol.left.length / 2));
+  const list = state.tasks.filter((t) => t.status === 'open' && t.priority === 3).sort((a, b) => b.id - a.id).slice(0, n);
+  return { label: ol.label, list };
+}
 // The single most important thing for this human to do right now (+ at most one low-priority extra).
 function renderNow(qOpen, unread, si) {
   const S = state.settings; const T = state.tasks.length;
@@ -1629,6 +1678,20 @@ function renderNow(qOpen, unread, si) {
   if (review && !S.integrator) ranked.push({ kind: 'urgent', go: 'step-integrator', more: `Pick who merges (${review} in Review)`, text: `Pick who merges to main: ${plural(review, 'finished task is', 'finished tasks are')} waiting to be merged` });
   if (qOpen.length) ranked.push({ kind: 'urgent', go: 'questions', more: `Answer ${plural(qOpen.length, 'question')}`, text: `Answer ${plural(qOpen.length, 'question')}: ${qOpen.length > 1 ? 'agents are' : 'an agent is'} waiting for you` });
   if (blocked) ranked.push({ kind: 'urgent', go: 'blocked', more: `Help with ${plural(blocked, 'blocked task')}`, text: `${plural(blocked, 'task is', 'tasks are')} blocked: read why and help` });
+  // Tasks that keep coming back from review: the task (or its checks) is probably unclear.
+  const bounced = bouncedTasks();
+  if (bounced.length) ranked.push({ kind: 'urgent', go: 'rejected', more: bounced.length === 1 ? `#${bounced[0].id} came back from review ${bounced[0].n}×` : `${bounced.length} tasks keep coming back from review`,
+    text: bounced.length === 1 ? `#${bounced[0].id} ${short(bounced[0].title, 40)} came back from review ${bounced[0].n} times: check what keeps failing and make the task clearer`
+      : `${bounced.length} tasks came back from review twice or more: check what keeps failing and make them clearer` });
+  // Behind the deadline: name the P3 tasks that probably won't make it (never more than half of what's left). The human decides.
+  const cut = tm.frozen ? null : cutTasks(tm); // frozen: unstarted tasks can't be claimed anyway, the freeze line says so
+  if (cut) ranked.push({ kind: 'urgent', go: 'cut', more: cut.list.length ? `${plural(cut.list.length, 'P3 task')} probably won't make it` : cut.label,
+    text: cut.list.length ? `${plural(cut.list.length, 'P3 task')} probably won't make it: move ${cut.list.length > 1 ? 'them' : 'it'} out, or move the demo time` : `${cut.label} at this pace: drop or shrink some tasks, or move the demo time` });
+  const reviewWait = review >= 4 && S.integrator;
+  if (reviewWait) ranked.push({ kind: 'urgent', go: 'review', more: `${review} tasks waiting in Review`,
+    text: `${review} tasks are waiting in Review: merging is the bottleneck. Help review and test${S.integrator === ANYONE ? '' : ', or let whoever is free merge (Start here, step 5)'}` });
+  if (si.limitedA.length) { const l = si.limitedA; ranked.push({ kind: 'setup', go: 'limited', more: l.length === 1 ? `${l[0].name} is out of usage` : `${l.length} agents out of usage`,
+    text: l.length === 1 ? `${l[0].name} hit its usage limit${l[0].limited?.until ? ` until ${clock(l[0].limited.until)}` : ''}: its tasks wait, or other agents take them over` : `${l.length} agents hit their usage limit: their tasks wait, or other agents take them over` }); }
   if (tm.frozen && !tm.past && state.phase !== 'all_done') ranked.push({ kind: 'urgent', go: review ? 'review' : 'compose', go2: 'wrapup', text2: 'Write-up for your submission', more: 'Feature freeze: help merge and test',
     text: `Feature freeze: agents won't start new tasks. Help merge and test ${review ? `the ${plural(review, 'task')} in Review` : 'main'}, then rehearse the demo. P1 bug fixes can still be claimed` });
   const top = over ? null : ranked[0];
@@ -1665,6 +1728,7 @@ function renderNow(qOpen, unread, si) {
   if (!over && S.goal && !tm.deadline && !dlSkipped()) more.push({ act: 'clock', text: 'Set the demo time so agents stop on time' });
   if (si.cur === 'invite' && !S.goal) more.push({ go: 'step-goal', text: 'Meanwhile: write the goal (step 2)' });
   const moreHtml = more.length ? `<div class="also"><span class="n">Also:</span>${more.slice(0, 2).map((m, i) => `<button type="button" class="link" ${m.act ? `data-act="${m.act}"` : `data-go="${m.go}"`} data-fk="now-more-${i}">${esc(m.text)} <span aria-hidden="true">→</span></button>`).join('')}</div>` : '';
+  const cutHtml = ui.showCut && cut?.list.length && !over ? `<ul class="cut-list" id="cut-list" aria-label="P3 tasks that probably won't make it"><li class="n">Probably won't make it:</li>${cut.list.map((t) => `<li><button type="button" class="link" data-open-task="${t.id}" data-fk="cut-${t.id}">#${t.id} ${esc(short(t.title, 48))}</button></li>`).join('')}</ul>` : '';
   const el = $('now'); el.className = 'now k-' + kind;
   // Phase track. "Connect" leads while no laptop is connected, so it never contradicts the line above.
   const curP = si.cur === 'invite' && !T ? 'connect' : state.phase;
@@ -1676,7 +1740,7 @@ function renderNow(qOpen, unread, si) {
     `<li>${i ? '<span class="arr" aria-hidden="true">›</span>' : ''}<span class="p ${k === curP ? 'cur' : i < ci ? 'past' : ''}" ${k === curP ? 'aria-current="step"' : ''}>${l}</span></li>`).join('')}</ol></div>`;
   patch(el, `<span class="nl">What to do now</span>${go
     ? `<button type="button" class="link na" data-go="${go}" data-fk="now-go">${esc(text)} <span class="go" aria-hidden="true">→</span></button>`
-    : `<span class="na">${esc(text)}</span>`}${appr ? '<button type="button" class="appr" data-act="approve" data-fk="now-appr">Approve plan &amp; start</button>' : ''}${text2 ? `<button type="button" class="link na2" data-go="${go2}" data-fk="now-go2">${esc(text2)} <span aria-hidden="true">→</span></button>` : ''}${phases}${moreHtml}`);
+    : `<span class="na">${esc(text)}</span>`}${appr ? '<button type="button" class="appr" data-act="approve" data-fk="now-appr">Approve plan &amp; start</button>' : ''}${text2 ? `<button type="button" class="link na2" data-go="${go2}" data-fk="now-go2">${esc(text2)} <span aria-hidden="true">→</span></button>` : ''}${cutHtml}${phases}${moreHtml}`);
 }
 
 function renderSetup(si) {
@@ -2590,6 +2654,20 @@ document.addEventListener('click', (ev) => {
   if (d.go === 'questions') { $('q-panel').scrollIntoView({ behavior: smooth(), block: 'start' }); return $('questions').querySelector('textarea')?.focus({ preventScroll: true }); }
   if (d.go === 'mentions') { ui.tab = 'me'; store.set('board-tab', 'me'); markMentionsSeen(); render(); return $('feed').scrollIntoView({ behavior: smooth(), block: 'center' }); }
   if (d.go === 'blocked') { $('col-blocked')?.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); return $('col-blocked')?.querySelector('.card')?.focus({ preventScroll: true }); }
+  if (d.go === 'cut') {
+    // Show (or hide) the P3 tasks that probably won't make it; with none to name, the demo time is the lever.
+    if (!cutTasks()?.list.length) return doAct('clock', el);
+    ui.showCut = !ui.showCut; render();
+    return ui.showCut ? $('cut-list')?.querySelector('button')?.focus() : undefined;
+  }
+  if (d.go === 'rejected') { const b = bouncedTasks()[0]; return b && openTask(b.id); }
+  if (d.go === 'limited') {
+    // Open the person with the out-of-usage agent, so its "out of usage" line and tasks are in view.
+    const a = setupInfo().limitedA[0]; if (!a) return;
+    const n = root(a.name); ui.openPeople.add(n); render();
+    const el = document.querySelector(`[data-fk="pb-${CSS.escape(a.name)}"]`) || document.querySelector(`[data-fk="ptog-${CSS.escape(n)}"]`);
+    el?.scrollIntoView({ behavior: smooth(), block: 'center' }); return el?.focus({ preventScroll: true });
+  }
   if (d.go === 'board') return goBoard();
   if (d.go === 'idle') {
     // Draft a request to the planner (not sent: the human reviews it), or add a task directly when nobody plans.

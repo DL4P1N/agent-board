@@ -418,6 +418,8 @@ function createBoardRuntime(slug, dir) {
       main_ci: board.mainCi || null,
       // How long tasks take on this board so far (null until 3 are done): for the planner and the retro.
       stats: board.taskStats(),
+      // Times each task was sent back from review, {id: n}: the page flags tasks that keep bouncing.
+      rejects: board.rejectCounts(),
     };
   }));
 

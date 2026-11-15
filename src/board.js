@@ -1343,6 +1343,12 @@ export class Board {
     return !!last && /review → in_progress/.test(last.text);
   }
 
+  // How often each task came back from review (review → in_progress): {id: n}, only tasks sent back at least once.
+  rejectCounts() {
+    const rows = this.db.prepare("SELECT task_id, COUNT(*) AS n FROM events WHERE task_id IS NOT NULL AND kind = 'task_updated' AND text LIKE ? GROUP BY task_id").all('%review → in_progress%');
+    return Object.fromEntries(rows.map((r) => [r.task_id, r.n]));
+  }
+
   // Why claiming is not allowed right now, or '' if it is.
   claimGate(task = null) {
     const s = this.getSettings();
