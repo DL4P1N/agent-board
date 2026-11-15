@@ -92,7 +92,7 @@ try {
     check('Agents (right dock): people, then their agents with tool dot, status and current task', await until(page, () => { const b = document.querySelector('[data-o-agent="ana-claude"]'); return b && $('o-right').contains(b) && !!b.querySelector('.tdot') && /working/i.test(b.querySelector('.o-st')?.textContent) && /asked you a question|#\d+ Vote API/.test(b.innerText) && /\bana\b/.test($('o-agents').innerText); }), await page.$eval('#o-agents', (e) => e.innerText.replace(/\s+/g, ' ')).catch(() => ''));
     check('Tasks window: five columns with counts and cards', await page.evaluate(() => { const c = [...document.querySelectorAll('#o-cols .o-col')]; return c.length === 5 && c.map((x) => x.querySelector('h3 span').textContent).join() === 'Open,In progress,Blocked,Review,Done' && /Vote API/.test(c[1].innerText) && /Leaderboard page/.test(c[0].innerText); }));
     check('top chips: Goal and demo time (with the verdict / countdown), the header clock and need-you badge hide', await page.evaluate(() => /voting app/i.test($('o-goal-chip').innerText) && /Demo in/.test($('o-dl-chip').innerText) && !$('clock').offsetWidth && !$('needs').offsetWidth));
-    check('bottom chips: Progress (x of y done, bar), Activity (the latest event), Chat', await page.evaluate(() => /0 of 2 done/.test($('o-prog-chip').innerText) && !!$('o-prog-bar') && $('o-act-x').textContent.length > 3 && /chat/i.test($('o-chat-chip').innerText)));
+    check('bottom chips: Progress (x of y done, bar) and Activity (the latest event); chat lives in Activity, no separate Chat chip', await page.evaluate(() => /0 of 2 done/.test($('o-prog-chip').innerText) && !!$('o-prog-bar') && $('o-act-x').textContent.length > 3 && !$('o-chat-chip')));
     const small = await page.evaluate(() => {
       const out = [];
       for (const b of $('office-view').querySelectorAll('button, textarea, select')) { const r = b.getBoundingClientRect(); if (r.width && r.height && (r.height < 24 || r.width < 24) && !b.matches('.link, .o-card')) out.push(`${b.id || b.dataset.fk || b.className || b.textContent} ${Math.round(r.width)}x${Math.round(r.height)}`); }
@@ -156,8 +156,9 @@ try {
     check('the Activity chip opens the feed with its filters', await page.evaluate(() => !$('o-act').hidden && $('o-act').contains($('feed')) && $('o-act').contains($('tabs')) && $('feed').offsetHeight > 150 && /vote API is up/.test($('feed').innerText)));
     await page.keyboard.press('Escape');
     check('Esc closes it, focus back on the chip', await page.evaluate(() => $('o-act').hidden && document.activeElement === $('o-act-chip')));
-    await page.click('#o-chat-chip');
-    check('the Chat chip opens the composer', await page.evaluate(() => !$('o-act').hidden && document.activeElement === $('msg')));
+    await page.click('#o-act-chip');
+    check('the Activity window has the chat composer', await page.evaluate(() => !$('o-act').hidden && $('o-act').contains($('msg'))));
+    await page.focus('#msg');
     await page.type('#msg', 'hello from the office'); await page.keyboard.press('Enter');
     check('sending a message works from the office', await until(page, () => /hello from the office/.test(document.getElementById('feed').innerText)));
     await page.keyboard.press('Escape');

@@ -724,7 +724,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   @media (max-width: 760px) { .vseg { display: none !important; } }
   /* 3D office: the demo's office view. The room fills the window under the header; translucent pixel panels float
      over it: Needs you (left dock), Agents (right dock), Tasks (bottom window), Goal and demo time chips on top,
-     Progress / Activity / Chat chips along the bottom. Docks and windows fold to chips (remembered per board). */
+     Progress / Activity (feed + chat) chips along the bottom. Docks and windows fold to chips (remembered per board). */
   .office-view { display: none; }
   html[data-board-view="office"] body { overflow: hidden; }
   html[data-board-view="office"] #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
@@ -1083,10 +1083,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         <div class="o-body" id="o-act-b"></div>
       </section>
 
-      <div class="o-chips o-bot" role="group" aria-label="Progress, activity and chat">
+      <div class="o-chips o-bot" role="group" aria-label="Progress and activity">
         <button type="button" class="o-chip" id="o-prog-chip" data-o-fold="tasks" aria-expanded="true" aria-controls="o-tasks"><span class="o-t">Progress</span><span class="o-x" id="o-prog-x"></span><span class="o-bar" aria-hidden="true"><i id="o-prog-bar"></i></span><span class="o-ar" aria-hidden="true">▾</span></button>
         <span class="sp"></span><button type="button" class="o-chip" id="o-act-chip" aria-expanded="false" aria-controls="o-act"><span class="o-t">Activity</span><span class="o-x" id="o-act-x"></span><span class="o-ar" aria-hidden="true">▴</span></button>
-        <button type="button" class="o-chip" id="o-chat-chip" aria-controls="o-act"><span class="o-t">Chat</span><span class="o-x muted">write to the agents</span></button>
       </div>
     </section>
 
@@ -1234,7 +1233,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dt>Plan approval</dt>
     <dd>Optional (Start here, step 4). When it's on, agents wait after the planner writes the task list until a human checks it and presses <b>Approve plan &amp; start</b>. You can edit and add tasks before approving.</dd>
     <dt>3D office and presenter view</dt>
-    <dd><b>3D office</b> (header, next to <b>Board</b>) shows the team's agents as characters in a pixel office, like the office demo: <b>Needs you</b> on the left (What to do now, the agents' questions with Answer, what's stuck), <b>Agents</b> on the right (click one, or a character, to see what it's doing), <b>Tasks</b> at the bottom, and chips for the goal, the demo time, progress, activity and chat. Panels fold into chips and stay that way in this browser; <code>Esc</code> closes the window on top. Not on phones. The <b>presenter view</b> is the same office, read-only and large, for the room's big screen.
+    <dd><b>3D office</b> (header, next to <b>Board</b>) shows the team's agents as characters in a pixel office, like the office demo: <b>Needs you</b> on the left (What to do now, the agents' questions with Answer, what's stuck), <b>Agents</b> on the right (click one, or a character, to see what it's doing), <b>Tasks</b> at the bottom, and chips for the goal, the demo time, progress, and activity (the feed and chat in one window). Panels fold into chips and stay that way in this browser; <code>Esc</code> closes the window on top. Not on phones. The <b>presenter view</b> is the same office, read-only and large, for the room's big screen.
       <div class="xacts" id="present-row" hidden><a id="present-link" class="plink" href="present.html" hidden target="_blank" rel="noopener" title="Read-only, for the room's big screen (opens in a new tab)" aria-label="Open the presenter view (opens in a new tab)"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 11v2.5M5 13.5h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Open the presenter view</a></div></dd>
     <dt>Desktop notifications</dt>
     <dd>Press the bell in the header to get a desktop notification while this tab is in the background: a new question for the humans, a message that @mentions you, a task that gets blocked, and the feature-freeze reminders. Click a notification to jump to it. Nothing is sent for your own actions.</dd>
@@ -4104,7 +4103,6 @@ $('office-view').addEventListener('click', (ev) => {
   if (d.oClose === 'act') return oAct(false);
   if (d.oClose === 'goal') return oGoal(false);
   if (t.id === 'o-act-chip') return oAct(!oUi.act);
-  if (t.id === 'o-chat-chip') return oChat();
   if (t.id === 'o-goal-chip') return oGoal(!ui.oGoal);
   if (d.oAgent) { const n = d.oAgent; pickAgent(office.picked === n ? null : n, true); return document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }
   if (d.officePerson) {
