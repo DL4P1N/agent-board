@@ -67,8 +67,8 @@ try {
   for (const w of [1366, 1440, 1600, 1920]) {
     await page.setViewport({ width: w, height: 900 }); await sleep(300);
     await page.evaluate(() => { nowSeen = false; syncNeeds(); }); await sleep(100);
-    const hd = await page.evaluate(() => { const h = document.querySelector('#app > header'); const v = $('vseg').getBoundingClientRect(); const b = $('help-btn').getBoundingClientRect(); const n = $('needs'); return { h: h.offsetHeight, same: Math.abs(v.top - b.top) < 12, vis: v.width > 0, badge: !n.hidden && n.offsetWidth > 0 && /question/.test(n.querySelector('button')?.getAttribute('aria-label') || '') && !$('clock').hidden && Math.abs($('theme-btn').getBoundingClientRect().top - b.top) < 2 }; });
-    check(`${w}px: header on one row with the view switch, the clock, the theme button and the need-you badge`, hd.vis && hd.same && hd.h < 70 && hd.badge, JSON.stringify(hd));
+    const hd = await page.evaluate(() => { const h = document.querySelector('#app > header'); const v = $('vseg').getBoundingClientRect(); const b = $('help-btn').getBoundingClientRect(); const n = $('needs'); return { h: h.offsetHeight, same: Math.abs(v.top - b.top) < 12, vis: v.width > 0, badge: !n.hidden && n.offsetWidth > 0 && /question/.test(n.querySelector('button')?.getAttribute('aria-label') || '') && !document.querySelector('#app > header #clock') && Math.abs($('theme-btn').getBoundingClientRect().top - b.top) < 2 }; });
+    check(`${w}px: header on one row with the view switch, the theme button and the need-you badge (the demo time is a top bar chip)`, hd.vis && hd.same && hd.h < 70 && hd.badge, JSON.stringify(hd));
   }
   await page.reload(); await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 8000 }); await sleep(300);
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await sleep(300);
@@ -122,15 +122,23 @@ try {
         && c.every((x) => x.querySelector('.o-c').textContent === (document.getElementById('col-' + x.dataset.s)?.getAttribute('aria-label') || '').match(/(\d+) tasks?$/)?.[1]);
     }), await page.evaluate(() => [...document.querySelectorAll('#o-cols .o-col')].map((x) => `${x.querySelector('h3 span').textContent}=${x.querySelector('.o-c')?.textContent}/${document.getElementById('col-' + x.dataset.s)?.getAttribute('aria-label')}`).join(' ')));
     check('Tasks: one Tab stop per column (the board\'s model)', await page.evaluate(() => [...document.querySelectorAll('#o-cols .o-col')].every((c) => { const k = [...c.querySelectorAll('.o-card')]; return !k.length || k.filter((x) => x.tabIndex === 0).length === 1; })));
-    const tb = await page.evaluate(() => ({ t: $('topbar').innerText.replace(/\s+/g, ' '), merge: !!$('topbar').querySelector('.tb-merge')?.offsetWidth, inv: !!$('topbar').querySelector('[data-act="invite"]')?.offsetWidth, setup: !!$('topbar').querySelector('[data-fk="s-open"]')?.offsetWidth, clock: !!$('clock').offsetWidth && /Demo in/.test($('clock').innerText), rows: $('topbar').offsetHeight < 56 }));
-    check('the top bar is the Board view\'s: goal, progress, merges to main, Connect a laptop, Setup (one row); the demo time is the header clock, as on the Board view', /Goal: A voting app/.test(tb.t) && /0 of 2 done/.test(tb.t) && /Merges to main/.test(tb.t) && tb.merge && tb.inv && tb.setup && tb.clock && tb.rows, JSON.stringify(tb));
+    const tb = await page.evaluate(() => ({ t: $('topbar').innerText.replace(/\s+/g, ' '), merge: !!$('topbar').querySelector('.tb-merge')?.offsetWidth, inv: !!$('topbar').querySelector('[data-act="invite"]')?.offsetWidth, setup: !!$('topbar').querySelector('[data-fk="s-open"]')?.offsetWidth, clock: !!$('clock').offsetWidth && $('topbar').contains($('clock')) && /Demo in/.test($('clock').textContent), rows: $('topbar').offsetHeight < 56,
+      chips: [...$('topbar').querySelectorAll('.tbc')].map((c) => getComputedStyle(c.querySelector('.tbl')).color === getComputedStyle(document.documentElement).getPropertyValue('--accent').trim().replace(/^#(..)(..)(..)$/, (m, r, g, b) => `rgb(${[r, g, b].map((x) => parseInt(x, 16)).join(', ')})`) ? c.querySelector('.tbl').textContent : '!').join() }));
+    check('the top bar is the Board view\'s: chips GOAL, DEMO, DONE, MERGES (labels in the accent), then Connect a laptop, Setup (one row)', /GOAL A voting app/.test(tb.t) && /DONE 0 of 2/.test(tb.t) && /MERGES/.test(tb.t) && tb.chips === 'Goal,Demo,Done,Merges' && tb.merge && tb.inv && tb.setup && tb.clock && tb.rows, JSON.stringify(tb));
     await page.click('#clock');
-    check('the header clock opens the demo time in place (still the 3D view), focus in its time field', await view(page) === 'office' && await page.evaluate(() => !$('o-dl').hidden && document.activeElement === $('o-dl-in') && $('clock').getAttribute('aria-expanded') === 'true'));
+    check('the Demo chip opens the demo time in place (still the 3D view), focus in its time field', await view(page) === 'office' && await page.evaluate(() => !$('o-dl').hidden && document.activeElement === $('o-dl-in') && $('clock').getAttribute('aria-expanded') === 'true'));
     await page.$eval('#o-fz-in', (i) => { i.value = '45'; });
     await page.click('[data-fk="o-dl-save"]');
     check('saving it closes the popover, back on the clock, still in 3D; the board has the new freeze', await until(page, () => document.getElementById('o-dl').hidden && document.activeElement?.id === 'clock' && String(state.settings.freeze_minutes) === '45') && await view(page) === 'office');
     await page.click('#clock'); await page.keyboard.press('Escape');
-    check('Esc closes the demo time popover, focus back on the clock', await page.evaluate(() => $('o-dl').hidden && document.activeElement === $('clock')));
+    check('Esc closes the demo time popover, focus back on the Demo chip', await page.evaluate(() => $('o-dl').hidden && document.activeElement === $('clock')));
+    // MERGES: who merges to main (and main's CI), chosen in place under the chip.
+    await page.click('#merge-btn');
+    check('the Merges chip opens who merges to main in place (still 3D), focus on the choice', await view(page) === 'office' && await page.evaluate(() => !$('o-merge').hidden && document.activeElement === $('o-integ-sel') && $('merge-btn').getAttribute('aria-expanded') === 'true'));
+    await page.select('#o-integ-sel', '*');
+    check('choosing there saves it; the chip says whoever is free', await until(page, () => state.settings.integrator === '*' && /whoever is free/.test(document.getElementById('merge-btn').textContent)));
+    await page.focus('#o-integ-sel'); await page.keyboard.press('Escape');
+    check('Esc closes it, focus back on the Merges chip', await until(page, () => document.getElementById('o-merge').hidden && document.activeElement?.id === 'merge-btn'));
     check('progress (x of y done, bar) in the top bar; chat lives in Activity, no separate Chat chip', await page.evaluate(() => $('topbar').contains($('done-count')) && !!$('done-count').querySelector('.mbar') && !$('o-chat-chip')));
     // File locks: the Board view's panel, folded to its title bar with the count, at the foot of the right column.
     check('3D: File locks under Activity, folded, with the count; opening it lists the lock with Release', await page.evaluate(() => $('o-rcol').contains($('o-locks')) && !!$('o-locks').offsetWidth && /1 held/.test($('l-count').textContent) && $('l-body').hidden));

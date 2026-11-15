@@ -44,7 +44,7 @@ try {
   await page.evaluateOnNewDocument(() => { try { localStorage.setItem('board-token', 'testtok'); localStorage.setItem('board-name', 'dana'); localStorage.setItem('board-setup', 'closed'); } catch {} });
   const txt = (sel) => page.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim()).catch(() => '');
   const reload = async () => { await page.evaluate(() => load()); await sleep(250); };
-  const pill = () => page.$eval('#clock', (e) => ({ t: e.innerText.replace(/\s+/g, ' ').trim(), tip: e.title, label: e.getAttribute('aria-label'), vd: e.querySelector('.vd')?.className || '' }));
+  const pill = () => page.$eval('#clock', (e) => ({ t: e.querySelector('.o-x').textContent.replace(/\s+/g, ' ').trim(), tip: e.title, label: e.getAttribute('aria-label'), vd: e.querySelector('.vd')?.className || '' }));
   await page.goto(BASE + '/');
   await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 5000 });
   await sleep(300);
@@ -65,7 +65,7 @@ try {
 
   // 2 open M tasks = 60 min over 2 slots = 30 min, against 120 min to the freeze.
   c = await pill();
-  check('2 tasks left: "On track" leads the pill', /^On track · Demo in (?:2h 5\dm|3h 0m)$/.test(c.t) && /\bok\b/.test(c.vd), c.t);
+  check('2 tasks left: "On track" leads the pill', /^On track · Demo in (?:2h 5\dm|3h 0m)(?: · freeze .+)?$/.test(c.t) && /\bok\b/.test(c.vd), c.t);
   check('verdict tooltip explains the estimate', /About 30m of work left \(2 tasks .*2 agent slots online\) and (?:1h 5\dm|2h 0m) to the freeze/.test(c.tip), c.tip);
   check('aria-label carries the verdict', /^On track · Demo in/.test(c.label), c.label);
 
@@ -84,8 +84,8 @@ try {
   // One header row with the verdict, at the widths people use.
   for (const w of [1366, 1600]) {
     await page.setViewport({ width: w, height: 900 }); await sleep(250);
-    const hd = await page.evaluate(() => { const h = document.querySelector('#app > header'); const c = $('clock').getBoundingClientRect(); const b = $('help-btn').getBoundingClientRect(); return { h: h.offsetHeight, same: Math.abs(c.top - b.top) < 12 }; });
-    check(`${w}px: header stays one row with the verdict`, hd.same && hd.h < 70, JSON.stringify(hd));
+    const hd = await page.evaluate(() => { const h = document.querySelector('#app > header'); const c = $('clock').getBoundingClientRect(); const g = $('goal-btn').getBoundingClientRect(); const s = $('topbar').querySelector('[data-fk="s-open"]').getBoundingClientRect(); return { h: h.offsetHeight, tb: $('topbar').offsetHeight, same: Math.abs(c.top - g.top) < 4 && Math.abs(c.bottom - s.bottom) < 12, vd: getComputedStyle($('clock').querySelector('.vd')).display !== 'none' }; });
+    check(`${w}px: the header and the top bar each stay one row, with the verdict in the Demo chip`, hd.same && hd.h < 70 && hd.tb < 56 && hd.vd, JSON.stringify(hd));
     await page.screenshot({ path: `${out}/behind-header-${w}.png`, clip: { x: 0, y: 0, width: w, height: 200 } });
   }
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await sleep(300);
@@ -112,7 +112,7 @@ try {
 
   // No demo time: no verdict, no pill.
   await human('/settings', 'PUT', { deadline: '' }); await reload();
-  check('no deadline: no clock, no verdict', await page.evaluate(() => $('clock').hidden && outlook() === null && !/won't make it/.test($('now').innerText)));
+  check('no deadline: no countdown, no verdict', await page.evaluate(() => $('clock').classList.contains('unset') && !$('clock').querySelector('.vd') && outlook() === null && !/won't make it/.test($('now').innerText)));
 
   // ================= more "needs you" signals =================
   const st3 = await human('/state');

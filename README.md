@@ -257,7 +257,7 @@ Each suite starts its own throwaway board on a free port with an empty data fold
 | `tests/helpers-subagents.mjs` | Subagents (passing `as`): recorded on their first call, own model, `subagent_done`, the idle window, `presence[].helpers` in `/api/state`. |
 | `tests/agents.mjs` | Usage limits reported by agents (tool, REST, and the Stop hook reading a transcript), planning stats. |
 | `tests/join-tools.mjs` | Join for Gemini CLI and Cursor in a sandboxed home: config files, backups, re-runs, doctor. |
-| `tests/ui/verdict.mjs` | The deadline verdict in the clock pill and the extra *What to do now* signals (P3 tasks that won't make it, review backlog, sent back twice, out of usage). |
+| `tests/ui/verdict.mjs` | The deadline verdict in the top bar's Demo chip and the extra *What to do now* signals (P3 tasks that won't make it, review backlog, sent back twice, out of usage). |
 | `tests/ui/tasks-view.mjs` | Task search, the Columns / Table view, and the Problems / Merges feed tabs. |
 | `tests/ui/cancel.mjs` | Cancelling a task from its dialog (human-only), and the tool colour dots. |
 | `tests/ui/palette-theme.mjs` | The themes and the theme chooser (keyboard grid, Auto by the OS, old saved values), a contrast scan of every visible text in every theme, and the Ctrl+K command palette. |

@@ -297,7 +297,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   ::selection { background: var(--accent-soft); }
   /* The demo's monospace stays where it labels or counts: titles, tiles, column heads, chips, ids, times. Content is sans. */
-  header h1, .panel > h2, .sec-h h2, .setup > .sh h2, .now .nl, .col h3, .needs, .clock, .phases, time, .conn { font-family: var(--mono); }
+  header h1, .panel > h2, .sec-h h2, .setup > .sh h2, .now .nl, .col h3, .needs, .phases, time, .conn { font-family: var(--mono); }
   .attn > h2 { font-family: var(--font); }
 
   /* ---------- controls ---------- */
@@ -390,7 +390,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   header:has(.needs button) .tagline { display: none; }
   /* The demo clock takes the tagline's room, and the two link buttons turn into icons, so the header stays one row.
      Monospace is wide, so below 1600px they are icons anyway, the filter loses its label and the badges their tails. */
-  header:has(#clock:not([hidden])) .tagline { display: none; }
   @media (max-width: 1600px) {
     #link-btn .lt { display: none; }
     #link-btn { min-width: var(--ctl); padding: 0 var(--s3); justify-content: center; }
@@ -412,10 +411,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .needs button:active { transform: none; box-shadow: none; }
   /* After the event: the count stays, but nothing is urgent any more. */
   .needs.quiet button { color: var(--muted); font-weight: 400; border-color: var(--line); }
-  .clock { font-size: var(--fs-meta); padding: 0 var(--s3); min-height: var(--ctl-sm); border-radius: var(--r-full); background: transparent; color: var(--ink); border: 2px solid var(--line); box-shadow: none; font-weight: 400; white-space: nowrap; display: inline-flex; align-items: center; gap: var(--s3); font-variant-numeric: tabular-nums; }
-  .clock:hover { background: var(--sunken); border-color: var(--line-strong); }
-  .clock.warn, .clock.frozen { color: var(--warn); border-color: var(--warn-line); font-weight: 700; }
-  .clock.past { color: var(--muted); }
+  /* The DEMO chip's countdown: amber near the freeze and during it, muted once the demo is past or with no time set. */
+  .clock.warn .o-x, .clock.frozen .o-x { color: var(--warn); font-weight: 700; }
+  .clock.past .o-x, .clock.unset .o-x { color: var(--muted); }
   /* Deadline verdict ahead of the countdown; on narrower screens the freeze time moves to the tooltip. */
   .clock .vd { font-weight: 700; }
   .clock .vd.ok { color: var(--ok); }
@@ -423,8 +421,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .clock .vd.behind { color: var(--warn); } /* a pace note, not an error: amber on every screen */
   /* The view switch (Board | 3D office) needs room too: it says "3D" from 1440px. (The Presenter view link lives in
      the help dialog and the command palette.) */
-  @media (max-width: 1600px) { .clock:has(.vd) .fz { display: none; } }
-  @media (max-width: 1400px) { .clock .fz { display: none; } }
   @media (max-width: 1440px) { .vseg .lt { display: none; } }
   .now .cut-list { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
   .now .cut-list .n { color: var(--muted); }
@@ -441,7 +437,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     max-width: calc(100vw - 16px); max-height: var(--tp-max, calc(100vh - 76px)); overflow-y: auto; overscroll-behavior: contain; padding: var(--s4);
     background: var(--panel); border: 2px solid var(--border); box-shadow: 0 0 0 2px var(--outline), var(--e2); scrollbar-width: thin; }
   .theme-pop[hidden] { display: none; }
-  .tp-h { font: 700 var(--fs-micro) var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .tp-h { font: 700 var(--fs-micro) var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
   .tp-grid { display: grid; grid-template-columns: repeat(4, 8.75rem); gap: var(--s3); }
   button.tile { display: flex; flex-direction: column; align-items: stretch; gap: var(--s2); padding: var(--s2); min-height: 0; white-space: normal; text-align: left;
     background: var(--raised); color: var(--ink); border: 2px solid var(--line); box-shadow: none; font-weight: 400; }
@@ -469,8 +465,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     header { flex-wrap: nowrap; }
     header > * { flex-shrink: 0; }
     header > .sp { flex-shrink: 1; }
-    header > .clock { flex-shrink: 1; min-width: 6rem; overflow: hidden; }
-    header > .clock > span { overflow: hidden; text-overflow: ellipsis; }
   }
   .hpair { display: inline-flex; gap: var(--s3); align-items: center; flex-wrap: nowrap; }
   a.plink { display: inline-flex; align-items: center; gap: var(--s3); text-decoration: none; color: var(--ink); background: var(--raised); border: 2px solid var(--line-strong); border-radius: var(--r-sm); padding: 0 var(--s5); font-size: var(--fs-ctl); min-height: var(--ctl); transition: background-color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
@@ -489,7 +483,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .sec-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s1) var(--s4); margin-bottom: var(--s4); font-size: var(--fs-meta); }
   .panel > .sec-h:first-child { margin: calc(-1 * var(--s4)) calc(-1 * var(--s5)) var(--s5); padding: var(--s3) var(--s5); border-bottom: 2px solid var(--line); align-items: center; min-height: 32px; }
   .panel > h2, .sec-h h2, .sec-h { font-weight: 700; }
-  .panel > h2, .sec-h h2 { font-size: .8125rem; line-height: var(--lh-tight); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .panel > h2, .sec-h h2 { font-size: .8125rem; line-height: var(--lh-tight); text-transform: uppercase; letter-spacing: .1em; color: var(--accent); }
   .sec-h .muted { font-weight: 400; }
   .panel-hint { font-size: var(--fs-meta); color: var(--muted); margin: calc(-1 * var(--s2)) 0 var(--s4); }
   .step, .panel, .col, #now, .nyou { scroll-margin-top: calc(var(--hdr, 54px) + 14px); }
@@ -498,7 +492,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .nyou { background: var(--panel); border: 2px solid var(--border); box-shadow: var(--e2); margin: 2px; min-width: 0; transition: border-color var(--t-slow) var(--ease); }
   .now { display: flex; align-items: center; gap: var(--s3) var(--s5); flex-wrap: wrap; padding: 0 var(--s5) var(--s5); }
   /* Title bar: "What to do now" on the left, the phase track on the right. */
-  .now .nl { order: -3; flex: 1 0 auto; align-self: stretch; display: inline-flex; align-items: center; gap: var(--s4); margin: 0 0 var(--s1) calc(-1 * var(--s5)); padding: var(--s2) var(--s5); min-height: 32px; border-bottom: 2px solid var(--line); font-size: .8125rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
+  .now .nl { order: -3; flex: 1 0 auto; align-self: stretch; display: inline-flex; align-items: center; gap: var(--s4); margin: 0 0 var(--s1) calc(-1 * var(--s5)); padding: var(--s2) var(--s5); min-height: 32px; border-bottom: 2px solid var(--line); font-size: .8125rem; color: var(--accent); text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
   .now .phases { order: -2; align-self: stretch; margin: 0 calc(-1 * var(--s5)) var(--s1) calc(-1 * var(--s5)); padding: var(--s2) var(--s5) var(--s2) 0; border-bottom: 2px solid var(--line); }
   .now::after { content: ""; order: -1; flex: 0 0 100%; height: 0; margin-bottom: calc(-1 * var(--s3)); }
   /* The lead: the demo's first "needs you" row, bigger, with a status flag. */
@@ -540,7 +534,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 
   /* ---------- Start here ---------- */
   .setup > .sh { display: flex; align-items: center; gap: var(--s3) 10px; flex-wrap: wrap; margin: calc(-1 * var(--s4)) calc(-1 * var(--s5)) 0; padding: var(--s3) var(--s5); border-bottom: 2px solid var(--line); min-height: 32px; }
-  .setup > .sh h2 { font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .setup > .sh h2 { font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); }
   .setup > .sh .muted { font-size: var(--fs-meta); }
   .setup .intro { margin: var(--s3) 0 0; max-width: 820px; }
   .steps { list-style: none; margin: 10px 0 0; padding: 0; }
@@ -853,7 +847,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-panel, .o-pill { background: var(--panel); border: 2px solid var(--border); box-shadow: 0 0 0 2px var(--outline), inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 4px 4px 0 2px rgba(0, 0, 0, .18); color: var(--ink); }
   .o-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
   .o-head { display: flex; align-items: center; gap: var(--s4); min-height: 34px; padding: 2px var(--s2) 2px var(--s5); border-bottom: 2px solid var(--border); flex: 0 0 auto; min-width: 0; }
-  .o-head h2, .o-h, .o-pill .o-t { font: 700 var(--fs-meta)/1.2 var(--mono); text-transform: uppercase; letter-spacing: .12em; text-shadow: var(--shade); color: var(--ink); }
+  /* Section titles, the same everywhere (panels, sections, the top bar's chip labels): small uppercase mono in the accent,
+     so they stand out from the content (the one use of the accent that isn't "needs you"). */
+  .o-head h2, .o-h, .o-pill .o-t { font: 700 var(--fs-meta)/1.2 var(--mono); text-transform: uppercase; letter-spacing: .12em; text-shadow: var(--shade); color: var(--accent); }
   .o-head h2 { flex: 0 0 auto; white-space: nowrap; }
   .o-head .o-sub { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font: var(--fs-meta) var(--mono); white-space: nowrap; }
   .o-head .o-ib:first-of-type { margin-left: auto; }
@@ -872,24 +868,44 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-panel.folded > .o-body { display: none; }
   .o-panel.folded > .o-head { border-bottom: 0; }
 
-  /* The top bar: the goal, progress, who merges to main and setup, one line (the same in both views). */
-  .topbar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s5); padding: var(--s3) var(--s3) var(--s3) var(--s5); min-height: 42px; font-size: var(--fs-ctl); }
-  .topbar > * { min-width: 0; }
-  .topbar .tb-goal { display: inline-flex; align-items: baseline; gap: var(--s2); flex: 1 1 0; min-width: 9ch; min-height: var(--ctl-xs); font-size: var(--fs-ctl); }
-  .topbar .tb-goal .o-x { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .topbar .tb-goal .o-ar { color: var(--muted); font-family: var(--mono); flex: 0 0 auto; }
-  .topbar .tb-goal[aria-expanded="true"] .o-ar { display: inline-block; transform: rotate(180deg); }
-  .topbar .repo-s { flex: 0 1 auto; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .topbar .tb-merge { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .topbar .acts { display: flex; gap: var(--s3); flex: 0 0 auto; }
+  /* The top bar, the same in both views: a row of separate chips, each a small uppercase mono label in the accent, then
+     its value, and ▾ when it opens something in place: GOAL (the goal), DEMO (the countdown and the pace verdict; the
+     demo time), DONE (progress), MERGES (who merges to main and main's CI; the merger choice). Connect a laptop and
+     Setup are plain buttons at the end. One row from 1101px: the goal gives way first, then the demo chip, cut with an
+     ellipsis (their full text is the tooltip). */
+  #topbar.topbar { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s4); padding: 0; background: none; border: 0; box-shadow: none; min-height: var(--ctl); }
+  .topbar > *, .tb-slot > * { min-width: 0; }
+  .tb-slot { display: contents; }
+  .tbc { display: inline-flex; align-items: center; gap: var(--s3); min-height: var(--ctl); max-width: 100%; padding: 0 var(--s4); background: var(--panel); color: var(--ink); border: 2px solid var(--border);
+    box-shadow: 0 0 0 2px var(--outline), inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 3px 3px 0 1px rgba(0, 0, 0, .18); font: 400 var(--fs-ctl)/1.2 var(--font); white-space: nowrap; text-align: left; }
+  html[data-board-view="office"] .tbc { background: var(--glass); }
+  button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
+  button.tbc:active { transform: translate(1px, 1px); }
+  .tbc .tbl { font: 700 var(--fs-micro)/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); flex: 0 0 auto; text-shadow: var(--shade); }
+  .tbc .o-x { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .tbc .o-ar { color: var(--muted); font-family: var(--mono); flex: 0 0 auto; }
+  .tbc[aria-expanded="true"] .o-ar { transform: rotate(180deg); }
+  .tbc .ci-pill { flex: 0 0 auto; }
+  .topbar .tb-goal { flex: 1 1 0; min-width: 9ch; }
+  .topbar .clock { flex: 0 1 auto; min-width: 9ch; }
+  .topbar .tb-merge { flex: 0 1 auto; min-width: 8ch; max-width: 260px; }
+  .topbar .repo-s { flex: 0 1 auto; min-width: 8ch; max-width: 220px; }
+  .topbar .stat { flex: 0 0 auto; font-weight: 600; }
+  .topbar .acts { display: flex; gap: var(--s3); flex: 0 0 auto; margin-left: auto; }
   .topbar .acts button { min-height: var(--ctl-sm); padding: 0 var(--s4); font-size: var(--fs-meta); }
-  @media (min-width: 1101px) { .topbar { flex-wrap: nowrap; } .topbar .stat { flex: 0 0 auto; } }
+  @media (min-width: 1101px) { #topbar.topbar { flex-wrap: nowrap; } }
+  @media (max-width: 1800px) { .clock:has(.vd) .fz { display: none; } }
+  @media (max-width: 1600px) { .topbar .repo-s, .clock .fz { display: none; } }
+  @media (max-width: 1500px) { .topbar .stat .mbar { display: none; } }
   @media (max-width: 600px) { .topbar .tb-goal { flex-basis: 100%; } }
-  /* Popovers: the goal (under the top bar) and the demo time (under the header clock), each edited in place. */
+  /* Popovers: the goal (under the top bar) and the demo time and who merges (under their top bar chips), each edited in place. */
   .o-pop { position: absolute; z-index: 8; max-height: min(70vh, 560px); }
   .o-goal { top: calc(100% + var(--s4)); left: 0; width: min(560px, 100%); }
   .centre > .o-goal { top: 50px; }
-  .o-dl { position: fixed; top: calc(var(--hdr, 54px) + var(--s2)); width: min(400px, calc(100vw - 24px)); z-index: 30; }
+  .o-dl, .o-merge { position: fixed; top: calc(var(--hdr, 54px) + var(--s2)); width: min(400px, calc(100vw - 24px)); z-index: 30; }
+  .o-merge { width: min(460px, calc(100vw - 24px)); }
+  .o-merge .inl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
+  .o-merge select { width: 100%; }
   .o-goal .o-body p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-body); }
   .o-pop .xacts { margin-top: var(--s4); }
   .o-form label { margin: 0 0 var(--s2); }
@@ -919,7 +935,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-left .qcard .qt { margin: var(--s1) 0 var(--s2); }
   .o-left .qcard textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .o-sec { margin-top: var(--s5); padding-top: var(--s4); border-top: 2px dashed var(--line); }
-  .o-sec h3 { font: 700 var(--fs-meta)/1.3 var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin: 0 0 var(--s3); }
+  .o-sec h3 { font: 700 var(--fs-meta)/1.3 var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--accent); margin: 0 0 var(--s3); }
   .o-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s3); }
   .o-list li { font-size: var(--fs-sm); min-width: 0; }
   .o-list .o-why { display: block; color: var(--muted); overflow-wrap: anywhere; }
@@ -1141,7 +1157,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     .hacts { display: contents; }
     header > .sp { display: none; }
     .hpair { order: 1; margin-left: auto; }
-    .clock { order: 2; }
     #new-task-btn, #link-btn, .themew { order: 3; }
     #new-task-btn { flex: 1 1 auto; }
     .theme-pop { top: auto; left: 0; right: 0; bottom: 0; z-index: 45; max-width: none; max-height: 78vh; border-width: 2px 0 0; padding-bottom: calc(var(--s4) + env(safe-area-inset-bottom, 0px)); }
@@ -1235,7 +1250,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <div class="vseg" id="vseg" role="group" aria-label="View" hidden><button type="button" data-vset="board" aria-pressed="true" tabindex="-1" title="The task board">Board</button><button type="button" data-vset="office" aria-pressed="false" aria-label="3D office" title="The team's agents in a live 3D office, with what needs you, the agents and the tasks around it">3D<span class="lt"> office</span></button></div>
     <span class="tagline">your team's AI coding agents, on one task board</span>
     <span id="conn" class="conn" role="status">Connecting…</span>
-    <button type="button" id="clock" class="clock" data-act="clock" aria-expanded="false" aria-controls="o-dl" hidden></button>
     <div class="needs" id="needs"></div>
     <span class="sp"></span>
     <div class="hacts">
@@ -1250,10 +1264,15 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         <button id="help-btn" class="ghost icon help" title="What does everything mean? (?)" aria-label="Help: what everything on this page means">?</button>
       </span>
     </div>
-    <!-- The demo time, edited in place under the header clock (both views). -->
+    <!-- The demo time and who merges to main, edited in place under their chips in the top bar (both views; fixed, so
+         they sit above every panel). -->
     <section class="o-panel o-pop o-dl" id="o-dl" aria-labelledby="o-dl-h" hidden>
       <div class="o-head"><h2 id="o-dl-h">Demo time</h2><button type="button" class="o-ib" data-o-close="dl" aria-label="Close the demo time">×</button></div>
       <div class="o-body" id="o-dl-b"></div>
+    </section>
+    <section class="o-panel o-pop o-merge" id="o-merge" aria-labelledby="o-merge-h" hidden>
+      <div class="o-head"><h2 id="o-merge-h">Merges to main</h2><button type="button" class="o-ib" data-o-close="merge" aria-label="Close merges to main">×</button></div>
+      <div class="o-body" id="o-merge-b"></div>
     </section>
   </header>
   <div id="downbar" class="downbar" role="alert" hidden></div>
@@ -1282,7 +1301,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <button type="button" class="o-pill" id="o-left-pill" data-o-fold="left" aria-expanded="false" aria-controls="o-left" hidden><span class="o-t">Needs you</span><span class="o-n" id="o-left-n"></span><span class="o-ar" aria-hidden="true">›</span></button>
 
     <div class="centre" id="centre">
-      <section id="topbar" class="o-panel topbar" aria-label="Goal and progress"></section>
+      <section id="topbar" class="o-panel topbar" aria-label="Goal, demo time, progress and merges"><span class="tb-slot" id="tb-a"></span><button type="button" id="clock" class="tbc clock" data-act="clock" data-fk="tb-clock" aria-expanded="false" aria-controls="o-dl"></button><span class="tb-slot" id="tb-b"></span></section>
       <section class="o-panel o-pop o-goal" id="o-goal" aria-labelledby="o-goal-h" hidden>
         <div class="o-head"><h2 id="o-goal-h">Goal</h2><button type="button" class="o-ib" data-o-close="goal" aria-label="Close the goal">×</button></div>
         <div class="o-body" id="o-goal-b"></div>
@@ -1440,11 +1459,11 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dt>Talking to agents</dt>
     <dd>Agents read the chat in Activity. Write <code>@alice</code> to address alice's agent, <code>@alice/ui-worker</code> for one subagent, or <code>@all</code> for everyone. <code>#12</code> links to task 12.</dd>
     <dt>Demo time &amp; feature freeze</dt>
-    <dd>Set when the demo starts in Start here, step 2. The header counts down to it. At the <b>feature freeze</b> (60 min before, by default) agents stop claiming new tasks and finish, push and merge what they have, so <code>main</code> works for the demo. Priority-1 tasks (bug fixes) can still be claimed during the freeze. The board posts a reminder 30 minutes before the freeze and at the freeze.</dd>
+    <dd>Set when the demo starts in Start here, step 2, or with the <b>Demo</b> chip in the top bar, which counts down to it (and says whether the team is on track). At the <b>feature freeze</b> (60 min before, by default) agents stop claiming new tasks and finish, push and merge what they have, so <code>main</code> works for the demo. Priority-1 tasks (bug fixes) can still be claimed during the freeze. The board posts a reminder 30 minutes before the freeze and at the freeze.</dd>
     <dt>Plan approval</dt>
     <dd>Optional (Start here, step 4). When it's on, agents wait after the planner writes the task list until a human checks it and presses <b>Approve plan &amp; start</b>. You can edit and add tasks before approving.</dd>
     <dt>3D office and presenter view</dt>
-    <dd><b>3D office</b> (header, next to <b>Board</b>) shows the team's agents as characters in a pixel office, like the office demo, with the same panels as the Board view in the same places: <b>Needs you</b> on the left (what to do now, the agents' questions with Answer, what's blocked), the top bar (the goal, progress, who merges to main, setup), <b>Agents</b>, <b>Activity</b> and <b>File locks</b> on the right (click an agent, or its character, to see what it's doing), and <b>Tasks</b> at the bottom, with the same search, Show filter and Columns / Table (folded to its title bar on screens up to 900px tall). Panels fold the same way in both views and stay that way in this browser; <code>Esc</code> closes the window on top. Not on phones. The <b>presenter view</b> is the same office, read-only and large, for the room's big screen.
+    <dd><b>3D office</b> (header, next to <b>Board</b>) shows the team's agents as characters in a pixel office, like the office demo, with the same panels as the Board view in the same places: <b>Needs you</b> on the left (what to do now, the agents' questions with Answer, what's blocked), the top bar (chips for the goal, the demo time, progress and who merges to main, then Connect a laptop and Setup), <b>Agents</b>, <b>Activity</b> and <b>File locks</b> on the right (click an agent, or its character, to see what it's doing), and <b>Tasks</b> at the bottom, with the same search, Show filter and Columns / Table (folded to its title bar on screens up to 900px tall). Panels fold the same way in both views and stay that way in this browser; <code>Esc</code> closes the window on top. Not on phones. The <b>presenter view</b> is the same office, read-only and large, for the room's big screen.
       <div class="xacts" id="present-row" hidden><a id="present-link" class="plink" href="present.html" hidden target="_blank" rel="noopener" title="Read-only, for the room's big screen (opens in a new tab)" aria-label="Open the presenter view (opens in a new tab)"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 11v2.5M5 13.5h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Open the presenter view</a></div></dd>
     <dt>Desktop notifications</dt>
     <dd>Press the bell in the header to get a desktop notification while this tab is in the background: a new question for the humans, a message that @mentions you, a task that gets blocked, and the feature-freeze reminders. Click a notification to jump to it. Nothing is sent for your own actions.</dd>
@@ -2018,12 +2037,16 @@ function outlook(t = timeNow()) {
   const why = `About ${dur(eta * 60e3)} of work left (${plural(left.length, 'task')} at this board's median time per size, over ${plural(slots, 'agent slot')} online) and ${dur(mins * 60e3)} to the ${t.frozen ? 'demo' : 'freeze'}`;
   return { verdict, label, why, shortBy, left };
 }
-const CLOCK_ICO = '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.8V8l2.2 1.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
 let prevFrozen = null;
 function renderClock() {
   const t = timeNow(); const b = $('clock');
-  b.hidden = !t.deadline;
-  if (!t.deadline) { prevFrozen = null; return; }
+  const chip = (x) => `<span class="tbl">Demo</span><span class="o-x">${x}</span><span class="o-ar" aria-hidden="true">▾</span>`;
+  if (!t.deadline) {
+    prevFrozen = null;
+    const h = chip('not set'); if (b._html !== h) { b.innerHTML = h; b._html = h; }
+    b.className = 'tbc clock unset'; b.title = 'No demo time yet: set it so agents stop on time'; b.setAttribute('aria-label', 'Demo time not set. Set it');
+    return;
+  }
   const now = Date.now();
   // main + detail: the detail (freeze time) hides on narrower screens when a verdict leads the pill.
   let main, detail = '', cls = '', tip;
@@ -2040,11 +2063,11 @@ function renderClock() {
   if (ol) tip = `${ol.label ? `${ol.label}. ` : ''}${ol.why}.
 ${tip}`;
   const text = `${vd ? vd.label + ' · ' : ''}${main}${detail}`;
-  const html = CLOCK_ICO + (t.frozen && !t.past
-    ? `<span>Feature freeze<span class="fz"> — finish &amp; merge</span>${esc(detail)}</span>`
-    : `<span>${vd ? `<b class="vd ${vd.verdict}">${esc(vd.label)}</b> · ` : ''}${esc(main)}${detail ? `<span class="fz">${esc(detail)}</span>` : ''}</span>`);
+  const html = chip(t.frozen && !t.past
+    ? `Feature freeze<span class="fz"> — finish &amp; merge</span>${esc(detail)}`
+    : `${vd ? `<b class="vd ${vd.verdict}">${esc(vd.label)}</b> · ` : ''}${esc(main)}${detail ? `<span class="fz">${esc(detail)}</span>` : ''}`);
   if (b._html !== html) { b.innerHTML = html; b._html = html; }
-  b.className = 'clock ' + cls; b.title = tip; b.setAttribute('aria-label', `${text}. Change the demo time`);
+  b.className = 'tbc clock ' + cls; b.title = tip; b.setAttribute('aria-label', `${text}. Change the demo time`);
   // One polite announcement when the freeze starts while the page is open.
   if (prevFrozen === false && t.frozen && !t.past) announce(`Feature freeze started. Agents won't take new tasks; help merge and test.`);
   prevFrozen = t.frozen;
@@ -2367,8 +2390,13 @@ function renderNow(qOpen, unread, si) {
     : `<span class="na">${esc(text)}</span>`}${appr ? '<button type="button" class="appr" data-act="approve" data-fk="now-appr">Approve plan &amp; start</button>' : ''}${text2 ? `<button type="button" class="link na2" data-go="${go2}"${lv(go2)} data-fk="now-go2">${esc(text2)} <span aria-hidden="true">→</span></button>` : ''}${cutHtml}${phases}${moreHtml}`);
 }
 
-// The top bar, the same in both views: the goal (opens it in place), progress (done of all tasks except proposals),
-// the repo, who merges to main (with main's CI) and the way into setup.
+// The top bar, the same in both views: chips for the goal (opens it in place), the demo time (#clock, renderClock), progress
+// (done of all tasks except proposals), the repo, who merges to main with main's CI (the merger choice in place), then
+// the way into setup.
+function mergerText() {
+  const S = state.settings;
+  return S.integrator === ANYONE ? 'whoever is free' : S.integrator || '';
+}
 function renderTopbar(si) {
   const S = state.settings;
   const left = si.steps.find((s) => !s.done);
@@ -2376,10 +2404,12 @@ function renderTopbar(si) {
   const pct = T.length ? Math.round((done / T.length) * 100) : 0;
   const goal = String(S.goal || '').trim(); const head = goal.split('\n').find((l) => l.trim()) || '';
   const open = setupOpen(si.complete) && boardView !== 'office';
-  patch($('topbar'), `<button type="button" class="link tb-goal" id="goal-btn" data-act="goal" data-fk="tb-goal" aria-expanded="${!!ui.oGoal}" aria-controls="o-goal" title="${esc(goal || 'No goal set yet')}" aria-label="Goal: ${esc(goal ? short(head, 120) : 'not set yet')}. ${ui.oGoal ? 'Close' : 'Show'} the full goal"><b>Goal:</b><span class="o-x">${goal ? esc(head) : '<span class="muted">not set</span>'}</span><span class="o-ar" aria-hidden="true">▾</span></button>
-      ${T.length ? `<span class="stat" id="done-count" title="${done} of ${T.length} tasks merged into main (${pct}%)"><b>${done} of ${T.length} done</b><span class="mbar" aria-hidden="true"><i style="width:${pct}%"></i></span></span>` : ''}
-      ${S.repo ? `<span class="repo-s" title="Project repo: ${esc(S.repo)}"><b>Repo:</b> ${esc(S.repo)}</span>` : ''}
-      <span class="tb-merge" title="The person whose agent merges finished branches into main">Merges to main: ${S.integrator === '*' ? 'whoever is free' : S.integrator ? `${nameTag(S.integrator)}${ownerOffline({ assignee: S.integrator }) || agentLimited(S.integrator) ? ' <span class="muted">(away: whoever is free merges meanwhile)</span>' : ''}` : '<span class="muted">not picked yet</span>'}${ciPill()}</span>
+  const m = mergerText(); const away = S.integrator && S.integrator !== ANYONE && (ownerOffline({ assignee: S.integrator }) || agentLimited(S.integrator));
+  const ci = state.main_ci?.status === 'pass' ? ', main is green' : state.main_ci?.status === 'fail' ? ', main is failing' : state.main_ci?.status === 'pending' ? ', checks running on main' : '';
+  patch($('tb-a'), `<button type="button" class="tbc tb-goal" id="goal-btn" data-act="goal" data-fk="tb-goal" aria-expanded="${!!ui.oGoal}" aria-controls="o-goal" title="${esc(goal || 'No goal set yet')}" aria-label="Goal: ${esc(goal ? short(head, 120) : 'not set yet')}. ${ui.oGoal ? 'Close' : 'Show'} the full goal"><span class="tbl">Goal</span><span class="o-x">${goal ? esc(head) : '<span class="muted">not set</span>'}</span><span class="o-ar" aria-hidden="true">▾</span></button>`);
+  patch($('tb-b'), `${T.length ? `<span class="tbc stat" id="done-count" title="${done} of ${T.length} tasks merged into main (${pct}%)"><span class="tbl">Done</span><b>${done} of ${T.length}</b><span class="mbar" aria-hidden="true"><i style="width:${pct}%"></i></span></span>` : ''}
+      ${S.repo ? `<span class="tbc repo-s" title="Project repo: ${esc(S.repo)}"><span class="tbl">Repo</span><span class="o-x">${esc(S.repo)}</span></span>` : ''}
+      <button type="button" class="tbc tb-merge" id="merge-btn" data-act="merge" data-fk="tb-merge" aria-expanded="${!!ui.oMerge}" aria-controls="o-merge" title="The person whose agent merges finished branches into main${away ? ` (${S.integrator} is away: whoever is free merges meanwhile)` : ''}" aria-label="Merges to main: ${esc(m || 'not picked yet')}${away ? ' (away)' : ''}${ci}. ${ui.oMerge ? 'Close' : 'Choose who merges'}"><span class="tbl">Merges</span><span class="o-x">${m ? (S.integrator === ANYONE ? 'whoever is free' : nameTag(S.integrator)) + (away ? ' <span class="muted">(away)</span>' : '') : '<span class="muted">not picked</span>'}</span>${ciPill()}<span class="o-ar" aria-hidden="true">▾</span></button>
       <span class="acts"><button type="button" class="ghost" data-act="invite" data-fk="s-inv">Connect a laptop</button><button type="button" class="ghost" data-act="${open ? 'setup-close' : 'setup-open'}" data-fk="s-open" aria-expanded="${open}" aria-controls="setup" ${left ? `aria-label="${open ? 'Hide' : 'Open'} the setup guide. Left to do: ${esc(left.left)}"` : ''}>Setup${left ? `: ${esc(left.left)}` : ''}</button></span>`);
 }
 function renderSetup(si) {
@@ -2621,14 +2651,14 @@ function stepBacklog() {
   if (S.planner) { const c = clientOf(S.planner); return `<p>${nameTag(S.planner)}'s agent${c ? ` (${esc(c)})` : ''} is the <b>planner</b> and is writing the task list now<span class="dots"></span> Cards appear on the board below as it goes.</p>${add}`; }
   return `<p>The first agent that starts on the board (step 3) becomes the <b>planner</b> and writes the task list from the goal automatically.</p>${add}`;
 }
-function stepIntegrator() {
+function stepIntegrator(_si, sel = 'integ-sel') {
   const S = state.settings;
   const review = state.tasks.filter((t) => t.status === 'review').length;
   const names = agentNames([S.integrator]);
   return `<p>Finished branches are merged into <code>main</code> by one agent at a time, which runs the tests first, so changes don't collide. Pick one agent to always do it, or let <b>whoever is free</b> take the next task in Review (never its own work).${S.integrator ? '' : ' If nobody is picked, the first agent with finished work takes the job.'}</p>
     ${review && !S.integrator ? `<p class="note">${plural(review, 'finished task is', 'finished tasks are')} waiting to be merged.</p>` : ''}
-    <div class="inl"><label for="integ-sel" class="m0">Merges to main</label>
-      <select id="integ-sel" data-fk="integ"><option value="">Let the first agent with finished work do it</option><option value="${ANYONE}" ${S.integrator === ANYONE ? 'selected' : ''}>Whoever is free (any agent with room merges)</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.integrator ? 'selected' : ''}>${esc(n)}${n === me ? ' (you)' : ''}</option>`).join('')}</select>${ciPill()}</div>`;
+    <div class="inl"><label for="${sel}" class="m0">Merges to main</label>
+      <select id="${sel}" data-fk="${sel === 'integ-sel' ? 'integ' : 'o-integ'}"><option value="">Let the first agent with finished work do it</option><option value="${ANYONE}" ${S.integrator === ANYONE ? 'selected' : ''}>Whoever is free (any agent with room merges)</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.integrator ? 'selected' : ''}>${esc(n)}${n === me ? ' (you)' : ''}</option>`).join('')}</select>${ciPill()}</div>`;
 }
 function renderBoardEmpty(si) {
   const el = $('board-empty'); const S = state.settings;
@@ -2677,7 +2707,7 @@ function renderBoardNote() {
     html = `<p><b>The demo time (${esc(when(t.deadline))}) has passed.</b> Agents have been told to wrap up and merge what they have. Write-up for your submission: the goal, who built what, the decisions you made and what's unfinished.</p>
       <div class="inl">${exportBtns('bn')}</div>`;
   }
-  // The feature freeze has no banner: the header clock names it, What to do now says what to do, and the Open column
+  // The feature freeze has no banner: the Demo chip names it, What to do now says what to do, and the Open column
   // dims what won't start.
   el.hidden = !html; el.className = 'bnote' + (kind ? ' k-' + kind : '');
   patch(el, html);
@@ -3566,7 +3596,7 @@ document.addEventListener('change', async (ev) => {
     } catch (e) { toast(e.message, true); render(); }
     return;
   }
-  if (ev.target.id !== 'integ-sel') return;
+  if (ev.target.id !== 'integ-sel' && ev.target.id !== 'o-integ-sel') return;
   const v = ev.target.value;
   try {
     state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ integrator: v }) });
@@ -3609,6 +3639,7 @@ function doAct(a, el) {
   if (a === 'qr') { ui.qr = !ui.qr; render(); return document.querySelector('[data-fk="qr-tog"]')?.focus({ preventScroll: true }); }
   if (a === 'clock') return oDl(el?.id === 'clock' ? !ui.oDl : true);
   if (a === 'goal') return oGoal(!ui.oGoal);
+  if (a === 'merge') return oMerge(!ui.oMerge);
   if (a === 'o-goal-edit') return oGoal(true, { edit: true });
   if (a === 'o-goal-cancel') { ui.oGoalEdit = false; ui.goalErr = ''; renderDocks(); return document.querySelector('[data-fk="o-goal-edit"]')?.focus(); }
   if (a === 'dl-edit') { ui.editDeadline = true; render(); return $('dl-in')?.focus(); }
@@ -4158,7 +4189,7 @@ function placeThemePop() {
 function themePop(open, focus = true) {
   ui.themeOpen = open; $('theme-pop').hidden = !open; $('theme-btn').setAttribute('aria-expanded', String(open));
   if (open) placeThemePop();
-  if (open && (ui.oGoal || ui.oDl)) { ui.oGoal = false; ui.oDl = false; renderDocks(); }
+  if (open && (ui.oGoal || ui.oDl || ui.oMerge)) { ui.oGoal = false; ui.oDl = false; ui.oMerge = false; renderDocks(); }
   if (!focus) return;
   if (open) $('theme-pop').querySelector('[aria-checked="true"]')?.focus({ preventScroll: true }); else $('theme-btn').focus({ preventScroll: true });
 }
@@ -4305,6 +4336,8 @@ function oApply() {
   $('l-body').hidden = oLocksOff();
   $('o-goal').hidden = !ui.oGoal; $('goal-btn')?.setAttribute('aria-expanded', String(!!ui.oGoal));
   $('o-dl').hidden = !ui.oDl; $('clock').setAttribute('aria-expanded', String(!!ui.oDl));
+  $('o-merge').hidden = !ui.oMerge; $('merge-btn')?.setAttribute('aria-expanded', String(!!ui.oMerge));
+  if (ui.oMerge) { const c = $('merge-btn'); const r = c?.offsetWidth ? c.getBoundingClientRect() : null; const w = $('o-merge').offsetWidth || 460; $('o-merge').style.left = `${Math.max(8, Math.min((r ? r.left : 8), innerWidth - w - 8))}px`; if (r) $('o-merge').style.top = `${Math.round(r.bottom + 8)}px`; }
   if (ui.oDl) { const c = $('clock'); const r = c.offsetWidth ? c.getBoundingClientRect() : null; const w = $('o-dl').offsetWidth || 400; $('o-dl').style.left = `${Math.max(8, Math.min((r ? r.left : 8), innerWidth - w - 8))}px`; if (r) $('o-dl').style.top = `${Math.round(r.bottom + 8)}px`; }
   syncNeeds();
   if (boardView === 'office') $('main').style.setProperty('--tb-h', $('topbar').offsetHeight + 'px');
@@ -4342,23 +4375,29 @@ function oAct(focus = true) {
   oShow('act');
   const f = $('feed'); f.scrollTop = f.scrollHeight; if (focus) f.focus({ preventScroll: true });
 }
-// The goal opens in place under the top bar, the demo time under the header clock (one at a time), and each is edited
-// there. A click elsewhere or Esc closes them.
+// The goal, the demo time and who merges open in place under their chips in the top bar (one at a time), and each is
+// edited there. A click elsewhere or Esc closes them.
 function oGoal(open, { edit = false } = {}) {
-  ui.oGoal = open; ui.oGoalEdit = open && edit; ui.goalErr = ''; if (open) { ui.oDl = false; if (ui.themeOpen) themePop(false, false); }
-  $('o-goal-b')._html = undefined; renderDocks(); $('topbar')._html = undefined; renderTopbar(setupInfo());
+  ui.oGoal = open; ui.oGoalEdit = open && edit; ui.goalErr = ''; if (open) { ui.oDl = false; ui.oMerge = false; if (ui.themeOpen) themePop(false, false); }
+  $('o-goal-b')._html = undefined; renderDocks(); $('tb-a')._html = undefined; $('tb-b')._html = undefined; renderTopbar(setupInfo());
   if (!open) return $('goal-btn')?.focus({ preventScroll: true });
   const ta = $('o-goal-in');
   if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } else $('o-goal').querySelector('.o-ib').focus({ preventScroll: true });
 }
 function oDl(open) {
-  ui.oDl = open; ui.dlErr = ''; if (open) { ui.oGoal = false; if (ui.themeOpen) themePop(false, false); }
+  ui.oDl = open; ui.dlErr = ''; if (open) { ui.oGoal = false; ui.oMerge = false; if (ui.themeOpen) themePop(false, false); }
   $('o-dl-b').innerHTML = ''; $('o-dl-b')._html = undefined; renderDocks();
   if (open) $('o-dl-in')?.focus(); else $('clock').focus({ preventScroll: true });
+}
+function oMerge(open) {
+  ui.oMerge = open; if (open) { ui.oGoal = false; ui.oDl = false; if (ui.themeOpen) themePop(false, false); }
+  $('o-merge-b')._html = undefined; renderDocks(); $('tb-b')._html = undefined; renderTopbar(setupInfo());
+  if (open) $('o-integ-sel')?.focus(); else $('merge-btn')?.focus({ preventScroll: true });
 }
 document.addEventListener('click', (ev) => {
   if (ui.oGoal && !ev.target.closest?.('#o-goal, #goal-btn') && ev.target.isConnected) { ui.oGoal = false; renderDocks(); }
   if (ui.oDl && !ev.target.closest?.('#o-dl, #clock, [data-act="clock"]') && ev.target.isConnected) { ui.oDl = false; renderDocks(); }
+  if (ui.oMerge && !ev.target.closest?.('#o-merge, #merge-btn') && ev.target.isConnected) { ui.oMerge = false; renderDocks(); renderTopbar(setupInfo()); }
 });
 // The demo time form for its popover: the board's own (step 2 of Start here), with ids of its own.
 function oDlForm() {
@@ -4396,6 +4435,7 @@ function renderDocks(qOpen = openQuestions(), si = setupInfo()) {
         <div class="xacts"><span class="sp"></span>${goal ? '<button type="button" class="ghost sm" data-act="o-goal-cancel" data-fk="o-goal-cancel">Cancel</button>' : ''}<button type="submit" class="sm" data-fk="o-goal-save">Save goal</button></div></form>`
     : `<p>${esc(goal)}</p><div class="xacts"><button type="button" class="ghost sm" data-act="o-goal-edit" data-fk="o-goal-edit">Edit the goal</button></div>`);
   if (ui.oDl) patch($('o-dl-b'), oDlForm());
+  if (ui.oMerge) patch($('o-merge-b'), stepIntegrator(null, 'o-integ-sel'));
   oApply();
 }
 // ---------- 3D view: the room and the Tasks window ----------
@@ -4477,15 +4517,17 @@ $('app').addEventListener('click', (ev) => {
   if ('oMax' in d) { oUi.max = !oUi.max; oSave(); oApply(); requestAnimationFrame(oMore); return office.mod?.resize(); }
   if (d.oClose === 'goal') return oGoal(false);
   if (d.oClose === 'dl') return oDl(false);
+  if (d.oClose === 'merge') return oMerge(false);
   if (d.oAgent) { const n = d.oAgent; pickAgent(ui.picked === n ? null : n, true); return document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }
 });
 // Esc closes the window on top: a popover (goal, demo time; the theme picker closes itself), then the maximised tasks,
 // then the selected agent.
 document.addEventListener('keydown', (ev) => {
   if (ev.key !== 'Escape' || ev.defaultPrevented || ev.target.closest?.('dialog')) return;
-  if (ev.target.matches?.('input, textarea, select') && !ev.target.closest('#o-goal, #o-dl')) return;
+  if (ev.target.matches?.('input, textarea, select') && !ev.target.closest('#o-goal, #o-dl, #o-merge')) return;
   if (ac.open) return;
   if (ui.oDl) return oDl(false);
+  if (ui.oMerge) return oMerge(false);
   if (ui.oGoal) return oGoal(false);
   if (boardView === 'office' && oUi.max && !oTasksOff()) { oUi.max = false; oSave(); oApply(); office.mod?.resize(); return $('o-tasks-max').focus({ preventScroll: true }); }
   if (ui.picked && ev.target.closest?.('#o-right, #office-view')) { const n = ui.picked; pickAgent(null, true); document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }

@@ -55,7 +55,7 @@ try {
   await sleep(300);
 
   // ================= deadline from the UI =================
-  check('no countdown before a deadline is set', await page.$eval('#clock', (e) => e.hidden));
+  check('no countdown before a deadline is set: the top bar\'s Demo chip says "not set"', await page.$eval('#clock', (e) => e.classList.contains('unset') && /^not set$/.test(e.querySelector('.o-x').textContent.replace(/\s+/g, ' ').trim()) && !e.querySelector('.vd')));
   await page.evaluate(() => goStep('goal', 'dl')); await sleep(300);
   check('step 2 has a labelled demo-time input (datetime-local) and freeze minutes (default 60)', await page.evaluate(() => {
     const d = $('dl-in'); const f = $('fz-in');
@@ -68,9 +68,9 @@ try {
   const target = Date.now() + (3 * 60 + 12.5) * 60e3;
   await page.evaluate((ts) => { $('dl-in').value = localInput(ts); $('fz-in').value = '60'; }, target);
   await page.click('[data-fk="dl-save"]');
-  await until(page, () => !document.getElementById('clock').hidden);
-  const clock1 = await txt(page, '#clock');
-  check('countdown in header: "Demo in 3h 1Xm · freeze HH:MM"', /^Demo in 3h 1[123]m · freeze (?:\w{3} )?\d\d?:\d\d(?: ?[AP]M)?$/.test(clock1), clock1);
+  await until(page, () => !document.getElementById('clock').classList.contains('unset'));
+  const clock1 = await page.$eval('#clock', (e) => e.querySelector('.o-x').textContent.replace(/\s+/g, ' ').trim());
+  check('countdown in the top bar\'s Demo chip: "Demo in 3h 1Xm · freeze HH:MM"', /^Demo in 3h 1[123]m · freeze (?:\w{3} )?\d\d?:\d\d(?: ?[AP]M)?$/.test(clock1), clock1);
   const s1 = await rest(board, 'dana', '/state');
   check('deadline saved on the server', Math.abs(Number(s1.settings.deadline) - Math.floor(target / 60e3) * 60e3) < 60e3 && s1.settings.freeze_minutes === '60' && s1.time.deadline > 0, JSON.stringify(s1.settings));
   const dlEv = (s1.events || []).find((e) => /set the demo deadline to/.test(e.text || ''))?.text || '';
@@ -88,14 +88,14 @@ try {
   // Within 30 min of the freeze: warning colour.
   await settings({ deadline: Date.now() + 80 * 60e3, freeze_minutes: 60 });
   await reload(page); await sleep(200);
-  const w = await page.$eval('#clock', (e) => ({ c: e.className, t: e.innerText }));
+  const w = await page.$eval('#clock', (e) => ({ c: e.className, t: e.querySelector('.o-x').textContent.replace(/\s+/g, ' ').trim() }));
   check('within 30 min of the freeze: warning colour + "freeze in Xm"', /warn/.test(w.c) && /freeze in (19|20|21)m/.test(w.t), JSON.stringify(w));
 
   // ================= frozen =================
   await settings({ deadline: Date.now() + 30 * 60e3, freeze_minutes: 60 });
   await reload(page); await sleep(300);
-  const fz = await page.$eval('#clock', (e) => ({ c: e.className, t: e.innerText }));
-  check('frozen: header says "Feature freeze — finish & merge"', /frozen/.test(fz.c) && /^Feature freeze — finish & merge · demo in (29|30)m$/.test(fz.t), JSON.stringify(fz));
+  const fz = await page.$eval('#clock', (e) => ({ c: e.className, t: e.querySelector('.o-x').textContent.replace(/\s+/g, ' ').trim() }));
+  check('frozen: the Demo chip says "Feature freeze — finish & merge"', /frozen/.test(fz.c) && /^Feature freeze — finish & merge · demo in (29|30)m$/.test(fz.t), JSON.stringify(fz));
   const nowF = await txt(page, '#now');
   check('frozen: What to do now mentions the freeze, merge and test', /Feature freeze: agents won't start new tasks\. Help merge and test/.test(nowF) && /Write-up for your submission/.test(nowF), nowF);
   // The freeze has no banner above the board any more (M3/M7 of the 2026-11-14 review): What to do now explains it, the
@@ -113,7 +113,7 @@ try {
   // ================= plan approval =================
   await settings({ deadline: '' });
   await reload(page); await sleep(200);
-  check('deadline cleared: countdown hidden, no freeze banner', await page.evaluate(() => $('clock').hidden && $('board-note').hidden));
+  check('deadline cleared: no countdown (the Demo chip says not set), no freeze banner', await page.evaluate(() => $('clock').classList.contains('unset') && $('board-note').hidden));
   await page.evaluate(() => goStep('backlog')); await sleep(300);
   check('step 4 has the approval toggle (labelled checkbox, off)', await page.evaluate(() => { const c = $('appr-on'); return c?.type === 'checkbox' && !c.checked && /Review the task list before agents start/.test(c.closest('label').innerText); }));
   await page.click('#appr-on');
