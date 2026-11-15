@@ -8,7 +8,8 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # typecheck + production build
 npm run test:sim   # headless simulation invariants
-npm run build:present  # the board's Presenter view -> ../public/present.html + ../public/office/
+npx tsx src/sim/textTests.ts  # chat/intent parser checks
+npm run build:present  # the board's Presenter view -> ../public/present.html + ../public/office/ (commit the output)
 ```
 
 ## What you are looking at
@@ -102,12 +103,13 @@ dusk, day, night, terminal.
 
 ## Presenter view (live board)
 
-`present.html` + `src/live/` drive the same scene from the real board instead of the simulator: `live/connection.ts`
+`present.html` + `src/live/` drive the same scene from the real board instead of the simulator (it is the board's Presenter view; without WebGL it hands over to the 2D `public/present-classic.html`, also linked as *Simple view*): `live/connection.ts`
 reads `/api/state` with the read-only viewer token (and reloads on the live stream), `live/adapter.ts` turns it into a
 `SimState` (one agent per online board agent, tool from its MCP client, pose from what it holds; tickets from tasks; no
-costs), and `live/overlay.ts` draws the goal, countdown, done count and who needs a human. `VisualSettings.live` makes
-the wall screens show done counts instead of spend and readiness. Build it with `npm run build:present` (or
-`npm run build:present` at the repo root) and commit the output in `public/`; the board server serves it as is.
+costs), and `live/overlay.ts` draws the goal, the deadline verdict (a copy of the board's `outlook()`, keep them in sync), countdown, done count and who needs a human. `VisualSettings.live` makes
+the wall screens show done counts instead of spend and readiness. Build it with `npm run build:present` (here or at
+the repo root) and commit the output in `public/`; the board server serves it as is, and CI fails if the committed
+files are out of date. The build is deterministic and clears `public/office/` first, so no old hashed files stay behind.
 
 ## Backend
 

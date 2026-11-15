@@ -1,7 +1,7 @@
 # Port plan: demo ideas into the real board
 
 Source: the UI/UX review of the `office/` demo (carry / leave-behind list) and a read of what
-`public/index.html` and the server already do. Written 2026-11-14.
+`public/index.html` and the server already do. Written 2026-11-14. Status: slices 1-8 below are all done (each has its own suite in `tests/ui/`), and the 3D presenter is done too.
 
 ## What the real board already has
 
@@ -18,12 +18,12 @@ Several "carry" items are already in the real board, often in better shape than 
 
 So the port is smaller than the carry list suggests. Don't rebuild these; extend them.
 
-## Slices, in order
+## Slices, in order (all done)
 
 Each slice is one commit, client-only unless it says otherwise, with a test in `tests/ui/` and
 existing ids/classes/text kept stable (tests assert on `#filter`, `.qcard`, `.card`, the clock wording).
 
-1. **Deadline verdict.** Biggest gap: the board shows a countdown but never says whether we'll make it.
+1. **Deadline verdict.** *Done* (`tests/ui/verdict.mjs`). Biggest gap: the board shows a countdown but never says whether we'll make it.
    - Compute on the client from data already in `/api/state`: open tasks by `size` × `stats.minutes`
      (median per size) ÷ busy-able agent slots from `presence`, against time to freeze from `time`.
    - Show "On track", "Tight" or "Behind by ~N tasks" in the clock pill, with the countdown as detail.
@@ -31,25 +31,25 @@ existing ids/classes/text kept stable (tests assert on `#filter`, `.qcard`, `.ca
    - When behind, add a "What to do now" item: "N P3 tasks probably won't make it", linking to them.
      No auto-cut: the human moves or deletes them.
    - Port the logic from `office/src/ui/attention.ts` `outlook()`, keeping the "cut at most half" cap.
-2. **More "needs you" signals** in `renderNow()`: agents at their usage limit (`limited`),
+2. **More "needs you" signals** *(done, `tests/ui/verdict.mjs`)* in `renderNow()`: agents at their usage limit (`limited`),
    review backlog (4+ in review), tasks rejected twice or more (count rejects from task history).
    Header badge click scrolls to the panel.
-3. **Task text filter + table view.** Search box next to `#filter` (title, id, assignee).
+3. **Task text filter + table view.** *Done (`tests/ui/tasks-view.mjs`).* Search box next to `#filter` (title, id, assignee).
    A "Columns | Table" toggle; the table is sortable by status, priority, size, assignee, age.
    Kanban stays the default; choice saved in `localStorage`.
-4. **Activity filters.** Add "Problems" (blocked, rejected, usage limit, conflicts) and
+4. **Activity filters.** *Done (`tests/ui/tasks-view.mjs`).* Add "Problems" (blocked, rejected, usage limit, conflicts) and
    "Merges and reviews" next to All / Chat / @me. Derived from `kind` + `data.status` on
    `task_updated` events; no server change.
-5. **Cancel in the task editor** (small server change). `board.cancelTask` exists but is MCP-only.
+5. **Cancel in the task editor** (small server change). *Done (`tests/ui/cancel.mjs`).* `board.cancelTask` exists but is MCP-only.
    Add a human-only `POST /api/tasks/:id/cancel {reason}` and a "Cancel task" button with a reason,
    distinct from Delete (cancel keeps history and notifies the assignee).
-6. **Theme switch + contrast.** Auto / Light / Dark via `html[data-theme]`, saved per browser.
+6. **Theme switch + contrast.** *Done (`tests/ui/palette-theme.mjs`).* Auto / Light / Dark via `html[data-theme]`, saved per browser.
    Run the demo's contrast check over both themes; everything 4.5:1 or better.
-7. **Tool colour dots.** Give `toolChip()` a fixed colour per known client
+7. **Tool colour dots.** *Done (`tests/ui/cancel.mjs`).* Give `toolChip()` a fixed colour per known client
    (Claude Code, Codex, Copilot, Gemini CLI, Cursor, other), using the demo's palette in
    `office/src/providers.ts`, including the day variants. A dot only, so it never competes with
    the per-person hue.
-8. **Ctrl+K palette.** Jump to task or person, new task, answer the oldest question, set the deadline,
+8. **Ctrl+K palette.** *Done (`tests/ui/palette-theme.mjs`).* Jump to task or person, new task, answer the oldest question, set the deadline,
    switch filter or view. Commands map to existing UI actions only. Keep the existing `N`, `?`, `/`
    shortcuts (all guarded while typing); add no new single-key ones.
 
@@ -61,12 +61,13 @@ existing ids/classes/text kept stable (tests assert on `#filter`, `.qcard`, `.ca
 - **Per-agent model, context gauge, skills.** Same problem: none of it is recorded.
   `model` could come from the agent at join time cheaply; context usage can't.
 - **Difficulty and skills on tasks.** Not in the schema. `size` already covers most of difficulty.
-- **3D office as a presenter screen.** Done: `present.html` is now the 3D office over `/api/state`
-  (built from `office/present.html` + `office/src/live/`), with the 2D page kept as `present-classic.html`.
+- **3D office as a presenter screen.** Done: `public/present.html` is the 3D office over `/api/state`
+  (built by `npm run build:present` from `office/present.html` + `office/src/live/`, committed, CI-checked), with the
+  2D page kept as `public/present-classic.html` for browsers without WebGL.
 
 ## Leave behind
 
 The demo control room (scenarios, sliders, sim clock, Restart/Reset), four palettes,
 floating draggable windows and minimised chips, single-key shortcuts beyond the existing three,
-the 3D office as a working view, the room-code invite (keep link + `/board`), 8–10 px uppercase
+the 3D office as a working view (it is only the read-only presenter), the room-code invite (keep link + `/board`), 8–10 px uppercase
 monospace body text, illustrative pricing.
