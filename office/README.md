@@ -8,6 +8,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # typecheck + production build
 npm run test:sim   # headless simulation invariants
+npm run build:present  # the board's Presenter view -> ../public/present.html + ../public/office/
 ```
 
 ## What you are looking at
@@ -98,6 +99,15 @@ Dev harnesses: `/src/scene/demo.html` (scene with `?fake=1`, `?palette=night`, `
 The scene renders at `canvas / pixelSize` into a low-res target, upscaled with nearest sampling, then Bayer-dithered
 and palette-quantised with depth outlines. The camera snaps to the texel grid so pixels don't crawl. Four palettes:
 dusk, day, night, terminal.
+
+## Presenter view (live board)
+
+`present.html` + `src/live/` drive the same scene from the real board instead of the simulator: `live/connection.ts`
+reads `/api/state` with the read-only viewer token (and reloads on the live stream), `live/adapter.ts` turns it into a
+`SimState` (one agent per online board agent, tool from its MCP client, pose from what it holds; tickets from tasks; no
+costs), and `live/overlay.ts` draws the goal, countdown, done count and who needs a human. `VisualSettings.live` makes
+the wall screens show done counts instead of spend and readiness. Build it with `npm run build:present` (or
+`npm run build:present` at the repo root) and commit the output in `public/`; the board server serves it as is.
 
 ## Backend
 

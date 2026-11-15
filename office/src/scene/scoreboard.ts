@@ -55,10 +55,44 @@ export class ScoreboardTV {
     ctx.fillStyle = col; ctx.fillRect(x + 1, y + 1, Math.round((w - 2) * Math.max(0, Math.min(1, v))), h - 2);
   }
 
-  private draw(s: SimState | null, t: number): void {
+  /** Real board data: the demo countdown and the done count only (no readiness, deploys or scope cuts). */
+  private drawLive(s: SimState, reduced: boolean): void {
+    const { ctx, tex } = this.c;
+    const hack = s.hack;
+    const merged = s.metrics?.merged ?? 0;
+    const total = s.tickets?.length ?? 0;
+    const stage = !hack.active ? '' : hack.stage === 'polish' ? 'FREEZE' : hack.stage === 'demo' ? 'DEMO' : 'BUILD';
+    ctx.fillStyle = '#262e4a'; ctx.fillRect(0, 0, W, 10);
+    ctx.fillStyle = '#d97757'; ctx.fillRect(0, 0, 3, 10);
+    drawText(ctx, 'DEMO', 6, 1, '#ffffff', 1);
+    if (stage) {
+      const sw = textWidth(stage) + 6;
+      ctx.fillStyle = STAGE_COL[hack.stage] ?? '#9aa4c0'; ctx.fillRect(W - sw - 2, 1, sw, 8);
+      drawText(ctx, stage, W - sw + 1, 2, '#10141f', 1);
+    }
+    if (!hack.active) drawTextCentered(ctx, 'NO DEMO TIME', W / 2, 26, '#9fb0e0', 1);
+    else {
+      const left = hack.endsAt - s.time;
+      const mins = left / 60;
+      const col = left <= 0 || mins <= 5 ? '#ff4a52' : mins <= 15 ? '#ffb23c' : '#7dff9a';
+      if ((left <= 0 || mins <= 5) && !reduced && this.beat % 2 === 0) { ctx.fillStyle = '#3a0c14'; ctx.fillRect(0, 10, W, 31); }
+      drawTextCentered(ctx, left <= 0 ? 'TIME' : 'DEMO IN', W / 2, 13, '#9fb0e0', 1);
+      const clock = left <= 0 ? '00:00' : fmtClock(left);
+      const sc = clock.length > 5 ? 2 : 3;
+      drawTextCentered(ctx, clock, W / 2, sc === 3 ? 22 : 25, col, sc);
+    }
+    drawText(ctx, 'DONE', 4, 50, '#9fb0e0', 1);
+    this.bar(30, 49, 66, 9, total ? merged / total : 0, '#5ad17a');
+    const n = merged + '/' + total;
+    drawText(ctx, n, W - 4 - textWidth(n), 50, '#ffffff', 1);
+    tex.needsUpdate = true;
+  }
+
+  private draw(s: SimState | null, t: number, live = false, reduced = false): void {
     const { ctx, tex } = this.c;
     ctx.fillStyle = '#0b0e1c'; ctx.fillRect(0, 0, W, H);
     const hack = s?.hack;
+    if (s && hack && live) { this.drawLive(s, reduced); return; }
     if (!s || !hack) { drawTextCentered(ctx, 'STANDBY', W / 2, 32, '#4a5278', 2); tex.needsUpdate = true; return; }
     const blink = this.beat % 2 === 0;
     const merged = s.metrics?.merged ?? 0;
@@ -142,8 +176,8 @@ export class ScoreboardTV {
     if (stageChanged || this.acc >= 0.5) {
       this.acc = 0; this.beat++;
       this.lastStage = stage;
-      this.draw(s, u.t);
-      if (stageChanged && stage === 'submitted') this.fx.confetti(TV_POS.x, TV_POS.y + 1.2, TV_POS.z + 0.5, 70, 2.4);
+      this.draw(s, u.t, !!u.live, u.reduced);
+      if (stageChanged && stage === 'submitted' && !u.live) this.fx.confetti(TV_POS.x, TV_POS.y + 1.2, TV_POS.z + 0.5, 70, 2.4);
     }
     if (stage === 'submitted' && !u.reduced) {
       this.confettiAcc += u.dt;

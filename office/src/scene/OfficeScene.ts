@@ -218,6 +218,8 @@ export class OfficeScene {
   }
 
   // ------------------------------------------------------------------ public API
+  /** False when WebGL could not start (the scene then shows a short message instead of the office). */
+  get usable(): boolean { return this.ok; }
   setVisual(v: VisualSettings): void { this.visual = { ...v }; if (this.ok) this.applyVisual(false); }
   selectAgent(id: string | null): void { this.selected = id; }
   onPick(cb: (id: string | null) => void): void { this.pickCb = cb; }
@@ -423,7 +425,7 @@ export class OfficeScene {
     this.skills.sync(state.skills);
     this.syncAgents(state, dt);
 
-    const su: StationUpdate = { state, t: this.time, dt, pal: this.pal, reduced: this.reduced };
+    const su: StationUpdate = { state, t: this.time, dt, pal: this.pal, reduced: this.reduced, live: !!this.visual.live };
     this.cubicles.update(state.agents, this.time, dt, this.pal, this.reduced);
     for (const s of this.stations) s.update(su);
     this.flights.update(state, dt, (ep, out, isFrom) => this.resolveEndpoint(ep, out, isFrom), this.visual.showLabels);

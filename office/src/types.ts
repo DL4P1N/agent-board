@@ -447,6 +447,9 @@ export interface VisualSettings {
   quality: 'low' | 'high';    // shadows on/off etc
   /** 0..1 camera framing. 0 = whole office, 1 = close on the selected agent (if any). */
   focus: number;
+  /** Real board data (the presenter view), not the simulator: wall screens show done counts instead of
+   *  simulated spend, budget, readiness and deploys, and ticket chips show their id instead of a cost. */
+  live?: boolean;
 }
 
 export const DEFAULT_VISUAL: VisualSettings = {

@@ -27,6 +27,7 @@ const CSS = `
 .ab-q{font-size:9px;line-height:9px;padding:0 3px;background:#ffd25a;color:#10141f;box-shadow:0 0 0 1px #000;font-weight:900;display:none;}
 .ab-more{font-size:9px;color:#d8d0f0;font-weight:600;border-top:1px dashed rgba(255,255,255,.2);margin-top:1px;padding-top:2px;display:flex;flex-direction:column;gap:1px;}
 .ab-cost{color:#ffd25a;}
+.ab-tier:empty,.ab-model:empty{display:none;}
 .ab-fl{position:absolute;left:0;top:0;will-change:transform;display:none;pointer-events:none;}
 .ab-fli{transform:translate(-50%,-100%);font-size:9px;line-height:10px;font-weight:800;padding:0 4px 1px;background:#10141f;color:#fff;border:1px solid var(--fc);box-shadow:0 0 0 1px #000,2px 2px 0 rgba(0,0,0,.45);white-space:nowrap;text-shadow:1px 1px 0 #000;}
 .ab-bub{max-width:190px;background:#fffbe8;color:#1c1830;border:2px solid #1c1830;padding:3px 6px;font-size:10px;line-height:12px;font-weight:700;white-space:normal;text-align:center;box-shadow:2px 2px 0 rgba(0,0,0,.4);position:relative;margin-bottom:3px;}

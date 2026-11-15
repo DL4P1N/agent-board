@@ -14,7 +14,7 @@ import type { ParticlePool } from './effects';
 
 export interface StationCtx { sh: Shared; fx: ParticlePool; tint: (m: THREE.MeshBasicMaterial) => void }
 
-export interface StationUpdate { state: SimState; t: number; dt: number; pal: Palette; reduced: boolean }
+export interface StationUpdate { state: SimState; t: number; dt: number; pal: Palette; reduced: boolean; live?: boolean }
 
 function signPlane(ctx: StationCtx, text: string, bg: string, fg: string, border: string, height: number, scale = 1): THREE.Mesh {
   const { tex, aspect } = makeSignTex(text, bg, fg, border, scale);
@@ -406,6 +406,7 @@ export class PlanBoard {
   private skills = new SkillIndex();
   private skillFn = this.skills.fn;
   private mat: THREE.MeshBasicMaterial;
+  private live = false;
   constructor(ctx: StationCtx) {
     const b = new BoxBuilder();
     const x = STATIONS.board.prop.x;
@@ -432,7 +433,9 @@ export class PlanBoard {
     ctx.fillStyle = '#d97757'; ctx.fillRect(0, 0, 8, 29); ctx.fillStyle = '#2dd4bf'; ctx.fillRect(8, 0, 4, 29);
     if (!s) { drawText(ctx, 'PLAN BOARD', 18, 8, '#ffffff', 2); tex.needsUpdate = true; return; }
     const name = (s.plan?.name ?? 'PLAN').toUpperCase();
-    drawText(ctx, name.length > 24 ? name.slice(0, 24) : name, 18, 4, '#ffffff', 2);
+    // live: the done count takes the right of the header, so the name gets what is left (12 px per letter at scale 2)
+    const maxName = this.live ? Math.max(4, Math.floor((W - 26 - 18 - textWidth('DONE ' + (s.metrics?.merged ?? 0) + '/' + s.tickets.length, 2)) / 12)) : 24;
+    drawText(ctx, name.length > maxName ? name.slice(0, maxName) : name, 18, 4, '#ffffff', 2);
     // note marquee
     const note = (s.plan?.note ?? '').toUpperCase();
     const avail = 240;
@@ -444,18 +447,23 @@ export class PlanBoard {
       drawText(ctx, note, 18 - off, 20, '#9fb0e0', 1); drawText(ctx, note, 18 - off + total, 20, '#9fb0e0', 1);
       ctx.restore();
     }
-    // spend + gauge
+    // spend + gauge (live board data: the done count instead; the board records no spend)
     const m = s.metrics;
-    const spend = 'SPEND ' + money(m?.totalCostUsd ?? 0);
-    drawText(ctx, spend, W - 8 - textWidth(spend, 1) - 0, 5, '#ffd25a', 1);
-    const pct = Math.max(0, Math.min(1, (m?.budgetUsedPct ?? 0) / 100));
-    const gx = W - 128, gy = 16;
-    ctx.fillStyle = '#10142a'; ctx.fillRect(gx, gy, 120, 8);
-    const gc = pct > 0.9 ? '#e5484d' : pct > 0.7 ? '#f08a3c' : '#5ad17a';
-    ctx.fillStyle = gc; ctx.fillRect(gx + 1, gy + 1, Math.max(0, Math.round(118 * pct)), 6);
-    ctx.fillStyle = '#ffffff'; for (let i = 1; i < 4; i++) ctx.fillRect(gx + i * 30, gy, 1, 2);
-    const bl = m && m.budgetUsedPct > 0 ? 'BUDGET ' + Math.round(m.budgetUsedPct) + '%' : 'NO BUDGET';
-    drawText(ctx, bl, gx, 26 - 1, '#7f8ab0', 1);
+    if (this.live) {
+      const done = 'DONE ' + (m?.merged ?? 0) + '/' + s.tickets.length;
+      drawText(ctx, done, W - 8 - textWidth(done, 2), 7, '#5ad17a', 2);
+    } else {
+      const spend = 'SPEND ' + money(m?.totalCostUsd ?? 0);
+      drawText(ctx, spend, W - 8 - textWidth(spend, 1) - 0, 5, '#ffd25a', 1);
+      const pct = Math.max(0, Math.min(1, (m?.budgetUsedPct ?? 0) / 100));
+      const gx = W - 128, gy = 16;
+      ctx.fillStyle = '#10142a'; ctx.fillRect(gx, gy, 120, 8);
+      const gc = pct > 0.9 ? '#e5484d' : pct > 0.7 ? '#f08a3c' : '#5ad17a';
+      ctx.fillStyle = gc; ctx.fillRect(gx + 1, gy + 1, Math.max(0, Math.round(118 * pct)), 6);
+      ctx.fillStyle = '#ffffff'; for (let i = 1; i < 4; i++) ctx.fillRect(gx + i * 30, gy, 1, 2);
+      const bl = m && m.budgetUsedPct > 0 ? 'BUDGET ' + Math.round(m.budgetUsedPct) + '%' : 'NO BUDGET';
+      drawText(ctx, bl, gx, 26 - 1, '#7f8ab0', 1);
+    }
     // columns
     const cw = 94, cols: Ticket[][] = [[], [], [], []];
     for (const tk of s.tickets) cols[colOf(tk)].push(tk);
@@ -465,7 +473,7 @@ export class PlanBoard {
       const cx = 2 + ci * (cw + 1);
       ctx.fillStyle = '#232b45'; ctx.fillRect(cx, 31, cw - 1, H - 32);
       ctx.fillStyle = COLS[ci].color; ctx.fillRect(cx, 31, cw - 1, 2);
-      drawText(ctx, COLS[ci].label, cx + 3, 36, COLS[ci].color, 1);
+      drawText(ctx, this.live && ci === 3 ? 'DONE' : COLS[ci].label, cx + 3, 36, COLS[ci].color, 1);
       const cnt = String(cols[ci].length);
       drawText(ctx, cnt, cx + cw - 4 - textWidth(cnt), 36, '#ffffff', 1);
       const list = cols[ci];
@@ -478,8 +486,8 @@ export class PlanBoard {
         ctx.fillStyle = col; ctx.fillRect(rx + 1, ry + 1, 42, 7);
         if (tk.status === 'changes_requested') { ctx.fillStyle = '#e5484d'; ctx.fillRect(rx, ry, 44, 1); ctx.fillRect(rx, ry + 8, 44, 1); }
         if (tk.status === 'in_progress') { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(rx + 1, ry + 6, Math.round(42 * (1 - (tk.progress ?? 0))), 2); }
-        const cost = moneyShort(tk.usage?.costUsd ?? 0);
-        drawText(ctx, cost, rx + 3, ry + 1, '#10141f', 1);
+        const cost = this.live ? tk.id : moneyShort(tk.usage?.costUsd ?? 0);
+        drawText(ctx, cost.length > 6 ? cost.slice(0, 6) : cost, rx + 3, ry + 1, '#10141f', 1);
         let dx = rx + 44 - 4;
         const sk = (tk.skills ?? []).slice(0, 3);
         for (let q = sk.length - 1; q >= 0; q--) {
@@ -499,7 +507,8 @@ export class PlanBoard {
     this.acc = 0;
     const s = u.state;
     this.skills.sync(s.skills);
-    let sig = this.skills.sig + (s.plan?.name ?? '') + '|' + (s.metrics?.totalCostUsd ?? 0).toFixed(2) + '|' + (s.metrics?.budgetUsedPct ?? 0).toFixed(2) + '|' + ((s.plan?.note ?? '').length > 40 ? Math.floor(u.t * 14) : s.plan?.note);
+    this.live = !!u.live;
+    let sig = (this.live ? 'L' : '') + this.skills.sig + (s.plan?.name ?? '') + '|' + (s.metrics?.totalCostUsd ?? 0).toFixed(2) + '|' + (s.metrics?.budgetUsedPct ?? 0).toFixed(2) + '|' + ((s.plan?.note ?? '').length > 40 ? Math.floor(u.t * 14) : s.plan?.note);
     for (const t of s.tickets) sig += t.id + t.status + (t.usage?.costUsd ?? 0).toFixed(1) + Math.round((t.progress ?? 0) * 8);
     if (sig === this.sig) return;
     this.sig = sig;
