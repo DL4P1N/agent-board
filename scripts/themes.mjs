@@ -7,7 +7,8 @@
 // This script writes the generated blocks into the pages that carry theme tokens, between "themes:start" and
 // "themes:end" markers (CSS and JS), plus office/src/themes.ts:
 //   node scripts/themes.mjs           rewrite them
-//   node scripts/themes.mjs --check   exit 1 when a page is out of date or a base text colour is under 4.5:1
+//   node scripts/themes.mjs --check   exit 1 when a page is out of date, a base text colour is under 4.5:1
+//                                     or an accent is within 30 degrees of hue of its theme's warn or bad
 // The 3D room's palettes (office/src/scene/palettes.ts) are hand-made per theme, with the same ids.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,17 +25,17 @@ export const BASE = {
   day: { name: 'Day', light: true },
   night: { name: 'Night' },
   terminal: { name: 'Terminal' },
-  contrast: { name: 'High Contrast', bg: '#000000', panel: '#0b0b0b', border: '#ffffff', text: '#ffffff', muted: '#d6d6d6', accent: '#ffe600', accentInk: '#000000', ok: '#5cff9d', warn: '#ffe600', bad: '#ff7a7a', info: '#7cd0ff',
+  contrast: { name: 'High Contrast', bg: '#000000', panel: '#0b0b0b', border: '#ffffff', text: '#ffffff', muted: '#d6d6d6', accent: '#ff70ff', accentInk: '#000000', ok: '#5cff9d', warn: '#ffe600', bad: '#ff7a7a', info: '#7cd0ff',
     // Lines as strong as the borders, and Review apart from both In progress and Done.
     over: { line: '#8a8a8a', 'line-strong': '#bdbdbd', 'field-line': '#ffffff', review: '#e0a8ff' } },
   paper: { name: 'Paper', light: true, bg: '#e9e4d8', panel: '#faf8f2', border: '#7d7464', text: '#1d1b18', muted: '#5a5448', accent: '#1d4ea3', accentInk: '#ffffff', ok: '#1b6a33', warn: '#7f5600', bad: '#ac2c26', info: '#0b6378' },
-  synthwave: { name: 'Synthwave', bg: '#130824', panel: '#1e0e37', border: '#8a3fd1', text: '#fbeeff', muted: '#c0a3e0', accent: '#ff4fa8', accentInk: '#22001a', ok: '#4dffc6', warn: '#ffd45e', bad: '#ff6680', info: '#52dcff' },
-  ocean: { name: 'Ocean', bg: '#04161f', panel: '#0a2230', border: '#1f5a73', text: '#e2f4f8', muted: '#94bccb', accent: '#ff8a65', accentInk: '#2a0d00', ok: '#5fe0b5', warn: '#ffd166', bad: '#ff7b8a', info: '#6fd3ff' },
-  sticky: { name: 'Sticky Note', light: true, bg: '#ffe066', panel: '#fff7cc', border: '#c29012', text: '#2b1d05', muted: '#563f0c', accent: '#a23500', accentInk: '#ffffff', ok: '#195c26', warn: '#683e00', bad: '#981226', info: '#0d4d8c' },
-  coral: { name: 'Coral', light: true, bg: '#ffd3c2', panel: '#fff3ee', border: '#c25a3c', text: '#2e0f08', muted: '#6a3324', accent: '#b3261e', accentInk: '#ffffff', ok: '#1b6430', warn: '#6e4300', bad: '#8f0f2a', info: '#124f8a' },
-  candy: { name: 'Cotton Candy', light: true, accentSoft: 0.06, bg: '#e4efff', panel: '#fff4fa', border: '#8f78c9', text: '#2a1640', muted: '#5e4a7e', accent: '#c4127a', accentInk: '#ffffff', ok: '#126b3a', warn: '#865000', bad: '#b0122e', info: '#1a5bc0' },
-  sunset: { name: 'Sunset', bg: '#1c0d14', panel: '#28131d', border: '#8a3b52', text: '#ffeee8', muted: '#d4a7ac', accent: '#ff9e45', accentInk: '#2a1000', ok: '#8fe0a0', warn: '#ffd166', bad: '#ff7d8c', info: '#80c8ff' },
-  forest: { name: 'Forest', bg: '#0e1912', panel: '#15251a', border: '#43734b', text: '#e8f1e3', muted: '#a2baa0', accent: '#f2b84b', accentInk: '#241600', ok: '#8edb8a', warn: '#f2b84b', bad: '#ff8070', info: '#7cc9e3' },
+  synthwave: { name: 'Synthwave', bg: '#130824', panel: '#1e0e37', border: '#8a3fd1', text: '#fbeeff', muted: '#c0a3e0', accent: '#ff4fa8', accentInk: '#22001a', ok: '#4dffc6', warn: '#ffd45e', bad: '#ff6b5b', info: '#52dcff' },
+  ocean: { name: 'Ocean', bg: '#04161f', panel: '#0a2230', border: '#1f5a73', text: '#e2f4f8', muted: '#94bccb', accent: '#ff8a65', accentInk: '#2a0d00', ok: '#5fe0b5', warn: '#ffe066', bad: '#ff7aa2', info: '#6fd3ff' },
+  sticky: { name: 'Sticky Note', light: true, bg: '#ffe066', panel: '#fff7cc', border: '#c29012', text: '#2b1d05', muted: '#563f0c', accent: '#6b2bb5', accentInk: '#ffffff', ok: '#195c26', warn: '#683e00', bad: '#981226', info: '#0d4d8c' },
+  coral: { name: 'Coral', light: true, bg: '#ffd3c2', panel: '#fff3ee', border: '#c25a3c', text: '#2e0f08', muted: '#6a3324', accent: '#6a32c9', accentInk: '#ffffff', ok: '#1b6430', warn: '#6e4300', bad: '#8f0f2a', info: '#124f8a' },
+  candy: { name: 'Cotton Candy', light: true, accentSoft: 0.06, bg: '#e4efff', panel: '#fff4fa', border: '#8f78c9', text: '#2a1640', muted: '#5e4a7e', accent: '#c4127a', accentInk: '#ffffff', ok: '#126b3a', warn: '#865000', bad: '#b3261a', info: '#1a5bc0' },
+  sunset: { name: 'Sunset', bg: '#1c0d14', panel: '#28131d', border: '#8a3b52', text: '#ffeee8', muted: '#d4a7ac', accent: '#ff80d0', accentInk: '#2a1000', ok: '#8fe0a0', warn: '#ffd166', bad: '#ff7d8c', info: '#80c8ff' },
+  forest: { name: 'Forest', bg: '#0e1912', panel: '#15251a', border: '#43734b', text: '#e8f1e3', muted: '#a2baa0', accent: '#c9a7ff', accentInk: '#241600', ok: '#8edb8a', warn: '#f2b84b', bad: '#ff8070', info: '#7cc9e3' },
 };
 export const IDS = Object.keys(BASE);
 export const AUTO = { dark: 'dark', light: 'light' }; // what Auto shows on a dark / light OS
@@ -47,10 +48,10 @@ const FIXED = {
     bg: '#1b1530', sunken: '#201939', panel: '#241c40', raised: '#2b2249', chip: '#342a5a', field: '#130e24',
     ink: '#f1e9ff', muted: '#b0a2d2', line: '#44386c', 'line-strong': '#67589a', 'field-line': '#8e7fc6',
     border: '#5b4b8a', outline: '#0d0a1a', hi: 'rgba(255, 255, 255, .12)', lo: 'rgba(0, 0, 0, .35)',
-    accent: '#ffb86b', 'accent-hover': '#ffc98c', 'accent-ink': '#2a1600', 'accent-soft': '#46344a', 'accent-line': '#9b7252',
+    accent: '#ff9466', 'accent-hover': '#ffab88', 'accent-ink': '#2a1600', 'accent-soft': '#46344a', 'accent-line': '#9b6652',
     info: '#6ec1ff', review: '#5fd8c8',
-    ok: '#7ee081', warn: '#ffc857', 'warn-soft': '#3f3343', 'warn-line': '#8d7240', stale: '#2f2540',
-    bad: '#ff6b7a', 'bad-hover': '#ff8a96', 'bad-soft': '#432647', 'bad-line': '#93405a',
+    ok: '#7ee081', warn: '#ffe15c', 'warn-soft': '#3f3343', 'warn-line': '#8d7f40', stale: '#2f2540',
+    bad: '#ff6b9a', 'bad-hover': '#ff8a96', 'bad-soft': '#432647', 'bad-line': '#93405a',
     mention: '#403545', 'mention-line': '#b39642', 'on-fill': '#1b1530',
     toast: '#2b2249', 'toast-ink': '#f1e9ff', scrim: 'rgba(8, 5, 18, .72)',
     pl: '74%', ps: '70%', dl: '62%', shade: '2px 2px 0 rgba(0, 0, 0, .35)', 'ok-soft': '#2b3a45' },
@@ -60,7 +61,7 @@ const FIXED = {
     border: '#7a5f3d', outline: '#3a2a14', hi: 'rgba(255, 255, 255, .7)', lo: 'rgba(80, 50, 10, .16)',
     accent: '#9a4a14', 'accent-hover': '#823d0f', 'accent-ink': '#fff7e8', 'accent-soft': '#f7e2cb', 'accent-line': '#d29f75',
     info: '#135fa8', review: '#0b6b6e',
-    ok: '#1a6e2d', warn: '#845407', 'warn-soft': '#f8e8c6', 'warn-line': '#d3ab5e', stale: '#fbefd8',
+    ok: '#1a6e2d', warn: '#686000', 'warn-soft': '#f8e8c6', 'warn-line': '#d3ab5e', stale: '#fbefd8',
     bad: '#b42335', 'bad-hover': '#991c2c', 'bad-soft': '#f9e0dc', 'bad-line': '#e2a3a3',
     mention: '#fbecb8', 'mention-line': '#c49f35', 'on-fill': '#fff7e8',
     toast: '#fff7e8', 'toast-ink': '#2c2114', scrim: 'rgba(58, 42, 20, .45)',
@@ -69,10 +70,10 @@ const FIXED = {
     bg: '#080c1a', sunken: '#0b1122', panel: '#0f1730', raised: '#152040', chip: '#1c2a50', field: '#060a16',
     ink: '#dce7ff', muted: '#9aaad6', line: '#26365f', 'line-strong': '#3d5290', 'field-line': '#6a80c0',
     border: '#31457f', outline: '#02040c', hi: 'rgba(160, 190, 255, .14)', lo: 'rgba(0, 0, 0, .45)',
-    accent: '#ffb86b', 'accent-hover': '#ffc98c', 'accent-ink': '#2a1600', 'accent-soft': '#3a2c34', 'accent-line': '#9b7252',
+    accent: '#ff9466', 'accent-hover': '#ffab88', 'accent-ink': '#2a1600', 'accent-soft': '#3a2c34', 'accent-line': '#9b6652',
     info: '#5cd6f0', review: '#c4a0ff',
-    ok: '#5fe3a1', warn: '#f2c14e', 'warn-soft': '#2a2838', 'warn-line': '#7d6a35', stale: '#141d38',
-    bad: '#ff7a90', 'bad-hover': '#ff97a8', 'bad-soft': '#341c38', 'bad-line': '#8a3a55',
+    ok: '#5fe3a1', warn: '#f0dc50', 'warn-soft': '#2a2838', 'warn-line': '#7d7535', stale: '#141d38',
+    bad: '#ff7aa6', 'bad-hover': '#ff97a8', 'bad-soft': '#341c38', 'bad-line': '#8a3a55',
     mention: '#2c2c45', 'mention-line': '#a8913f', 'on-fill': '#080c1a',
     toast: '#152040', 'toast-ink': '#dce7ff', scrim: 'rgba(2, 4, 12, .75)',
     pl: '76%', ps: '70%', dl: '62%', shade: '2px 2px 0 rgba(0, 0, 0, .45)', 'ok-soft': '#133238' },
@@ -282,6 +283,20 @@ export function contrastProblems() {
   return out;
 }
 
+// ---- the accent stays apart from the status colours ----
+// The accent means "needs you"; warn (amber) and bad (red) mean a state. Within 30 degrees of hue they read as the same
+// thing, so every theme keeps its accent at least that far from both.
+const hue = (h) => { const [r, g, b] = hex(h).map((v) => v / 255); const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b); if (!d) return 0;
+  const x = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; return (x * 60 + 360) % 360; };
+const hueGap = (a, b) => { const x = Math.abs(hue(a) - hue(b)); return Math.min(x, 360 - x); };
+export const ACCENT_GAP = 30;
+/** Themes whose accent is within ACCENT_GAP degrees of hue of their warn or bad colour. */
+export function accentClashes() {
+  const out = [];
+  for (const id of IDS) for (const k of ['warn', 'bad']) { const g = hueGap(TOKENS[id].accent, TOKENS[id][k]); if (g < ACCENT_GAP) out.push(`${id}: --accent ${Math.round(g)} deg from --${k}`); }
+  return out;
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const check = process.argv.includes('--check');
   const stale = [];
@@ -292,7 +307,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   }
   const low = contrastProblems();
   if (low.length) console.log('Contrast under the minimum:\n  ' + low.join('\n  '));
+  const clash = accentClashes();
+  if (clash.length) console.log(`Accent within ${ACCENT_GAP} degrees of hue of a status colour:\n  ` + clash.join('\n  '));
   if (check && stale.length) console.log(`Out of date (run node scripts/themes.mjs): ${stale.join(', ')}`);
   else if (!check) console.log('Theme blocks written.');
-  if (low.length || stale.length) process.exitCode = 1;
+  if (low.length || clash.length || stale.length) process.exitCode = 1;
 }

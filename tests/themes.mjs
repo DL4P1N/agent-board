@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './helpers.mjs';
-import { build, contrastProblems, IDS, BASE, TOKENS } from '../scripts/themes.mjs';
+import { build, contrastProblems, accentClashes, IDS, BASE, TOKENS } from '../scripts/themes.mjs';
 
 const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
@@ -17,6 +17,8 @@ check('light themes: Light, Day, Paper, Sticky Note, Coral, Cotton Candy', IDS.f
 check('Dusk, Day, Night and Terminal keep their board colours', TOKENS.dusk.bg === '#1b1530' && TOKENS.day.bg === '#efe4cf' && TOKENS.night.bg === '#080c1a' && TOKENS.terminal.bg === '#020a04' && TOKENS.day.accent === '#9a4a14');
 const low = contrastProblems();
 check('every base text colour >= 4.5:1 on the surfaces it sits on, field borders >= 3:1, in every theme', !low.length, low.join('; '));
+const clash = accentClashes();
+check('every accent at least 30 degrees of hue from its theme warn and bad colours', !clash.length, clash.join('; '));
 const pal = fs.readFileSync(path.join(ROOT, 'office/src/scene/palettes.ts'), 'utf8');
 const rooms = IDS.filter((t) => !new RegExp(`^  ${t}: \\{`, 'm').test(pal));
 check('each theme has its own room palette in the 3D office', !rooms.length, rooms.join());
