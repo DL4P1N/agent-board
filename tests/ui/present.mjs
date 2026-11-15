@@ -1,4 +1,5 @@
-// Presenter view (public/present.html): the read-only big-screen page for the room or the demo.
+// Classic presenter (public/present-classic.html): the simple read-only big-screen page. The 3D office presenter
+// (public/present.html, tests/ui/office-present.mjs) falls back to it without WebGL and links to it as "Simple view".
 // Starts its own throwaway board. Run all suites with: npm test
 import path from 'node:path';
 import { startBoard, launchBrowser, shotsDir, finish, agent, rest, TOKEN } from '../helpers.mjs';
@@ -35,7 +36,7 @@ const page = await browser.newPage();
 const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 const out = shotsDir('present');
 try {
-  await page.goto(`${board.base}/present.html?token=${encodeURIComponent(VIEW)}`);
+  await page.goto(`${board.base}/present-classic.html?token=${encodeURIComponent(VIEW)}`);
   await page.waitForFunction(() => /Leaderboard|Vote API|voting app/i.test(document.body.innerText), { timeout: 8000 });
   const txt = await page.evaluate(() => document.body.innerText);
   check('goal shown large, as text (no HTML injected)', await page.$eval('h1.goal', (h) => h.textContent.includes('<b>live</b>') && !h.querySelector('b')));
@@ -101,7 +102,7 @@ try {
   // Without a token: a clear message, no errors.
   const p2 = await browser.newPage(); const e2 = []; p2.on('pageerror', (e) => e2.push(e.message));
   await p2.evaluateOnNewDocument(() => { try { localStorage.clear(); } catch {} });
-  await p2.goto(`${board.base}/present.html`); await sleep(400);
+  await p2.goto(`${board.base}/present-classic.html`); await sleep(400);
   check('no token: explains how to open it', /Presenter view/.test(await p2.evaluate(() => document.body.innerText)) && !e2.length, e2.join('; '));
   // The main board's "Presenter view" link uses the viewer token.
   const mp = await browser.newPage();
@@ -113,7 +114,7 @@ try {
   await mp.close();
   // A rejected token: the page says the link expired.
   const p3 = await browser.newPage(); const e3 = []; p3.on('pageerror', (e) => e3.push(e.message));
-  await p3.goto(`${board.base}/present.html?token=nope`);
+  await p3.goto(`${board.base}/present-classic.html?token=nope`);
   const exp = await p3.waitForFunction(() => /presenter link has expired/.test(document.body.innerText), { timeout: 8000 }).then(() => true).catch(() => false);
   check('a rejected token: "This presenter link has expired"', exp && !e3.length, e3.join('; '));
   check('no page errors', !errors.length, errors.join('; '));

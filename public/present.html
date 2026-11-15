@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- Presenter view: the 3D office over the live board. Built into public/present.html by `npm run build:present`
+     (office/vite.present.config.ts); edit this file and office/src/live/, not the built copy. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Board presenter</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%233d5afe'/><rect x='3' y='4' width='3' height='8' fill='white'/><rect x='7' y='4' width='3' height='5' fill='white'/><rect x='11' y='4' width='2' height='6' fill='white'/></svg>">
+<meta name="description" content="Read-only big-screen view of the team board: the 3D office with the live goal, countdown and progress">
+<script>
+// Before anything loads: the board's theme choice (Auto / Light / Dark, per browser), and no WebGL means the
+// simple 2D presenter instead (it reads the same viewer token; the address keeps it if it came with one).
+(function () {
+  try { var t = localStorage.getItem('board-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  var ok = false;
+  try {
+    var c = document.createElement('canvas');
+    var gl = window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl'));
+    ok = !!gl;
+    var lose = gl && gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext();
+  } catch (e) {}
+  if (!ok) { document.documentElement.setAttribute('data-scene', 'failed'); location.replace('present-classic.html' + location.search); }
+})();
+</script>
+<style>html, body { margin: 0; background: #cfe3f2; } @media (prefers-color-scheme: dark) { html:not([data-theme="light"]), html:not([data-theme="light"]) body { background: #1b1530; } } html[data-theme="dark"], html[data-theme="dark"] body { background: #1b1530; }</style>
+  <script type="module" crossorigin src="./office/present-gVvLSOX3.js"></script>
+  <link rel="stylesheet" crossorigin href="./office/present-DIq-QwYw.css">
+</head>
+<body>
+<div id="live" class="has-msg">
+  <header id="top"></header>
+  <main id="scene" aria-label="The team's agents in a 3D office: one character per online agent"></main>
+  <footer id="bottom"></footer>
+  <div id="msg" role="status" aria-live="polite"><p>Loading the board…</p></div>
+</div>
+<noscript>The presenter view needs JavaScript. Open <a href="present-classic.html">the simple view</a>.</noscript>
+</body>
+</html>

@@ -59,7 +59,7 @@ try {
   check('every hue in the palette is at least 20° from the next', await page.evaluate(() => HUES.every((h, i) => i === 0 || h - HUES[i - 1] >= 20)));
   const pv = await browser.newPage();
   await pv.evaluateOnNewDocument((t) => { try { localStorage.setItem('board-token', t); } catch {} }, board.token);
-  await pv.goto(board.base + '/present.html');
+  await pv.goto(board.base + '/present-classic.html');
   await sleep(500);
   const pres = await pv.evaluate(() => (typeof hue === 'function' ? ['hostp', 'emil-claude', 'ana'].map((n) => hue(n)) : null)).catch(() => null);
   const main = await page.evaluate(() => ['hostp', 'emil-claude', 'ana'].map((n) => hue(n)));

@@ -2,7 +2,7 @@
 
 Lets a team work on one project with a mix of AI coding agents: **Claude Code, Codex (ChatGPT), GitHub Copilot, Gemini CLI and Cursor**. Each laptop's agent takes tasks from a shared board, builds them on its own git branch, and coordinates with the others. You watch and steer from a web page.
 
-> **3D office (work in progress).** [`office/`](office/) holds a separate frontend demo, the *Agent Board* pixel office: a fully simulated 3D room where agents work tickets, plus a backend plan ([office/docs/BACKEND_PLAN.md](office/docs/BACKEND_PLAN.md)). It is self-contained and not yet connected to this board. Run it with `cd office && npm install && npm run dev`.
+> **3D office (work in progress).** [`office/`](office/) holds a separate frontend demo, the *Agent Board* pixel office: a fully simulated 3D room where agents work tickets, plus a backend plan ([office/docs/BACKEND_PLAN.md](office/docs/BACKEND_PLAN.md)). The board's **Presenter view** now uses its 3D room, driven by the live board (see *On a big screen*); the rest of the demo is still simulated. Run it with `cd office && npm install && npm run dev`.
 
 ## Quick start
 
@@ -101,7 +101,7 @@ Keep the web board open. The line at the top always says the one thing that need
 
 **Set the demo time** in *Start here*. The board counts down, and a **feature freeze** starts 60 minutes before the demo (you can change that). 30 minutes before the freeze, and again when it starts (also when it starts at the demo time itself), the board tells every agent. During the freeze agents can't claim new tasks; they finish, merge and fix bugs instead. At the demo time the board posts a "Demo time" message to everyone. Like any post, it wakes agents that are waiting, and tells them to push and merge what's finished, release the rest with a note and post a short status. A demo time in the past is refused.
 
-**On a big screen**, open the **Presenter view** (header link, `/present.html`): goal, countdown, progress (with a *Claimed* count next to Open, In progress, Blocked, Review and Done), who's working on what and the latest merges. An hour after the demo it shows *Event finished* with the final count. Its link carries a read-only viewer token: it can't change anything or see the join commands, so it's safe on a shared screen. Rotating the board token also changes it.
+**On a big screen**, open the **Presenter view** (header link, `/present.html`): the 3D pixel office from [`office/`](office/), with one character per online agent at its own desk, in its tool's colour, typing, reviewing, stuck or raising a hand for a question, and paper planes when tasks go to review or get done. Around it: the goal, the deadline verdict and countdown, *x of y done*, questions waiting and who's stuck. It follows the board's light/dark choice and reduced motion. Without WebGL it opens the simple 2D page (`/present-classic.html`, also linked as *Simple view*): goal, countdown, progress (with a *Claimed* count next to Open, In progress, Blocked, Review and Done), who's working on what and the latest merges. An hour after the demo both show *Event finished* with the final count. The 3D page is built into `public/` and committed, so the server needs no build step; after changing `office/present.html` or `office/src/`, run `npm run build:present`. Its link carries a read-only viewer token: it can't change anything or see the join commands, so it's safe on a shared screen. Rotating the board token also changes it.
 
 **A link leaked?** *Rotate token* in *Start here* step 1 makes a new one (old links and agent configs stop working at once); everyone then re-runs the join command. An old token gets a 401 with `reason: "token_rotated"`, so the web board, join and doctor say the token was changed instead of just "bad token". A token set with `BOARD_TOKEN` can't be rotated there.
 
@@ -250,7 +250,8 @@ Each suite starts its own throwaway board on a free port with an empty data fold
 | `tests/ops.mjs` | Webhook notifications (Slack, Discord, ntfy, generic), backups and `npm run restore`, token rotation. |
 | `tests/agents.mjs` | Usage limits reported by agents (tool, REST, and the Stop hook reading a transcript), planning stats. |
 | `tests/join-tools.mjs` | Join for Gemini CLI and Cursor in a sandboxed home: config files, backups, re-runs, doctor. |
-| `tests/ui/present.mjs` | The presenter view. |
+| `tests/ui/present.mjs` | The classic (2D) presenter view. |
+| `tests/ui/office-present.mjs` | The 3D presenter view: live overlay and adapted office state, live updates, themes, reduced motion, the WebGL fallback. |
 | `tests/boards.mjs` | Several boards on one server: separate data and tokens, `/b/<board>/` links, the admin API, archive/restore/default/delete, `npm run boards`. |
 | `tests/ui/boards.mjs` | The Boards page and a board served under `/b/<board>/` in a real browser. |
 | `tests/join-boards.mjs` | Join, doctor, the Stop hook and restore against a board that isn't the default. |

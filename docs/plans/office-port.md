@@ -61,8 +61,8 @@ existing ids/classes/text kept stable (tests assert on `#filter`, `.qcard`, `.ca
 - **Per-agent model, context gauge, skills.** Same problem: none of it is recorded.
   `model` could come from the agent at join time cheaply; context usage can't.
 - **Difficulty and skills on tasks.** Not in the schema. `size` already covers most of difficulty.
-- **3D office as a presenter screen.** It could replace or sit beside `present.html` as
-  a read-only ambient view over `/api/state`. A separate project; not part of this port.
+- **3D office as a presenter screen.** Done: `present.html` is now the 3D office over `/api/state`
+  (built from `office/present.html` + `office/src/live/`), with the 2D page kept as `present-classic.html`.
 
 ## Leave behind
 

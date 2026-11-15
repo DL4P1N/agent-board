@@ -18,7 +18,8 @@
     "rehearse": "node scripts/rehearse.mjs",
     "restore": "node scripts/restore.mjs",
     "pretest": "node scripts/ensure-deps.mjs --dev",
-    "test": "node tests/run.mjs"
+    "test": "node tests/run.mjs",
+    "build:present": "npm --prefix office install --no-audit --no-fund && npm --prefix office run build:present"
   },
   "type": "module",
   "dependencies": {

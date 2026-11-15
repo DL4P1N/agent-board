@@ -7,8 +7,13 @@
 <title>Board presenter</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%233d5afe'/><rect x='3' y='4' width='3' height='8' fill='white'/><rect x='7' y='4' width='3' height='5' fill='white'/><rect x='11' y='4' width='2' height='6' fill='white'/></svg>">
 <meta name="description" content="Read-only big-screen view of the team board for the room or the demo">
+<script>
+// The board's theme choice (Auto / Light / Dark, per browser), like the board and the 3D presenter.
+try { const t = localStorage.getItem('board-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+</script>
 <style>
-  /* Presenter view: the board's design system (see public/index.html), set large for a screen across the room.
+  /* Classic presenter view (the simple 2D page): public/present.html (the 3D office) opens it when WebGL is missing,
+     and links to it as "Simple view". The board's design system (see public/index.html), set large for a screen across the room.
      Same colours, radius, status colours and motion; the type scale is fluid, from a phone to a projector. */
   :root {
     color-scheme: light;
@@ -145,7 +150,7 @@ async function load() {
       if (r.status === 410) return showMsg('This board is archived. The presenter view comes back by itself when the host restores it.');
       if (r.status === 503) return showMsg(`This board couldn't open: ${esc(body.error || 'unknown error')}. Checking again by itself.`);
       const to = String(body.moved_to || '').replace(/\/+$/, '');
-      const url = new URL(to + '/present.html', location.origin); url.searchParams.set('token', token);
+      const url = new URL(to + '/present-classic.html', location.origin); url.searchParams.set('token', token);
       return showMsg(`This board moved to its own address. <a href="${esc(url.href)}">Open the presenter view there</a>.`);
     }
     if (!r.ok) throw new Error(r.statusText);
