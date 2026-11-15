@@ -81,6 +81,8 @@ addEventListener('storage', (e) => {
   meta('m-tc-light', 'content', THEMES[t && lt ? t : AUTO_THEME.light].bg);
   meta('m-tc-dark', 'media', t === null ? '(prefers-color-scheme: dark)' : lt ? 'not all' : 'all');
   meta('m-tc-dark', 'content', THEMES[t && !lt ? t : AUTO_THEME.dark].bg);
+  // The favicon too (present.html's pre-paint script defines themeIcon; Auto's icon follows the OS by itself).
+  (window as unknown as { themeIcon?: (t: string) => void }).themeIcon?.(t ?? 'auto');
   themeChanged();
 });
 // Keep the MediaQueryList: a temporary one can be garbage-collected and take its listener with it.
