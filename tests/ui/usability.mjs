@@ -41,9 +41,9 @@ try {
   await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 5000 });
   await sleep(300);
   check('A empty: phase track leads with Connect, same as what-to-do', await page.$eval('.phases .cur', (e) => e.textContent) === 'Connect' && /Connect your first laptop/.test(await txt(page, '#now')), await txt(page, '#now'));
-  check('A header has Copy board link', await page.$eval('#link-btn', (b) => b.getAttribute('aria-label')) === 'Copy board link');
-  await page.click('#link-btn'); await sleep(200);
-  check('A copy board link gives feedback', /Board link copied/.test(await txt(page, '#toasts')));
+  check('A step 1 has the board link with Copy', !!(await page.$('#step-invite [data-fk="cp-web"]')));
+  await page.click('#step-invite [data-fk="cp-web"]'); await sleep(200);
+  check('A copy board link gives feedback', /Copied/.test(await txt(page, '#toasts')));
   check('A step 1 offers Copy invite message', !!(await page.$('#step-invite [data-act="copy-invite"]')));
   await scheme(page, 'light'); await sleep(150); await page.screenshot({ path: `${out}/r-empty-light.png` });
   await scheme(page, 'dark'); await sleep(150); await page.screenshot({ path: `${out}/r-empty-dark.png` });
@@ -55,7 +55,7 @@ try {
   const erin = await agent('erin', 'claude-code');
   await reload(page); await sleep(300);
   const inv = await page.$eval('#step-invite', (e) => ({ done: e.classList.contains('done'), t: e.innerText.replace(/\s+/g, ' ') }));
-  check('A step 1 never shows as done; says "invite more"', !inv.done && /1 laptop connected · invite more/.test(inv.t), inv.t.slice(0, 120));
+  check('A step 1 ticks once a laptop is connected; still says "invite more"', inv.done && /1 laptop connected · invite more/.test(inv.t), inv.t.slice(0, 120));
   check('A step 3 not done while agent only connected', await page.$eval('#step-start', (e) => !e.classList.contains('done') && /connected, not started/.test(e.innerText)));
   await openStep(page, 'invite');
   check('A chip says connected · not started — type /board', /erin.*connected · not started — type \/board/.test(await txt(page, '#step-invite .chips')), await txt(page, '#step-invite .chips'));
@@ -127,7 +127,7 @@ try {
   await page.evaluate(() => { localStorage.removeItem('board-setup'); ui.forceSetup = false; ui.steps = {}; });
   await reload(page); await sleep(400);
   check('A collapsed Setup button names what is left', (await txt(page, '[data-act="setup-open"]')) === 'Setup: pick merger', await txt(page, '[data-act="setup-open"]'));
-  check('A top bar: "Connect a laptop" + repo', /Connect a laptop/.test(await txt(page, '#topbar')) && /https:\/\/github.com\/team\/vote-app/.test(await page.$eval('#topbar .repo-s', (e) => e.textContent + e.title)), await txt(page, '#topbar'));
+  check('A top bar: "Setup" + repo', /Setup/.test(await txt(page, '#topbar')) && /https:\/\/github.com\/team\/vote-app/.test(await page.$eval('#topbar .repo-s', (e) => e.textContent + e.title)), await txt(page, '#topbar'));
   // One task for two idle agents: the low-priority offer asks for more tasks first...
   check('A All good + "2 agents are idle: add tasks…"', /All good/.test(await txt(page, '#now .na')) && /2 agents are idle: add tasks or ask the planner for more/.test(await txt(page, '#now .na2')), await txt(page, '#now'));
   // ...and once there is enough work, it suggests picking a merger.
