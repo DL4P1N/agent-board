@@ -443,6 +443,24 @@
   .tabs { display: flex; gap: var(--s1); margin-left: auto; padding: var(--s1); background: var(--chip); border-radius: var(--r-md); }
   .tabs button { font-size: var(--fs-meta); padding: 0 10px; min-height: var(--ctl-xs); background: transparent; color: var(--muted); border: 0; border-radius: var(--r-sm); }
   .tabs button:hover { background: transparent; color: var(--ink); }
+  .tabs { flex-wrap: wrap; justify-content: flex-end; }
+  .taskbar { display: flex; gap: var(--s4); align-items: center; flex-wrap: wrap; margin-bottom: var(--s3); }
+  .taskbar .tabs { margin-left: auto; }
+  .tsearch { flex: 1 1 200px; max-width: 360px; margin: 0; }
+  .tsearch input { width: 100%; }
+  .board[hidden], .ttable[hidden], .taskbar[hidden] { display: none; }
+  .ttable { overflow-x: auto; max-width: 100%; border: 1px solid var(--line); border-radius: var(--r-md); }
+  .ttable table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: var(--fs-sm); }
+  .ttable th, .ttable td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .ttable th { font-weight: 600; color: var(--muted); white-space: nowrap; }
+  .ttable th button { background: transparent; border: 0; padding: 0; min-height: 0; font: inherit; color: inherit; cursor: pointer; }
+  .ttable th[aria-sort="ascending"] button::after { content: " \25B2"; font-size: .8em; }
+  .ttable th[aria-sort="descending"] button::after { content: " \25BC"; font-size: .8em; }
+  .ttable tbody tr { cursor: pointer; }
+  .ttable tbody tr:hover { background: var(--chip); }
+  .ttable td.tt { max-width: 340px; overflow-wrap: anywhere; }
+  .ttable td.tt button { text-align: left; }
+  .tt-empty { padding: var(--s5); }
   .tabs button[aria-pressed="true"] { background: var(--raised); color: var(--ink); box-shadow: var(--e1), 0 0 0 1px var(--line); }
   .tabs .n { background: var(--warn); color: var(--on-fill); border-radius: var(--r-full); padding: 0 5px; margin-left: var(--s2); font-size: var(--fs-micro); font-weight: 600; font-variant-numeric: tabular-nums; }
   .feedwrap { position: relative; }
@@ -671,10 +689,15 @@
       <section aria-labelledby="b-h" class="boardwrap">
         <h2 id="b-h" class="vh">Tasks</h2>
         <div class="filterbar" id="filterbar" hidden></div>
+        <div class="taskbar" id="taskbar">
+          <label class="tsearch"><span class="vh">Search tasks</span><input type="search" id="tsearch" autocomplete="off" placeholder="Search tasks: title, #id, person" aria-label="Search tasks by title, number, assignee or reviewer"></label>
+          <div class="tabs" id="viewtog" role="group" aria-label="Task view"><button type="button" data-view="columns" aria-pressed="true">Columns</button><button type="button" data-view="table" aria-pressed="false">Table</button></div>
+        </div>
         <div class="bnote k-ci" id="ci-note" tabindex="-1" role="status" hidden></div>
         <div class="bnote" id="board-note" tabindex="-1" hidden></div>
         <div class="board-empty" id="board-empty" role="status" hidden></div>
         <div class="board" id="board" tabindex="-1"></div>
+        <div class="ttable" id="tasktable" hidden></div>
         <p class="hint">Drag a card to another column, or use its <b>Move…</b> button, to change its status. Open a card (click / Enter) to edit it. Cards flag priority (P1, P3) and size (S, L) only when it isn't the usual P2 and M.</p>
       </section>
       <div class="side">
@@ -684,6 +707,8 @@
               <button data-tab="all" aria-pressed="true">All</button>
               <button data-tab="chat" aria-pressed="false">Chat</button>
               <button data-tab="me" aria-pressed="false" aria-label="@me">@me</button>
+              <button data-tab="problems" aria-pressed="false" title="Blocked or sent-back tasks, usage limits, name clashes">Problems</button>
+              <button data-tab="merges" aria-pressed="false" title="Tasks going to review, and merged into main">Merges and reviews</button>
             </div>
           </div>
           <div class="feedwrap">
@@ -2152,8 +2177,48 @@ function doneOpen() {
   if (ui.doneOpen === 'closed') return false;
   return ($('board').clientWidth || window.innerWidth) >= 6 * 170 + 50; // auto: only when all six columns fit
 }
+// Search box + Columns/Table toggle. The box is static HTML (never re-rendered), so typed text survives.
+const tv = { view: store.get('board-view') === 'table' ? 'table' : 'columns', q: '', sort: 'status', dir: 1 };
+const taskText = (t) => `#${t.id} ${t.id} ${t.title} ${t.assignee || ''} ${t.reviewer || ''}`.toLowerCase();
+function taskShown(t) {
+  if (!taskVisible(t)) return false;
+  const q = tv.q.trim().toLowerCase(); if (!q) return true;
+  return q.split(/\s+/).every((w) => taskText(t).includes(w));
+}
+const TSORT = {
+  status: (t) => (t.status === 'proposed' ? -1 : STATUSES.indexOf(t.status)),
+  priority: (t) => t.priority || 2,
+  size: (t) => ['S', 'M', 'L'].indexOf(t.size) + 1 || 2,
+  assignee: (t) => (t.assignee || '\uffff').toLowerCase(),
+  age: (t) => t.created_at || 0,
+};
+const TCOLS = [['id', '#'], ['title', 'Task'], ['status', 'Status'], ['priority', 'Priority'], ['size', 'Size'], ['assignee', 'Assignee'], ['age', 'Age']];
+function renderTable(visible) {
+  const f = TSORT[tv.sort] || TSORT.status;
+  const rows = [...visible].sort((a, b) => { const x = f(a); const y = f(b); return (x < y ? -1 : x > y ? 1 : 0) * tv.dir || a.id - b.id; });
+  const th = TCOLS.map(([k, l]) => TSORT[k]
+    ? `<th scope="col" aria-sort="${tv.sort === k ? (tv.dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" data-tsort="${k}" data-fk="ts-${k}">${l}</button></th>`
+    : `<th scope="col">${l}</th>`).join('');
+  const body = rows.map((t) => `<tr data-open-task="${t.id}" data-id="${t.id}"><td>#${t.id}</td><td class="tt"><button type="button" class="link" data-open-task="${t.id}" data-fk="tt-${t.id}">${esc(t.title)}</button></td><td><span class="pill s-${t.status}">${LABEL[t.status]}</span></td><td>P${t.priority || 2}</td><td>${['S', 'L'].includes(t.size) ? t.size : 'M'}</td><td>${t.assignee ? esc(t.assignee) : '<span class="muted">unassigned</span>'}</td><td>${ago(t.created_at)}</td></tr>`).join('');
+  patch($('tasktable'), `<table><caption class="vh">Tasks, sorted by ${tv.sort}</caption><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>${rows.length ? '' : `<p class="muted tt-empty">${tv.q.trim() ? 'No tasks match your search.' : 'No tasks to show.'}</p>`}`);
+}
+$('tsearch').addEventListener('input', () => { tv.q = $('tsearch').value; renderBoard(); });
+$('viewtog').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-view]'); if (!b) return;
+  tv.view = b.dataset.view === 'table' ? 'table' : 'columns'; store.set('board-view', tv.view); renderBoard();
+});
+$('tasktable').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-tsort]'); if (!b) return;
+  if (tv.sort === b.dataset.tsort) tv.dir = -tv.dir; else { tv.sort = b.dataset.tsort; tv.dir = 1; }
+  renderBoard();
+});
 function renderBoard() {
-  const visible = state.tasks.filter(taskVisible);
+  const visible = state.tasks.filter(taskShown);
+  const table = tv.view === 'table';
+  $('viewtog').querySelectorAll('button').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.view === tv.view)); b.tabIndex = b.dataset.view === tv.view ? -1 : 0; });
+  $('taskbar').hidden = !state.tasks.length;
+  $('board').hidden = table; $('tasktable').hidden = !table || !state.tasks.length;
+  if (table) { if (state.tasks.length) renderTable(visible); return; }
   const dOpen = doneOpen();
   $('board').classList.toggle('none', !state.tasks.length);
   $('board').classList.toggle('done-closed', !dOpen);
@@ -2178,7 +2243,7 @@ function renderBoard() {
       more = `<button class="ghost more" data-show-col="${s}" data-fk="more-${s}">${all ? 'Show fewer' : `Show ${items.length - shown.length} more`}</button>`;
       items = shown;
     }
-    const empty = !state.tasks.length ? '' : filterRoot() && !total ? `None for ${esc(filterRoot())}` : COL_EMPTY[s];
+    const empty = !state.tasks.length ? '' : tv.q.trim() && !total ? 'No matches' : filterRoot() && !total ? `None for ${esc(filterRoot())}` : COL_EMPTY[s];
     return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}" role="region" aria-labelledby="colh-${s} colc-${s}" aria-describedby="cold-${s}"><h3 title="${HINT[s]}"><span id="colh-${s}">${LABEL[s]}<span class="vh">,</span></span><span><span id="colc-${s}">${total}<span class="vh"> ${total === 1 ? 'task' : 'tasks'}</span></span>${s === 'done' ? '<button type="button" class="dclose" data-act="done-toggle" data-fk="done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse">«</button>' : ''}</span></h3><p class="cd" id="cold-${s}">${COL_DESC[s]}</p>
       ${items.length ? `<ul class="cards">${items.map((t) => `<li>${card(t)}</li>`).join('')}</ul>` : empty ? `<div class="empty">${empty}</div>` : ''}${more}</div>`;
   }).join('');
@@ -2283,8 +2348,14 @@ function settingsText(e) {
     return self ? 'will merge finished work into main (integrator)' : `picked ${v} to merge finished work into main (integrator)`;
   }).join('; ');
 }
+// Feed filters, derived from kind + data (task_updated carries data.status; the rest is read from the text).
+const isProblem = (e) => (e.kind === 'task_updated' && (e.data?.status === 'blocked' || /review → in_progress/.test(e.text)))
+  || (e.kind === 'task_deleted' && /^rejected proposal/.test(e.text))
+  || (e.kind === 'message' && (e.data?.notice === 'limit' || (e.author === 'board' && /is being used from \d+ laptops/.test(e.text))));
+const isMergeReview = (e) => e.kind === 'task_updated' && (e.data?.status === 'review' || e.data?.status === 'done') && /→ (review|done)\b/.test(e.text);
+const TAB_EMPTY = { me: 'No mentions of you yet.', problems: 'No problems so far: nothing blocked, sent back or out of usage.', merges: 'No reviews or merges yet.' };
 function renderFeed(unreadCount) {
-  const tabs = { all: () => true, chat: isChat, me: (e) => mentionsMe(e) };
+  const tabs = { all: () => true, chat: isChat, me: (e) => mentionsMe(e), problems: isProblem, merges: isMergeReview };
   $('tabs').querySelectorAll('button').forEach((b) => {
     b.setAttribute('aria-pressed', String(b.dataset.tab === ui.tab));
     if (b.dataset.tab === 'me') {
@@ -2304,7 +2375,7 @@ function renderFeed(unreadCount) {
   }
   const more = older.more ?? (state.events.length >= 200 && state.events[0]?.id > 1);
   const html = (more ? `<div class="older"><button type="button" class="link muted" data-older ${older.loading ? 'disabled' : ''}>${older.loading ? 'Loading…' : 'Load earlier activity'}</button></div>` : '')
-    + (evs.length ? evs.map((e, i) => evHtml(e, evs[i - 1])).join('') : `<div class="muted empty-note">${ui.tab === 'me' ? 'No mentions of you yet.' : 'No activity yet. Messages from agents and teammates show up here.'}</div>`);
+    + (evs.length ? evs.map((e, i) => evHtml(e, evs[i - 1])).join('') : `<div class="muted empty-note">${TAB_EMPTY[ui.tab] || 'No activity yet. Messages from agents and teammates show up here.'}</div>`);
   // New lines fade in (not on first load or a tab switch, and not a whole burst at once).
   const seen = before !== undefined && before !== html && canMove() ? new Set([...feed.children].map((n) => n.dataset.eid)) : null;
   patch(feed, html);
