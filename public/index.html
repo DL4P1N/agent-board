@@ -681,7 +681,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .col.collapsed { padding: var(--s2); }
   .dtog { width: 100%; background: none; color: var(--muted); border: 0; box-shadow: none; padding: var(--s4) 0; font-size: var(--fs-meta); font-weight: 700; writing-mode: vertical-rl; white-space: nowrap; min-height: 140px; display: flex; align-items: center; gap: var(--s3); font-variant-numeric: tabular-nums; }
   .dtog:hover { background: none; color: var(--ink); }
-  .dtog .ok-mk { color: var(--ok); }
+  .dtog .ok-mk { color: var(--ok); font-style: normal; }
   .dtog:active { transform: none; box-shadow: none; }
   @media (max-width: 760px) { .dtog { writing-mode: horizontal-tb; min-height: var(--ctl-sm); padding: var(--s2); } .col.collapsed { min-height: 0; } }
   .col h3 .dclose { background: none; border: 0; box-shadow: none; padding: 0 var(--s3); color: var(--muted); font-size: var(--fs-meta); min-height: calc(var(--ctl-xs) - 4px); margin-block: calc(-1 * var(--s3)); } /* keeps the Done heading as tall as the others */
@@ -894,6 +894,13 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-ib { flex: 0 0 auto; width: 26px; min-height: 26px; padding: 0; background: transparent; color: var(--muted); border: 2px solid transparent; box-shadow: none; font: 700 var(--fs-sm)/1 var(--mono); display: inline-flex; align-items: center; justify-content: center; }
   .o-ib:hover { background: transparent; color: var(--ink); border-color: var(--border); }
   .o-ib:active { transform: translate(1px, 1px); box-shadow: none; }
+  /* One fold mark everywhere: a chevron that turns with aria-expanded. Title bars: down = open, up = folded. Docks
+     point the way they fold (Needs you left, Agents right), their chips the way they open. */
+  .chev { display: inline-block; font-family: var(--mono); line-height: 1; transition: rotate var(--t-base) var(--ease); }
+  [aria-expanded="false"] > .chev { rotate: 180deg; }
+  #o-left [data-o-fold] .chev, #o-right-pill .chev, .dtog .chev { rotate: 90deg; }
+  #o-right [data-o-fold] .chev, #o-left-pill .chev, .dclose .chev { rotate: -90deg; }
+  button.link[aria-expanded="false"] > .chev { rotate: -90deg; }
   /* Folded: the demo's pill, a title chip where the panel was. */
   .o-pill { display: inline-flex; align-items: center; gap: var(--s4); min-height: 34px; padding: 0 var(--s5); font-size: var(--fs-sm); }
   .o-pill:hover { background: var(--raised); }
@@ -1135,7 +1142,13 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-tasks .o-body { padding: var(--s3) var(--s4) var(--s4); overflow: hidden; }
   .o-tasks .ttable { height: 100%; margin: 0; overflow: auto; box-shadow: none; background: transparent; }
   .o-col { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: color-mix(in srgb, var(--sunken) 70%, transparent); border: 2px solid var(--line); }
-  .o-col h3 { display: flex; align-items: center; gap: var(--s3); margin: 0; padding: 2px var(--s3); min-height: 26px; border-bottom: 2px solid var(--line); font: 700 var(--fs-micro)/1.2 var(--font); color: var(--ink); white-space: nowrap; overflow: hidden; }
+  .o-col h3 { display: flex; align-items: center; gap: var(--s3); margin: 0; padding: 2px var(--s3); min-height: 26px; border-bottom: 2px solid var(--line); font: 700 var(--fs-meta)/1.2 var(--mono); color: var(--ink); white-space: nowrap; overflow: hidden; }
+  .o-col h3 .dclose { background: none; border: 0; box-shadow: none; padding: 0 var(--s2); min-height: var(--ctl-xs); color: var(--muted); font-size: var(--fs-meta); }
+  .o-col h3 .dclose:hover { background: none; color: var(--ink); }
+  .o-cols.done-closed { grid-template-columns: repeat(5, minmax(0, 1fr)) 40px; }
+  .o-col.collapsed h3 { border: 0; padding: 0; height: 100%; align-items: stretch; }
+  .o-col.collapsed .dtog { min-height: 0; height: 100%; padding: var(--s3) 0; justify-content: flex-start; }
+  .o-col.collapsed .dtog .o-c { margin: 0; }
   .o-col h3 > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .o-col.s-claimed h3::before { box-shadow: inset 0 0 0 2px var(--info); }
   .o-col h3::before { content: ""; width: 8px; height: 8px; flex: 0 0 auto; box-shadow: inset 0 0 0 2px var(--field-line); }
@@ -1159,7 +1172,18 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-tasks.max .o-card .o-ct { -webkit-line-clamp: 3; line-clamp: 3; }
   .o-card .id { color: var(--muted); font-variant-numeric: tabular-nums; }
   .o-card .o-cw { display: block; color: var(--muted); font-size: var(--fs-meta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .o-card .o-cw.bad { color: var(--bad); }
+  .o-card .o-cw.bad { color: var(--bad); white-space: normal; }
+  .o-card .o-cm { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); align-items: center; margin-top: var(--s2); font-size: var(--fs-meta); color: var(--muted); }
+  .o-card .o-cm .pill { line-height: 18px; }
+  .o-card.proposed { box-shadow: inset 0 0 0 2px var(--line); }
+  .o-card.stale { background: color-mix(in srgb, var(--stale) 88%, transparent); }
+  .o-col li { display: flex; flex-direction: column; gap: 2px; }
+  .o-ca { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+  .o-ca button { font-size: var(--fs-meta); padding: 0 var(--s4); min-height: var(--ctl-xs); }
+  .o-ca .qb { background: none; color: var(--accent); font-weight: 700; border: 0; box-shadow: none; padding: 0 var(--s1); text-decoration: underline; text-underline-offset: 2px; }
+  .o-ca .qb:hover { background: none; text-decoration-thickness: 2px; }
+  .o-ca .rj { display: flex; gap: var(--s2); width: 100%; }
+  .o-ca .rj input { padding: 2px var(--s3); min-height: var(--ctl-xs); font-size: var(--fs-meta); }
   .o-bar, .mbar { display: inline-block; width: 48px; height: 8px; background: var(--field); box-shadow: 0 0 0 1px var(--line-strong); }
   .o-bar i, .mbar i { display: block; height: 100%; background: var(--ok); }
 
@@ -1333,7 +1357,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
          the 3D view floats the same panels over the room. Each panel folds the same way in both, remembered in this
          browser. -->
     <aside class="o-panel o-dock o-left" id="o-left" aria-labelledby="o-left-h">
-      <div class="o-head"><h2 id="o-left-h">Needs you</h2><span class="o-sub" id="o-left-sub"></span><button type="button" class="o-ib" data-o-fold="left" aria-expanded="true" aria-controls="o-left" aria-label="Fold Needs you to a chip" title="Fold">‹</button></div>
+      <div class="o-head"><h2 id="o-left-h">Needs you</h2><span class="o-sub" id="o-left-sub"></span><button type="button" class="o-ib" data-o-fold="left" aria-expanded="true" aria-controls="o-left" aria-label="Fold Needs you to a chip" title="Fold"><span class="chev" aria-hidden="true">▾</span></button></div>
       <div class="o-body" id="o-left-b">
         <div class="nyou" id="nyou">
           <section id="now" class="now" aria-labelledby="now-h"></section>
@@ -1345,7 +1369,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         <div id="o-blocked"></div>
       </div>
     </aside>
-    <button type="button" class="o-pill" id="o-left-pill" data-o-fold="left" aria-expanded="false" aria-controls="o-left" hidden><span class="o-t">Needs you</span><span class="o-n" id="o-left-n"></span><span class="o-ar" aria-hidden="true">›</span></button>
+    <button type="button" class="o-pill" id="o-left-pill" data-o-fold="left" aria-expanded="false" aria-controls="o-left" hidden><span class="o-t">Needs you</span><span class="o-n" id="o-left-n"></span><span class="o-ar chev" aria-hidden="true">▾</span></button>
 
     <div class="centre" id="centre">
       <section id="topbar" class="o-panel topbar" aria-label="Goal, demo time, progress and merges"><span class="tb-slot" id="tb-a"></span><button type="button" id="clock" class="tbc clock" data-act="clock" data-fk="tb-clock" aria-expanded="false" aria-controls="o-dl"></button><span class="tb-slot" id="tb-b"></span></section>
@@ -1378,19 +1402,19 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       <!-- Tasks: the Board view's columns in a window at the foot of the room. Its title bar is the Board view's task bar
            (Tasks, search, Show), moved in here while the 3D view is on. -->
       <section class="o-panel o-tasks" id="o-tasks" aria-labelledby="b-h">
-        <div class="o-head" id="o-tasks-head"><button type="button" class="o-ib" id="o-tasks-max" data-o-max aria-pressed="false" aria-label="Maximise the tasks" title="Maximise">□</button><button type="button" class="o-ib" id="o-tasks-fold" data-o-fold="tasks" aria-expanded="true" aria-controls="o-tasks-b" aria-label="Fold the tasks to their title bar" title="Fold">▾</button></div>
+        <div class="o-head" id="o-tasks-head"><button type="button" class="o-ib" id="o-tasks-max" data-o-max aria-pressed="false" aria-label="Maximise the tasks" title="Maximise"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><button type="button" class="o-ib" id="o-tasks-fold" data-o-fold="tasks" aria-expanded="true" aria-controls="o-tasks-b" aria-label="Fold the tasks to their title bar" title="Fold"><span class="chev" aria-hidden="true">▾</span></button></div>
         <div class="o-body" id="o-tasks-b"><div class="o-cols" id="o-cols"></div></div>
       </section>
     </section>
 
     <div class="o-rcol" id="o-rcol">
       <aside class="o-panel o-dock o-right" id="o-right" aria-labelledby="o-right-h">
-        <div class="o-head"><h2 id="o-right-h">Agents</h2><span class="o-sub" id="o-right-sub"></span><button type="button" class="o-ib" data-o-fold="right" aria-expanded="true" aria-controls="o-right" aria-label="Fold Agents to a chip" title="Fold">›</button></div>
+        <div class="o-head"><h2 id="o-right-h">Agents</h2><span class="o-sub" id="o-right-sub"></span><button type="button" class="o-ib" data-o-fold="right" aria-expanded="true" aria-controls="o-right" aria-label="Fold Agents to a chip" title="Fold"><span class="chev" aria-hidden="true">▾</span></button></div>
         <div class="o-body" id="o-agents"><p class="psum" id="p-sum"></p><ul class="people" id="people"></ul></div>
       </aside>
-      <button type="button" class="o-pill" id="o-right-pill" data-o-fold="right" aria-expanded="false" aria-controls="o-right" hidden><span class="o-ar" aria-hidden="true">‹</span><span class="o-t">Agents</span><span class="o-sub o-n" id="o-right-n"></span></button>
+      <button type="button" class="o-pill" id="o-right-pill" data-o-fold="right" aria-expanded="false" aria-controls="o-right" hidden><span class="o-ar chev" aria-hidden="true">▾</span><span class="o-t">Agents</span><span class="o-sub o-n" id="o-right-n"></span></button>
       <section class="o-panel o-act" id="o-act" aria-labelledby="f-h">
-        <div class="o-head"><h2 id="f-h">Activity</h2><span class="o-sub" id="o-act-x"></span><button type="button" class="o-ib" id="o-act-fold" data-o-fold="act" aria-expanded="true" aria-controls="o-act-b" aria-label="Fold Activity to its title bar" title="Fold">▾</button></div>
+        <div class="o-head"><h2 id="f-h">Activity</h2><span class="o-sub" id="o-act-x"></span><button type="button" class="o-ib" id="o-act-fold" data-o-fold="act" aria-expanded="true" aria-controls="o-act-b" aria-label="Fold Activity to its title bar" title="Fold"><span class="chev" aria-hidden="true">▾</span></button></div>
         <div class="o-body" id="o-act-b">
           <div class="tabs" id="tabs">
             <button data-tab="all" aria-pressed="true">All</button>
@@ -1413,7 +1437,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         </div>
       </section>
       <section class="o-panel o-locks" id="o-locks" aria-labelledby="l-h">
-        <div class="o-head"><h2 id="l-h">File locks</h2><span class="o-sub" id="l-count"></span><button type="button" class="o-ib" id="l-tog" data-o-fold="locks" aria-expanded="false" aria-controls="l-body" aria-label="Show the file locks" title="Show">▴</button></div>
+        <div class="o-head"><h2 id="l-h">File locks</h2><span class="o-sub" id="l-count"></span><button type="button" class="o-ib" id="l-tog" data-o-fold="locks" aria-expanded="false" aria-controls="l-body" aria-label="Show the file locks" title="Show"><span class="chev" aria-hidden="true">▾</span></button></div>
         <div class="o-body" id="l-body" hidden>
           <p class="panel-hint">"I'm editing this shared file, don't touch it." Agents set these themselves; they expire on their own.</p>
           <ul class="locks" id="locks"></ul>
@@ -2535,10 +2559,10 @@ function stepInvite(si) {
     <div class="sub"><b>First time on this laptop?</b> Get the board tool first. Skip this if you already have an <code>agent-board</code> folder (or an older <code>claude-board</code> one) (then run <code>git pull</code> in it, so it's up to date).</div>${cmdBox(su.clone_command, 'clone', 'download command')}
     <div class="sub"><b>Connect to this board:</b> run it inside the <code>agent-board</code> folder. It asks your name, which AI tool(s) you use and where your project is, then tests the connection.</div>${cmdBox(best.command, 'join', 'join command')}
     ${onlyLocal ? '<p class="note">No network address found, so teammates can\'t reach this laptop yet. Join the same wifi, start Tailscale, or restart the board with <code>npm run tunnel</code>.</p>' : `<p class="hint" title="${esc(best.label)}">${esc(addrText(best))}.</p>`}
-    ${rest.length ? `<button type="button" class="link muted t-meta mt-1" data-act="addrs" data-fk="addrs" aria-expanded="${ui.addrs}">${ui.addrs ? '▾' : '▸'} Other addresses (if that one doesn't connect)</button>
+    ${rest.length ? `<button type="button" class="link muted t-meta mt-1" data-act="addrs" data-fk="addrs" aria-expanded="${ui.addrs}"><span class="chev" aria-hidden="true">▾</span> Other addresses (if that one doesn't connect)</button>
       ${ui.addrs ? rest.map((a, i) => `<div class="sub" title="${esc(a.label)}">${esc(addrText(a))}</div>${cmdBox(a.command, 'alt' + i, 'join command: ' + addrText(a))}`).join('') : ''}` : ''}
     <div class="sub">Just want to watch? Send them this page's link</div>${cmdBox(best.web_url, 'web', 'board link')}
-    <button type="button" class="link muted t-meta mt-1" data-act="qr" data-fk="qr-tog" aria-expanded="${!!ui.qr}" aria-controls="qr-codes">${ui.qr ? '▾ Hide QR code' : '▸ Show QR code (scan with a phone)'}</button>
+    <button type="button" class="link muted t-meta mt-1" data-act="qr" data-fk="qr-tog" aria-expanded="${!!ui.qr}" aria-controls="qr-codes"><span class="chev" aria-hidden="true">▾</span> ${ui.qr ? 'Hide QR code' : 'Show QR code (scan with a phone)'}</button>
     ${ui.qr ? `<div class="qrs" id="qr-codes">
       <figure><img src="${esc(qrSrc(best.web_url))}" alt="QR code for this board's link, ${esc(best.web_url)}" width="180" height="180"><figcaption>Board link: open it on a phone to watch. To connect a laptop, copy the join command above or send the invite message.</figcaption></figure></div>` : ''}
     <div class="sub">Laptops connected</div>${si.ros.some((r) => r.agent) ? chips(si, true) : '<p class="muted t-meta m0">None yet.</p>'}
@@ -2563,7 +2587,7 @@ async function loadNotify() {
 }
 function notifyBox() {
   const n = ui.nf;
-  const tog = `<button type="button" class="link muted t-meta mt-2" data-act="nf-tog" data-fk="nf-tog" aria-expanded="${n.open}" aria-controls="nf-box">${n.open ? '▾' : '▸'} Notifications when you're away${n.url ? ` <span class="pill ok">on · ${esc(NOTIFY_KIND[n.kind] || 'webhook')}</span>` : ''}</button>`;
+  const tog = `<button type="button" class="link muted t-meta mt-2" data-act="nf-tog" data-fk="nf-tog" aria-expanded="${n.open}" aria-controls="nf-box"><span class="chev" aria-hidden="true">▾</span> Notifications when you're away${n.url ? ` <span class="pill ok">on · ${esc(NOTIFY_KIND[n.kind] || 'webhook')}</span>` : ''}</button>`;
   if (!n.open) return tog;
   if (!n.loaded) { if (!n.loading) setTimeout(loadNotify, 0); return `${tog}<p class="muted" id="nf-box">Loading…</p>`; }
   const ev = n.events || nfEvents(null);
@@ -3035,7 +3059,7 @@ function card(t) {
 function doneOpen() {
   if (ui.doneOpen === 'open') return true;
   if (ui.doneOpen === 'closed') return false;
-  return ($('board').clientWidth || window.innerWidth) >= 6 * 170 + 50; // auto: only when all six columns fit
+  return ($('board').clientWidth || $('o-cols').clientWidth || window.innerWidth) >= 6 * 170 + 50; // auto: only when all six columns fit
 }
 // Search box + Columns/Table toggle. The box is static HTML (never re-rendered), so typed text survives.
 const tv = { view: store.get('board-view') === 'table' ? 'table' : 'columns', q: '', sort: 'status', dir: 1 };
@@ -3093,7 +3117,7 @@ function renderBoard() {
     if (s === 'open') items = items.sort((a, b) => (b.status === 'proposed') - (a.status === 'proposed'));
     const total = items.length;
     if (s === 'done' && !dOpen) {
-      return `<div class="col s-done collapsed" data-status="done" id="col-done" role="region" aria-label="Done, ${plural(total, 'task')}"><button type="button" class="dtog" id="colh-done" data-act="done-toggle" data-fk="done-tog" aria-expanded="false" aria-label="Done, ${plural(total, 'task')}: show the column" title="Show the Done column (tasks merged into main). You can still drop cards here."><span class="ok-mk" aria-hidden="true">✓</span>Done ${total} <span aria-hidden="true">▸</span></button></div>`;
+      return `<div class="col s-done collapsed" data-status="done" id="col-done" role="region" aria-label="Done, ${plural(total, 'task')}"><button type="button" class="dtog" id="colh-done" data-act="done-toggle" data-fk="done-tog" aria-expanded="false" aria-label="Done, ${plural(total, 'task')}: show the column" title="Show the Done column (tasks merged into main). You can still drop cards here."><span class="ok-mk" aria-hidden="true">✓</span>Done ${total} <span class="chev" aria-hidden="true">▾</span></button></div>`;
     }
     let more = '';
     if (s === 'done') {
@@ -3111,7 +3135,7 @@ function renderBoard() {
     const empty = !state.tasks.length ? '' : tv.q.trim() && !total ? 'No matches' : filterRoot() && !total ? `None for ${esc(filterRoot())}` : COL_EMPTY[s];
     // Feature freeze: Open says what can still start.
     const desc = s === 'open' && frozen ? FROZEN_DESC : COL_DESC[s];
-    return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}" role="region" aria-label="${LABEL[s]}, ${plural(total, 'task')}" aria-describedby="cold-${s}"><h3 title="${COL_DESC[s]}"><span id="colh-${s}">${LABEL[s]}</span><span><span id="colc-${s}">${total}</span>${s === 'done' ? '<button type="button" class="dclose" data-act="done-toggle" data-fk="done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse">«</button>' : ''}</span></h3><p class="cd${desc !== COL_DESC[s] ? ' fz-note' : ''}" id="cold-${s}" title="${desc}">${desc}</p>
+    return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}" role="region" aria-label="${LABEL[s]}, ${plural(total, 'task')}" aria-describedby="cold-${s}"><h3 title="${COL_DESC[s]}"><span id="colh-${s}">${LABEL[s]}</span><span><span id="colc-${s}">${total}</span>${s === 'done' ? '<button type="button" class="dclose" data-act="done-toggle" data-fk="done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse"><span class="chev" aria-hidden="true">▾</span></button>' : ''}</span></h3><p class="cd${desc !== COL_DESC[s] ? ' fz-note' : ''}" id="cold-${s}" title="${desc}">${desc}</p>
       ${items.length ? `<ul class="cards">${items.map((t) => `<li>${card(t)}</li>`).join('')}</ul>` : empty ? `<div class="empty">${empty}</div>` : ''}${more}</div>`;
   }).join('');
   const el = $('board');
@@ -3412,8 +3436,8 @@ document.addEventListener('click', (ev) => {
   if (d.askCancel) { const id = Number(d.askCancel); ui.moveAsk = null; render(); return focusCard(id); }
   if (d.release) { const t = taskById(Number(d.release)); if (t) { moveTask(t, 'open'); render(); } return; }
   if (d.approve) { const id = Number(d.approve); act(api(`/tasks/${id}/decide`, { method: 'POST', body: JSON.stringify({ approve: true }) }), `Approved #${id}: agents can claim it now`).then(() => focusCard(id)).catch(() => {}); return; }
-  if (d.reject) { ui.rejecting = Number(d.reject); render(); return $('rj-' + d.reject)?.focus(); }
-  if (d.rejectNo) { const id = Number(d.rejectNo); ui.rejecting = null; render(); return document.querySelector(`[data-fk="rj-b-${id}"]`)?.focus(); }
+  if (d.reject) { ui.rejecting = Number(d.reject); render(); return $((boardView === 'office' ? 'orj-' : 'rj-') + d.reject)?.focus(); }
+  if (d.rejectNo) { const id = Number(d.rejectNo); ui.rejecting = null; render(); return document.querySelector(`[data-fk="${boardView === 'office' ? 'o' : ''}rj-b-${id}"]`)?.focus(); }
   if (d.limit) { ui.limitForm = d.limit; render(); return $('lu-' + d.limit)?.focus(); }
   if (d.limcancel) { const n = d.limcancel; ui.limitForm = null; render(); return document.querySelector(`[data-fk="lm-${CSS.escape(n)}"]`)?.focus(); }
   if (d.unlimit) { const n = d.unlimit; act(api(`/agents/${encodeURIComponent(n)}`, { method: 'PATCH', body: JSON.stringify({ limited: false }) }), `${n} counts as available again`).catch(() => {}); return; }
@@ -3520,7 +3544,7 @@ document.addEventListener('submit', async (ev) => {
   const rjf = ev.target.closest('[data-rjform]');
   if (rjf) {
     ev.preventDefault();
-    const id = Number(rjf.dataset.rjform); const note = ($('rj-' + id)?.value || '').trim();
+    const id = Number(rjf.dataset.rjform); const note = (rjf.querySelector('input')?.value || '').trim();
     try {
       await api(`/tasks/${id}/decide`, { method: 'POST', body: JSON.stringify({ approve: false, note }) });
       ui.rejecting = null; toast(`Rejected proposal #${id}`); scheduleReload();
@@ -3723,7 +3747,7 @@ function doAct(a, el) {
   if (a === 'repo-cancel') { ui.editRepo = false; ui.repoErr = ''; render(); return document.querySelector('[data-fk="repo-edit"]')?.focus(); }
   if (a === 'done-toggle') {
     const open = !doneOpen(); ui.doneOpen = open ? 'open' : 'closed'; store.set('board-done', ui.doneOpen); render();
-    return document.querySelector(`[data-fk="${open ? 'done-close' : 'done-tog'}"]`)?.focus({ preventScroll: true });
+    return document.querySelector(`[data-fk="${boardView === 'office' ? 'o-' : ''}${open ? 'done-close' : 'done-tog'}"]`)?.focus({ preventScroll: true });
   }
   if (a === 'new-task') return openTask(null);
   if (a === 'clear-search') { tv.q = ''; $('tsearch').value = ''; renderBoard(); renderOffice(); return $('tsearch').focus(); }
@@ -4383,6 +4407,8 @@ function officeMount(on) {
 const oTasksOff = () => (typeof oUi.tasks === 'boolean' ? oUi.tasks : innerHeight <= 900);
 const oLocksOff = () => (typeof oUi.locks === 'boolean' ? oUi.locks : store.get('board-locks') !== 'open');
 const oOff = (w) => (w === 'tasks' ? oTasksOff() : w === 'locks' ? oLocksOff() : w === 'act' ? !!oUi.actOff : !!oUi[w]);
+// The Tasks window's maximise / restore icons (corners out, corners in).
+const O_MAX = '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>', O_RESTORE = '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M10 2v4h4M14 10h-4v4M2 10h4v4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 function oApply() {
   const m = $('main');
   for (const s of ['left', 'right']) {
@@ -4392,9 +4418,9 @@ function oApply() {
   const tOff = oTasksOff();
   $('o-tasks').classList.toggle('max', !!oUi.max && !tOff);
   $('o-tasks-max').setAttribute('aria-pressed', String(!!oUi.max)); $('o-tasks-max').setAttribute('aria-label', oUi.max ? 'Restore the tasks window' : 'Maximise the tasks'); $('o-tasks-max').title = oUi.max ? 'Restore (Esc)' : 'Maximise';
-  $('o-tasks-max').textContent = oUi.max ? '❐' : '□';
+  $('o-tasks-max').innerHTML = oUi.max ? O_RESTORE : O_MAX;
   for (const [box, b, off, what] of [[$('o-tasks'), $('o-tasks-fold'), tOff, 'the tasks'], [$('o-act'), $('o-act-fold'), !!oUi.actOff, 'Activity'], [$('o-locks'), $('l-tog'), oLocksOff(), 'the file locks']]) {
-    box.classList.toggle('folded', off); b.setAttribute('aria-expanded', String(!off)); b.textContent = off ? '▴' : '▾';
+    box.classList.toggle('folded', off); b.setAttribute('aria-expanded', String(!off));
     b.title = off ? 'Show' : 'Fold'; b.setAttribute('aria-label', off ? `Show ${what}` : `Fold ${what} to ${what === 'Activity' ? 'its' : 'their'} title bar`);
   }
   $('l-body').hidden = oLocksOff();
@@ -4520,18 +4546,41 @@ function renderOffice() {
   $('o-cols').hidden = !!table;
   const tasks = state.tasks.filter(taskShown);
   if (state.tasks.length && tv.q.trim() && !tasks.length) { patch($('o-cols'), `<p class="o-nomatch">${noMatchHtml('o-clear-search')}</p>`); return oFrame(); }
+  // Done folds the same way as on the Board view (one setting, the same auto rule).
+  const dOpen = doneOpen(); $('o-cols').classList.toggle('done-closed', !dOpen);
   if (patch($('o-cols'), O_COLS.map(([k, label]) => {
     let list = tasks.filter((t) => colOf(t) === k);
     list = k === 'open' ? list.sort((a, b) => (b.status === 'proposed') - (a.status === 'proposed') || a.priority - b.priority || a.id - b.id) : list.sort((a, b) => b.updated_at - a.updated_at);
-    return `<section class="o-col s-${k}${list.length ? ' has' : ''}" data-s="${k}" aria-label="${label}, ${plural(list.length, 'task')}"><h3 title="${COL_DESC[k]}"><span>${label}</span><span class="o-c">${list.length}</span></h3>${list.length ? `<ul>${list.map((t) => {
-      const who = t.assignee ? agentRoot(t.assignee) : '';
-      const note = t.status === 'blocked' ? blockedNote(t) : '';
-      const sub = t.status === 'proposed' ? 'proposed, waiting for approval' : note ? note : t.status === 'review' && t.reviewer ? `${who} · ${agentRoot(t.reviewer)} merges` : who;
-      return `<li><button type="button" class="o-card${who ? ' has-owner' : ''}" ${who ? hs(who) : ''} data-open-task="${t.id}" data-fk="oc-${t.id}"><span class="o-ct"><span class="id">#${t.id}</span> ${esc(t.title)}</span>${sub ? `<span class="o-cw${note ? ' bad' : ''}">${esc(short(sub, 80))}</span>` : ''}</button></li>`;
-    }).join('')}</ul><p class="o-more" aria-hidden="true" hidden></p>` : `<p class="o-none">${tv.q.trim() || filterRoot() ? 'No matches' : 'None'}</p>`}</section>`;
+    if (k === 'done' && !dOpen) return `<section class="o-col s-done collapsed" data-s="done" aria-label="Done, ${plural(list.length, 'task')}"><h3><button type="button" class="dtog" data-act="done-toggle" data-fk="o-done-tog" aria-expanded="false" aria-label="Done, ${plural(list.length, 'task')}: show the column" title="Show the Done column (tasks merged into main)"><i class="ok-mk" aria-hidden="true">✓</i><span>${label}</span> <span class="o-c">${list.length}</span> ${CHEV}</button></h3></section>`;
+    return `<section class="o-col s-${k}${list.length ? ' has' : ''}" data-s="${k}" aria-label="${label}, ${plural(list.length, 'task')}"><h3 title="${COL_DESC[k]}"><span>${label}</span><span class="o-c">${list.length}</span>${k === 'done' ? `<button type="button" class="dclose" data-act="done-toggle" data-fk="o-done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse">${CHEV}</button>` : ''}</h3>${list.length ? `<ul>${list.map(oCard).join('')}</ul><p class="o-more" aria-hidden="true" hidden></p>` : `<p class="o-none">${filterRoot() ? `None for ${esc(filterRoot())}` : 'None'}</p>`}</section>`;
   }).join(''))) oRove();
   requestAnimationFrame(oMore);
   oFrame();
+}
+const CHEV = '<span class="chev" aria-hidden="true">▾</span>';
+// A card in the Tasks window: the Board view's card, compact. The same title, the same facts (P1 / P3, S / L, who holds
+// it, proposed by, waits on, stale), the same blocked note, and the same buttons for what needs you (Approve / Reject…,
+// question waiting) under it; Move… and the rest are in its dialog.
+function oCard(t) {
+  const who = t.assignee ? agentRoot(t.assignee) : '';
+  const note = blockedNote(t); const prop = t.status === 'proposed';
+  const q = openQuestions().find((x) => x.task_id === t.id);
+  const waiting = t.status === 'done' ? [] : t.depends_on.filter((d) => taskById(d)?.status !== 'done');
+  const facts = [
+    t.priority === 1 ? '<span class="pill bad">P1</span>' : t.priority >= 3 ? '<span class="pill">P3</span>' : '',
+    ['S', 'L'].includes(t.size) ? `<span class="pill size ${t.size}"><span class="vh">size </span>${t.size}</span>` : '',
+    prop ? `<span class="pill flag">proposed by ${esc(t.created_by)}</span>` : '',
+    t.status === 'review' && t.reviewer ? `<span class="pill role">merging: ${esc(t.reviewer)}</span>` : '',
+    t.assignee ? `<span class="pc" ${hs(t.assignee)}>${esc(t.assignee)}</span>` : '',
+    waiting.length ? `<span class="pill flag">waits on ${waiting.map((d) => '#' + d).join(' ')}</span>` : '',
+    isStale(t) ? '<span class="pill flag">stale</span>' : '',
+  ].filter(Boolean).join('');
+  const rej = ui.rejecting === t.id;
+  const acts = prop ? (rej
+    ? `<form class="rj" data-rjform="${t.id}"><label class="vh" for="orj-${t.id}">Why reject #${t.id}? (optional)</label><input id="orj-${t.id}" data-keep="orj-${t.id}" placeholder="Why? (optional)" maxlength="300"><button type="submit" class="danger" data-fk="orjy-${t.id}">Reject</button><button type="button" class="ghost" data-reject-no="${t.id}" data-fk="orjn-${t.id}">Cancel</button></form>`
+    : `<button type="button" data-approve="${t.id}" data-fk="oap-${t.id}" title="Make it a normal open task agents can claim">Approve</button><button type="button" class="ghost" data-reject="${t.id}" data-fk="orj-b-${t.id}" title="Remove it; ${esc(t.created_by)} is told why">Reject…</button>`) : '';
+  const ca = acts || q ? `<div class="o-ca">${acts}${q ? `<button type="button" class="qb" data-go-q="${q.id}" data-fk="ocq-${t.id}" title="${esc(short(q.question, 120))}">question waiting</button>` : ''}</div>` : '';
+  return `<li><button type="button" class="o-card${who ? ' has-owner' : ''}${prop ? ' proposed' : ''}${isStale(t) ? ' stale' : ''}" ${who ? hs(who) : ''} data-open-task="${t.id}" data-fk="oc-${t.id}"><span class="o-ct"><span class="id">#${t.id}</span> ${esc(t.title)}</span>${note ? `<span class="o-cw bad">“${esc(short(note, 80))}”</span>` : ''}${facts ? `<span class="o-cm">${facts}</span>` : ''}</button>${ca}</li>`;
 }
 // Tasks: one Tab stop per column, arrow keys between cards (Left / Right: the next column), as on the Board view.
 function oRove() {
