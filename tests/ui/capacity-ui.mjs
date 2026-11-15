@@ -51,8 +51,11 @@ let page;
 const txt = (sel) => page.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ')).catch(() => '');
 const cardTxt = (id) => txt(`.card[data-id="${id}"]`);
 async function openCard(id) {
-  await page.click(`.card[data-id="${id}"] .ct`);
+  // Click inside the page (atomic with the DOM): a coordinate click can land on a neighbouring card when a
+  // state reload re-lays the board out between puppeteer measuring and clicking.
+  await page.$eval(`.card[data-id="${id}"] .ct`, (e) => e.click());
   await page.waitForSelector('#task-dlg[open]');
+  await page.waitForFunction((t) => document.getElementById('td-title').textContent === `Task #${t}`, { timeout: 5000 }, id);
 }
 async function save() {
   await page.click('#td-save');
