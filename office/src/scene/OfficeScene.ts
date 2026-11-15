@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { DESKS, STATIONS, findPath, type Place, type StationId } from '../layout';
 import type { AgentState, Flight, Phase, Pose, SimState, VisualSettings } from '../types';
 import { createAgentRig, type AgentRig, type RigFrame } from './characters';
-import { CameraRig, type CameraState } from './cameraRig';
+import { CameraRig, type CameraState, type ViewInsets } from './cameraRig';
 import { PALETTES, type Palette } from './palettes';
 import { PixelPipeline } from './post';
 import { makeShared, type Shared } from './shared';
@@ -225,6 +225,8 @@ export class OfficeScene {
   onPick(cb: (id: string | null) => void): void { this.pickCb = cb; }
   getCameraState(): CameraState { return this.cam.getState(); }
   setCamera(s: Partial<CameraState>): void { if (this.ok) this.cam.setState(s); }
+  /** Parts of the view covered by panels (fractions of its width / height): the room is framed in the rest. */
+  setInsets(i: ViewInsets): void { if (this.ok) this.cam.insets = { ...i }; }
   getStats(): { frameMs: number; renderTarget: [number, number]; drawCalls: number; triangles: number } {
     const t = this.frameTimes;
     const avg = t.length ? t.reduce((a, b) => a + b, 0) / t.length : 0;

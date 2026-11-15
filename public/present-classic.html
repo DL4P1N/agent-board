@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark" id="m-scheme">
-<meta name="theme-color" content="#cfe3f2" media="(prefers-color-scheme: light)" id="m-tc-light">
+<meta name="theme-color" content="#efe4cf" media="(prefers-color-scheme: light)" id="m-tc-light">
 <meta name="theme-color" content="#1b1530" media="(prefers-color-scheme: dark)" id="m-tc-dark">
 <title>Board presenter</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23ffb86b'/><rect x='3' y='4' width='3' height='8' fill='%232a1600'/><rect x='7' y='4' width='3' height='5' fill='%232a1600'/><rect x='11' y='4' width='2' height='6' fill='%232a1600'/></svg>">
@@ -13,7 +13,7 @@
 // The board's theme choice (Auto / Dusk / Day / Night / Terminal, per browser), like the board and the 3D presenter.
 // Auto leaves html[data-theme] off and follows the OS. Older saved values: light = Day, dark = Dusk.
 (function () {
-  var THEMES = { dusk: '#1b1530', day: '#cfe3f2', night: '#080c1a', terminal: '#020a04' };
+  var THEMES = { dusk: '#1b1530', day: '#efe4cf', night: '#080c1a', terminal: '#020a04' };
   function themeOf(t) { t = t === 'light' ? 'day' : t === 'dark' ? 'dusk' : t; return Object.prototype.hasOwnProperty.call(THEMES, t) ? t : 'auto'; }
   function apply(t) {
     var d = document.documentElement, g = function (i) { return document.getElementById(i); };
@@ -36,9 +36,9 @@
      Same colours, radius, status colours and motion; the type scale is fluid, from a phone to a projector. */
   :root {
     color-scheme: light;
-    --bg: #cfe3f2; --panel: #fff7e8; --chip: #efe3cc; --ink: #2c2114; --muted: #67563e; --line: #7a5f3d; --field-line: #7a5f3d;
+    --bg: #efe4cf; --panel: #fff7e8; --chip: #efe3cc; --ink: #2c2114; --muted: #67563e; --line: #7a5f3d; --field-line: #7a5f3d;
     --outline: #3a2a14; --hi: rgba(255, 255, 255, .7); --lo: rgba(80, 50, 10, .16); --shade: 1px 1px 0 rgba(255, 255, 255, .6);
-    --accent: #135fa8; --accent-ink: #fff7e8; --mark: #9a4a14; --mark-ink: #fff7e8; --ok: #1a6e2d; --warn: #845407; --warn-soft: #f8e8c6; --bad: #b42335; --bad-soft: #f9e0dc;
+    --accent: #135fa8; --review: #0b6b6e; --accent-ink: #fff7e8; --mark: #9a4a14; --mark-ink: #fff7e8; --ok: #1a6e2d; --warn: #845407; --warn-soft: #f8e8c6; --bad: #b42335; --bad-soft: #f9e0dc;
     --pl: 28%; --ps: 60%;
     /* The board's pixel look (office demo): square corners, 2px borders, bevelled panels, the four palettes (Dusk, Day, Night, Terminal); monospace for labels and numbers. */
     --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif;
@@ -55,7 +55,7 @@
       color-scheme: dark;
       --bg: #1b1530; --panel: #241c40; --chip: #342a5a; --ink: #f1e9ff; --muted: #b0a2d2; --line: #5b4b8a; --field-line: #8e7fc6;
       --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --shade: 2px 2px 0 rgba(0, 0, 0, .35);
-      --accent: #6ec1ff; --mark: #ffb86b; --mark-ink: #2a1600; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
+      --accent: #6ec1ff; --review: #5fd8c8; --mark: #ffb86b; --mark-ink: #2a1600; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
       --pl: 74%; --ps: 70%;
     }
   }
@@ -63,7 +63,7 @@
     color-scheme: dark;
     --bg: #1b1530; --panel: #241c40; --chip: #342a5a; --ink: #f1e9ff; --muted: #b0a2d2; --line: #5b4b8a; --field-line: #8e7fc6;
     --outline: #0d0a1a; --hi: rgba(255, 255, 255, .12); --lo: rgba(0, 0, 0, .35); --shade: 2px 2px 0 rgba(0, 0, 0, .35);
-    --accent: #6ec1ff; --mark: #ffb86b; --mark-ink: #2a1600; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
+    --accent: #6ec1ff; --review: #5fd8c8; --mark: #ffb86b; --mark-ink: #2a1600; --accent-ink: #1b1530; --ok: #7ee081; --warn: #ffc857; --warn-soft: #3f3343; --bad: #ff6b7a; --bad-soft: #432647;
     --pl: 74%; --ps: 70%;
   }
   :root[data-theme="day"] { color-scheme: light; }
@@ -71,14 +71,14 @@
     color-scheme: dark;
     --bg: #080c1a; --panel: #0f1730; --chip: #1c2a50; --ink: #dce7ff; --muted: #9aaad6; --line: #31457f; --field-line: #6a80c0;
     --outline: #02040c; --hi: rgba(160, 190, 255, .14); --lo: rgba(0, 0, 0, .45); --shade: 2px 2px 0 rgba(0, 0, 0, .45);
-    --accent: #5cd6f0; --mark: #6ea8ff; --mark-ink: #04122c; --accent-ink: #080c1a; --ok: #5fe3a1; --warn: #f2c14e; --warn-soft: #2a2838; --bad: #ff7a90; --bad-soft: #341c38;
+    --accent: #5cd6f0; --review: #c4a0ff; --mark: #ffb86b; --mark-ink: #2a1600; --accent-ink: #080c1a; --ok: #5fe3a1; --warn: #f2c14e; --warn-soft: #2a2838; --bad: #ff7a90; --bad-soft: #341c38;
     --pl: 76%; --ps: 70%;
   }
   :root[data-theme="terminal"] {
     color-scheme: dark;
     --bg: #020a04; --panel: #04140a; --chip: #0b2814; --ink: #a4ffb5; --muted: #5fc477; --line: #1d9a3d; --field-line: #2fb352;
     --outline: #000; --hi: rgba(57, 255, 106, .16); --lo: rgba(0, 0, 0, .5); --shade: 2px 2px 0 rgba(0, 0, 0, .5);
-    --accent: #4de0ff; --mark: #39ff6a; --mark-ink: #00230a; --accent-ink: #020a04; --ok: #39ff6a; --warn: #e5ff4d; --warn-soft: #1c260a; --bad: #ff6b6b; --bad-soft: #2e1010;
+    --accent: #4de0ff; --review: #e8fff0; --mark: #ffb547; --mark-ink: #1a0f00; --accent-ink: #020a04; --ok: #39ff6a; --warn: #e5ff4d; --warn-soft: #1c260a; --bad: #ff6b6b; --bad-soft: #2e1010;
     --pl: 72%; --ps: 70%;
   }
   * { box-sizing: border-box; }
@@ -109,7 +109,7 @@
   /* One bar, one segment per status, in the board's status colours. */
   .bar { display: flex; height: clamp(12px, 1.2vw, 20px); border-radius: var(--r-full); border: 2px solid var(--line); background: var(--chip); overflow: hidden; margin: 1em 0 .8em; }
   .bar > span { display: block; height: 100%; flex: 0 0 auto; }
-  .s-done { background: var(--ok); } .s-review { background: var(--warn); } .s-blocked { background: var(--bad); } .s-doing { background: var(--accent); }
+  .s-done { background: var(--ok); } .s-review { background: var(--review); } .s-blocked { background: var(--bad); } .s-doing { background: var(--accent); }
   .s-claimed { background: color-mix(in srgb, var(--accent) 40%, var(--chip)); }
   .s-open { background: transparent; box-shadow: inset 0 0 0 2px var(--field-line); }
   .cols { display: flex; flex-wrap: wrap; gap: .4em 1.2em; color: var(--muted); }
@@ -226,6 +226,20 @@ function outlook(now = Date.now()) {
   return { verdict, label: verdict === 'ok' ? 'On track' : verdict === 'tight' ? 'Tight' : `Behind by ~${plural(shortBy, 'task')}`,
     why: `About ${durWords(eta * 60e3)} of work left (${plural(left.length, 'task')} at this board's median time per size, over ${plural(slots, 'agent slot')} online) and ${durWords(mins * 60e3)} to the ${frozen ? 'demo' : 'freeze'}` };
 }
+// One vocabulary and one counting rule for every view (the board, its 3D view, both presenters). Keep in sync with
+// columnCounts() / needsOf() in office/src/live/board.ts and blockedSplit() / isStale() in public/index.html.
+// Tasks per board column: proposals sit (and count) in Open, as on the board; "x of y done" leaves them out.
+function columnCounts(tasks) { const n = { open: 0, claimed: 0, in_progress: 0, blocked: 0, review: 0, done: 0 }; for (const t of tasks) n[t.status === 'proposed' ? 'open' : t.status]++; return n; }
+const isStale = (t, now) => ['claimed', 'in_progress'].includes(t.status) && (typeof t.stale === 'boolean' ? t.stale : now - t.updated_at > 15 * 60e3);
+// What waits on a human: open questions; blocked tasks WITHOUT an open question (a task blocked on a question is counted
+// once, as the question); stale tasks; agents out of usage.
+function needsOf(now = Date.now()) {
+  const questions = (state.questions || []).filter((q) => !q.answer);
+  const asked = new Set(questions.map((q) => q.task_id).filter(Boolean));
+  const tasks = state.tasks || [];
+  return { questions, blocked: tasks.filter((t) => t.status === 'blocked' && !asked.has(t.id)), stale: tasks.filter((t) => isStale(t, now)),
+    limited: (state.presence || []).filter((p) => p.kind === 'agent' && !skipName(p.name) && limitedNow(p, now)) };
+}
 function dur(ms) { const t = Math.max(0, Math.round(ms / 1000)); const h = Math.floor(t / 3600); const m = Math.floor((t % 3600) / 60); const s = t % 60; return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}:${String(s).padStart(2, '0')}`; }
 
 async function load() {
@@ -274,31 +288,34 @@ function render() {
   const agents = (state.presence || []).filter((p) => p.kind === 'agent');
   const agentOf = (n) => agents.find((a) => a.name === agentRoot(n));
   const groups = new Map(); // person -> { items: [], out: bool, h: hue }
-  const add = (name, text, stuck = false) => { const k = personOf(name); if (!groups.has(k)) groups.set(k, { items: [], out: false, h: hue(name) }); const g = groups.get(k); if (text) g.items.push({ text, stuck }); if (agentOf(name)?.limited) g.out = true; };
+  const add = (name, text, stuck = false) => { const k = personOf(name); if (!groups.has(k)) groups.set(k, { items: [], out: false, h: hue(name) }); const g = groups.get(k); if (text) g.items.push({ text, stuck }); if (limitedNow(agentOf(name) || {}, Date.now())) g.out = true; };
   const holders = new Set();
   for (const t of tasks) if (['claimed', 'in_progress', 'blocked'].includes(t.status) && t.assignee) { holders.add(agentRoot(t.assignee)); add(t.assignee, `#${t.id} ${t.title}`, t.status === 'blocked'); }
-  for (const a of agents) if (a.online && a.doing && !a.limited && !holders.has(a.name) && !/^working \(last board call/.test(a.doing)) add(a.name, a.doing);
+  for (const a of agents) if (a.online && a.doing && !limitedNow(a, Date.now()) && !holders.has(a.name) && !/^working \(last board call/.test(a.doing)) add(a.name, a.doing);
   const people = [...groups].filter(([, g]) => g.items.length).sort((a, b) => a[0].localeCompare(b[0]));
   // Everyone who holds work (a big screen has room for a team), stuck tasks first and marked.
   const NOW_MAX = 6;
   for (const [, g] of groups) g.items.sort((a, b) => b.stuck - a.stuck);
-  const itemsText = (g) => g.items.map((i) => (i.stuck ? `Stuck: ${i.text}` : i.text)).join('; ');
-  const itemsHtml = (g) => g.items.map((i) => (i.stuck ? `<b class="stuck">Stuck</b> ${esc(i.text)}` : esc(i.text))).join('; ');
+  const itemsText = (g) => g.items.map((i) => (i.stuck ? `Blocked: ${i.text}` : i.text)).join('; ');
+  const itemsHtml = (g) => g.items.map((i) => (i.stuck ? `<b class="stuck">Blocked</b> ${esc(i.text)}` : esc(i.text))).join('; ');
   const ol = outlook();
   // Amber, not red, even when behind: the room (judges, other teams) sees it; it's a pace note for the team.
   const vd = ol ? `<span class="pill ${ol.verdict === 'ok' ? 'ok' : 'warn'}" id="verdict" title="${esc(ol.why)}.">${esc(ol.label)}</span>` : '';
-  const nStuck = tasks.filter((t) => t.status === 'blocked').length;
+  const nd = needsOf();
   const taskTitle = (id) => (state.tasks || []).find((t) => t.id === id)?.title || '';
   const merges = (state.events || []).filter((e) => e.kind === 'task_updated' && e.data?.status === 'done' && /→ done/.test(e.text || '')).slice(-4).reverse();
-  const qOpen = (state.questions || []).filter((q) => !q.answer).length;
+  const qOpen = nd.questions.length;
+  const needPills = [qOpen ? `<span class="pill warn">${plural(qOpen, 'question')} waiting</span>` : '', nd.blocked.length ? `<span class="pill bad">${nd.blocked.length} blocked</span>` : '',
+    nd.stale.length ? `<span class="pill">${nd.stale.length} stale</span>` : '', nd.limited.length ? `<span class="pill warn">${nd.limited.length} out of usage</span>` : ''].join('');
   const ci = state.main_ci;
   const ciPill = !ci ? '' : ci.status === 'fail' ? `<span class="pill bad">main is failing${ci.failing?.length ? `: ${esc(ci.failing.join(', '))}` : ''}</span>` : ci.status === 'pending' ? '<span class="pill">main: checks running…</span>' : '<span class="pill ok">✓ main green</span>';
-  const n = { done, review: by('review'), blocked: by('blocked'), doing: by('in_progress'), claimed: by('claimed'), open: by('open') };
+  const c = columnCounts(state.tasks || []);
+  const n = { done: c.done, review: c.review, blocked: c.blocked, doing: c.in_progress, claimed: c.claimed, open: c.open };
   const seg = (k) => (n[k] ? `<span class="s-${k}" data-seg="${k}" style="width:${(n[k] / total) * 100}%"></span>` : '');
   const key = (k, label) => `<span><i class="s-${k}" aria-hidden="true"></i>${label} <b>${n[k]}</b></span>`;
   const html = `
     <header><span class="brand"><svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" fill="var(--mark)"/><rect x="3" y="4" width="2.6" height="8" fill="var(--mark-ink)"/><rect x="6.7" y="4" width="2.6" height="5" fill="var(--mark-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" fill="var(--mark-ink)"/></svg>Claude Board</span><span class="live"><span class="dot ${live ? 'live' : ''}" aria-hidden="true"></span>${live ? 'Live' : lastErr ? esc(lastErr) : 'Connecting…'}</span><span class="sp"></span>
-      ${ciPill || qOpen || nStuck ? `<div class="pills">${ciPill}${qOpen ? `<span class="pill warn">${qOpen} question${qOpen > 1 ? 's' : ''} waiting for a human</span>` : ''}${nStuck ? `<span class="pill bad">${plural(nStuck, 'task')} stuck</span>` : ''}</div>` : ''}</header>
+      ${ciPill || needPills ? `<div class="pills">${ciPill}${needPills}</div>` : ''}</header>
     <h1 class="goal${state.settings?.goal ? '' : ' unset'}" title="${esc(plain(state.settings?.goal))}">${esc(goalHead(state.settings?.goal) || 'No goal set yet')}</h1>
     <div class="row">
       <section class="card" aria-labelledby="h-time"><h2 id="h-time">Time</h2>${vd}<div class="clock ${cd.cls}" id="clock">${esc(cd.big)}</div><div class="sub" id="clock-sub">${esc(cd.sub)}</div></section>

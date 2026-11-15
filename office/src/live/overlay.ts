@@ -2,12 +2,12 @@
  * The calm overlay around the 3D office: goal, deadline verdict and countdown on top; done count, questions waiting
  * and who is stuck below. Read-only, large type for a screen across the room, in the board's Dusk / Day look.
  */
-import { agentRoot, countdown, goalHead, hueOf, outlook, personOf, plain, plural, timeNow, type BoardState } from './board';
+import { agentRoot, clock, columnCounts, countdown, goalHead, hueOf, needsOf, outlook, personOf, plain, plural, timeNow, type BoardState } from './board';
 
 const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 // The board's mark, in the board's accent (amber / burnt orange), not the presenter's blue.
 const MARK = '<svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" fill="var(--mark)"/><rect x="3" y="4" width="2.6" height="8" fill="var(--mark-ink)"/><rect x="6.7" y="4" width="2.6" height="5" fill="var(--mark-ink)"/><rect x="10.4" y="4" width="2.6" height="6.5" fill="var(--mark-ink)"/></svg>';
-const BLOCKED_MAX = 3;
+const NEEDS_MAX = 4; // rows under the questions line: blocked, stale, out of usage
 
 export interface OverlayEls { top: HTMLElement; bottom: HTMLElement; msg: HTMLElement; root: HTMLElement }
 
@@ -80,18 +80,26 @@ export class Overlay {
         </section>
       </div>`;
 
-    const n = { done, review: by('review'), blocked: by('blocked'), doing: by('in_progress'), claimed: by('claimed'), open: by('open') };
+    // The board's column counts (proposals count in Open, as on the board).
+    const c = columnCounts(s.tasks || []);
+    const n = { done: c.done, review: c.review, blocked: c.blocked, doing: c.in_progress, claimed: c.claimed, open: c.open };
     const seg = (k: keyof typeof n) => (n[k] ? `<span class="s-${k}" style="width:${(n[k] / total) * 100}%"></span>` : '');
     const key = (k: keyof typeof n, label: string) => `<span><i class="s-${k}" aria-hidden="true"></i>${label} <b>${n[k]}</b></span>`;
-    // Who needs a human: open questions (and who asked), then the stuck tasks with their person.
-    const qs = (s.questions || []).filter((q) => !q.answer);
+    // Who needs a human, by the board's rule: the questions (and who asked), then blocked tasks that don't wait on one of
+    // those questions, stale tasks and agents out of usage, each with its person.
+    const nd = needsOf(s, now);
+    const qs = nd.questions;
     const askers = [...new Set(qs.map((q) => personOf(q.asker, s.presence || [])))];
-    const blocked = tasks.filter((x) => x.status === 'blocked').sort((a, b) => a.priority - b.priority || a.id - b.id);
-    const who = (name: string | null) => (name ? `<span class="who" style="--h:${hueOf(name, s.presence || [])}">${esc(personOf(name, s.presence || []))}</span>` : '<span class="who none">nobody</span>');
+    const who = (name: string | null, label?: string) => (name ? `<span class="who" style="--h:${hueOf(name, s.presence || [])}">${esc(label ?? personOf(name, s.presence || []))}</span>` : '<span class="who none">nobody</span>');
+    const rows = [
+      ...nd.blocked.map((x) => `<li class="b"><span class="tag bad">Blocked</span>${who(x.assignee ? agentRoot(x.assignee) : null)}<span class="what">#${x.id} ${esc(x.title)}</span></li>`),
+      ...nd.stale.map((x) => `<li class="s"><span class="tag flag">Stale</span>${who(x.assignee ? agentRoot(x.assignee) : null)}<span class="what">#${x.id} ${esc(x.title)}</span></li>`),
+      ...nd.limited.map((p) => `<li class="l"><span class="tag warn">Out of usage</span>${who(p.name, agentRoot(p.name))}${p.limited?.until ? `<span class="what">back at ${esc(clock(p.limited.until))}</span>` : ''}</li>`),
+    ];
     const needs = [
       qs.length ? `<li class="q"><span class="tag warn">${plural(qs.length, 'question')} waiting</span><span class="what">${askers.length ? `from ${askers.map((a) => `<span class="who" style="--h:${hueOf(a, s.presence || [])}">${esc(a)}</span>`).join(', ')}` : 'for a human'}</span></li>` : '',
-      ...blocked.slice(0, BLOCKED_MAX).map((x) => `<li class="b"><span class="tag bad">Stuck</span>${who(x.assignee ? agentRoot(x.assignee) : null)}<span class="what">#${x.id} ${esc(x.title)}</span></li>`),
-      blocked.length > BLOCKED_MAX ? `<li class="more">and ${blocked.length - BLOCKED_MAX} more stuck</li>` : '',
+      ...rows.slice(0, NEEDS_MAX),
+      rows.length > NEEDS_MAX ? `<li class="more">and ${rows.length - NEEDS_MAX} more</li>` : '',
     ].filter(Boolean);
     const bottom = `
       <section class="card prog" aria-labelledby="h-prog"><h2 id="h-prog">Progress</h2>
@@ -100,7 +108,7 @@ export class Overlay {
         <div class="cols">${key('done', 'Done')}${key('open', 'Open')}${key('claimed', 'Claimed')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}</div>
       </section>
       <section class="card needs" aria-labelledby="h-needs"><h2 id="h-needs">Needs a human</h2>
-        ${needs.length ? `<ul class="list" id="needs">${needs.join('')}</ul>` : '<p class="empty" id="needs">Nothing is waiting on a human, and nobody is stuck.</p>'}
+        ${needs.length ? `<ul class="list" id="needs">${needs.join('')}</ul>` : '<p class="empty" id="needs">Nothing is waiting on a human, and nothing is blocked.</p>'}
       </section>`;
     const a = this.put('top', top);
     const b = this.put('bottom', bottom);

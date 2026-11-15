@@ -120,7 +120,7 @@ try {
   check('a rejected token: "This presenter link has expired"', exp && !e3.length, e3.join('; '));
   // Theme: the board's choice (localStorage board-theme: auto / dusk / day / night / terminal; older: light, dark) wins over
   // the OS. Auto = no data-theme, Dusk on a dark OS, Day on a light one.
-  const BG = { dusk: 'rgb(27, 21, 48)', day: 'rgb(207, 227, 242)', night: 'rgb(8, 12, 26)', terminal: 'rgb(2, 10, 4)' };
+  const BG = { dusk: 'rgb(27, 21, 48)', day: 'rgb(239, 228, 207)', night: 'rgb(8, 12, 26)', terminal: 'rgb(2, 10, 4)' };
   const themed = async (stored, os) => {
     const tp = await browser.newPage(); tp.on('pageerror', (e) => errors.push(e.message));
     await tp.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: os }]);
@@ -131,7 +131,7 @@ try {
   };
   for (const [stored, pal] of [['dusk', 'dusk'], ['day', 'day'], ['night', 'night'], ['terminal', 'terminal'], ['light', 'day'], ['dark', 'dusk']]) {
     const r = await themed(stored, pal === 'day' ? 'dark' : 'light'); // the OS says the opposite: the choice wins
-    check(`board-theme ${stored}: data-theme ${pal}, ${pal} background, ${pal === 'day' ? 'light' : 'dark'} colour scheme and browser bar`, r.theme === pal && r.bg === BG[pal] && r.scheme === (pal === 'day' ? 'light' : 'dark') && r.meta === (pal === 'day' ? 'light' : 'dark') && r.bar.length === 1 && r.bar[0].toLowerCase() === (pal === 'day' ? '#cfe3f2' : { dusk: '#1b1530', night: '#080c1a', terminal: '#020a04' }[pal]), JSON.stringify([r.theme, r.bg, r.scheme, r.meta, r.bar]));
+    check(`board-theme ${stored}: data-theme ${pal}, ${pal} background, ${pal === 'day' ? 'light' : 'dark'} colour scheme and browser bar`, r.theme === pal && r.bg === BG[pal] && r.scheme === (pal === 'day' ? 'light' : 'dark') && r.meta === (pal === 'day' ? 'light' : 'dark') && r.bar.length === 1 && r.bar[0].toLowerCase() === (pal === 'day' ? '#efe4cf' : { dusk: '#1b1530', night: '#080c1a', terminal: '#020a04' }[pal]), JSON.stringify([r.theme, r.bg, r.scheme, r.meta, r.bar]));
     if (stored === 'night' || stored === 'terminal') await r.tp.screenshot({ path: path.join(out, `present-${stored}.png`) });
     await r.tp.close();
   }

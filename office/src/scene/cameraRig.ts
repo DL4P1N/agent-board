@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { ROOM } from '../layout';
 
 export interface CameraState { azimuth: number; elevation: number; zoom: number; target: { x: number; y: number; z: number } }
+/** The parts of the view covered by panels, as fractions of its width (left, right) and height (top, bottom). */
+export interface ViewInsets { top: number; right: number; bottom: number; left: number }
 
 const DEG = Math.PI / 180;
 const _dir = new THREE.Vector3();
@@ -37,6 +39,9 @@ export class CameraRig {
   onHover: ((x: number, y: number) => void) | null = null;
   private cleanup: (() => void)[] = [];
   reducedMotion = false;
+  /** Where panels cover the view: the room is framed in the rest (eased, like the fit). */
+  insets: ViewInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+  private ins: ViewInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 
   constructor(private el: HTMLElement) {
     const down = (e: PointerEvent) => {
@@ -123,7 +128,11 @@ export class CameraRig {
   update(dt: number, rtW: number, rtH: number, auto: { on: boolean; speed: number }, focus: number, focusAt: THREE.Vector3 | null): void {
     const aspect = rtW / rtH;
     if (auto.on && !this.dragging && !this.reducedMotion) this.azimuth += auto.speed * 0.12 * dt;
-    const f = this.computeFit(aspect);
+    // The free part of the view (not under a panel): the room is fitted into it and centred on it.
+    const k = this.reducedMotion || !this.fitInit ? 1 : 1 - Math.exp(-6 * dt);
+    for (const s of ['top', 'right', 'bottom', 'left'] as const) this.ins[s] += (THREE.MathUtils.clamp(this.insets[s] || 0, 0, 0.45) - this.ins[s]) * k;
+    const freeW = Math.max(0.1, 1 - this.ins.left - this.ins.right), freeH = Math.max(0.1, 1 - this.ins.top - this.ins.bottom);
+    const f = this.computeFit(aspect * freeW / freeH) / freeH;
     if (!this.fitInit) { this.fit = f; this.fitInit = true; } else this.fit += (f - this.fit) * (1 - Math.exp(-6 * dt));
 
     // focus blending
@@ -138,7 +147,9 @@ export class CameraRig {
     this.halfH = this.fit / effZoom;
     const halfW = this.halfH * aspect;
     const cam = this.camera;
-    cam.left = -halfW; cam.right = halfW; cam.top = this.halfH; cam.bottom = -this.halfH;
+    // Shift the frustum so the target sits at the centre of the free part (a view offset, no rotation).
+    const dx = ((this.ins.left - this.ins.right) / 2) * 2 * halfW, dy = ((this.ins.bottom - this.ins.top) / 2) * 2 * this.halfH;
+    cam.left = -halfW - dx; cam.right = halfW - dx; cam.top = this.halfH - dy; cam.bottom = -this.halfH - dy;
     cam.updateProjectionMatrix();
 
     _tmp.copy(this.target);

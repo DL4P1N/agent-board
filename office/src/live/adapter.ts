@@ -42,7 +42,7 @@ export function lookFor(p: BoardPresence, b: BoardState, now = Date.now()): Look
   const q = (b.questions || []).find((x) => !x.answer && agentRoot(x.asker) === name);
   if (q) return { phase: 'asking_help', pose: 'raise_hand', bubble: 'Question', ticketId: q.task_id ? '#' + q.task_id : null };
   const blocked = has('blocked');
-  if (blocked) return { phase: 'blocked', pose: 'blocked', bubble: `Stuck on #${blocked.id}`, ticketId: id(blocked) };
+  if (blocked) return { phase: 'blocked', pose: 'blocked', bubble: `Blocked on #${blocked.id}`, ticketId: id(blocked) };
   const doing = has('in_progress');
   if (doing) return { phase: 'working', pose: 'type', bubble: null, ticketId: id(doing) };
   const reviewing = (b.tasks || []).find((t) => t.status === 'review' && t.reviewer && agentRoot(t.reviewer) === name);

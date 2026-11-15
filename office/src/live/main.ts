@@ -19,7 +19,7 @@ const reduced = mq('(prefers-reduced-motion: reduce)');
 // html[data-theme]) follows the OS: Dusk on a dark one, Day on a light one. Older saved values: light = Day, dark = Dusk.
 type Palette = VisualSettings['palette'];
 const PALETTES: readonly Palette[] = ['dusk', 'day', 'night', 'terminal'];
-const BARS: Record<Palette, string> = { dusk: '#1b1530', day: '#cfe3f2', night: '#080c1a', terminal: '#020a04' };
+const BARS: Record<Palette, string> = { dusk: '#1b1530', day: '#efe4cf', night: '#080c1a', terminal: '#020a04' };
 const themeOf = (t: string | null | undefined): Palette | null => {
   const v = t === 'light' ? 'day' : t === 'dark' ? 'dusk' : t;
   return (PALETTES as readonly string[]).includes(v ?? '') ? (v as Palette) : null;

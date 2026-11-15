@@ -39,6 +39,9 @@ export interface OfficeEmbed {
   setTheme(theme: Palette | 'light' | 'dark'): void;
   /** Pause rendering while the office is hidden (the board view), resume when it is shown again. */
   setActive(on: boolean): void;
+  /** Where the page's panels cover the view, as fractions of its width (left, right) and height (top, bottom): the room
+   *  is framed in the part left free, so no desk sits under a dock or the Tasks window. */
+  setInsets(i: { top: number; right: number; bottom: number; left: number }): void;
   /** Highlight an agent (or none). */
   select(agent: string | null): void;
   /** The agent highlighted now (picked in the scene or selected by the page), or null. */
@@ -66,6 +69,7 @@ export function mount(container: HTMLElement, opts: EmbedOptions): OfficeEmbed {
   // With reduced motion the office stands still: it only animates for a moment after something on it changed.
   let settleUntil = 0;
   let sig = '';
+  let insetKey = '';
   const settle = (): void => { settleUntil = performance.now() + 1200; };
   const stateSig = (): string => {
     const s = world.state;
@@ -123,6 +127,12 @@ export function mount(container: HTMLElement, opts: EmbedOptions): OfficeEmbed {
       if (on) { scene.resize(); run(); } else if (raf) { cancelAnimationFrame(raf); raf = 0; }
     },
     select(agent) { if (dead) return; selected = agent; scene.selectAgent(agent); settle(); },
+    setInsets(i) {
+      if (dead) return;
+      const k = `${i.top.toFixed(3)} ${i.right.toFixed(3)} ${i.bottom.toFixed(3)} ${i.left.toFixed(3)}`;
+      if (k === insetKey) return;
+      insetKey = k; scene.setInsets(i); settle();
+    },
     resize() { if (!dead) { scene.resize(); settle(); } },
     destroy() {
       if (dead) return;

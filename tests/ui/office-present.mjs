@@ -62,14 +62,17 @@ try {
     check('creating a task updates the overlay (1 of 4 done)', await until(page, () => /1 of 4 done/.test(document.body.innerText)));
     const bob = await agent(board, 'bob-codex', 'codex-mcp-client'); await bob('board_status');
     await bob('claim_task', { id: t3.id }); await bob('update_task', { id: t3.id, status: 'blocked', note: 'needs the API key' });
-    const stuck = await until(page, (id) => new RegExp(`Stuck[\\s\\S]*bob[\\s\\S]*#${id} Submit form`, 'i').test(document.getElementById('needs')?.innerText || ''), t3.id);
-    check('a blocked task shows under "Needs a human" with its person', stuck, (await page.$eval('#needs', (n) => n.innerText).catch(() => '')).replace(/\s+/g, ' '));
+    const stuck = await until(page, (id) => new RegExp(`Blocked[\\s\\S]*bob[\\s\\S]*#${id} Submit form`, 'i').test(document.getElementById('needs')?.innerText || ''), t3.id);
+    check('a blocked task shows under "Needs a human" with its person (the board\'s word: Blocked)', stuck, (await page.$eval('#needs', (n) => n.innerText).catch(() => '')).replace(/\s+/g, ' '));
     const s1 = await S(page);
     const b1 = s1.agents.find((a) => a.id === 'bob-codex');
-    check('adapter: blocked -> stuck, Codex agent at its own desk', b1?.provider === 'codex' && b1.phase === 'blocked' && b1.pose === 'blocked' && b1.deskIndex !== s1.agents.find((a) => a.id === 'ana-claude').deskIndex, JSON.stringify(b1 && [b1.provider, b1.phase, b1.deskIndex]));
+    check('adapter: blocked -> "Blocked on #id" (the board\'s word), Codex agent at its own desk', b1?.provider === 'codex' && b1.phase === 'blocked' && b1.pose === 'blocked' && b1.bubble === `Blocked on #${t3.id}` && b1.deskIndex !== s1.agents.find((a) => a.id === 'ana-claude').deskIndex, JSON.stringify(b1 && [b1.provider, b1.phase, b1.bubble, b1.deskIndex]));
     await ana('ask_human', { question: 'Which login provider?' });
     check('a question shows as waiting for a human', await until(page, () => /1 question waiting[\s\S]*ana/i.test(document.getElementById('needs')?.innerText || '')));
     check('adapter: an agent with an open question raises its hand', (await S(page)).agents.find((a) => a.id === 'ana-claude')?.pose === 'raise_hand');
+    // The board's counting rule: a blocked task that waits on an open question is counted once, as the question.
+    await bob('ask_human', { question: 'Where is the API key?', task_id: t3.id });
+    check('a blocked task with an open question is counted once, as the question (not also as Blocked)', await until(page, () => { const t = document.getElementById('needs')?.innerText || ''; return /2 questions waiting/i.test(t) && !/Blocked/i.test(t); }), (await page.$eval('#needs', (n) => n.innerText).catch(() => '')).replace(/\s+/g, ' '));
     await ana('update_task', { id: t2.id, status: 'review', note: 'pr' });
     check('adapter: a task sent to review flies a paper plane to the inbox', await until(page, () => window.__officeState.flights.some((f) => f.kind === 'pr' && f.to.station === 'inbox')));
     await human(`/tasks/${t2.id}`, 'PATCH', { status: 'done' });
@@ -95,7 +98,7 @@ try {
 
     // Theme: the board's choice (localStorage board-theme: auto / dusk / day / night / terminal; older: light, dark) wins
     // over the OS. Auto = no data-theme, Dusk on a dark OS, Day on a light one. The scene palette follows.
-    const BG = { dusk: 'rgb(27, 21, 48)', day: 'rgb(207, 227, 242)', night: 'rgb(8, 12, 26)', terminal: 'rgb(2, 10, 4)' };
+    const BG = { dusk: 'rgb(27, 21, 48)', day: 'rgb(239, 228, 207)', night: 'rgb(8, 12, 26)', terminal: 'rgb(2, 10, 4)' };
     const themed = async (stored, os) => {
       const tp = watch(await browser.newPage());
       await tp.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: os }]);
