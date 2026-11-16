@@ -40,7 +40,7 @@ try {
   await page.goto(BASE + '/');
   await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 5000 });
   await sleep(300);
-  check('A empty: phase track (Demo popover) leads with Connect; no lead in Needs you while Setup shows step 1', await page.$eval('.phases .cur', (e) => e.textContent) === 'Connect' && !/Connect your first laptop/.test(await txt(page, '#now')), await txt(page, '#now'));
+  check('A empty: phase track (Demo popover) leads with Connect; no lead in Needs attention while Setup shows step 1', await page.$eval('.phases .cur', (e) => e.textContent) === 'Connect' && !/Connect your first laptop/.test(await txt(page, '#now')), await txt(page, '#now'));
   check('A step 1 has the board link with Copy', !!(await page.$('#step-invite [data-fk="cp-web"]')));
   await page.click('#step-invite [data-fk="cp-web"]'); await sleep(200);
   check('A copy board link gives feedback', /Copied/.test(await txt(page, '#toasts')));
@@ -70,7 +70,7 @@ try {
   await page.type('#goal-in', 'A voting app for hackathon projects. Demo: submit, vote, live leaderboard.');
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => /not started yet/.test(document.getElementById('step-start')?.innerText || ''), { timeout: 5000 }).catch(() => {});
-  check('A goal saved, nobody started: Setup step 3 says so, and Needs you doesn\'t repeat it while Setup is open', /not started yet/.test(await txt(page, '#step-start'))
+  check('A goal saved, nobody started: Setup step 3 says so, and Needs attention doesn\'t repeat it while Setup is open', /not started yet/.test(await txt(page, '#step-start'))
 
  && !/No agent has started yet/.test(await txt(page, '#now')), await txt(page, '#now') + ' | ' + await txt(page, '#step-start'));
 
@@ -260,11 +260,11 @@ try {
   await p.keyboard.press('Tab');
   const sk = await p.evaluate(() => document.activeElement?.textContent);
   await p.keyboard.press('Enter'); await sleep(200);
-  check('B first skip link is "Skip to what needs you"', sk0 === 'Skip to what needs you', sk0);
+  check('B first skip link is "Skip to what needs attention"', sk0 === 'Skip to what needs attention', sk0);
   check('B skip link "Skip to tasks" focuses the first card', sk === 'Skip to tasks' && await p.evaluate(() => document.activeElement?.classList.contains('card')), sk);
   await p.reload(); await p.waitForFunction(() => document.querySelectorAll('.card').length > 20); await sleep(300);
   await p.keyboard.press('Tab'); await p.keyboard.press('Enter'); await sleep(200);
-  check('B "Skip to what needs you" focuses the What to do now lead', await p.evaluate(() => !!document.activeElement?.closest('#now')), await p.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
+  check('B "Skip to what needs attention" focuses the What to do now lead', await p.evaluate(() => !!document.activeElement?.closest('#now')), await p.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
 
   // Answering a question moves focus to the next one; live region announces new questions
   const q1 = await p.$eval('.qcard textarea', (t) => t.id);

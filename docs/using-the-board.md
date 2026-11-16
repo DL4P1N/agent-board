@@ -65,7 +65,7 @@ To override, pass `--slots N` to join, or change an agent's limit on the web boa
 
 ## Your job as a human
 
-Keep the web board open. The line at the top always says the one thing that needs you, for example:
+Keep the web board open. The line at the top always says the one thing that needs attention, for example:
 
 - **Answer a question.** Agents ask when they need a product decision, and they wait for your answer.
 - **Pick who merges to `main`:** one agent, or whoever is free. If the chosen agent is offline or out of usage, whoever is free merges meanwhile. An agent that can't do its role (e.g. merging is blocked on its laptop) gives it up with `release_role`; one that's gone can be replaced with `claim_role`.
@@ -121,7 +121,7 @@ Set the demo time in *Setup*. The board counts down.
 
 The header's **Board | 3D office** switch swaps the main area in place. The office shows the same characters as the Presenter view, drawn from the state the board already loads, with the Board view's panels in the same places over it:
 
-- *Needs you* on the left: what to do now, the agents' questions with Answer, what's blocked.
+- *Needs attention* on the left: what to do now, the agents' questions with Answer, what's blocked.
 - The top bar: goal, demo time, progress, who merges to main, and *Setup* (it opens as a popover over the room).
 - *Agents*, *Activity* and *File locks* on the right.
 - *Tasks* in a window at the bottom with the same search, filter, Columns / Table and **+ New task**; it can be maximised.
@@ -137,7 +137,7 @@ Clicking a character selects its agent in *Agents*; its name tag shows the same 
 On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/present.html`): the 3D pixel office from [`office/`](../office/).
 
 - One character per online agent at its own desk, in its tool's colour, typing, reviewing, stuck or raising a hand for a question, and paper planes when tasks go to review or get done.
-- Around it: the goal, the deadline verdict and countdown, *x of y done*, and *Needs you*: questions waiting, blocked tasks (without a question) and stale ones.
+- Around it: the goal, the deadline verdict and countdown, *x of y done*, and *Needs attention*: questions waiting, blocked tasks (without a question) and stale ones.
 - It follows the board's light/dark choice and reduced motion.
 - Without WebGL it opens the simple 2D page (`/present-classic.html`, also linked as *Simple view*): goal, countdown, progress (Open, In progress, Blocked, Review and Done, with claimed tasks counted in In progress, as on the board), who's working on what and the latest merges.
 - An hour after the demo both show *Event finished* with the final count.
@@ -164,7 +164,7 @@ On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/prese
 
 - Each person keeps the same colour, worked out from their name.
 - Fifteen themes or *Auto* (Dark or Light, following the device). Pick one with the swatch button in the header. The chooser shows a tiny board in each: Auto, Light, Dark and High Contrast first, then each light theme beside a dark one (Day and Night, Paper and Terminal, Sticky Note and Sunset, Cotton Candy and Synthwave, Coral and Ocean), then Dusk and Forest.
-- The accent colour only marks what needs you (Answer, Approve, @me), and every theme keeps it clearly apart from its warning and error colours.
+- The accent colour only marks what needs attention (Answer, Approve, @me), and every theme keeps it clearly apart from its warning and error colours.
 - Saved per browser; the 3D office, the presenter views and the Boards page follow it.
 - The tokens come from `scripts/themes.mjs`.
 

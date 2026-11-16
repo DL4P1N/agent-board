@@ -85,7 +85,7 @@ export class Overlay {
     const n = { done: c.done, review: c.review, blocked: c.blocked, doing: c.in_progress, open: c.open };
     const seg = (k: keyof typeof n) => (n[k] ? `<span class="s-${k}" style="width:${(n[k] / total) * 100}%"></span>` : '');
     const key = (k: keyof typeof n, label: string) => `<span><i class="s-${k}" aria-hidden="true"></i>${label} <b>${n[k]}</b></span>`;
-    // What needs you, by the board's rule: the questions (and who asked), then blocked tasks that don't wait on one of
+    // What needs attention, by the board's rule: the questions (and who asked), then blocked tasks that don't wait on one of
     // those questions and stale tasks, each with its person. Out of usage isn't listed: nobody in the room can fix it
     // (the room shows it over the agent).
     const nd = needsOf(s, now);
@@ -107,8 +107,8 @@ export class Overlay {
         <div class="bar" role="progressbar" aria-label="Tasks done" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}">${total ? (['done', 'review', 'blocked', 'doing'] as const).map(seg).join('') : ''}</div>
         <div class="cols">${key('done', 'Done')}${key('open', 'Open')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}</div>
       </section>
-      <section class="card needs" aria-labelledby="h-needs"><h2 id="h-needs">Needs you</h2>
-        ${needs.length ? `<ul class="list" id="needs">${needs.join('')}</ul>` : '<p class="empty" id="needs">Nothing needs you, and nothing is blocked.</p>'}
+      <section class="card needs" aria-labelledby="h-needs"><h2 id="h-needs">Needs attention</h2>
+        ${needs.length ? `<ul class="list" id="needs">${needs.join('')}</ul>` : '<p class="empty" id="needs">Nothing needs attention, and nothing is blocked.</p>'}
       </section>`;
     const a = this.put('top', top);
     const b = this.put('bottom', bottom);

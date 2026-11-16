@@ -114,7 +114,7 @@ try {
   await human('/settings', 'PUT', { deadline: '' }); await reload();
   check('no deadline: no countdown, no verdict', await page.evaluate(() => $('clock').classList.contains('unset') && !$('clock').querySelector('.vd') && outlook() === null && !/won't make it/.test($('now').innerText)));
 
-  // ================= more "needs you" signals =================
+  // ================= more "needs attention" signals =================
   const st3 = await human('/state');
   const p3 = st3.tasks.filter((t) => t.status === 'open' && t.priority === 3).map((t) => t.id);
   for (const id of p3) await human(`/tasks/${id}`, 'DELETE');

@@ -158,7 +158,7 @@ export const isLight = (id) => !!BASE[id]?.light;
 const BOARD_KEYS = ['tool-claude', 'tool-codex', 'tool-copilot', 'tool-gemini', 'tool-cursor', 'tool-other', 'bg', 'sunken', 'panel', 'raised', 'chip', 'field', 'ink', 'muted', 'line', 'line-strong', 'field-line', 'border', 'outline', 'hi', 'lo', 'accent', 'accent-hover', 'accent-ink', 'accent-soft', 'accent-line', 'info', 'review', 'ok', 'warn', 'warn-soft', 'warn-line', 'stale', 'bad', 'bad-hover', 'bad-soft', 'bad-line', 'mention', 'mention-line', 'on-fill', 'toast', 'toast-ink', 'scrim', 'pl', 'ps', 'dl', 'shade'];
 const BOARDS_KEYS = ['bg', 'sunken', 'panel', 'chip', 'field', 'ink', 'muted', 'line', 'line-strong', 'field-line', 'border', 'outline', 'hi', 'lo', 'accent', 'accent-hover', 'accent-ink', 'accent-soft', 'ok', 'ok-soft', 'bad', 'bad-hover', 'bad-soft', 'on-fill', 'toast', 'toast-ink', 'shade'];
 // The presenters: --accent is the board's In progress blue (links, the progress bar), --mark the board's accent
-// (what needs you), --line the panel border.
+// (what needs attention), --line the panel border.
 const presenterTokens = (id) => {
   const t = TOKENS[id];
   return { bg: t.bg, panel: t.panel, chip: t.chip, ink: t.ink, muted: t.muted, line: t.border, 'field-line': t['field-line'], outline: t.outline, hi: t.hi, lo: t.lo, shade: t.shade,
@@ -285,7 +285,7 @@ export function contrastProblems() {
 }
 
 // ---- the accent stays apart from the status colours ----
-// The accent means "needs you"; warn (amber) and bad (red) mean a state. Within 30 degrees of hue they read as the same
+// The accent means "needs attention"; warn (amber) and bad (red) mean a state. Within 30 degrees of hue they read as the same
 // thing, so every theme keeps its accent at least that far from both.
 const hue = (h) => { const [r, g, b] = hex(h).map((v) => v / 255); const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b); if (!d) return 0;
   const x = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; return (x * 60 + 360) % 360; };

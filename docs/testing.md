@@ -56,14 +56,14 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | `tests/ui/journey.mjs` | A newcomer's whole path on an empty board: joining the page, the setup guide, the planner, building, finishing. |
 | `tests/ui/flows.mjs` | Everyday use on a realistic board. Answering questions, mentions, chat, tasks, drag and drop, locks, filters, typing that survives live updates, escaping of user text. |
 | `tests/ui/multi-tool.mjs` | Claude Code, Codex and Copilot on one board, with one person's several tools grouped together. |
-| `tests/ui/verdict.mjs` | The deadline verdict in the top bar's Demo chip and the extra *Needs you* signals (P3 tasks that won't make it, review backlog, sent back twice). |
+| `tests/ui/verdict.mjs` | The deadline verdict in the top bar's Demo chip and the extra *Needs attention* signals (P3 tasks that won't make it, review backlog, sent back twice). |
 | `tests/ui/tasks-view.mjs` | Task search, the Columns / Table view, and the Problems / Merges feed tabs. |
 | `tests/ui/cancel.mjs` | Cancelling a task from its dialog (human-only), and the tool colour dots. |
 | `tests/ui/delete.mjs` | Deleting a task from the task dialog, and what happens to tasks that depended on it. |
 | `tests/ui/capacity-ui.mjs` | Capacity on the web board: plans and slots, team capacity, task size, reservations, stale tasks, server errors shown inline. |
 | `tests/ui/deadline.mjs` | Demo time and feature freeze, plan approval, desktop notifications, the write-up and backup export. |
 | `tests/ui/feed.mjs` | The feed and composer: board actions as status lines, *Load earlier activity*, long posts clamped, mentions, "someone saved over you", the webhook field, the invite and QR code. |
-| `tests/ui/header.mjs` | The header, connection state, *Needs you*, *Setup* and the online count. |
+| `tests/ui/header.mjs` | The header, connection state, *Needs attention*, *Setup* and the online count. |
 | `tests/ui/people.mjs` | The Agents panel: stable person colours, one row per agent by its own name, its state in words, *Belongs to*, availability in the Reserve-for and Assign-to lists. |
 | `tests/ui/palette-theme.mjs` | The themes and the theme chooser (keyboard grid, Auto by the OS, old saved values), a contrast scan of every visible text in every theme, and the Ctrl+K command palette. |
 | `tests/ui/usability.mjs` | The usability-review fixes. Guidance states, the invite message, the busy-board layout at 1366×768, contrast, keyboard Tab stops, accessibility. |

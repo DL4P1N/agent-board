@@ -46,7 +46,7 @@ try {
   await page.type('#g-name', 'dana'); await page.keyboard.press('Enter');
   await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 5000 });
   await sleep(400);
-  check('empty: no lead while Setup shows step 1; Needs you offers the goal meanwhile', !/Connect your first laptop/.test(await now()) && /Write the goal \(step 2\)/.test(await now()), await now());
+  check('empty: no lead while Setup shows step 1; Needs attention offers the goal meanwhile', !/Connect your first laptop/.test(await now()) && /Write the goal \(step 2\)/.test(await now()), await now());
   check('empty: setup guide expanded with join cmd', await page.evaluate(() => /npm run join -- --url/.test(document.getElementById('setup').innerText)));
   check('empty: board banner', await page.$eval('#board-empty', (e) => !e.hidden && /No tasks yet/.test(e.innerText)));
   // Nobody connected yet: the phase track leads with Connect, matching the what-to-do line.
@@ -62,7 +62,7 @@ try {
   await alice('board_status');
   await reload(); await sleep(200);
   check('alice shows as connected agent', await page.evaluate(() => /1 laptop connected/.test(document.getElementById('step-invite').innerText) && /1 agent started/.test(document.getElementById('step-start').innerText)));
-  check('next: write goal (in Setup, step 2, which is open; Needs you has no lead)', /Setup shows what's next/.test(await now()) && await page.evaluate(() => !!document.getElementById('goal-in')?.offsetWidth), await now());
+  check('next: write goal (in Setup, step 2, which is open; Needs attention has no lead)', /Setup shows what's next/.test(await now()) && await page.evaluate(() => !!document.getElementById('goal-in')?.offsetWidth), await now());
   await page.click('#goal-in'); await sleep(200);
   check('the goal box takes focus', await page.evaluate(() => document.activeElement?.id === 'goal-in'));
 
