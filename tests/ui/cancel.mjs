@@ -54,6 +54,25 @@ try {
   check('cancellation with reason recorded in activity', !!ev && /cancelled/.test(ev.text) && /duplicate of another one/.test(ev.text), ev?.text);
   check('card removed from the board', !(await page.$(`.card[data-id="${a.id}"]`)));
 
+  // A proposal's dialog: Approve and Reject… in the footer; Save changes only once a field has changed.
+  await alice('claim_role', { role: 'planner' });
+  const bobA = await agent(board, 'bob-codex', 'codex-mcp-client');
+  const p = await bobA('create_task', { title: 'Idea: emoji reactions' });
+  const shown = () => page.evaluate(() => [...document.querySelectorAll('#task-dlg .df button')].filter((b) => b.offsetWidth).map((b) => b.id).join());
+  if (p.status === 'proposed') {
+    await page.waitForSelector(`.card[data-id="${p.id}"]`);
+    await page.evaluate((id) => openTask(id), p.id); await page.waitForSelector('#task-dlg[open]');
+    check('a proposal\'s dialog: Reject…, Close and Approve; no Save until a field changes', (await shown()) === 'td-reject,td-close,td-approve', await shown());
+    await page.type('#td-name', ' (small)');
+    check('after an edit: Save changes shows', (await shown()) === 'td-reject,td-close,td-save,td-approve', await shown());
+    await page.click('#td-approve');
+    await page.waitForFunction(() => !document.querySelector('#task-dlg[open]'), { timeout: 5000 });
+    await sleep(300);
+    const ap = (await rest(board, 'dana', '/state')).tasks.find((t) => t.id === p.id);
+    check('Approve saves the edit and approves it', ap?.status === 'open' && ap.title === 'Idea: emoji reactions (small)', JSON.stringify(ap && [ap.status, ap.title]));
+  } else check('bob\'s new task is a proposal', false, p.status);
+
+
   // Tool colour dots.
   await page.waitForSelector('.tdot');
   const dots = await page.$$eval('.tdot', (els) => els.map((e) => ({ tool: e.dataset.tool, bg: getComputedStyle(e).backgroundColor, hidden: e.getAttribute('aria-hidden') })));
