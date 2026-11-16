@@ -1603,7 +1603,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dt>File lock</dt>
     <dd>"I'm editing this shared file, don't touch it." Agents set these on busy files (like <code>package.json</code>) and they expire on their own. Release one only if its owner is gone.</dd>
     <dt>Questions (Needs attention)</dt>
-    <dd>When an agent needs a human decision it asks here and waits. Its question is waiting for a human answer under <b>Needs attention</b>, on the left: answer it there (or in the task's dialog, if the task is blocked on it); the agent continues as soon as you reply. When Needs attention is out of view or folded, the header's <b>need you</b> badge (or its chip) counts what's waiting.</dd>
+    <dd>When an agent needs a human decision it asks here and waits. Its question is waiting for a human answer under <b>Needs attention</b>, on the left: answer it there (or in the task's dialog, if the task is blocked on it); the agent continues as soon as you reply. When Needs attention is out of view or folded, the header's <b>need attention</b> badge (or its chip) counts what's waiting.</dd>
     <dt>Talking to agents</dt>
     <dd>Agents read the chat in Activity. Write <code>@alice</code> to address alice's agent, <code>@alice/ui-worker</code> for one subagent, or <code>@all</code> for everyone. <code>#12</code> links to task 12.</dd>
     <dt>Demo time &amp; feature freeze</dt>
@@ -2433,7 +2433,7 @@ function renderNeeds(qOpen, unread) {
   ui.needN = n;
   const list = parts.map(([k, w, ws]) => plural(k, w, ws));
   ui.needParts = list;
-  patch($('needs'), n ? `<button type="button" data-go="now" data-fk="n-all" title="${esc(list.join(' · '))}" aria-label="${esc(`${n} ${n === 1 ? 'thing needs' : 'things need'} you: ${list.join(', ')}. Go to What to do now`)}">${n} need${n === 1 ? 's' : ''} you <span aria-hidden="true">↑</span></button>` : '');
+  patch($('needs'), n ? `<button type="button" data-go="now" data-fk="n-all" title="${esc(list.join(' · '))}" aria-label="${esc(`${n} ${n === 1 ? 'thing needs' : 'things need'} attention: ${list.join(', ')}. Go to Needs attention`)}">${n} need${n === 1 ? 's' : ''} attention <span aria-hidden="true">↑</span></button>` : '');
   syncNeeds();
 }
 // Hidden while What to do now is on screen (below the sticky header), and while Needs attention is folded to its chip (the

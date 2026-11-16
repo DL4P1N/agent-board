@@ -41,7 +41,7 @@ check('gate submits with Enter, SSE live', true, page.url());
 const qCount = await page.$$eval('.qcard', (q) => q.length);
 check('two open questions shown in attention panel', qCount === 2);
 check('document title counts what needs me', (await page.title()).startsWith('('), await page.title());
-// One "N need you" header badge, hidden while What to do now (the home of these facts) is on screen. The blocked task
+// One "N need attention" header badge, hidden while What to do now (the home of these facts) is on screen. The blocked task
 // waits on one of the questions, so it is counted once, as the question.
 check('header: no needs badge while What to do now is on screen', await page.$eval('#needs', (e) => e.hidden));
 // On a laptop What to do now stays on screen in its rail while the board scrolls, so the badge stays away.
@@ -50,7 +50,7 @@ check('laptop: What to do now stays in view in its rail when the board scrolls, 
 // One column (narrow window): What to do now scrolls away, and the badge takes over.
 await page.setViewport({ width: 960, height: 1000 }); await page.evaluate(() => window.scrollTo(0, 1600)); await sleep(400);
 const needs = await page.$eval('#needs', (e) => ({ hidden: e.hidden, t: e.innerText.replace(/\s+/g, ' '), label: e.querySelector('button')?.getAttribute('aria-label') || '' }));
-check('header need-you badge when scrolled: questions and the mention, the blocked-on-a-question task not counted twice', !needs.hidden && /^3 need you/.test(needs.t) && /2 questions/.test(needs.label) && /1 new mention/.test(needs.label) && !/blocked/.test(needs.label), JSON.stringify(needs));
+check('header need-attention badge when scrolled: questions and the mention, the blocked-on-a-question task not counted twice', !needs.hidden && /^3 need attention/.test(needs.t) && /2 questions/.test(needs.label) && /1 new mention/.test(needs.label) && !/blocked/.test(needs.label), JSON.stringify(needs));
 await page.click('#needs button'); await sleep(600);
 check('the badge goes back up to What to do now', await page.evaluate(() => !!document.activeElement?.closest('#now') && $('needs').hidden));
 await page.setViewport({ width: 1440, height: 1000 });

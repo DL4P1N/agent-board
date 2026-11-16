@@ -61,7 +61,7 @@ try {
   }));
   check('no three.js or office code requested on load', officeReqs(reqs).length === 0 && !(await page.$('canvas')), officeReqs(reqs).join(' '));
 
-  // ---- Header stays on one row with the switch and the theme button (ONB-9 widths), also with the "need you" badge ----
+  // ---- Header stays on one row with the switch and the theme button (ONB-9 widths), also with the "need attention" badge ----
   // On a laptop What to do now stays in view in its rail, so the badge only shows once it's scrolled out of view (a
   // long rail, or one column): show it here as it is then.
   for (const w of [1366, 1440, 1600, 1920]) {

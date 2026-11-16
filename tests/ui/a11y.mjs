@@ -83,7 +83,7 @@ try {
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
   await page.evaluate(() => window.scrollTo(0, 0)); await sleep(400);
   const hdr = await page.evaluate(() => ({ ov: document.documentElement.scrollWidth - innerWidth, clipped: [...document.querySelectorAll('#needs button')].filter((b) => b.offsetWidth && b.getBoundingClientRect().right > innerWidth).map((b) => b.textContent), hidden: $('needs').hidden }));
-  // One "need you" badge, hidden while What to do now is on screen: no third header row on a phone.
+  // One "need attention" badge, hidden while What to do now is on screen: no third header row on a phone.
   check('MO-1 phone: no badge row in the header while What to do now is on screen, nothing cut off', hdr.hidden && !hdr.clipped.length, JSON.stringify(hdr));
   check('phone: no horizontal overflow at 390px', hdr.ov <= 0, hdr.ov + 'px');
   await page.screenshot({ path: `${out}/phone-top.png` });
