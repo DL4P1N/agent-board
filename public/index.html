@@ -409,7 +409,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .on.w { background: var(--warn); }
 
   /* ---------- header: the demo's top bar ---------- */
-  header { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s4) var(--s4); padding: var(--s3) var(--s5); min-height: 52px; border-bottom: 2px solid var(--border); box-shadow: 0 2px 0 var(--outline), inset 0 -2px 0 var(--lo), 0 6px 0 rgba(0, 0, 0, .12); background: var(--panel); position: sticky; top: 0; z-index: 10; } /* above every panel of both views (main is its own stacking layer) */
+  header { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s4) var(--s4); padding: var(--s3) var(--s5); min-height: 52px; border-bottom: 2px solid var(--border); background: var(--panel); position: sticky; top: 0; z-index: 10; } /* above every panel of both views (main is its own stacking layer) */
   /* The wordmark: sans, bold, sentence case (the mono uppercase is for section labels). */
   header h1 { font: 700 1rem/var(--lh-tight) var(--font); display: inline-flex; align-items: center; gap: var(--s4); white-space: nowrap; }
   /* The logo: three agents, two in the accent behind one in the text colour; the eyes are cut out in the colour behind. */
@@ -495,8 +495,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .bname { font-size: var(--fs-sm); font-weight: 700; color: var(--ink); background: var(--sunken); border: 2px solid var(--border); border-radius: var(--r-sm); padding: 1px var(--s3); max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   a.plink:hover { background: var(--chip); border-color: var(--field-line); }
   /* The header's icon buttons (theme, bell, help) carry no frame: a fill on hover, the bell's pressed state a fill too. */
-  header button.ghost.icon { background: transparent; border-color: transparent; }
-  header button.ghost.icon:hover { background: var(--chip); border-color: transparent; }
+  header button.ghost:is(.icon, #me-btn) { background: transparent; border-color: transparent; box-shadow: none; }
+  header button.ghost:is(.icon, #me-btn):hover { background: var(--chip); border-color: transparent; }
   button.bell[aria-pressed="true"], button.bell[aria-pressed="true"]:hover { background: var(--chip); color: var(--ink); }
   button.bell .slash { display: none; }
   button.bell.blocked .slash { display: inline; }
@@ -946,8 +946,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   @media (max-width: 1800px) { .clock:has(.vd) .fz { display: none; } }
   @media (max-width: 1600px) { .topbar .repo-s, .clock .fz { display: none; } }
   @media (max-width: 1500px) { .topbar .stat .mbar { display: none; } }
-  /* Narrower: the verdict word goes (its colour stays on the time, the words are the tooltip), the merger is cut at 7ch. */
-  @media (max-width: 1279px) { .clock .vdw { display: none; } .clock.v-ok .tm { color: var(--ok); } .clock:is(.v-tight, .v-behind) .tm { color: var(--warn); } .topbar .tb-merge .o-x { max-width: 7ch; } .topbar .tb-goal { min-width: 10ch; } }
+  /* Narrower, while the top bar is one row: the verdict word goes (its colour stays on the time, the words are the tooltip), the merger is cut at 7ch. */
+  @media (min-width: 1101px) and (max-width: 1279px) { .clock .vdw { display: none; } .clock.v-ok .tm { color: var(--ok); } .clock:is(.v-tight, .v-behind) .tm { color: var(--warn); } .topbar .tb-merge .o-x { max-width: 7ch; } .topbar .tb-goal { min-width: 10ch; } }
   @media (max-width: 600px) { .topbar .tb-goal { flex-basis: 100%; } }
   /* Popovers: the goal (under the top bar) and the demo time and who merges (under their top bar chips), each edited in place. */
   .o-pop { position: absolute; z-index: 8; max-height: min(70vh, 560px); }
@@ -1253,7 +1253,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     header .needs button { flex: 0 1 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
     .hacts { margin-left: auto; gap: var(--s2); }
     .hpair { gap: var(--s2); }
-    #me-btn .mp { display: none; }
     .theme-pop { top: auto; left: 0; right: 0; bottom: 0; z-index: 45; max-width: none; max-height: 78vh; border-width: 2px 0 0; padding-bottom: calc(var(--s4) + env(safe-area-inset-bottom, 0px)); }
     .tp-grid { grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); }
     .conn { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; }
@@ -1353,7 +1352,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         <span class="theme-pop" id="theme-pop" role="radiogroup" aria-label="Theme" hidden><span class="tp-h" aria-hidden="true">Theme</span><span class="tp-grid" id="tp-grid"></span></span></span>
       <span class="hpair">
         <button id="notify-btn" class="ghost icon bell" type="button" aria-pressed="false" aria-label="Desktop notifications" title="Notify me when this tab is in the background"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.5V7a4 4 0 018 0v4.5l1.2 1.2H2.8zM6.5 13.5a1.6 1.6 0 003 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><path class="slash" d="M2.5 2.5l11 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
-        <button id="me-btn" class="ghost" title="Change your name or token"><span class="mp">you: </span><b id="me"></b></button>
+        <button id="me-btn" class="ghost" title="Change your name or token" aria-label="You. Change your name"><b id="me"></b></button>
         <button id="help-btn" class="ghost icon help" title="What does everything mean? (?)" aria-label="Help: what everything on this page means">?</button>
       </span>
     </div>
@@ -2311,7 +2310,7 @@ function flushActivity() {
 // ---------- render ----------
 let prevQIds = null;
 function render() {
-  $('me').textContent = me;
+  $('me').textContent = me; $('me-btn').setAttribute('aria-label', `You: ${me}. Change your name`);
   // Presenter view opens with the read-only viewer token, never the board token; hidden until the server gives one.
   { const vt = state.setup?.viewer_token; const pl = $('present-link'); pl.hidden = !vt; $('present-row').hidden = !vt; if (vt) pl.href = BASE + '/present.html?token=' + encodeURIComponent(vt); }
   const qOpen = openQuestions();
