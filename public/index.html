@@ -940,7 +940,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .clock .o-x .rest { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .topbar .repo-s { flex: 0 20 auto; min-width: 8ch; max-width: 220px; }
   .topbar .stat { flex: 0 0 auto; font-weight: 600; }
-  .topbar .acts { display: flex; gap: var(--s3); flex: 0 20 auto; min-width: 66px; margin-left: auto; } /* never under "Setup ▾" */
+  .topbar .acts { display: flex; gap: var(--s3); flex: 0 0 auto; margin-left: auto; } /* never under "Setup ▾"; what's left is cut at 22ch */
+  .topbar .acts .tbc .o-x { max-width: 22ch; }
   .topbar .acts .tbc { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   @media (min-width: 1101px) { #topbar.topbar { flex-wrap: nowrap; } }
   @media (max-width: 1800px) { .clock:has(.vd) .fz { display: none; } }
@@ -1502,9 +1503,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <!-- The footer stays in view while the dialog scrolls. Destructive actions sit on the left, apart from Close and Save;
          Cancel task's reason field opens right above its button. -->
     <div class="df">
-      <div id="td-cancel-row" class="row" hidden><label for="td-cancel-reason">Reason for cancelling (optional)</label><input id="td-cancel-reason" maxlength="300" placeholder="e.g. duplicate of #4" autocomplete="off" aria-describedby="td-cancel-hint"><p class="hint" id="td-cancel-hint">Removes the task from the board and posts the reason in the feed, notifying the assignee if there is one.</p></div>
+      <div id="td-cancel-row" class="row" hidden><label for="td-cancel-reason">Reason for cancelling (optional)</label><input id="td-cancel-reason" maxlength="300" placeholder="e.g. duplicate of #4" autocomplete="off" aria-describedby="td-cancel-hint"><p class="hint" id="td-cancel-hint">Removes the task from the board and posts the reason in the feed, notifying the assignee if there is one.</p>
+        <p class="hint td-del-alt" id="td-del-alt">Or remove it without a note in the feed: <button type="button" class="ghost sm" id="td-delete" hidden>Delete task</button></p></div>
       <button type="button" class="ghost dz" id="td-cancel" hidden>Cancel task…</button>
-      <button type="button" class="ghost dz" id="td-delete" hidden>Delete task</button>
       <span class="sp"></span>
       <button type="button" class="ghost" id="td-mention" hidden>Message assignee</button>
       <button type="button" class="ghost" data-close>Close</button>
@@ -3252,7 +3253,7 @@ function evHtmlRaw(e, prev) {
   if (!isChat(e)) {
     // Consecutive status lines from the same author are grouped: the name shows once.
     const cont = prev && !isChat(prev) && prev.author === e.author && e.ts - prev.ts < 10 * 60e3;
-    return `<div class="ev sys${cont ? ' cont' : ''}${isAction(e) ? ' act' : ''}${isAction(e) && mentionsMe(e) ? ' mention' : ''}" data-eid="${e.id}"><div class="eh"><span class="eb">${cont ? `<span class="vh">${esc(e.author)} </span>` : who(e.author, true) + (isAction(e) ? ' · ' : ' ')}${fmt(e.kind === 'settings' ? settingsText(e) : isAction(e) ? actionText(e) : e.text, true)}</span>${timeEl(e.ts)}</div></div>`;
+    return `<div class="ev sys${cont ? ' cont' : ''}${isAction(e) ? ' act' : ''}${isAction(e) && mentionsMe(e) ? ' mention' : ''}" data-eid="${e.id}"><div class="eh"><span class="eb">${cont ? `<span class="vh">${esc(e.author)} </span>` : who(e.author, true) + (isAction(e) ? ' · ' : ' ')}${fmt(noTool(e.kind === 'settings' ? settingsText(e) : isAction(e) ? actionText(e) : e.text), true)}</span>${timeEl(e.ts)}</div></div>`;
   }
   const mention = mentionsMe(e); const lite = !mention && mentionsLite(e);
   const tag = e.kind === 'question' ? '<span class="pill warn">asked the humans</span>' : e.kind === 'answer' ? '<span class="pill">answered</span>' : '';
@@ -3261,6 +3262,8 @@ function evHtmlRaw(e, prev) {
   return `<div class="ev chat ${mention ? 'mention' : lite ? 'mention-lite' : ''} ${open ? 'question' : ''}${long ? ' long' : ''}${shown ? ' open' : ''}" data-eid="${e.id}"><div class="eh">${who(e.author, true)}${tag}${e.channel !== 'general' ? `<span class="ch">#${esc(e.channel)}</span>` : ''}${timeEl(e.ts)}</div>
     <div class="eb">${fmt(e.text, true)}</div>${long ? `<button type="button" class="link muted evmore" data-more="${e.id}" aria-expanded="${shown}">${shown ? 'Show less' : 'Show more'}</button>` : ''}</div>`;
 }
+// A status line written for the agents ends with the tool to use, "(decide_proposal)": people don't need it.
+const noTool = (s) => String(s).replace(/\s*\([a-z]+(?:_[a-z]+)+\)(?=\s*(?:$|[.;,]))/g, '');
 // "planner → alice; integrator → nobody" in plain words.
 function settingsText(e) {
   return String(e.text).split('; ').map((part) => {
@@ -3960,7 +3963,11 @@ function openTask(id) {
   $('td-hist-wrap').hidden = !t;
   $('td-history')._html = undefined;
   $('td-mention').hidden = !t?.assignee;
-  $('td-delete').hidden = !t; resetDelete();
+  // One destructive button: Cancel task… (Delete is offered in its confirmation); a done task can't be cancelled, so
+  // its footer has Delete task instead.
+  const del = $('td-delete'); const doneT = t?.status === 'done';
+  if (doneT) $('td-cancel').before(del); else $('td-del-alt').append(del);
+  del.className = doneT ? 'ghost dz' : 'ghost sm'; del.hidden = !t; resetDelete();
   $('td-cancel').hidden = !t || t.status === 'done'; resetCancel();
   if (!dlg.open) dlg.showModal();
   renderDialogLive();
@@ -4062,7 +4069,7 @@ $('td-delete').onclick = async () => {
 };
 // Cancel: like delete it removes the task, but records why in the feed and @-mentions the assignee. Two clicks.
 let cancelArmed = null;
-function resetCancel() { clearTimeout(cancelArmed); cancelArmed = null; $('td-cancel').textContent = 'Cancel task…'; $('td-cancel').classList.remove('danger'); $('td-cancel-row').hidden = true; $('td-cancel-reason').value = ''; }
+function resetCancel() { resetDelete(); clearTimeout(cancelArmed); cancelArmed = null; $('td-cancel').textContent = 'Cancel task…'; $('td-cancel').classList.remove('danger'); $('td-cancel-row').hidden = true; $('td-cancel-reason').value = ''; }
 $('td-cancel').onclick = async () => {
   const t = editing; if (!t) return;
   if (!cancelArmed) {

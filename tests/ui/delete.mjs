@@ -28,7 +28,8 @@ try {
 
   await page.click(`.card[data-id="${a.id}"]`);
   await page.waitForSelector('#task-dlg[open]');
-  check('delete button visible for an existing task', await page.$eval('#td-delete', (e) => !e.hidden));
+  await page.click('#td-cancel'); // Delete is offered in Cancel task's confirmation
+  check('delete button visible for an existing task', await page.$eval('#td-delete', (e) => !e.hidden && !!e.offsetParent));
   await page.click('#td-delete');
   check('first click only asks to confirm', /Click again/.test(await page.$eval('#td-delete', (e) => e.textContent)) && !!(await page.$('#task-dlg[open]')));
   check('task still exists after one click', (await rest(board, 'dana', '/state')).tasks.some((t) => t.id === a.id));
@@ -45,6 +46,7 @@ try {
 
   await page.click(`.card[data-id="${b.id}"]`);
   await page.waitForSelector('#task-dlg[open]');
+  await page.click('#td-cancel');
   await page.click('#td-delete');
   await sleep(5500);
   check('confirm resets after 5 s', (await page.$eval('#td-delete', (e) => e.textContent)) === 'Delete task');
