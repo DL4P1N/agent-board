@@ -293,7 +293,7 @@ try {
     // board gets the width), and stays folded in 3D.
     const w0 = await page.evaluate(() => $('board').getBoundingClientRect().width);
     await page.click('#o-left [data-o-fold]');
-    check('Board view: Needs attention folds to its chip, the board gets the width, focus on the chip', await page.evaluate((w) => $('o-left').hidden && !!$('o-left-pill').offsetWidth && document.activeElement === $('o-left-pill') && $('board').getBoundingClientRect().width > w + 100, w0));
+    check('Board view: Needs attention folds to its chip, the board gets the width, focus on the chip', await until(page, (w) => $('o-left').hidden && !!$('o-left-pill').offsetWidth && document.activeElement === $('o-left-pill') && $('board').getBoundingClientRect().width > w + 100, w0));
     await page.click('#vseg [data-vset="office"]');
     check('3D view: the same fold (one memory for both views)', await until(page, () => document.documentElement.dataset.boardView === 'office' && $('o-left').hidden && !!$('o-left-pill').offsetWidth));
     await page.click('#o-left-pill');
