@@ -1011,7 +1011,11 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-agent:hover { background: var(--raised); border-color: var(--line-strong); }
   .o-agent:active { transform: none; box-shadow: none; }
   .o-agent[aria-pressed="true"] { border-color: var(--line-strong); box-shadow: inset 4px 0 0 hsl(var(--h, 0) 60% var(--dl)); }
-  #o-agents.more-below { -webkit-mask-image: linear-gradient(to top, transparent, #000 28px); mask-image: linear-gradient(to top, transparent, #000 28px); }
+  /* Rows cut at an edge of the Agents list (or Activity's filters) fade there, so they read as "more", not a fragment. */
+  #o-agents { --fa: #000; --fb: #000; -webkit-mask-image: linear-gradient(to bottom, var(--fa), #000 24px, #000 calc(100% - 28px), var(--fb)); mask-image: linear-gradient(to bottom, var(--fa), #000 24px, #000 calc(100% - 28px), var(--fb)); }
+  #o-agents.more-above { --fa: transparent; } #o-agents.more-below { --fb: transparent; }
+  #tabs { --fr: #000; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), var(--fr)); mask-image: linear-gradient(to right, #000 calc(100% - 28px), var(--fr)); }
+  #tabs.more-right { --fr: transparent; }
   .o-agent .o-r1, .o-agent .o-r2 { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
   .o-agent .o-an { flex: 1 1 auto; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .o-agent .o-r2 { color: var(--muted); font-size: var(--fs-meta); }
@@ -1087,7 +1091,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   @media (max-width: 1100px) {
     main { grid-template-columns: 264px minmax(0, 1fr); grid-template-areas: "left centre" "right centre"; grid-template-rows: auto 1fr; }
     html:not([data-board-view="office"]) :is(#o-left, #o-left-pill, .o-rcol) { position: static; max-height: none; height: auto; }
-    html:not([data-board-view="office"]) .o-rcol { padding: 0; margin: 0; }
+    html:not([data-board-view="office"]) .o-rcol { padding: 2px; margin: 0; } /* 16px from the edges, like Needs you (its 2px margin) */
     html:not([data-board-view="office"]) .o-rcol > .o-panel { flex: 0 0 auto; max-height: none; }
     html:not([data-board-view="office"]) .o-act .feed { max-height: 50vh; }
   }
@@ -2982,8 +2986,12 @@ function renderAgents(si, qOpen) {
 }
 
 // More rows below the Agents panel's edge: its foot fades, so a cut row reads as "more", not as a fragment.
-function fadeAgents() { const b = $('o-agents'); b.classList.toggle('more-below', b.scrollHeight - b.scrollTop - b.clientHeight > 2); }
+function fadeAgents() {
+  const b = $('o-agents'); b.classList.toggle('more-below', b.scrollHeight - b.scrollTop - b.clientHeight > 2); b.classList.toggle('more-above', b.scrollTop > 2);
+  const t = $('tabs'); t.classList.toggle('more-right', t.scrollWidth - t.scrollLeft - t.clientWidth > 2);
+}
 $('o-agents').addEventListener('scroll', fadeAgents, { passive: true });
+$('tabs').addEventListener('scroll', fadeAgents, { passive: true });
 addEventListener('resize', () => requestAnimationFrame(fadeAgents));
 function renderFilter() {
   const ps = people().map((p) => p.name).filter((n) => n !== me);
