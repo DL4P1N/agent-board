@@ -106,7 +106,7 @@ try {
   // ROLES (below 1600px): the planner's and the merger's names in one chip, both choices in one popover.
   await page.setViewport({ width: 1440, height: 900 }); await sleep(250);
   check('1440px: one Roles chip (the planner and who merges, full names in its tooltip and label) where Planner and Merges were', await page.evaluate(() => { const r = $('roles-btn'); return !!r.offsetWidth && !$('plan-btn').offsetWidth && !$('merge-btn').offsetWidth && r.nextElementSibling === $('plan-btn') && r.querySelector('.tbl').textContent === 'Roles' && r.querySelectorAll('.rn').length === 2 && r.textContent.includes(state.settings.planner || 'first agent') && r.title.includes('Planner: ') && r.title.includes('Merges to main: ') && /^Roles\. Planner: .+\. Merges to main: .+\. Choose the planner and who merges$/.test(r.getAttribute('aria-label')) && r.getAttribute('aria-expanded') === 'false' && r.getAttribute('aria-controls') === 'o-roles'; }), await page.$eval('#roles-btn', (r) => r.getAttribute('aria-label')));
-  await page.click('#roles-btn');
+  await page.$eval('#roles-btn', (b) => b.click());
   check('the Roles chip opens one popover with both choices (planner + extra tasks, who merges), focus on the planner', await page.evaluate(() => !$('o-roles').hidden && $('o-roles-h').textContent === 'Roles' && document.activeElement === $('r-plan-sel') && !!$('r-pex-sel') && !!$('r-integ-sel') && $('roles-btn').getAttribute('aria-expanded') === 'true' && $('o-plan').hidden && $('o-merge').hidden));
   const rPick = await page.evaluate(() => [...$('r-plan-sel').options].map((o) => o.value).find((v) => v !== state.settings.planner));
   await page.select('#r-plan-sel', rPick);
@@ -117,11 +117,11 @@ try {
   check('choosing who merges there saves it; the Roles chip says the name', await until(page, () => state.settings.integrator === 'ana-claude' && document.querySelectorAll('#roles-btn .rn')[1]?.textContent.includes('ana-claude') && /Merges to main: ana-claude/.test(document.getElementById('roles-btn').getAttribute('aria-label'))));
   await page.focus('#r-integ-sel'); await page.keyboard.press('Escape');
   check('Esc closes the Roles popover, focus back on the Roles chip', await until(page, () => document.getElementById('o-roles').hidden && document.activeElement?.id === 'roles-btn' && document.getElementById('roles-btn').getAttribute('aria-expanded') === 'false'));
-  await page.click('#roles-btn'); await page.click('[data-o-close="roles"]');
+  await page.$eval('#roles-btn', (b) => b.click()); await page.click('[data-o-close="roles"]');
   check('its × closes it, focus back on the chip', await page.evaluate(() => $('o-roles').hidden && document.activeElement === $('roles-btn')));
-  await page.click('#roles-btn'); await page.click('#clock');
+  await page.$eval('#roles-btn', (b) => b.click()); await page.click('#clock');
   check('one top bar popover at a time: opening the demo time closes Roles', await page.evaluate(() => $('o-roles').hidden && !$('o-dl').hidden && $('roles-btn').getAttribute('aria-expanded') === 'false'));
-  await page.keyboard.press('Escape'); await page.click('#roles-btn'); await page.mouse.click(4, 30);
+  await page.keyboard.press('Escape'); await page.$eval('#roles-btn', (b) => b.click()); await page.mouse.click(4, 30);
   check('a click elsewhere closes the Roles popover', await page.evaluate(() => $('o-roles').hidden && $('roles-btn').getAttribute('aria-expanded') === 'false'));
 
   // ---- Switch to the office ----
@@ -189,7 +189,7 @@ try {
     }
     // ROLES: both choices in one popover, the same in the 3D view.
     await page.setViewport({ width: 1280, height: 900 }); await sleep(300);
-    await page.click('#roles-btn');
+    await page.$eval('#roles-btn', (b) => b.click());
     check('3D: the Roles chip opens the planner and who merges in place, focus on the planner', await view(page) === 'office' && await page.evaluate(() => !$('o-roles').hidden && document.activeElement === $('r-plan-sel') && !!$('r-integ-sel') && $('roles-btn').getAttribute('aria-expanded') === 'true'));
     await page.select('#r-integ-sel', '');
     check('3D: choosing there saves it; the Roles chip says not picked', await until(page, () => state.settings.integrator === '' && /not picked/.test(document.querySelectorAll('#roles-btn .rn')[1]?.textContent || '')));
