@@ -37,14 +37,14 @@ try {
   // ---- ONB-4: on first load the goal step is in view, and the strip says it can be set meanwhile ----
   const goalTop = await page.$eval('#step-goal', (e) => e.getBoundingClientRect().top);
   check('ONB-4 first load at 1440×900: step 2 is above the fold', goalTop < 900 - 40, Math.round(goalTop));
-  check('ONB-4 the strip offers the goal meanwhile', /Meanwhile: write the goal \(step 2\)/.test(await txt('#now .also')), await txt('#now'));
+  check('ONB-4 the strip offers the goal meanwhile (one link, no "Also:"), and no lead while Setup shows step 1', /^Write the goal \(step 2\)$/.test(await txt('#now .also')) && !(await page.$('#now .na')), await txt('#now'));
   await page.screenshot({ path: `${out}/h-first-load.png` });
 
   // ---- ONB-3: Rotate token… is out of step 1, under Board security; step 1 links to it ----
   check('ONB-3 no rotate button inside step 1', !(await page.$('#step-invite [data-fk="rot"]')));
   check('ONB-3 rotate button under Board security', !!(await page.$('#board-sec [data-fk="rot"]')) && /Board security/.test(await txt('#board-sec')));
-  await page.click('#step-invite [data-act="sec-go"]'); await sleep(400);
-  check('ONB-3 the step 1 link focuses Rotate token…', await page.evaluate(() => document.activeElement?.dataset.fk === 'rot'));
+  check('ONB-3 step 1 says nothing about laptops while none is connected, and has no "Link leaked?" line', !/Laptops connected|None yet|Link leaked/.test(await txt('#step-invite')), await txt('#step-invite'));
+
 
   // ---- ONB-2: after the goal is saved, step 2 stays open on the demo time ----
   await page.click('#now .also [data-go="step-goal"]'); await sleep(300);

@@ -520,7 +520,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .now { display: flex; align-items: center; gap: var(--s3) var(--s5); flex-wrap: wrap; padding: 0 var(--s5) var(--s5); }
   /* Title bar: "What to do now" on the left, the phase track on the right. */
   .now .nl { order: -3; flex: 1 0 auto; align-self: stretch; display: inline-flex; align-items: center; gap: var(--s4); margin: 0 0 var(--s1) calc(-1 * var(--s5)); padding: var(--s2) var(--s5); min-height: 32px; border-bottom: 2px solid var(--line); font-size: .8125rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
-  .now .phases { order: -2; align-self: stretch; margin: 0 calc(-1 * var(--s5)) var(--s1) calc(-1 * var(--s5)); padding: var(--s2) var(--s5) var(--s2) 0; border-bottom: 2px solid var(--line); }
+  .o-ph .phases { padding: 0 var(--s5) var(--s4); }
+  .now .na-sub { margin: 0; flex: 1 1 100%; font-size: var(--fs-sm); color: var(--muted); }
   .now::after { content: ""; order: -1; flex: 0 0 100%; height: 0; margin-bottom: calc(-1 * var(--s3)); }
   /* The lead: the demo's first "needs you" row, bigger, with a status flag. */
   .now .na { position: relative; font-size: var(--fs-lead); font-weight: 600; line-height: var(--lh-tight); flex: 1 1 260px; min-width: 0; padding-left: 20px; }
@@ -542,7 +543,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .phases .ph-l { margin-right: var(--s2); }
   .phases span.p { padding: 0 var(--s2); }
   .phases span.p.past { color: var(--ink); }
-  .phases span.p.cur { color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--ink); }
+  .phases span.p.cur { color: var(--ink); font-weight: 700; } /* bold, not underlined: it isn't a link */
   .phases .arr { color: var(--muted); }
   /* Only the phase the team is in: the whole track is the tooltip (and read out), and Setup has the steps. */
   .phases li:not(:has(.cur)), .phases .arr { display: none; }
@@ -979,7 +980,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-left .now { flex-direction: column; align-items: stretch; gap: var(--s4); padding: 0; }
   .o-left .now::after { display: none; }
   .o-left .now .nl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; margin: 0; padding: 0; border: 0; }
-  .o-left .now .phases { margin: 0; padding: 0; border: 0; }
   .o-left .now .na { flex: 0 0 auto; }
   .o-left .now .appr { align-self: flex-start; }
   .o-left .now .also { flex-direction: column; align-items: flex-start; gap: 0; }
@@ -1373,6 +1373,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <section class="o-panel o-pop o-dl" id="o-dl" aria-labelledby="o-dl-h" hidden>
       <div class="o-head"><h2 id="o-dl-h">Demo time</h2><button type="button" class="o-ib" data-o-close="dl" aria-label="Close the demo time">×</button></div>
       <div class="o-body" id="o-dl-b"></div>
+      <div class="o-ph" id="o-dl-ph"></div>
     </section>
     <section class="o-panel o-pop o-merge" id="o-merge" aria-labelledby="o-merge-h" hidden>
       <div class="o-head"><h2 id="o-merge-h">Merges to main</h2><button type="button" class="o-ib" data-o-close="merge" aria-label="Close merges to main">×</button></div>
@@ -2403,13 +2404,15 @@ function renderNeeds(qOpen, unread) {
 // chip has the count).
 let nowSeen = true;
 function syncNeeds() { $('needs').hidden = nowSeen || !!oUi.left; }
-if ('IntersectionObserver' in window) new IntersectionObserver(([e]) => { nowSeen = e.isIntersecting; syncNeeds(); }, { rootMargin: '-56px 0px 0px 0px' }).observe($('now'));
+if ('IntersectionObserver' in window) new IntersectionObserver(([e]) => { nowSeen = e.isIntersecting; syncNeeds(); }, { rootMargin: '-56px 0px 0px 0px' }).observe($('nyou'));
 // The Board view's rails stick right under the header, whatever its height.
 if ('ResizeObserver' in window) new ResizeObserver(([e]) => document.documentElement.style.setProperty('--hdr', Math.round(e.target.offsetHeight) + 'px')).observe(document.querySelector('#app > header'));
 
 const plural = (n, w, ws = w + 's') => `${n} ${n === 1 ? w : ws}`;
 const cmdBox = (text, key, what) => `<div class="cmd"><code>${esc(text)}</code><button type="button" class="ghost" data-copy="${esc(text)}" data-fk="cp-${key}" aria-label="Copy ${esc(what)}">Copy</button></div>`;
 const nameTag = (n) => `<b class="pc" ${hs(n)}>${esc(n)}</b>`;
+// " (you)" after my own name, unless my name already says it.
+const youTag = (n) => (n === me && String(n).toLowerCase() !== 'you' ? ' (you)' : '');
 
 // Not-done tasks sent back from review twice or more (state.rejects: {id: times}), most bounced first.
 const bouncedTasks = () => state.tasks.filter((t) => t.status !== 'done' && (state.rejects?.[t.id] || 0) >= 2)
@@ -2493,23 +2496,35 @@ function renderNow(qOpen, unread, si) {
   // Mentions lead only when nothing else does; otherwise they come next, after the freeze (also in the @me tab).
   if (!over && unread.length && go !== 'mentions') more.splice(more[0]?.freeze ? 1 : 0, 0, { go: 'mentions', text: plural(unread.length, 'new mention') });
   if (!over && S.goal && !tm.deadline && !dlSkipped()) more.push({ act: 'clock', text: 'Set the demo time so agents stop on time' });
-  if (si.cur === 'invite' && !S.goal) more.push({ go: 'step-goal', text: 'Meanwhile: write the goal (step 2)' });
+  if (si.cur === 'invite' && !S.goal) more.push({ go: 'step-goal', text: 'Write the goal (step 2)' });
   // In the 3D view, links that lead to a part only the Board view has say so (CSS adds "(Board view)").
   const lv = (g) => (g && !stays(g) ? ' data-leaves' : '');
-  const moreHtml = more.length ? `<div class="also"><span class="n">Also:</span>${more.slice(0, 2).map((m, i) => `<button type="button" class="link" ${m.act ? `data-act="${m.act}"` : `data-go="${m.go}"${lv(m.go)}`} data-fk="now-more-${i}">${esc(m.text)} <span aria-hidden="true">→</span></button>`).join('')}</div>` : '';
+  // "Also:" only before two of them; one is just the link.
+  const moreHtml = more.length ? `<div class="also">${more.length > 1 ? '<span class="n">Also:</span>' : ''}${more.slice(0, 2).map((m, i) => `<button type="button" class="link" ${m.act ? `data-act="${m.act}"` : `data-go="${m.go}"${lv(m.go)}`} data-fk="now-more-${i}">${esc(m.text)} <span aria-hidden="true">→</span></button>`).join('')}</div>` : '';
   const cutHtml = ui.showCut && cut?.list.length && !over ? `<ul class="cut-list" id="cut-list" aria-label="P3 tasks that probably won't make it"><li class="n">Probably won't make it:</li>${cut.list.map((t) => `<li><button type="button" class="link" data-open-task="${t.id}" data-fk="cut-${t.id}">#${t.id} ${esc(short(t.title, 48))}</button></li>`).join('')}</ul>` : '';
   const el = $('now'); el.className = 'now k-' + kind;
-  // Phase track. "Connect" leads while no laptop is connected, so it never contradicts the line above.
+  // No lead where it would repeat what's right there: the question cards under it (what they block stays, as a muted
+  // line), or the open Setup step it points to.
+  const qLead = go === 'questions' && qOpen.length;
+  const hideLead = qLead || (kind === 'setup' && String(go).startsWith('step-') && setupShown(si));
+  const lead = qLead ? (bs.asked.length ? `<p class="na-sub">${plural(bs.asked.length, 'task')} blocked on ${qOpen.length > 1 ? 'them' : 'it'}</p>` : '')
+    : hideLead ? (more.length || text2 ? '' : '<p class="na-sub">Nothing needs you yet: Setup shows what\'s next.</p>') : go
+
+      ? `<button type="button" class="link na" data-go="${go}"${lv(go)} data-fk="now-go">${esc(text)} <span class="go" aria-hidden="true">→</span></button>`
+      : `<span class="na">${esc(text)}</span>`;
+  el.classList.toggle('no-lead', !!hideLead);
+  // Where the team is (connect → goal → tasks → build → done): under the demo time, in the Demo popover. "Connect" leads
+  // while no laptop is connected. With plan approval on, a "Review plan" step sits between writing tasks and building.
   const curP = si.cur === 'invite' && !T ? 'connect' : state.phase;
-  // With plan approval on, a "Review plan" step sits between writing tasks and building.
   const track = S.require_approval || approvalWait() ? [...ALL_PHASES.slice(0, 3), ['awaiting_approval', 'Review plan'], ...ALL_PHASES.slice(3)] : ALL_PHASES;
   const ci = track.findIndex(([k]) => k === curP);
   // A list, so screen readers hear "Phase: Build, step 5 of 6" and each step as a list item.
-  const phases = `<div class="phases" title="Where the team is: connect laptops → set a goal → the planner writes tasks${track !== ALL_PHASES ? ' → humans approve them' : ''} → agents build → everything merged"><span class="ph-l" aria-hidden="true">Phase</span><ol role="list" aria-label="${ci < 0 ? 'Phase' : `Phase: ${track[ci][1]}, step ${ci + 1} of ${track.length}`}">${track.map(([k, l], i) =>
-    `<li>${i ? '<span class="arr" aria-hidden="true">›</span>' : ''}<span class="p ${k === curP ? 'cur' : i < ci ? 'past' : ''}" ${k === curP ? 'aria-current="step"' : ''}>${l}</span></li>`).join('')}</ol></div>`;
-  patch(el, `<h2 class="nl" id="now-h">What to do now</h2>${go
-    ? `<button type="button" class="link na" data-go="${go}"${lv(go)} data-fk="now-go">${esc(text)} <span class="go" aria-hidden="true">→</span></button>`
-    : `<span class="na">${esc(text)}</span>`}${appr ? '<button type="button" class="appr" data-act="approve" data-fk="now-appr">Approve plan &amp; start</button>' : ''}${text2 ? `<button type="button" class="link na2" data-go="${go2}"${lv(go2)} data-fk="now-go2">${esc(text2)} <span aria-hidden="true">→</span></button>` : ''}${cutHtml}${phases}${moreHtml}`);
+  patch($('o-dl-ph'), `<div class="phases" title="Where the team is: connect laptops → set a goal → the planner writes tasks${track !== ALL_PHASES ? ' → humans approve them' : ''} → agents build → everything merged"><span class="ph-l" aria-hidden="true">Phase</span><ol role="list" aria-label="${ci < 0 ? 'Phase' : `Phase: ${track[ci][1]}, step ${ci + 1} of ${track.length}`}">${track.map(([k, l], i) =>
+    `<li>${i ? '<span class="arr" aria-hidden="true">›</span>' : ''}<span class="p ${k === curP ? 'cur' : i < ci ? 'past' : ''}" ${k === curP ? 'aria-current="step"' : ''}>${l}</span></li>`).join('')}</ol></div>`);
+  patch(el, `<h2 class="nl" id="now-h">What to do now</h2>${lead}${appr ? '<button type="button" class="appr" data-act="approve" data-fk="now-appr">Approve plan &amp; start</button>' : ''}${text2 ? `<button type="button" class="link na2" data-go="${go2}"${lv(go2)} data-fk="now-go2">${esc(text2)} <span aria-hidden="true">→</span></button>` : ''}${cutHtml}${moreHtml}`);
+  // Nothing under the questions' own cards: no empty band above them.
+  el.hidden = !!hideLead && !lead && !appr && !text2 && !cutHtml && !moreHtml;
+
 }
 
 // The top bar, the same in both views: chips for the goal (opens it in place), the demo time (#clock, renderClock), progress
@@ -2602,7 +2617,7 @@ function stepInvite(si) {
   const onlyLocal = best.ip === 'localhost';
   return `<p>Everyone who'll run an AI agent (you too) connects their laptop once, in a terminal. It takes about a minute.</p>
     <div class="inl mt-2"><button type="button" class="ghost" data-act="copy-invite" data-fk="s-invite">Copy invite message</button><span class="muted t-meta">One message for your team chat with every step below${state.settings.repo ? ' and the project repo' : ''}.</span></div>
-    <div class="sub"><b>First time on this laptop?</b> Get the board tool first. Skip this if you already have an <code>agent-board</code> folder (or an older <code>claude-board</code> one) (then run <code>git pull</code> in it, so it's up to date).</div>${cmdBox(su.clone_command, 'clone', 'download command')}
+    <div class="sub"><b>First time on this laptop?</b> Get the board tool first. Skip this if you already have an <code>agent-board</code> folder (or an older <code>claude-board</code> one: then run <code>git pull</code> in it, so it's up to date).</div>${cmdBox(su.clone_command, 'clone', 'download command')}
     <div class="sub"><b>Connect to this board:</b> run it inside the <code>agent-board</code> folder. It asks your name, which AI tool(s) you use and where your project is, then tests the connection.</div>${cmdBox(best.command, 'join', 'join command')}
     ${onlyLocal ? '<p class="note">No network address found, so teammates can\'t reach this laptop yet. Join the same wifi, start Tailscale, or restart the board with <code>npm run tunnel</code>.</p>' : `<p class="hint" title="${esc(best.label)}">${esc(addrText(best))}.</p>`}
     ${rest.length ? `<button type="button" class="link muted t-meta mt-1" data-act="addrs" data-fk="addrs" aria-expanded="${ui.addrs}"><span class="chev" aria-hidden="true">▾</span> Other addresses (if that one doesn't connect)</button>
@@ -2611,10 +2626,9 @@ function stepInvite(si) {
     <button type="button" class="link muted t-meta mt-1" data-act="qr" data-fk="qr-tog" aria-expanded="${!!ui.qr}" aria-controls="qr-codes"><span class="chev" aria-hidden="true">▾</span> ${ui.qr ? 'Hide QR code' : 'Show QR code (scan with a phone)'}</button>
     ${ui.qr ? `<div class="qrs" id="qr-codes">
       <figure><img src="${esc(qrSrc(best.web_url))}" alt="QR code for this board's link, ${esc(best.web_url)}" width="180" height="180"><figcaption>Board link: open it on a phone to watch. To connect a laptop, copy the join command above or send the invite message.</figcaption></figure></div>` : ''}
-    <div class="sub">Laptops connected</div>${si.ros.some((r) => r.agent) ? chips(si, true) : '<p class="muted t-meta m0">None yet.</p>'}
-    ${(() => { const w = si.ros.filter((r) => r.humanOnline && !r.agent); return w.length ? `<p class="muted t-meta mt-1">Watching this page: ${w.map((r) => `${nameTag(r.name)}${r.name === me ? ' (you)' : ''}`).join(', ')}</p>` : ''; })()}
-    ${notifyBox()}
-    <button type="button" class="link muted t-meta mt-2" data-act="sec-go" data-fk="sec-go">Link leaked? Rotate the token under Board security, below the steps</button>`;
+    ${si.ros.some((r) => r.agent) ? `<div class="sub">Laptops connected</div>${chips(si, true)}` : ''}
+    ${(() => { const w = si.ros.filter((r) => r.humanOnline && !r.agent); return w.length ? `<p class="muted t-meta mt-1">Watching this page: ${w.map((r) => `${nameTag(r.name)}${youTag(r.name)}`).join(', ')}</p>` : ''; })()}
+    ${notifyBox()}`;
 }
 
 // ---------- notifications to a team chat or phone (webhook) ----------
@@ -2997,7 +3011,8 @@ function renderAgents(si, qOpen) {
       + (agents.length ? `<ul class="o-agents" aria-label="${key}'s agents">${agents.map((a) => agentRow(a, p)).join('')}</ul>`
         : `<p class="o-none" title="${esc(lt || '')}">${p.r.humanOnline && p.name !== me ? 'watching · ' : ''}no AI agent</p>`)
       + '</li>';
-  }).join('') : '<li class="muted">Nobody yet. When a teammate\'s AI agent connects, it appears here with what it\'s working on.</li><li><button type="button" class="ghost sm" data-go="step-invite" data-fk="o-invite">Connect a laptop</button></li>');
+  }).join('') : '<li class="muted">Nobody yet. When a teammate\'s AI agent connects, it appears here with what it\'s working on.</li>');
+
 }
 
 // More rows below the Agents panel's edge: its foot fades, so a cut row reads as "more", not as a fragment.
@@ -3416,7 +3431,8 @@ function focusTask(id) {
   const c = boardView === 'office' ? document.querySelector(`.o-card[data-open-task="${id}"]`) : document.querySelector(`.card[data-id="${id}"]`);
   if (c?.offsetParent) { c.focus({ preventScroll: true }); c.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
 }
-function focusNow() { const b = $('now').querySelector('button'); if (b) b.focus({ preventScroll: true }); else { $('now').tabIndex = -1; $('now').focus({ preventScroll: true }); } }
+function focusNow() { const b = $('now').hidden ? $('questions').querySelector('textarea') : $('now').querySelector('button'); if (b) b.focus({ preventScroll: true }); else { $('now').tabIndex = -1; $('now').focus({ preventScroll: true }); } }
+
 function goQuestion(id) {
   oShow('left');
   const c = $('q-' + id); if (!c) return toast('That question was already answered.');
@@ -4633,7 +4649,7 @@ function oDlForm() {
   const S = state.settings; const t = timeNow();
   const fm = S.freeze_minutes === '' || S.freeze_minutes == null ? '60' : S.freeze_minutes;
   return `<form class="o-form" data-dlform="o" novalidate>
-      <div class="o-fr"><label for="o-dl-in">Demo time</label><input id="o-dl-in" type="datetime-local" data-keep="o-dl" value="${esc(localInput(t.deadline || defaultDeadline()))}" step="60" aria-describedby="o-dl-hint o-dl-err" ${ui.dlErr ? 'aria-invalid="true"' : ''}></div>
+      <div class="o-fr"><input id="o-dl-in" type="datetime-local" aria-label="Demo time" data-keep="o-dl" value="${esc(localInput(t.deadline || defaultDeadline()))}" step="60" aria-describedby="o-dl-hint o-dl-err" ${ui.dlErr ? 'aria-invalid="true"' : ''}></div>
       <div class="o-fr"><label for="o-fz-in">Feature freeze</label><span class="o-in"><input id="o-fz-in" type="number" data-keep="o-fz" value="${esc(fm)}" min="0" max="600" step="5" inputmode="numeric" aria-describedby="o-fz-u o-dl-hint"><span class="muted" id="o-fz-u">min before</span></span></div>
       <p class="hint" id="o-dl-hint">${t.deadline ? '' : 'Not set yet: the time shown is a suggestion. '}At the freeze agents stop taking new tasks (except priority-1 fixes) and get what they have merged.</p>
       <div class="err" id="o-dl-err" role="alert">${esc(ui.dlErr || '')}</div>

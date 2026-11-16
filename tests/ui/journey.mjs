@@ -46,7 +46,7 @@ try {
   await page.type('#g-name', 'dana'); await page.keyboard.press('Enter');
   await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 5000 });
   await sleep(400);
-  check('empty: what-to-do says connect laptop', /Connect your first laptop/.test(await now()), await now());
+  check('empty: no lead while Setup shows step 1; Needs you offers the goal meanwhile', !/Connect your first laptop/.test(await now()) && /Write the goal \(step 2\)/.test(await now()), await now());
   check('empty: setup guide expanded with join cmd', await page.evaluate(() => /npm run join -- --url/.test(document.getElementById('setup').innerText)));
   check('empty: board banner', await page.$eval('#board-empty', (e) => !e.hidden && /No tasks yet/.test(e.innerText)));
   // Nobody connected yet: the phase track leads with Connect, matching the what-to-do line.
@@ -62,10 +62,10 @@ try {
   await alice('board_status');
   await reload(); await sleep(200);
   check('alice shows as connected agent', await page.evaluate(() => /1 laptop connected/.test(document.getElementById('step-invite').innerText) && /1 agent started/.test(document.getElementById('step-start').innerText)));
-  check('next: write goal', /Write what you're building/.test(await now()), await now());
-  // click do-now -> focuses goal textarea
-  await page.click('#now [data-go]'); await sleep(400);
-  check('do-now focuses goal textarea', await page.evaluate(() => document.activeElement?.id === 'goal-in'));
+  check('next: write goal (in Setup, step 2, which is open; Needs you has no lead)', /Setup shows what's next/.test(await now()) && await page.evaluate(() => !!document.getElementById('goal-in')?.offsetWidth), await now());
+  await page.click('#goal-in'); await sleep(200);
+  check('the goal box takes focus', await page.evaluate(() => document.activeElement?.id === 'goal-in'));
+
   await page.type('#goal-in', 'A voting app for hackathon projects. Demo: submit, vote, live leaderboard.');
   // SSE mid-typing must not wipe it
   await alice('post', { text: 'hello from alice' }); await sleep(500);
@@ -90,7 +90,7 @@ try {
   await sleep(500);
   check('setup collapsed: the guide hides, the top bar stays', await page.evaluate(() => $('setup').hidden && /Goal/i.test($('goal-btn')?.innerText) && !!$('topbar').querySelector('[data-act="setup-open"]')));
   check('phase Build', await page.$eval('.phases .cur', (e) => e.textContent) === 'Build');
-  check('column descriptions', await page.$eval('#col-review .cd', (e) => /integrator/.test(e.textContent)));
+  check('column descriptions', await page.$eval('#col-review .cd', (e) => /merged into main/.test(e.textContent)));
   await shots('4-tasks', { light: false });
 
   // building: bob joins, work happens
