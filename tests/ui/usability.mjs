@@ -126,7 +126,7 @@ try {
   const dc = await agent('dana-claude', 'claude-code'); await dc('board_status');
   await page.evaluate(() => { localStorage.removeItem('board-setup'); ui.forceSetup = false; ui.steps = {}; });
   await reload(page); await sleep(400);
-  check('A collapsed Setup button names what is left', (await txt(page, '[data-act="setup-open"]')) === 'Setup: pick merger', await txt(page, '[data-act="setup-open"]'));
+  check('A collapsed Setup button names what is left', (await txt(page, '[data-act="setup-open"] .o-x')) === 'Setup: pick merger', await txt(page, '[data-act="setup-open"]'));
   check('A top bar: "Setup" + repo', /Setup/.test(await txt(page, '#topbar')) && /https:\/\/github.com\/team\/vote-app/.test(await page.$eval('#topbar .repo-s', (e) => e.textContent + e.title)), await txt(page, '#topbar'));
   // One task for two idle agents: the low-priority offer asks for more tasks first...
   check('A All good + "2 agents are idle: add tasks…"', /All good/.test(await txt(page, '#now .na')) && /2 agents are idle: add tasks or ask the planner for more/.test(await txt(page, '#now .na2')), await txt(page, '#now'));

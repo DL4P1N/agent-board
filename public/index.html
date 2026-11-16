@@ -562,6 +562,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .qcard form { display: flex; gap: var(--s3); align-items: flex-end; }
 
   /* ---------- Setup ---------- */
+  .setup > .sh .sx { margin-left: auto; }
   .setup > .sh { display: flex; align-items: center; gap: var(--s3) 10px; flex-wrap: wrap; margin: calc(-1 * var(--s4)) calc(-1 * var(--s5)) 0; padding: var(--s3) var(--s5); border-bottom: 2px solid var(--line); min-height: 32px; }
   .setup > .sh h2 { font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
   .setup > .sh .muted { font-size: var(--fs-meta); }
@@ -939,14 +940,14 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .clock .o-x .rest { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .topbar .repo-s { flex: 0 20 auto; min-width: 8ch; max-width: 220px; }
   .topbar .stat { flex: 0 0 auto; font-weight: 600; }
-  .topbar .acts { display: flex; gap: var(--s3); flex: 0 20 auto; min-width: 7ch; margin-left: auto; }
+  .topbar .acts { display: flex; gap: var(--s3); flex: 0 20 auto; min-width: 66px; margin-left: auto; } /* never under "Setup ▾" */
   .topbar .acts .tbc { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   @media (min-width: 1101px) { #topbar.topbar { flex-wrap: nowrap; } }
   @media (max-width: 1800px) { .clock:has(.vd) .fz { display: none; } }
   @media (max-width: 1600px) { .topbar .repo-s, .clock .fz { display: none; } }
   @media (max-width: 1500px) { .topbar .stat .mbar { display: none; } }
-  /* Narrower: the verdict word goes (its colour stays on the time, the words are the tooltip), the merger is cut at 8ch. */
-  @media (max-width: 1279px) { .clock .vdw { display: none; } .clock.v-ok .tm { color: var(--ok); } .clock:is(.v-tight, .v-behind) .tm { color: var(--warn); } .topbar .tb-merge .o-x { max-width: 8ch; } .topbar .tb-goal { min-width: 12ch; } }
+  /* Narrower: the verdict word goes (its colour stays on the time, the words are the tooltip), the merger is cut at 7ch. */
+  @media (max-width: 1279px) { .clock .vdw { display: none; } .clock.v-ok .tm { color: var(--ok); } .clock:is(.v-tight, .v-behind) .tm { color: var(--warn); } .topbar .tb-merge .o-x { max-width: 7ch; } .topbar .tb-goal { min-width: 10ch; } }
   @media (max-width: 600px) { .topbar .tb-goal { flex-basis: 100%; } }
   /* Popovers: the goal (under the top bar) and the demo time and who merges (under their top bar chips), each edited in place. */
   .o-pop { position: absolute; z-index: 8; max-height: min(70vh, 560px); }
@@ -2512,15 +2513,18 @@ function renderTopbar(si) {
   patch($('tb-b'), `${T.length ? `<span class="tbc stat" id="done-count" title="${done} of ${T.length} tasks merged into main (${pct}%)"><span class="tbl">Done</span><b>${done} of ${T.length}</b><span class="mbar" aria-hidden="true"><i style="width:${pct}%"></i></span></span>` : ''}
       ${S.repo ? `<span class="tbc repo-s" title="Project repo: ${esc(S.repo)}"><span class="tbl">Repo</span><span class="o-x">${esc(S.repo)}</span></span>` : ''}
       <button type="button" class="tbc tb-merge" id="merge-btn" data-act="merge" data-fk="tb-merge" aria-expanded="${!!ui.oMerge}" aria-controls="o-merge" title="The person whose agent merges finished branches into main${away ? ` (${S.integrator} is away: whoever is free merges meanwhile)` : ''}" aria-label="Merges to main: ${esc(m || 'not picked yet')}${away ? ' (away)' : ''}${ci}. ${ui.oMerge ? 'Close' : 'Choose who merges'}"><span class="tbl">Merges</span><span class="o-x">${m ? (S.integrator === ANYONE ? 'whoever is free' : nameTag(S.integrator)) + (away ? ' <span class="muted">(away)</span>' : '') : '<span class="muted">not picked</span>'}</span>${ciPill()}<span class="o-ar" aria-hidden="true">▾</span></button>
-      <span class="acts"><button type="button" class="tbc tb-act" data-act="${open ? 'setup-close' : 'setup-open'}" data-fk="s-open" aria-expanded="${open}" aria-controls="setup" ${left ? `aria-label="${open ? 'Hide' : 'Open'} Setup. Left to do: ${esc(left.left)}"` : ''}>Setup${left ? `: ${esc(left.left)}` : ''}</button></span>`);
+      <span class="acts"><button type="button" class="tbc tb-act" data-act="${open ? 'setup-close' : 'setup-open'}" data-fk="s-open" aria-expanded="${open}" aria-controls="setup" ${left ? `aria-label="${open ? 'Hide' : 'Open'} Setup. Left to do: ${esc(left.left)}"` : ''}><span class="o-x">Setup${left ? `: ${esc(left.left)}` : ''}</span><span class="o-ar" aria-hidden="true">▾</span></button></span>`);
 }
 function renderSetup(si) {
   const el = $('setup');
   el.hidden = !setupShown(si);
   if (el.hidden) return patch(el, '');
   const body = { invite: stepInvite, goal: stepGoal, start: stepStart, backlog: stepBacklog, integrator: stepIntegrator };
-  patch(el, `<div class="sh"><h2>Setup</h2><span class="muted">${si.doneCount} of 5 done · steps tick off by themselves</span></div>
-    <p class="intro">This board coordinates your team's AI coding agents: Claude Code, Codex, GitHub Copilot, Gemini CLI or Cursor (or any MCP tool), mixed however you like. They split the goal into small tasks, claim them, build each one in its own git branch, and ask you here when they need a decision.</p>
+  const all = si.doneCount >= si.steps.length;
+  // The same head as the goal's popover: its name, then x (closes it, focus back on the Setup chip). Once every step is
+  // done, the intro and "steps tick off by themselves" go.
+  patch(el, `<div class="sh"><h2>Setup</h2><span class="muted">${si.doneCount} of ${si.steps.length} done${all ? '' : ' · steps tick off by themselves'}</span><button type="button" class="o-ib sx" data-act="setup-close" data-fk="s-x" aria-label="Close Setup" title="Close (Esc)">×</button></div>
+    ${all ? '' : `<p class="intro">This board coordinates your team's AI coding agents: Claude Code, Codex, GitHub Copilot, Gemini CLI or Cursor (or any MCP tool), mixed however you like. They split the goal into small tasks, claim them, build each one in its own git branch, and ask you here when they need a decision.</p>`}
     <ol class="steps">${si.steps.map((s, i) => {
       const open = stepOpen(s.key, si.cur);
       const tick = s.done;
@@ -3766,7 +3770,7 @@ function doAct(a, el) {
   if (a === 'setup-open' || a === 'setup-close') {
     if (boardView === 'office') return oSetup(a === 'setup-open');
     store.set('board-setup', a === 'setup-open' ? 'open' : 'closed'); ui.forceSetup = false; render();
-    return document.querySelector('[data-fk="s-open"]')?.focus();
+    return setupFocus(a === 'setup-open');
   }
   if (a === 'invite') return goStep('invite');
   if (a === 'copy-invite') return copyText(inviteText(), document.querySelector('[data-act="copy-invite"]'), 'Invite copied. Paste it in your team chat.');
@@ -4515,9 +4519,17 @@ function oDl(open) {
 function oSetup(open, focus = true) {
   ui.oSetup = open; if (open) { ui.oGoal = false; ui.oDl = false; ui.oMerge = false; if (ui.themeOpen) themePop(false, false); }
   render();
-  if (!focus) return;
-  if (open) { $('setup').scrollTop = 0; ($('setup').querySelector('.step.cur .step-h') || $('setup').querySelector('.step-h'))?.focus({ preventScroll: true }); }
-  else document.querySelector('[data-fk="s-open"]')?.focus({ preventScroll: true });
+  if (focus) setupFocus(open);
+}
+// Setup, in both views: opened, focus moves into it (its current step) and a phone scrolls it into view; closed, focus
+// goes back to the Setup chip.
+function setupFocus(open) {
+  const el = $('setup');
+  if (!open || el.hidden) return document.querySelector('[data-fk="s-open"]')?.focus({ preventScroll: true });
+  el.scrollTop = 0;
+  (el.querySelector('.step.cur .step-h') || el.querySelector('.step-h'))?.focus({ preventScroll: true });
+  const r = el.getBoundingClientRect();
+  if (boardView !== 'office' && (r.top < 0 || r.top > innerHeight * 0.6)) el.scrollIntoView({ behavior: smooth(), block: 'start' });
 }
 function oMerge(open) {
   ui.oMerge = open; if (open) { ui.oGoal = false; ui.oDl = false; ui.oSetup = false; if (ui.themeOpen) themePop(false, false); }
@@ -4701,6 +4713,7 @@ document.addEventListener('keydown', (ev) => {
   if (ui.oDl) return oDl(false);
   if (ui.oMerge) return oMerge(false);
   if (ui.oSetup && boardView === 'office') return oSetup(false);
+  if (boardView !== 'office' && setupShown() && ev.target.closest?.('#setup, [data-fk="s-open"]')) { store.set('board-setup', 'closed'); ui.forceSetup = false; render(); return setupFocus(false); }
   if (ui.oGoal) return oGoal(false);
   if (boardView === 'office' && oUi.max && !oTasksOff()) { oUi.max = false; oSave(); oApply(); office.mod?.resize(); return $('o-tasks-max').focus({ preventScroll: true }); }
   if (ui.picked && ev.target.closest?.('#o-right, #office-view')) { const n = ui.picked; pickAgent(null, true); document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }
