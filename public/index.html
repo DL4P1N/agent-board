@@ -1545,7 +1545,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dd>A worker the main agent starts for one task, shown as <code>owner/subagent</code>, e.g. <code>alice/ui-worker</code>. Today only Claude Code starts subagents.</dd>
     <dt>Planner</dt>
     <dd>The first agent that sees the goal (or the one you pick in Setup). It reads the repo and writes the task list (the backlog), and decides on tasks other agents <b>propose</b>. It can reserve tasks for specific agents. When nobody else is free it may take a few extra small tasks with subagents. After planning it works like everyone else.</dd>
-    <dt>Integrator (merges to main)</dt>
+    <dt>Who merges to main</dt>
     <dd>The agent that merges finished branches into <code>main</code>, runs the tests and marks tasks Done. In Setup you pick one agent, or <b>whoever is free</b>: then any agent with room takes the next task in Review (only one agent per task, never its own work). If nobody is picked, the first agent with finished work takes the job.</dd>
     <dt>Proposed</dt>
     <dd>A task an agent other than the planner suggested. Nobody can claim it until the planner (or you, with Approve on the card) approves it.</dd>
@@ -2990,7 +2990,7 @@ function renderAgents(si, qOpen) {
     const key = esc(p.name); const sel = r === p.name; const agents = p.r.agents || [];
     const tasks = [...p.agents.values()].flatMap((a) => a.tasks);
     const roles = (S.planner && root(S.planner) === p.name ? '<span class="pill role" title="Planner: wrote the task list from the goal">planner</span>' : '')
-      + (S.integrator && S.integrator !== ANYONE && root(S.integrator) === p.name ? '<span class="pill role" title="Integrator: merges finished branches into main">merges to main</span>' : '');
+      + (S.integrator && S.integrator !== ANYONE && root(S.integrator) === p.name ? '<span class="pill role" title="Merges finished branches into main">merges to main</span>' : '');
     const filt = agents.length || tasks.length ? `<button type="button" class="o-ib pfilt" data-filter="${key}" data-fk="pf-${key}" aria-pressed="${sel}" aria-label="${sel ? 'Show everyone\'s tasks' : `Show only ${key}'s tasks`}" title="${sel ? 'Showing only their tasks: show everyone\'s' : `Show only ${key}'s tasks`}">${FUNNEL}</button>` : '';
     const lt = [...p.agents.values()].find((a) => a.lastText && !agents.some((x) => x.name === a.id))?.lastText;
     return `<li class="person${sel ? ' sel' : ''}" ${hs(p.name)} data-person-row="${key}"><div class="o-pn"><span class="pdot" aria-hidden="true" data-i="${esc([...p.name][0]?.toUpperCase() || '')}"></span><b class="pc" ${hs(p.name)}>${key}</b>${p.name === me ? '<span class="muted">(you)</span>' : ''}${roles}${filt}</div>`
@@ -3296,7 +3296,7 @@ function settingsText(e) {
     if (/^nobody/.test(v)) return role === 'planner' ? 'cleared the planner role' : 'cleared who merges to main';
     if (role === 'integrator' && /^whoever is free/.test(v)) return 'let whoever is free merge finished work into main';
     if (role === 'planner') return self ? 'is now the planner (writes the task list)' : `made ${v} the planner (writes the task list)`;
-    return self ? 'will merge finished work into main (integrator)' : `picked ${v} to merge finished work into main (integrator)`;
+    return self ? 'will merge finished work into main' : `picked ${v} to merge finished work into main`;
   }).join('; ');
 }
 // Feed filters, derived from kind + data (task_updated carries data.status; the rest is read from the text).
