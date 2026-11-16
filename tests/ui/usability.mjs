@@ -40,7 +40,7 @@ try {
   await page.goto(BASE + '/');
   await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 5000 });
   await sleep(300);
-  check('A empty: phase track leads with Connect, same as what-to-do', await page.$eval('.phases .cur', (e) => e.textContent) === 'Connect' && /Connect your first laptop/.test(await txt(page, '#now')), await txt(page, '#now'));
+  check('A empty: phase track (Demo popover) leads with Connect; no lead in Needs you while Setup shows step 1', await page.$eval('.phases .cur', (e) => e.textContent) === 'Connect' && !/Connect your first laptop/.test(await txt(page, '#now')), await txt(page, '#now'));
   check('A step 1 has the board link with Copy', !!(await page.$('#step-invite [data-fk="cp-web"]')));
   await page.click('#step-invite [data-fk="cp-web"]'); await sleep(200);
   check('A copy board link gives feedback', /Copied/.test(await txt(page, '#toasts')));
@@ -69,8 +69,10 @@ try {
   check('A goal hint: agent may also ask in its terminal', /may also ask you for the goal in its terminal/.test(await txt(page, '#step-goal')));
   await page.type('#goal-in', 'A voting app for hackathon projects. Demo: submit, vote, live leaderboard.');
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => /No agent has started yet/.test(document.getElementById('now').innerText), { timeout: 5000 }).catch(() => {});
-  check('A what-to-do: "No agent has started yet. Did everyone type /board ($board in Codex)?"', /No agent has started yet\. Did everyone type \/board \(\$board in Codex\)\?/.test(await txt(page, '#now')), await txt(page, '#now'));
+  await page.waitForFunction(() => /not started yet/.test(document.getElementById('step-start')?.innerText || ''), { timeout: 5000 }).catch(() => {});
+  check('A goal saved, nobody started: Setup step 3 says so, with what to type, and Needs you doesn\'t repeat it while Setup is open', /not started yet/.test(await txt(page, '#step-start')) && /\/board/.test(await txt(page, '#step-start'))
+ && !/No agent has started yet/.test(await txt(page, '#now')), await txt(page, '#now') + ' | ' + await txt(page, '#step-start'));
+
 
   // Project repo URL
   await openStep(page, 'goal');
