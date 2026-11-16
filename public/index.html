@@ -2824,14 +2824,14 @@ function renderQuestions(qOpen) {
   patch($('q-h'), qOpen.length ? `${qOpen.length === 1 ? 'An agent is' : `${qOpen.length} agents are`} waiting for a human answer` : '');
   patch($('questions'), qOpen.map((q) => {
     const t = q.task_id && taskById(q.task_id);
-    const old = Date.now() - q.created_at > 5 * 60e3;
+    const old = Date.now() - q.created_at > 30 * 60e3; // muted text; amber only once it has waited half an hour
     return `<article class="qcard" id="q-${q.id}" aria-label="Question from ${esc(q.asker)}">
       <div class="qh">${who(q.asker, true)}${t ? `<span class="muted">on</span> <button type="button" class="link tref" data-open-task="${t.id}">#${t.id} ${esc(short(t.title, 40))}</button>` : ''}
         <span class="${old ? 'pill warn' : 'muted'}" title="${esc(fullTime(q.created_at))}">asked ${ago(q.created_at)}</span></div>
       <div class="qt">${fmt(q.question, true)}</div>
       <form data-qform="${q.id}" data-asker="${esc(q.asker)}">
         <label class="vh" for="qa-${q.id}">Answer to ${esc(q.asker)}</label>
-        <textarea id="qa-${q.id}" data-keep="qa-${q.id}" rows="1" placeholder="Your answer (Enter to send)" title="Enter sends · Shift+Enter adds a new line" aria-describedby="qe-${q.id}" ${ui.qErr?.[q.id] ? 'aria-invalid="true"' : ''}></textarea>
+        <textarea id="qa-${q.id}" data-keep="qa-${q.id}" rows="1" placeholder="Your answer" title="Enter sends · Shift+Enter adds a new line" aria-describedby="qe-${q.id}" ${ui.qErr?.[q.id] ? 'aria-invalid="true"' : ''}></textarea>
         <button type="submit" data-fk="qb-${q.id}">Answer</button>
       </form><div class="err" id="qe-${q.id}" role="alert">${esc(ui.qErr?.[q.id] || '')}</div></article>`;
   }).join(''));
@@ -4010,7 +4010,7 @@ function renderTaskBlock(t) {
   const note = blockedNote(t); const q = openQuestions().find((x) => x.task_id === t.id);
   patch(el, `<p class="tb-why"><b>Blocked:</b> ${note ? esc(note) : '<span class="muted">no reason given. Ask in chat with Message assignee.</span>'}</p>
     ${q ? `<div class="tb-q"><div class="t-meta muted">${who(q.asker, true)} asked ${ago(q.created_at)}</div><div class="qt">${fmt(q.question, true)}</div>
-      <div class="tb-qa"><label class="vh" for="tdqa-${q.id}">Answer to ${esc(q.asker)}</label><textarea id="tdqa-${q.id}" data-keep="tdqa-${q.id}" data-tdq="${q.id}" data-asker="${esc(q.asker)}" rows="1" placeholder="Your answer (Enter to send)" title="Enter sends · Shift+Enter adds a new line" aria-describedby="tdqe-${q.id}"></textarea><button type="button" data-td-answer="${q.id}" data-fk="tdqb-${q.id}">Answer</button></div>
+      <div class="tb-qa"><label class="vh" for="tdqa-${q.id}">Answer to ${esc(q.asker)}</label><textarea id="tdqa-${q.id}" data-keep="tdqa-${q.id}" data-tdq="${q.id}" data-asker="${esc(q.asker)}" rows="1" placeholder="Your answer" title="Enter sends · Shift+Enter adds a new line" aria-describedby="tdqe-${q.id}"></textarea><button type="button" data-td-answer="${q.id}" data-fk="tdqb-${q.id}">Answer</button></div>
       <div class="err" id="tdqe-${q.id}" role="alert"></div></div>` : ''}
     <div class="inl"><button type="button" class="ghost sm" data-td-unblock data-fk="td-unblock" title="${t.assignee ? `Unblocked: ${esc(t.assignee)} carries on` : 'Unblocked: back to work'}">Back to In progress</button></div>`);
 }
