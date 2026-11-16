@@ -1169,7 +1169,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-tasks .taskbar .tabs { margin-left: auto; flex: none; flex-wrap: nowrap; }
   .o-tasks .taskbar .tabs button { white-space: nowrap; }
   /* Open, the window is at least about two cards tall, so a short screen still shows whole cards. */
-  .o-tasks:not(.folded, .max) { min-height: min(50vh, 360px); }
+  .o-tasks:not(.folded, .max, .nomatch) { min-height: min(50vh, 360px); }
+  .o-tasks.nomatch:not(.folded) { height: auto; }
   .o-tasks.folded .taskbar > #new-task-btn { display: none; }
   .o-tasks.folded .taskbar > :not(h2) { display: none; }
   /* Folded, the Tasks window is just its title bar, centred at the foot. */
@@ -1185,6 +1186,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-col h3 .dclose:hover { background: none; color: var(--ink); }
   .o-cols.done-closed { grid-template-columns: repeat(4, minmax(0, 1fr)) 40px; }
   .o-col.collapsed h3 { border: 0; padding: 0; height: 100%; align-items: stretch; }
+  .o-col.collapsed h3::before { display: none; } /* folded, the ✓ is its mark */
   .o-col.collapsed .dtog { min-height: 0; height: 100%; padding: var(--s3) 0; justify-content: flex-start; }
   .o-col.collapsed .dtog .o-c { margin: 0; }
   .o-col h3 > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -4698,7 +4700,9 @@ function renderOffice() {
   const table = tv.view === 'table' && state.tasks.length;
   $('o-cols').hidden = !!table;
   const tasks = state.tasks.filter(taskShown);
-  if (state.tasks.length && tv.q.trim() && !tasks.length) { patch($('o-cols'), `<p class="o-nomatch">${noMatchHtml('o-clear-search')}</p>`); return oFrame(); }
+  // A search that matches nothing: one line, and the window shrinks to it (as on the Board view).
+  const none = !!(state.tasks.length && tv.q.trim() && !tasks.length); $('o-tasks').classList.toggle('nomatch', none);
+  if (none) { patch($('o-cols'), `<p class="o-nomatch">${noMatchHtml('o-clear-search')}</p>`); return oFrame(); }
   // Done folds the same way as on the Board view (one setting, the same auto rule).
   const dOpen = doneOpen(); $('o-cols').classList.toggle('done-closed', !dOpen);
   if (patch($('o-cols'), O_COLS.map(([k, label]) => {
