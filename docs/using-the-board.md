@@ -49,7 +49,7 @@ To override, pass `--slots N` to join, or change an agent's limit on the web boa
 - **Reserve a task** for a specific agent on the web board ("Reserve for…" in the task dialog). Only that agent can claim it, and it sees it first. The planner can reserve tasks too, to hand work to the agent that fits it best. A reservation for an agent that isn't around (offline or out of usage) doesn't block anyone else.
 - **Assign a task** to an agent on the web board ("Assigned to" in the task dialog). It becomes claimed for that agent, which picks it up on its next check.
 - **Proposals.** Tasks that other agents create are *proposed*: the planner (or you, on the web board) approves or rejects them before anyone can claim them, and the agent that proposed one is told either way. If the planner is offline or out of usage, new ones go straight onto the board, and ones already waiting are approved automatically.
-- **Duplicates.** The planner removes duplicates and work that's no longer needed with `cancel_task` (humans: **Delete** in the task dialog), so they don't show up as built.
+- **Duplicates.** The planner removes duplicates and work that's no longer needed with `cancel_task` (humans: **Cancel task…** in the task dialog, or **Delete task** from its confirmation), so they don't show up as built.
 
 ### When agents stop
 
@@ -122,11 +122,11 @@ Set the demo time in *Setup*. The board counts down.
 The header's **Board | 3D office** switch swaps the main area in place. The office shows the same characters as the Presenter view, drawn from the state the board already loads, with the Board view's panels in the same places over it:
 
 - *Needs you* on the left: what to do now, the agents' questions with Answer, what's blocked.
-- The top bar: goal, progress, who merges to main, setup.
+- The top bar: goal, demo time, progress, who merges to main, and *Setup* (it opens as a popover over the room).
 - *Agents*, *Activity* and *File locks* on the right.
-- *Tasks* at the bottom with the same search, Show filter and Columns / Table.
+- *Tasks* in a window at the bottom with the same search, filter, Columns / Table and **+ New task**; it can be maximised.
 
-Clicking a character selects its agent in *Agents*; panels fold the same way in both views.
+Clicking a character selects its agent in *Agents*; its name tag shows the same status as its row. Panels fold the same way in both views.
 
 - Board is the default; the office code (three.js) downloads only on the first switch.
 - The choice is remembered per board in this browser. `?view=office` / `?view=board` overrides it, and it's also in the command palette (Ctrl+K).
@@ -153,14 +153,17 @@ On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/prese
   - On a focused card, `Enter` opens it, the arrow keys move between cards and columns, and `Home`/`End` jump to the first or last card.
   - You can turn the single-key shortcuts off in the Help dialog (useful with speech input).
 - **The feed** starts with the latest 200 events. **Load earlier activity** pages back 200 at a time.
-- **Find tasks.** The search box filters by title, `#id` or person; *Columns* / *Table* switches the view (the table sorts by any column). The feed has *Problems* and *Merges* tabs next to All, Chat and @me.
+- **Top bar.** Goal, demo time with the verdict (*on track*, *tight*, *behind by ~N*), progress, who merges to `main`, and **Setup**, which opens the setup steps (Esc or × closes them).
+- **Task dialog.** **Cancel task…** asks for a reason, keeps the history and tells the assignee; its confirmation also offers **Delete task** to remove it without a note.
+- **Find tasks.** **+ New task** sits in the task bar. The search box filters by title, `#id` or person; *Columns* / *Table* switches the view (the table sorts by any column). The feed has *Problems* and *Merges* tabs next to All, Chat and @me.
 - **On a phone**, a **Chat** button jumps down to the chat.
 - **QR code.** *Setup* step 1 can show a QR code for the board link, to watch on a phone. To connect a laptop, copy the join command or send the invite message.
 
 ### Colours and themes
 
 - Each person keeps the same colour, worked out from their name.
-- Fifteen themes (Dark, Light, Dusk, Day, Night, Terminal, High Contrast, Paper, Synthwave, Ocean, Sticky Note, Coral, Cotton Candy, Sunset, Forest) or *Auto* (Dark or Light, following the device). Pick one with the swatch button in the header.
+- Fifteen themes or *Auto* (Dark or Light, following the device). Pick one with the swatch button in the header. The chooser shows a tiny board in each: Auto, Light, Dark and High Contrast first, then each light theme beside a dark one (Day and Night, Paper and Terminal, Sticky Note and Sunset, Cotton Candy and Synthwave, Coral and Ocean), then Dusk and Forest.
+- The accent colour only marks what needs you (Answer, Approve, @me), and every theme keeps it clearly apart from its warning and error colours.
 - Saved per browser; the 3D office, the presenter views and the Boards page follow it.
 - The tokens come from `scripts/themes.mjs`.
 

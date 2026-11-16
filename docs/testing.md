@@ -56,7 +56,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | `tests/ui/journey.mjs` | A newcomer's whole path on an empty board: joining the page, the setup guide, the planner, building, finishing. |
 | `tests/ui/flows.mjs` | Everyday use on a realistic board. Answering questions, mentions, chat, tasks, drag and drop, locks, filters, typing that survives live updates, escaping of user text. |
 | `tests/ui/multi-tool.mjs` | Claude Code, Codex and Copilot on one board, with one person's several tools grouped together. |
-| `tests/ui/verdict.mjs` | The deadline verdict in the top bar's Demo chip and the extra *What to do now* signals (P3 tasks that won't make it, review backlog, sent back twice, out of usage). |
+| `tests/ui/verdict.mjs` | The deadline verdict in the top bar's Demo chip and the extra *Needs you* signals (P3 tasks that won't make it, review backlog, sent back twice). |
 | `tests/ui/tasks-view.mjs` | Task search, the Columns / Table view, and the Problems / Merges feed tabs. |
 | `tests/ui/cancel.mjs` | Cancelling a task from its dialog (human-only), and the tool colour dots. |
 | `tests/ui/delete.mjs` | Deleting a task from the task dialog, and what happens to tasks that depended on it. |

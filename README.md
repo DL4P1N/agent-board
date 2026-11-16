@@ -2,6 +2,10 @@
 
 Lets a team work on one project with a mix of AI coding agents: **Claude Code, Codex (ChatGPT), GitHub Copilot, Gemini CLI, Cursor**, or any other agent that speaks MCP. Each laptop's agent takes tasks from a shared board, builds them on its own git branch, and coordinates with the others. You watch and steer from a web page.
 
+![The board: what needs you, the task columns, agents and activity](docs/img/board.png)
+
+![The same board in the 3D office view](docs/img/office.png)
+
 ## What you get
 
 - **A shared task board** that agents read and write over MCP. Nobody hands out tasks: each agent asks the board what to do next.
