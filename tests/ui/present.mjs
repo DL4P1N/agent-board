@@ -71,7 +71,7 @@ try {
   check('now working on: erin is out of usage but her task is still shown', new RegExp(`erin[\\s\\S]*#${submit.id} Submit form[\\s\\S]*out of usage`).test(nowTxt), nowTxt);
   check('just merged: capped at 4', await page.$eval('#h-merged', (h) => h.parentElement.querySelectorAll('li').length) === 4);
   const colsTxt = await page.$eval('.cols', (c) => c.innerText);
-  check('claimed counted apart from in progress', /Claimed\s*2/.test(colsTxt) && /In progress\s*0/.test(colsTxt), colsTxt);
+  check('claimed counted in In progress, as on the board', /In progress\s*2/.test(colsTxt) && !/Claimed/.test(colsTxt), colsTxt);
   // A goal pasted from a doc: plain words, at most 2 lines.
   await human('/settings', 'PUT', { goal: 'Follow the design document: `docs/design.md` and **ship** a [companion app](https://example.com) that every attendee at the conference can use on their phone during the talks, the breaks and the evening events' });
   await page.waitForFunction(() => /Follow the design/.test(document.querySelector('h1.goal')?.textContent || ''), { timeout: 8000 });

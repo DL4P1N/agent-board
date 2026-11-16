@@ -118,7 +118,7 @@ try {
     check('the Agents count uses the board\'s rule and words ("N online", out of usage apart)', await page.evaluate(() => $('o-right-sub').textContent === agentsLine(setupInfo(), true) && /^\d+ online/.test($('o-right-sub').textContent)), await page.$eval('#o-right-sub', (e) => e.textContent));
     check('Tasks window: the board\'s six columns, names and counts', await page.evaluate(() => {
       const c = [...document.querySelectorAll('#o-cols .o-col')];
-      return c.length === 6 && c.map((x) => x.querySelector('h3 span').textContent).join() === 'Open,Claimed,In progress,Blocked,Review,Done' && /Vote API/.test(c[2].innerText) && /Leaderboard page/.test(c[0].innerText)
+      return c.length === 5 && c.map((x) => x.querySelector('h3 span').textContent).join() === 'Open,In progress,Blocked,Review,Done' && /Vote API/.test(c[1].innerText) && /Leaderboard page/.test(c[0].innerText)
         && c.every((x) => x.querySelector('.o-c').textContent === (document.getElementById('col-' + x.dataset.s)?.getAttribute('aria-label') || '').match(/(\d+) tasks?$/)?.[1]);
     }), await page.evaluate(() => [...document.querySelectorAll('#o-cols .o-col')].map((x) => `${x.querySelector('h3 span').textContent}=${x.querySelector('.o-c')?.textContent}/${document.getElementById('col-' + x.dataset.s)?.getAttribute('aria-label')}`).join(' ')));
     check('Tasks: one Tab stop per column (the board\'s model)', await page.evaluate(() => [...document.querySelectorAll('#o-cols .o-col')].every((c) => { const k = [...c.querySelectorAll('.o-card')]; return !k.length || k.filter((x) => x.tabIndex === 0).length === 1; })));

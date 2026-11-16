@@ -261,7 +261,9 @@
 
   .wrap { max-width: 960px; margin: 0 auto; padding: var(--s7) var(--s6) var(--s8); }
   header { display: flex; align-items: center; gap: var(--s5); flex-wrap: wrap; margin-bottom: var(--s7); }
-  header h1 { font-size: var(--fs-lead); font-weight: 700; text-transform: uppercase; letter-spacing: .12em; text-shadow: var(--shade); display: flex; align-items: center; gap: var(--s4); }
+  /* The wordmark, as in the board's header: sans, bold, sentence case; then the page's name. */
+  header h1 { font: 700 var(--fs-lead)/1.2 var(--font); display: flex; align-items: center; gap: var(--s4); white-space: nowrap; }
+  header h1 .pg { font-weight: 400; color: var(--muted); }
   /* The logo: three agents, two in the accent behind one in the text colour; the eyes are cut out in the page colour. */
   .mark { width: 28px; height: 28px; flex: 0 0 auto; }
   .mark .ma { fill: var(--accent); } .mark .mi { fill: var(--ink); } .mark .me { fill: var(--bg); }
@@ -288,7 +290,7 @@
   .pill.live { background: var(--ok-soft); color: var(--ok); }
   .pill.bad { background: var(--bad-soft); color: var(--bad); }
   .failerr { font-size: var(--fs-meta); color: var(--bad); margin-top: var(--s3); overflow-wrap: anywhere; }
-  .pill.def { background: var(--accent-soft); color: var(--accent); }
+  .pill.def { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-strong); } /* a fact, not something that needs you */
   .facts { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); font-size: var(--fs-meta); color: var(--muted); }
   .facts b { color: var(--ink); font-weight: 700; }
   .bar { height: 6px; background: var(--field); border: 1px solid var(--border); border-radius: var(--r-full); overflow: hidden; }
@@ -312,7 +314,7 @@
 <body>
 <div class="wrap">
   <header>
-    <h1><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><g transform="translate(-.5 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(18.7 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(6.1 6.8) scale(.76)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="mi"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="mi"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g></svg>Boards</h1>
+    <h1><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><g transform="translate(-.5 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(18.7 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(6.1 6.8) scale(.76)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="mi"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="mi"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g></svg>Agent Board <span class="pg">· Boards</span></h1>
     <span class="muted" style="font-size:var(--fs-sm)">Every board on this server. Each has its own token, people and tasks.</span>
     <span class="sp"></span>
     <button type="button" class="ghost sm" id="signout" hidden>Forget admin token</button>

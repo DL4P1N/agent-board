@@ -112,7 +112,7 @@ try {
   check("another agent's claim is refused", /reserved for eve/.test(refused.error || ''), JSON.stringify(refused).slice(0, 160));
   const ok = await eve('claim_task', { id: T[4].id });
   check("the reserved agent's claim works", ok.status === 'claimed' && ok.assignee === 'eve', JSON.stringify(ok).slice(0, 160));
-  await page.waitForFunction((id) => document.querySelector(`#col-claimed .card[data-id="${id}"]`), { timeout: 5000 }, T[4].id);
+  await page.waitForFunction((id) => document.querySelector(`#col-in_progress .card[data-id="${id}"]`), { timeout: 5000 }, T[4].id);
   check('reserved badge hidden once the reserved agent holds it', !/reserved for/.test(await cardTxt(T[4].id)));
   check('team capacity updates: 4 running', /Team can run 7 tasks at once · 4 running/.test(await txt('#p-sum')), await txt('#p-sum'));
 

@@ -139,14 +139,15 @@ On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/prese
 - One character per online agent at its own desk, in its tool's colour, typing, reviewing, stuck or raising a hand for a question, and paper planes when tasks go to review or get done.
 - Around it: the goal, the deadline verdict and countdown, *x of y done*, questions waiting and who's stuck.
 - It follows the board's light/dark choice and reduced motion.
-- Without WebGL it opens the simple 2D page (`/present-classic.html`, also linked as *Simple view*): goal, countdown, progress (with a *Claimed* count next to Open, In progress, Blocked, Review and Done), who's working on what and the latest merges.
+- Without WebGL it opens the simple 2D page (`/present-classic.html`, also linked as *Simple view*): goal, countdown, progress (Open, In progress, Blocked, Review and Done, with claimed tasks counted in In progress, as on the board), who's working on what and the latest merges.
 - An hour after the demo both show *Event finished* with the final count.
 - Its link carries a read-only viewer token: it can't change anything or see the join commands, so it's safe on a shared screen. Rotating the board token also changes it.
 - The 3D page is built into `public/` and committed, so the server needs no build step. After changing `office/present.html` or `office/src/`, run `npm run build:present`.
 
 ## On the web board
 
-- **Moving cards.** Drag a card or use its **Move…** button. A move to *Claimed* or *In progress* asks who it's for, and a task whose dependencies aren't done yet needs **Move anyway**.
+- **Columns.** Open, In progress, Blocked, Review and Done, in both views. A task an agent has claimed but not started sits in In progress, marked *claimed, not started*; the Table view and the task dialog give the exact status.
+- **Moving cards.** Drag a card or use its **Move…** button. A move to *In progress* asks who it's for, and a task whose dependencies aren't done yet needs **Move anyway**.
 - **Keyboard.**
   - `Ctrl`+`K` (`⌘K` on a Mac) opens the command palette: jump to a task or person, add a task, answer a question, set the demo time, switch the filter or theme.
   - `n` new task, `/` write a message, `?` help, `Esc` closes dialogs.

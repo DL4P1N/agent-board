@@ -45,7 +45,7 @@ try {
     check('goal shown large, as text (no HTML injected)', await page.$eval('#goal', (h) => h.textContent.includes('<b>live</b>') && !h.querySelector('b') && parseFloat(getComputedStyle(h).fontSize) >= 22));
     check('done count: 1 of 3 done, with a progress bar', /1 of 3 done/.test(txt) && await page.$eval('[role=progressbar]', (b) => b.getAttribute('aria-valuenow') === '1' && b.getAttribute('aria-valuemax') === '3'), txt.replace(/\s+/g, ' ').slice(0, 160));
     check('countdown to the demo with the freeze time', /^2h 0\dm$/.test(await page.$eval('#clock', (c) => c.textContent)) && /freeze at/.test(await page.$eval('#clock-sub', (c) => c.textContent)), await page.$eval('#clock', (c) => c.textContent));
-    check('nothing waiting on a human yet', /Nothing is waiting on a human/.test(txt));
+    check('nothing waiting on a human yet', /Nothing needs you/.test(txt));
     check('body text is at least 14px', await page.evaluate(() => [...document.querySelectorAll('#top, #bottom')].flatMap((r) => [...r.querySelectorAll('*')]).filter((e) => e.childNodes.length && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())).every((e) => parseFloat(getComputedStyle(e).fontSize) >= 14)));
     const s0 = await S(page);
     const a0 = s0.agents.find((a) => a.id === 'ana-claude');
@@ -63,7 +63,7 @@ try {
     const bob = await agent(board, 'bob-codex', 'codex-mcp-client'); await bob('board_status');
     await bob('claim_task', { id: t3.id }); await bob('update_task', { id: t3.id, status: 'blocked', note: 'needs the API key' });
     const stuck = await until(page, (id) => new RegExp(`Blocked[\\s\\S]*bob[\\s\\S]*#${id} Submit form`, 'i').test(document.getElementById('needs')?.innerText || ''), t3.id);
-    check('a blocked task shows under "Needs a human" with its person (the board\'s word: Blocked)', stuck, (await page.$eval('#needs', (n) => n.innerText).catch(() => '')).replace(/\s+/g, ' '));
+    check('a blocked task shows under "Needs you" with its person (the board\'s word: Blocked)', stuck, (await page.$eval('#needs', (n) => n.innerText).catch(() => '')).replace(/\s+/g, ' '));
     const s1 = await S(page);
     const b1 = s1.agents.find((a) => a.id === 'bob-codex');
     check('adapter: blocked -> "Blocked on #id" (the board\'s word), Codex agent at its own desk', b1?.provider === 'codex' && b1.phase === 'blocked' && b1.pose === 'blocked' && b1.bubble === `Blocked on #${t3.id}` && b1.deskIndex !== s1.agents.find((a) => a.id === 'ana-claude').deskIndex, JSON.stringify(b1 && [b1.provider, b1.phase, b1.bubble, b1.deskIndex]));

@@ -93,7 +93,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
                leads What to do now (and a dialog's own main button). No status uses its hue; toggles and the
                current step use ink with an underline. Facts are plain text; a soft fill only for
                states that need someone (blocked, a question, stale). Status: open = grey ring,
-               claimed = blue ring, in progress = blue (info), blocked = red, review = between In progress and
+               in progress (claimed too) = blue (info), blocked = red, review = between In progress and
                Done (teal; violet in Night, white in Terminal), done = green.
                People: --h (hue) is set inline per person; lightness comes from the theme.
      Type      System sans for content and controls; the demo's monospace for labels and counts (panel
@@ -655,7 +655,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .boardwrap { min-width: 0; }
   .boardwrap > .hint { margin-top: var(--s4); }
   .filterbar { font-size: var(--fs-sm); display: flex; gap: var(--s4); align-items: center; flex-wrap: wrap; margin-bottom: var(--s4); }
-  .board { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)) var(--done-w, minmax(120px, 1fr)); gap: var(--s4); overflow-x: auto; align-items: start; padding: 2px 2px var(--s2); position: relative; }
+  .board { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)) var(--done-w, minmax(120px, 1fr)); gap: var(--s4); overflow-x: auto; align-items: start; padding: 2px 2px var(--s2); position: relative; }
   .board.done-closed { --done-w: 48px; }
   @media (max-width: 760px) { .board, .board.done-closed { grid-template-columns: minmax(0, 1fr); overflow: visible; } .board.none { display: none; } }
   /* Columns: the demo's .tv-col, a sunken box whose heading is a title bar. */
@@ -665,7 +665,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   /* Column heading: status dot, name, count. The dot is the status colour used everywhere. */
   .col h3 { font-size: var(--fs-meta); font-weight: 700; line-height: var(--lh-tight); color: var(--ink); margin: 0 calc(-1 * var(--s3)) var(--s2); padding: var(--s2) var(--s4); min-height: 28px; border-bottom: 2px solid var(--line); display: flex; align-items: center; gap: var(--s3); }
   .col h3::before { content: ""; width: 8px; height: 8px; border-radius: var(--r-full); flex: 0 0 auto; box-shadow: inset 0 0 0 2px var(--field-line); }
-  .col.s-claimed h3::before { box-shadow: inset 0 0 0 2px var(--info); }
   .col.s-in_progress h3::before { background: var(--info); box-shadow: 0 0 0 1px var(--outline); }
   .col.s-blocked h3::before { background: var(--bad); box-shadow: 0 0 0 1px var(--outline); }
   .col.s-review h3::before { background: var(--review); box-shadow: 0 0 0 1px var(--outline); }
@@ -1163,19 +1162,18 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-tasks.folded { left: 50%; right: auto; translate: -50% 0; width: max-content; height: auto; max-width: calc(100% - 2 * var(--o-c)); }
   .o-tasks.folded > .o-head { gap: var(--s5); }
   .o-tasks.folded #o-tasks-max { display: none; }
-  .o-cols { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--s3); height: 100%; min-height: 0; }
+  .o-cols { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s3); height: 100%; min-height: 0; }
   .o-tasks .o-body { padding: var(--s3) var(--s4) var(--s4); overflow: hidden; }
   .o-tasks .ttable { height: 100%; margin: 0; overflow: auto; box-shadow: none; background: transparent; }
   .o-col { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: color-mix(in srgb, var(--sunken) 70%, transparent); border: 2px solid var(--line); }
   .o-col h3 { display: flex; align-items: center; gap: var(--s3); margin: 0; padding: 2px var(--s3); min-height: 26px; border-bottom: 2px solid var(--line); font: 700 var(--fs-meta)/1.2 var(--mono); color: var(--ink); white-space: nowrap; overflow: hidden; }
   .o-col h3 .dclose { background: none; border: 0; box-shadow: none; padding: 0 var(--s2); min-height: var(--ctl-xs); color: var(--muted); font-size: var(--fs-meta); }
   .o-col h3 .dclose:hover { background: none; color: var(--ink); }
-  .o-cols.done-closed { grid-template-columns: repeat(5, minmax(0, 1fr)) 40px; }
+  .o-cols.done-closed { grid-template-columns: repeat(4, minmax(0, 1fr)) 40px; }
   .o-col.collapsed h3 { border: 0; padding: 0; height: 100%; align-items: stretch; }
   .o-col.collapsed .dtog { min-height: 0; height: 100%; padding: var(--s3) 0; justify-content: flex-start; }
   .o-col.collapsed .dtog .o-c { margin: 0; }
   .o-col h3 > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .o-col.s-claimed h3::before { box-shadow: inset 0 0 0 2px var(--info); }
   .o-col h3::before { content: ""; width: 8px; height: 8px; flex: 0 0 auto; box-shadow: inset 0 0 0 2px var(--field-line); }
   .o-col.s-in_progress h3::before { background: var(--info); box-shadow: 0 0 0 1px var(--outline); }
   .o-col.s-blocked h3::before { background: var(--bad); box-shadow: 0 0 0 1px var(--outline); }
@@ -1540,7 +1538,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dt>Out of usage</dt>
     <dd>Mark an agent whose subscription hit its usage limit (select it under <b>Agents</b>). The board stops counting it as available, and other agents may take over the tasks it holds. It clears at the time you give, or when the agent talks to the board again.</dd>
     <dt>Task statuses</dt>
-    <dd><b>Proposed</b> suggested by an agent, waiting for approval → <b>Open</b> ready to pick up → <b>Claimed</b> an agent took it → <b>In progress</b> being worked on → <b>Blocked</b> stuck, needs help → <b>Review</b> pushed to a branch, waiting to be merged → <b>Done</b> merged into main. Drag cards between columns to change a status yourself.</dd>
+    <dd><b>Proposed</b> suggested by an agent, waiting for approval → <b>Open</b> ready to pick up → <b>Claimed</b> an agent took it, not started yet (its card sits in In progress) → <b>In progress</b> being worked on → <b>Blocked</b> stuck, needs help → <b>Review</b> pushed to a branch, waiting to be merged → <b>Done</b> merged into main. Drag cards between columns to change a status yourself.</dd>
     <dt>Waits on #3</dt>
     <dd>A dependency: the task can't be picked up until task #3 is done.</dd>
     <dt>Stale</dt>
@@ -1589,11 +1587,14 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 
 <script>
 const STATUSES = ['open', 'claimed', 'in_progress', 'blocked', 'review', 'done'];
+// The board's columns: Claimed (picked up, not started) sits in In progress, its card says so. The exact status stays in
+// the Table view and the task dialog.
+const COLS = ['open', 'in_progress', 'blocked', 'review', 'done'];
 const LABEL = { proposed: 'Proposed', open: 'Open', claimed: 'Claimed', in_progress: 'In progress', blocked: 'Blocked', review: 'Review', done: 'Done' };
 const HINT = { proposed: 'Proposed: waiting for the planner or you to approve', open: 'Ready for an agent to claim', claimed: 'Picked up, not started yet', in_progress: 'Being worked on', blocked: 'Stuck: needs help', review: 'Waiting to be merged', done: 'Merged / finished' };
-const COL_DESC = { open: 'Ready for an agent to pick up', claimed: 'An agent took it; not started yet', in_progress: 'An agent is working on it now', blocked: 'Stuck: needs a decision or help', review: 'Pushed to a branch, waiting for the integrator to merge', done: 'Merged into main' };
+const COL_DESC = { open: 'Ready for an agent to pick up', in_progress: 'An agent took it and is working on it (or about to start)', blocked: 'Stuck: needs a decision or help', review: 'Pushed to a branch, waiting to be merged into main', done: 'Merged into main' };
 const FROZEN_DESC = 'Feature freeze: only Priority-1 tasks (bug fixes) can still be claimed';
-const COL_EMPTY = { open: 'No open tasks. Add one with + New task.', claimed: 'None right now.', in_progress: 'None right now.', blocked: 'Nothing is blocked.', review: 'Nothing to merge.', done: 'Nothing merged yet.' };
+const COL_EMPTY = { open: 'No open tasks. Add one with + New task.', in_progress: 'None right now.', blocked: 'Nothing is blocked.', review: 'Nothing to merge.', done: 'Nothing merged yet.' };
 const PHASES = [['needs_goal', 'Set the goal'], ['needs_plan', 'Write tasks'], ['building', 'Build'], ['all_done', 'Done']];
 const ALL_PHASES = [['connect', 'Connect'], ...PHASES]; // 'connect' is client-side: shown while no laptop is connected yet
 const AGENT_ONLINE_MS = 10 * 60 * 1000;
@@ -2350,11 +2351,11 @@ function render() {
 }
 
 // ---------- one vocabulary and one counting rule: the Board view, the 3D view and both presenters ----------
-// Status names: LABEL. A task's column: colOf() (proposals sit, and count, in Open). Blocked: blockedSplit() (a blocked task
+// Status names: LABEL. A task's column: colOf() (proposals sit, and count, in Open; claimed tasks in In progress). Blocked: blockedSplit() (a blocked task
 // that waits on an open question counts once, as the question). Agents: agentsLine() (online = started, seen in the last
 // 10 min and not out of usage). The presenters' copies: office/src/live/board.ts (LABEL, columnCounts, needsOf) and
 // public/present-classic.html (columnCounts, needsOf).
-const colOf = (t) => (t.status === 'proposed' ? 'open' : t.status);
+const colOf = (t) => (t.status === 'proposed' ? 'open' : t.status === 'claimed' ? 'in_progress' : t.status);
 // What to do now's links that stay in the 3D view (what they lead to is in its panels or the Setup popover); the rest
 // open the Board view (the task columns), and say so there.
 const STAYS = ['cut', 'rejected', 'now', 'questions', 'blocked', 'conflict', 'compose', 'mentions', 'idle'];
@@ -3073,7 +3074,7 @@ function card(t) {
   // Feature freeze: an open task that isn't a P1 bug fix won't be started before the demo.
   const tm = timeNow(); const held = tm.frozen && !tm.past && (t.status === 'open' || prop) && t.priority !== 1;
   const aria = `#${t.id} ${t.title}. ${LABEL[t.status]}${prop ? ` by ${t.created_by}, waiting for approval` : ''}, ${t.assignee ? 'assigned to ' + t.assignee : 'unassigned'}, ${prio}${waiting.length ? `, waits on ${waiting.map((d) => '#' + d.id).join(' and ')}` : ''}${size !== 'M' ? `, size ${size}` : ''}${rsv ? `, reserved for ${t.reserved_for}` : ''}${pr ? `, pull request${pr.text ? ': ' + pr.text : ''}` : ''}${merging ? `, being merged by ${t.reviewer}` : ''}${stale ? `, stale: no update for 15+ minutes${off ? ', owner offline: agents may take it over' : ''}` : ''}${outU ? ', owner out of usage: agents may take it over' : ''}${q ? ', question waiting' : ''}${note ? `, blocked: ${note}` : ''}${held ? ', on hold for the feature freeze' : ''}. Press Enter to open`;
-  const menu = ui.moveMenu === t.id ? `<div class="mvmenu" role="group" aria-label="Move #${t.id} to"><span class="ml">Move to:</span>${STATUSES.filter((s) => s !== t.status).map((s) => `<button type="button" class="ghost" data-move-to="${s}" data-move-id="${t.id}" data-fk="mt-${t.id}-${s}">${LABEL[s]}</button>`).join('')}</div>` : '';
+  const menu = ui.moveMenu === t.id ? `<div class="mvmenu" role="group" aria-label="Move #${t.id} to"><span class="ml">Move to:</span>${COLS.filter((s) => s !== t.status).map((s) => `<button type="button" class="ghost" data-move-to="${s}" data-move-id="${t.id}" data-fk="mt-${t.id}-${s}">${LABEL[s]}</button>`).join('')}</div>` : '';
   const ask = ui.moveAsk?.id === t.id ? `<div class="mvmenu mvask" role="group" aria-label="Who is #${t.id} for?"><span class="ml">${LABEL[ui.moveAsk.to]} needs an owner. Who is it for?</span>${askAgents(t).map((a) => `<button type="button" class="ghost" data-ask-to="${esc(a)}" data-ask-id="${t.id}" data-fk="ask-${t.id}-${esc(a)}">${esc(a)}</button>`).join('')}<button type="button" class="ghost" data-ask-cancel="${t.id}" data-fk="askc-${t.id}">Cancel</button></div>` : '';
   const rej = ui.rejecting === t.id;
   const propActs = prop ? (rej
@@ -3091,6 +3092,7 @@ function card(t) {
       ${pr ? `<a class="pill ${pr.cls}" href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer" title="${esc(pr.tip)}">PR${pr.text ? ' · ' + esc(pr.text) : ''}</a>` : ''}
       ${merging ? `<span class="pill role" title="${esc(t.reviewer)} is reviewing and merging it">merging: ${esc(t.reviewer)}</span>` : ''}
       ${t.assignee ? `<span class="pc" ${hs(t.assignee)} title="Assigned to ${esc(t.assignee)}">${esc(t.assignee)}</span>` : t.status !== 'done' && t.status !== 'open' && !prop ? '<span class="pill warn" title="Nobody holds this task: open it to pick who it is for, or move it back to Open">unassigned</span>' : ''}
+      ${t.status === 'claimed' ? '<span title="Claimed: an agent picked it up but hasn’t started yet">claimed, not started</span>' : ''}
       ${waiting.length ? `<span class="pill flag" title="Depends on other tasks: can't be picked up until these are done">waits on ${waiting.map((d) => '#' + d.id).join(' ')}</span>` : deps.length ? `<span title="Dependencies done">after ${deps.map((d) => '#' + d.id).join(' ')} ✓</span>` : ''}
       ${stale ? `<span class="pill flag" title="Stale: no update for 15+ minutes. The agent may be stuck: ping it, or release the task back to Open.${off ? ' Its owner is offline, so other agents may take it over.' : ''}">stale</span>` : ''}
       <span title="Last update ${esc(fullTime(t.updated_at))}">${ago(t.updated_at)}</span>
@@ -3101,7 +3103,7 @@ function card(t) {
 function doneOpen() {
   if (ui.doneOpen === 'open') return true;
   if (ui.doneOpen === 'closed') return false;
-  return ($('board').clientWidth || $('o-cols').clientWidth || window.innerWidth) >= 6 * 170 + 50; // auto: only when all six columns fit
+  return ($('board').clientWidth || $('o-cols').clientWidth || window.innerWidth) >= 5 * 170 + 50; // auto: only when all five columns fit
 }
 // Search box + Columns/Table toggle. The box is static HTML (never re-rendered), so typed text survives.
 const tv = { view: store.get('board-view') === 'table' ? 'table' : 'columns', q: '', sort: 'status', dir: 1 };
@@ -3153,9 +3155,9 @@ function renderBoard() {
   const tm = timeNow(); const frozen = tm.frozen && !tm.past;
   $('board').classList.toggle('none', !state.tasks.length);
   $('board').classList.toggle('done-closed', !dOpen);
-  const html = STATUSES.map((s) => {
-    // Proposed tasks sit at the top of Open until someone approves them.
-    let items = visible.filter((t) => (t.status === 'proposed' ? 'open' : t.status) === s);
+  const html = COLS.map((s) => {
+    // Proposed tasks sit at the top of Open until someone approves them; claimed ones in In progress.
+    let items = visible.filter((t) => colOf(t) === s);
     if (s === 'open') items = items.sort((a, b) => (b.status === 'proposed') - (a.status === 'proposed'));
     const total = items.length;
     if (s === 'done' && !dOpen) {
@@ -3864,7 +3866,7 @@ document.addEventListener('drop', (ev) => {
   const col = ev.target.closest?.('.col'); if (!col) return;
   ev.preventDefault();
   const id = Number(ev.dataTransfer.getData('text/plain')); const t = taskById(id); const to = col.dataset.status;
-  if (t && t.status !== to) moveTask(t, to);
+  if (t && colOf(t) !== to) moveTask(t, to);
 });
 // Change a task's status (drag, Move… menu, Release). The toast offers Undo.
 // Claimed / In progress need an owner (asked on the card) and finished dependencies ("Move anyway").
@@ -4595,9 +4597,9 @@ function renderDocks(qOpen = openQuestions(), si = setupInfo()) {
   oApply();
 }
 // ---------- 3D view: the room and the Tasks window ----------
-// The Tasks window's columns: the board's six (proposals in Open), with the board's names, and the board's search and
+// The Tasks window's columns: the board's five (proposals in Open, claimed in In progress), with the board's names, and the board's search and
 // Show filter applied, so the counts match the Board view's columns. Columns / Table is the board's saved choice.
-const O_COLS = STATUSES.map((s) => [s, LABEL[s]]);
+const O_COLS = COLS.map((s) => [s, LABEL[s]]);
 const oRoveAt = {};
 function renderOffice() {
   if (boardView !== 'office') return;
@@ -4630,6 +4632,7 @@ function oCard(t) {
     ['S', 'L'].includes(t.size) ? `<span class="pill size ${t.size}"><span class="vh">size </span>${t.size}</span>` : '',
     t.status === 'review' && t.reviewer ? `<span class="pill role">merging: ${esc(t.reviewer)}</span>` : '',
     t.assignee ? `<span class="pc" ${hs(t.assignee)}>${esc(t.assignee)}</span>` : '',
+    t.status === 'claimed' ? '<span>claimed, not started</span>' : '',
     waiting.length ? `<span class="pill flag">waits on ${waiting.map((d) => '#' + d).join(' ')}</span>` : '',
     isStale(t) ? '<span class="pill flag">stale</span>' : '',
   ].filter(Boolean).join('');

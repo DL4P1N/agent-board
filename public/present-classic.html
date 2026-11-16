@@ -210,10 +210,11 @@
   html, body { margin: 0; }
   body { background: var(--bg); color: var(--ink); font: var(--fs-body)/1.4 var(--font); min-height: 100vh; }
   h1, h2, p { margin: 0; }
-  header .brand, .card h2, .clock, .prog, .cols b { font-family: var(--mono); }
+  .card h2, .clock, .prog, .cols b { font-family: var(--mono); }
   main { max-width: 1680px; margin: 0 auto; padding: var(--edge); display: grid; gap: var(--gap); }
   header { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; color: var(--muted); font-size: var(--fs-label); }
-  header .brand { font-weight: 700; color: var(--ink); text-transform: uppercase; letter-spacing: .12em; text-shadow: var(--shade); display: inline-flex; align-items: center; gap: 10px; }
+  /* The wordmark, as in the board's header: sans, bold, sentence case (the mono uppercase is for section labels). */
+  header .brand { font: 700 1.2em/1.2 var(--font); color: var(--ink); display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
   /* The logo: three agents in the board's accent (--mark here) and text colour; the eyes in the page colour. */
   .mark { width: 1.6em; height: 1.6em; flex: 0 0 auto; }
   .mark .ma { fill: var(--mark); } .mark .mi { fill: var(--ink); } .mark .me { fill: var(--bg); }
@@ -237,11 +238,11 @@
   .bar { display: flex; height: clamp(12px, 1.2vw, 20px); border-radius: var(--r-full); border: 2px solid var(--line); background: var(--chip); overflow: hidden; margin: 1em 0 .8em; }
   .bar > span { display: block; height: 100%; flex: 0 0 auto; }
   .s-done { background: var(--ok); } .s-review { background: var(--review); } .s-blocked { background: var(--bad); } .s-doing { background: var(--accent); }
-  .s-claimed { background: color-mix(in srgb, var(--accent) 40%, var(--chip)); }
   .s-open { background: transparent; box-shadow: inset 0 0 0 2px var(--field-line); }
   .cols { display: flex; flex-wrap: wrap; gap: .4em 1.2em; color: var(--muted); }
   .cols > span { display: inline-flex; align-items: center; gap: .45em; white-space: nowrap; }
   .cols i { width: .6em; height: .6em; border-radius: var(--r-full); box-shadow: 0 0 0 1px var(--outline); flex: 0 0 auto; }
+  .cols i.s-open { box-shadow: inset 0 0 0 2px var(--field-line); } /* the empty swatch: its ring, or it vanishes on a dark panel */
   .cols b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
   ul.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .55em; }
   ul.list li { display: flex; gap: .6em; align-items: baseline; min-width: 0; }
@@ -355,8 +356,9 @@ function outlook(now = Date.now()) {
 }
 // One vocabulary and one counting rule for every view (the board, its 3D view, both presenters). Keep in sync with
 // columnCounts() / needsOf() in office/src/live/board.ts and blockedSplit() / isStale() in public/index.html.
-// Tasks per board column: proposals sit (and count) in Open, as on the board; "x of y done" leaves them out.
-function columnCounts(tasks) { const n = { open: 0, claimed: 0, in_progress: 0, blocked: 0, review: 0, done: 0 }; for (const t of tasks) n[t.status === 'proposed' ? 'open' : t.status]++; return n; }
+// Tasks per board column: proposals sit (and count) in Open and claimed tasks in In progress, as on the board; "x of y
+// done" leaves proposals out.
+function columnCounts(tasks) { const n = { open: 0, in_progress: 0, blocked: 0, review: 0, done: 0 }; for (const t of tasks) n[t.status === 'proposed' ? 'open' : t.status === 'claimed' ? 'in_progress' : t.status]++; return n; }
 const isStale = (t, now) => ['claimed', 'in_progress'].includes(t.status) && (typeof t.stale === 'boolean' ? t.stale : now - t.updated_at > 15 * 60e3);
 // What waits on a human: open questions; blocked tasks WITHOUT an open question (a task blocked on a question is counted
 // once, as the question); stale tasks; agents out of usage.
@@ -433,11 +435,11 @@ function render() {
   const merges = (state.events || []).filter((e) => e.kind === 'task_updated' && e.data?.status === 'done' && /→ done/.test(e.text || '')).slice(-4).reverse();
   const qOpen = nd.questions.length;
   const needPills = [qOpen ? `<span class="pill warn">${plural(qOpen, 'question')} waiting</span>` : '', nd.blocked.length ? `<span class="pill bad">${nd.blocked.length} blocked</span>` : '',
-    nd.stale.length ? `<span class="pill">${nd.stale.length} stale</span>` : '', nd.limited.length ? `<span class="pill warn">${nd.limited.length} out of usage</span>` : ''].join('');
+    nd.stale.length ? `<span class="pill">${nd.stale.length} stale</span>` : ''].join(''); // out of usage: in Now working on, next to the person
   const ci = state.main_ci;
   const ciPill = !ci ? '' : ci.status === 'fail' ? `<span class="pill bad">main is failing${ci.failing?.length ? `: ${esc(ci.failing.join(', '))}` : ''}</span>` : ci.status === 'pending' ? '<span class="pill">main: checks running…</span>' : '<span class="pill ok">✓ main green</span>';
   const c = columnCounts(state.tasks || []);
-  const n = { done: c.done, review: c.review, blocked: c.blocked, doing: c.in_progress, claimed: c.claimed, open: c.open };
+  const n = { done: c.done, review: c.review, blocked: c.blocked, doing: c.in_progress, open: c.open };
   const seg = (k) => (n[k] ? `<span class="s-${k}" data-seg="${k}" style="width:${(n[k] / total) * 100}%"></span>` : '');
   const key = (k, label) => `<span><i class="s-${k}" aria-hidden="true"></i>${label} <b>${n[k]}</b></span>`;
   const html = `
@@ -447,8 +449,8 @@ function render() {
     <div class="row">
       <section class="card" aria-labelledby="h-time"><h2 id="h-time">Time</h2>${vd}<div class="clock ${cd.cls}" id="clock">${esc(cd.big)}</div><div class="sub" id="clock-sub">${esc(cd.sub)}</div></section>
       <section class="card" aria-labelledby="h-prog"><h2 id="h-prog">Progress</h2><div class="prog">${done} of ${total} done</div>
-        <div class="bar" role="progressbar" aria-label="Tasks done" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}">${total ? ['done', 'review', 'blocked', 'doing', 'claimed'].map(seg).join('') : ''}</div>
-        <div class="cols">${key('done', 'Done')}${key('open', 'Open')}${key('claimed', 'Claimed')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}</div></section>
+        <div class="bar" role="progressbar" aria-label="Tasks done" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}">${total ? ['done', 'review', 'blocked', 'doing'].map(seg).join('') : ''}</div>
+        <div class="cols">${key('done', 'Done')}${key('open', 'Open')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}</div></section>
     </div>
     <div class="row">
       <section class="card" aria-labelledby="h-now"><h2 id="h-now">Now working on</h2>

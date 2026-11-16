@@ -2,12 +2,12 @@
  * The calm overlay around the 3D office: goal, deadline verdict and countdown on top; done count, questions waiting
  * and who is stuck below. Read-only, large type for a screen across the room, in the board's Dusk / Day look.
  */
-import { agentRoot, clock, columnCounts, countdown, goalHead, hueOf, needsOf, outlook, personOf, plain, plural, timeNow, type BoardState } from './board';
+import { agentRoot, columnCounts, countdown, goalHead, hueOf, needsOf, outlook, personOf, plain, plural, timeNow, type BoardState } from './board';
 
 const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 // The board's logo (three agents), in the board's accent (amber / burnt orange), not the presenter's blue.
 const MARK = '<svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><g transform="translate(-.5 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(18.7 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(6.1 6.8) scale(.76)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="mi"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="mi"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g></svg>';
-const NEEDS_MAX = 4; // rows under the questions line: blocked, stale, out of usage
+const NEEDS_MAX = 4; // rows under the questions line: blocked, stale
 
 export interface OverlayEls { top: HTMLElement; bottom: HTMLElement; msg: HTMLElement; root: HTMLElement }
 
@@ -82,11 +82,12 @@ export class Overlay {
 
     // The board's column counts (proposals count in Open, as on the board).
     const c = columnCounts(s.tasks || []);
-    const n = { done: c.done, review: c.review, blocked: c.blocked, doing: c.in_progress, claimed: c.claimed, open: c.open };
+    const n = { done: c.done, review: c.review, blocked: c.blocked, doing: c.in_progress, open: c.open };
     const seg = (k: keyof typeof n) => (n[k] ? `<span class="s-${k}" style="width:${(n[k] / total) * 100}%"></span>` : '');
     const key = (k: keyof typeof n, label: string) => `<span><i class="s-${k}" aria-hidden="true"></i>${label} <b>${n[k]}</b></span>`;
-    // Who needs a human, by the board's rule: the questions (and who asked), then blocked tasks that don't wait on one of
-    // those questions, stale tasks and agents out of usage, each with its person.
+    // What needs you, by the board's rule: the questions (and who asked), then blocked tasks that don't wait on one of
+    // those questions and stale tasks, each with its person. Out of usage isn't listed: nobody in the room can fix it
+    // (the room shows it over the agent).
     const nd = needsOf(s, now);
     const qs = nd.questions;
     const askers = [...new Set(qs.map((q) => personOf(q.asker, s.presence || [])))];
@@ -94,21 +95,20 @@ export class Overlay {
     const rows = [
       ...nd.blocked.map((x) => `<li class="b"><span class="tag bad">Blocked</span>${who(x.assignee ? agentRoot(x.assignee) : null)}<span class="what">#${x.id} ${esc(x.title)}</span></li>`),
       ...nd.stale.map((x) => `<li class="s"><span class="tag flag">Stale</span>${who(x.assignee ? agentRoot(x.assignee) : null)}<span class="what">#${x.id} ${esc(x.title)}</span></li>`),
-      ...nd.limited.map((p) => `<li class="l"><span class="tag warn">Out of usage</span>${who(p.name, agentRoot(p.name))}${p.limited?.until ? `<span class="what">back at ${esc(clock(p.limited.until))}</span>` : ''}</li>`),
     ];
     const needs = [
-      qs.length ? `<li class="q"><span class="tag warn">${plural(qs.length, 'question')} waiting</span><span class="what">${askers.length ? `from ${askers.map((a) => `<span class="who" style="--h:${hueOf(a, s.presence || [])}">${esc(a)}</span>`).join(', ')}` : 'for a human'}</span></li>` : '',
+      qs.length ? `<li class="q"><span class="tag warn">${plural(qs.length, 'question')} waiting</span><span class="what">${askers.length ? `from ${askers.map((a) => `<span class="who" style="--h:${hueOf(a, s.presence || [])}">${esc(a)}</span>`).join(', ')}` : 'for you'}</span></li>` : '',
       ...rows.slice(0, NEEDS_MAX),
       rows.length > NEEDS_MAX ? `<li class="more">and ${rows.length - NEEDS_MAX} more</li>` : '',
     ].filter(Boolean);
     const bottom = `
       <section class="card prog" aria-labelledby="h-prog"><h2 id="h-prog">Progress</h2>
         <div class="count" id="done-count">${done} of ${total} done</div>
-        <div class="bar" role="progressbar" aria-label="Tasks done" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}">${total ? (['done', 'review', 'blocked', 'doing', 'claimed'] as const).map(seg).join('') : ''}</div>
-        <div class="cols">${key('done', 'Done')}${key('open', 'Open')}${key('claimed', 'Claimed')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}</div>
+        <div class="bar" role="progressbar" aria-label="Tasks done" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}">${total ? (['done', 'review', 'blocked', 'doing'] as const).map(seg).join('') : ''}</div>
+        <div class="cols">${key('done', 'Done')}${key('open', 'Open')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}</div>
       </section>
-      <section class="card needs" aria-labelledby="h-needs"><h2 id="h-needs">Needs a human</h2>
-        ${needs.length ? `<ul class="list" id="needs">${needs.join('')}</ul>` : '<p class="empty" id="needs">Nothing is waiting on a human, and nothing is blocked.</p>'}
+      <section class="card needs" aria-labelledby="h-needs"><h2 id="h-needs">Needs you</h2>
+        ${needs.length ? `<ul class="list" id="needs">${needs.join('')}</ul>` : '<p class="empty" id="needs">Nothing needs you, and nothing is blocked.</p>'}
       </section>`;
     const a = this.put('top', top);
     const b = this.put('bottom', bottom);

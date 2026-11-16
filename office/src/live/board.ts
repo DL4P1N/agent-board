@@ -114,10 +114,11 @@ export const LABEL: Record<TaskStatus, string> = { proposed: 'Proposed', open: '
 const STALE_MS = 15 * 60e3;
 /** Claimed or in progress with no update for 15+ minutes (the server's flag when it sends one), like isStale() on the board. */
 export const isStale = (t: BoardTask, now = Date.now()): boolean => (t.status === 'claimed' || t.status === 'in_progress') && (typeof t.stale === 'boolean' ? t.stale : now - t.updated_at > STALE_MS);
-/** Tasks per board column. Proposals sit (and count) in Open, as on the board; "x of y done" leaves them out. */
-export function columnCounts(tasks: BoardTask[]): Record<'open' | 'claimed' | 'in_progress' | 'blocked' | 'review' | 'done', number> {
-  const n = { open: 0, claimed: 0, in_progress: 0, blocked: 0, review: 0, done: 0 };
-  for (const t of tasks) n[t.status === 'proposed' ? 'open' : t.status]++;
+/** Tasks per board column. Proposals sit (and count) in Open and claimed tasks in In progress, as on the board (colOf());
+ *  "x of y done" leaves proposals out. */
+export function columnCounts(tasks: BoardTask[]): Record<'open' | 'in_progress' | 'blocked' | 'review' | 'done', number> {
+  const n = { open: 0, in_progress: 0, blocked: 0, review: 0, done: 0 };
+  for (const t of tasks) n[t.status === 'proposed' ? 'open' : t.status === 'claimed' ? 'in_progress' : t.status]++;
   return n;
 }
 /** What waits on a human, by the board's rule: the open questions; blocked tasks WITHOUT an open question (a task blocked
