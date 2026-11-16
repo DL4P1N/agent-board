@@ -942,47 +942,53 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .tbc .o-ar { color: var(--muted); font-family: var(--mono); flex: 0 0 auto; }
   .tbc[aria-expanded="true"] .o-ar { transform: rotate(180deg); }
   .tbc .ci-pill { flex: 0 0 auto; }
-  /* Who gives way when the row is short: first the goal, down to about 20 characters (never less); then the names on
-     the Planner, Merges and Roles chips and what Setup has left, cut with an ellipsis (the full text is the tooltip).
-     The demo time and Done are never cut. */
+  /* Who gives way when the row is short, in any font (no widths in px): the goal gives way first, down to about 20
+     characters; then the names on the Planner, Merges and Roles chips, down to a few letters each; only then the goal,
+     down to 10 characters. The demo time, Done and Setup are never cut. Each cut text keeps its ellipsis and its full
+     text in the tooltip.
+     How: a cut text is a one-line clamp that may break between any two letters, so its chip's own minimum is its label, ▾ and the
+     text's min-width (a nowrap text would make that minimum the whole text); the chips keep that minimum (min-width:
+     auto). The goal starts from about 20 characters and grows to its full text with what the others leave; the names
+     shrink 1000x faster than the goal, so they are cut before the goal goes under its 20 characters. */
+  .topbar :is(.tb-goal, .tb-plan, .tb-merge) .o-x, .tb-roles .rn { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; white-space: normal; word-break: break-all; overflow: hidden; }
   .topbar .tb-goal { flex: 0 1 auto; min-width: 16ch; }
-  /* One row: the goal takes what the other chips leave (up to its full text); squeezed to its minimum, the others shrink. */
-  @media (min-width: 1101px) { .topbar .tb-goal { flex: 1 1 0; min-width: 29ch; max-width: max-content; } }
+  @media (min-width: 1101px) { .topbar .tb-goal { flex: 1 1 calc(17ch + 5.4em); min-width: auto; max-width: max-content; } .topbar .tb-goal .o-x { min-width: 10ch; } }
   .topbar .clock { flex: 0 0 auto; } /* the time is never cut */
-  .topbar :is(.tb-merge, .tb-plan, .tb-roles) { flex: 0 1 auto; overflow: hidden; }
-  .topbar :is(.tb-merge, .tb-plan) { max-width: 260px; min-width: calc(96px + 3ch); }
-  .topbar :is(.tb-merge, .tb-plan) .o-x { max-width: 16ch; } /* a long name is cut, a short one never */
+  .topbar :is(.tb-merge, .tb-plan, .tb-roles) { flex: 0 1000 auto; min-width: auto; }
+  .topbar :is(.tb-merge, .tb-plan) { max-width: 260px; }
+  .topbar :is(.tb-merge, .tb-plan) .o-x { min-width: 4ch; max-width: 16ch; } /* a long name is cut, a short one never */
   /* Roles (below 1600px, instead of Planner and Merges): both names, each cut short, one popover for both choices. */
-  .topbar .tb-roles { display: none; max-width: 320px; min-width: calc(80px + 11ch); }
-  .tb-roles .o-x { display: inline-flex; align-items: baseline; gap: var(--s2); }
-  .tb-roles .rn { min-width: 5ch; max-width: 13ch; overflow: hidden; text-overflow: ellipsis; }
+  .topbar .tb-roles { display: none; max-width: 320px; }
+  .tb-roles .o-x { display: inline-flex; align-items: center; gap: var(--s2); }
+  .tb-roles .rn { min-width: 3ch; max-width: 13ch; }
   .tb-roles .rs { flex: none; color: var(--muted); }
-  .tb-roles .ci-dot { flex: none; width: 8px; height: 8px; background: var(--bad); }
+  .tbc .ci-dot { flex: none; width: 8px; height: 8px; background: var(--bad); } /* main is failing (the words are the tooltip) */
+  @media (min-width: 1800px) { .tb-merge .ci-dot { display: none; } }
   /* The demo chip: the time never shrinks; the freeze time and the verdict after it are cut first. */
   .clock .o-x { display: inline-flex; min-width: 0; }
   .clock .o-x .tm { flex: none; }
   .clock .o-x .rest { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .topbar .repo-s { flex: 0 20 auto; min-width: 8ch; max-width: 220px; }
   .topbar .stat { flex: 0 0 auto; font-weight: 600; }
-  /* Setup: never under "Setup ▾"; what's left after it is cut at 22ch, and shrinks once the goal is at its minimum (before the names); under 1280px it is only the tooltip. */
-  .topbar .acts { display: flex; gap: var(--s3); flex: 0 10 auto; margin-left: auto; min-width: calc(4.6ch + 33px); }
-  .topbar .acts:has(.sl) { min-width: calc(4.6ch + 44px); } /* "Setup…": room for the ellipsis */
+  /* Setup never shrinks: "Setup ▾", and from 1440px what is left to do (cut at 22ch); narrower, that is its tooltip. */
+  .topbar .acts { display: flex; gap: var(--s3); flex: none; margin-left: auto; }
   .topbar .acts .tbc .o-x { max-width: 22ch; }
+  @media (max-width: 1439px) { .topbar .acts .sl { display: none; } }
   .topbar .acts .tbc { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   @media (min-width: 1101px) { #topbar.topbar { flex-wrap: nowrap; } }
   /* Narrower screens drop extras first: the repo (it is in Setup), the progress bar and main's green / running CI pill
-     (a failing one stays), the freeze time, then the verdict word (its colour stays on the time, the words are the tooltip). */
+     (a failing one becomes a red dot), the freeze time, then the verdict word (its colour stays on the time, the words are the tooltip). */
   @media (max-width: 2199px) { .topbar .repo-s { display: none; } }
   @media (max-width: 1879px) { .clock:has(.vd) .fz { display: none; } }
-  @media (max-width: 1799px) { .topbar .stat .mbar, .topbar .tb-merge .ci-pill:not(.bad) { display: none; } }
+  @media (max-width: 1799px) { .topbar .stat .mbar, .topbar .tb-merge .ci-pill { display: none; } } /* a failing main stays as a red dot */
   @media (max-width: 1799px) { .clock .fz { display: none; } }
   @media (min-width: 1101px) and (max-width: 1699px) { .clock .vdw { display: none; } .clock.v-ok .tm { color: var(--ok); } .clock:is(.v-tight, .v-behind) .tm { color: var(--warn); } }
   /* Below 1600px Planner and Merges are one Roles chip (phones too). */
   @media (max-width: 1599px) { .topbar :is(.tb-plan, .tb-merge) { display: none; } .topbar .tb-roles { display: inline-flex; } }
   /* Tighter still while one row: chips and gaps a step tighter, the countdown without its DEMO label (the tooltip and
      the colour say it); below 1200px the Roles chip is just its label (both names are its tooltip). */
-  @media (min-width: 1101px) and (max-width: 1279px) { #topbar.topbar { column-gap: var(--s3); } .topbar .tbc { padding: 0 var(--s3); } .clock:not(.unset, .past) > .tbl { display: none; } .topbar .tb-goal { min-width: 28ch; } .topbar :is(.acts, .acts:has(.sl)) { min-width: calc(4.6ch + 29px); } .topbar .acts .sl { display: none; } }
-  @media (min-width: 1101px) and (max-width: 1199px) { .tb-roles .o-x { display: none; } .topbar .tb-roles { min-width: max-content; } .topbar .tb-goal { min-width: 22ch; } }
+  @media (min-width: 1101px) and (max-width: 1279px) { #topbar.topbar { column-gap: var(--s3); } .topbar .tbc { padding: 0 var(--s3); } .clock:not(.unset, .past) > .tbl { display: none; } }
+  @media (min-width: 1101px) and (max-width: 1199px) { .tb-roles .o-x { display: none; } }
   @media (max-width: 600px) { .topbar .tb-goal { flex-basis: 100%; } }
   /* Popovers: the goal (under the top bar) and the demo time and who merges (under their top bar chips), each edited in place. */
   .o-pop { position: absolute; z-index: 8; max-height: min(70vh, 560px); }
@@ -2587,7 +2593,7 @@ function renderTopbar(si) {
       ${S.repo ? `<span class="tbc repo-s" title="Project repo: ${esc(S.repo)}"><span class="tbl">Repo</span><span class="o-x">${esc(S.repo)}</span></span>` : ''}
       <button type="button" class="tbc tb-roles" id="roles-btn" data-act="roles" data-fk="tb-roles" aria-expanded="${!!ui.oRoles}" aria-controls="o-roles" title="${esc(`Planner: ${pWho} (writes the task list from the goal and approves proposed tasks)\nMerges to main: ${mWho}${away ? ': whoever is free merges meanwhile' : ''}${ci ? ` (${ci.slice(2)})` : ''}`)}" aria-label="${esc(`Roles. Planner: ${pWho}. Merges to main: ${mWho}${ci}.`)} ${ui.oRoles ? 'Close' : 'Choose the planner and who merges'}"><span class="tbl">Roles</span><span class="o-x"><span class="rn">${pName}</span><span class="rs" aria-hidden="true">·</span><span class="rn">${m ? (S.integrator === ANYONE ? 'whoever is free' : nameTag(S.integrator)) : '<span class="muted">not picked</span>'}</span></span>${state.main_ci?.status === 'fail' ? '<span class="ci-dot" aria-hidden="true"></span>' : ''}<span class="o-ar" aria-hidden="true">▾</span></button>
       <button type="button" class="tbc tb-plan" id="plan-btn" data-act="planner" data-fk="tb-plan" aria-expanded="${!!ui.oPlan}" aria-controls="o-plan" title="The agent that writes the task list from the goal and approves proposed tasks${S.planner ? '' : ' (none picked: the first agent that starts plans)'}" aria-label="Planner: ${esc(pWho)}. ${ui.oPlan ? 'Close' : 'Choose the planner'}"><span class="tbl">Planner</span><span class="o-x">${pName}</span><span class="o-ar" aria-hidden="true">▾</span></button>
-      <button type="button" class="tbc tb-merge" id="merge-btn" data-act="merge" data-fk="tb-merge" aria-expanded="${!!ui.oMerge}" aria-controls="o-merge" title="The person whose agent merges finished branches into main${away ? ` (${S.integrator} is away: whoever is free merges meanwhile)` : ''}" aria-label="Merges to main: ${esc(m || 'not picked yet')}${away ? ' (away)' : ''}${ci}. ${ui.oMerge ? 'Close' : 'Choose who merges'}"><span class="tbl">Merges</span><span class="o-x">${mName}</span>${ciPill()}<span class="o-ar" aria-hidden="true">▾</span></button>
+      <button type="button" class="tbc tb-merge" id="merge-btn" data-act="merge" data-fk="tb-merge" aria-expanded="${!!ui.oMerge}" aria-controls="o-merge" title="The person whose agent merges finished branches into main${away ? ` (${S.integrator} is away: whoever is free merges meanwhile)` : ''}${ci ? ` (${ci.slice(2)})` : ''}" aria-label="Merges to main: ${esc(m || 'not picked yet')}${away ? ' (away)' : ''}${ci}. ${ui.oMerge ? 'Close' : 'Choose who merges'}"><span class="tbl">Merges</span><span class="o-x">${mName}</span>${ciPill()}${state.main_ci?.status === 'fail' ? '<span class="ci-dot" aria-hidden="true"></span>' : ''}<span class="o-ar" aria-hidden="true">▾</span></button>
       <span class="acts"><button type="button" class="tbc tb-act" data-act="${open ? 'setup-close' : 'setup-open'}" data-fk="s-open" aria-expanded="${open}" aria-controls="setup" ${left ? `title="Setup: ${esc(left.left)}" aria-label="${open ? 'Hide' : 'Open'} Setup. Left to do: ${esc(left.left)}"` : ''}><span class="o-x">Setup${left ? `<span class="sl">: ${esc(left.left)}</span>` : ''}</span><span class="o-ar" aria-hidden="true">▾</span></button></span>`);
 }
 function renderSetup(si) {
