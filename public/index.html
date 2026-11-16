@@ -643,9 +643,14 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .ci-pill { margin-left: var(--s3); }
 
   /* ---------- an agent's controls (Agents, the selected agent) ---------- */
-  .actl { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; margin-top: var(--s2); font-size: var(--fs-meta); }
-  .actl select { width: auto; min-height: var(--ctl-sm); padding: 1px var(--s2); font-size: var(--fs-meta); }
-  .actl label { display: inline; margin: 0; font-weight: 400; }
+  .actl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); align-items: end; margin-top: var(--s2); font-size: var(--fs-meta); }
+  .actl > :not(.af) { grid-column: 1 / -1; }
+  .actl .al { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); align-items: center; }
+  .actl .al .pill { white-space: normal; }
+
+  .actl select { width: 100%; min-height: var(--ctl-sm); padding: 1px var(--s2); font-size: var(--fs-meta); }
+  .actl label { display: block; margin: 0 0 var(--s1); font-weight: 400; color: var(--muted); }
+
   .lim-f { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: flex-end; margin-top: var(--s2); }
   .lim-f label { margin: 0 0 var(--s1); }
   .lim-f input { width: auto; min-height: var(--ctl-sm); padding: 2px var(--s3); font-size: var(--fs-meta); }
@@ -2796,7 +2801,7 @@ function stepIntegrator(_si, sel = 'integ-sel') {
   return `<p>Finished branches are merged into <code>main</code> by one agent at a time, which runs the tests first, so changes don't collide. Pick one agent to always do it, or let <b>whoever is free</b> take the next task in Review (never its own work).${S.integrator ? '' : ' If nobody is picked, the first agent with finished work takes the job.'}</p>
     ${review && !S.integrator ? `<p class="note">${plural(review, 'finished task is', 'finished tasks are')} waiting to be merged.</p>` : ''}
     <div class="inl"><label for="${sel}" class="m0">Merges to main</label>
-      <select id="${sel}" data-fk="${sel === 'integ-sel' ? 'integ' : 'o-integ'}"><option value="">Let the first agent with finished work do it</option><option value="${ANYONE}" ${S.integrator === ANYONE ? 'selected' : ''}>Whoever is free (any agent with room merges)</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.integrator ? 'selected' : ''}>${esc(n)}${n === me ? ' (you)' : ''}</option>`).join('')}</select>${ciPill()}</div>`;
+      <select id="${sel}" data-fk="${sel === 'integ-sel' ? 'integ' : 'o-integ'}"><option value="">Let the first agent with finished work do it</option><option value="${ANYONE}" ${S.integrator === ANYONE ? 'selected' : ''}>Whoever is free (any agent with room merges)</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.integrator ? 'selected' : ''}>${esc(n)}${youTag(n)}</option>`).join('')}</select>${ciPill()}</div>`;
 }
 function renderBoardEmpty(si) {
   const el = $('board-empty'); const S = state.settings;
@@ -2943,9 +2948,10 @@ function agentControls(a) {
   // The people in the Agents panel (not every name ever typed on this page), plus its current person.
   const ppl = [...new Set([...people().map((p) => p.name), a.person, root(a.name)].filter(Boolean))].sort();
   const owner = `<label for="pb-${k}">Belongs to</label><select id="pb-${k}" data-person="${k}" data-fk="pb-${k}" title="Whose agent this is: ${esc(root(a.name))} (${esc(personSourceText(a))}). Pick a person to group it under them.">
-      <option value="" ${cur ? '' : 'selected'}>automatic (${esc(a.personSource === 'human' ? 'join or name' : root(a.name))})</option>${ppl.map((n) => `<option value="${esc(n)}" ${cur === n ? 'selected' : ''}>${esc(n)}${n === me ? ' (you)' : ''}</option>`).join('')}</select>`;
+      <option value="" ${cur ? '' : 'selected'}>automatic (${esc(a.personSource === 'human' ? 'join or name' : root(a.name))})</option>${ppl.map((n) => `<option value="${esc(n)}" ${cur === n ? 'selected' : ''}>${esc(n)}${youTag(n)}</option>`).join('')}</select>`;
   const clash = a.conflict ? `<div class="note row" role="status">${esc(conflictText(a))}</div>` : '';
-  return `<div class="actl">${owner}${slots}${lim}${clash}</div>${form}`;
+  // Each label over its control, the two side by side; the usage-limit control and a name clash under them.
+  return `<div class="actl"><div class="af">${owner}</div><div class="af">${slots}</div><div class="al">${lim}</div>${clash}</div>${form}`;
 }
 // Under the selected agent's row: its tool, plan and capacity, what it holds or merges, its question (with Answer),
 // what it last said, a way to message it and its controls.
@@ -2963,7 +2969,7 @@ function agentDetail(a, qOpen, lastText) {
   const doing = (lines.length || a.busy) && a.doing && !isLimited(a) && !/^#\d+/.test(a.doing) ? `<div class="doing" title="${esc(a.doing)}">${esc(short(a.doing, 120))}</div>` : '';
   return `<div class="o-det" id="o-det" role="group" aria-label="${esc(a.name)}">${cap}${what ? `<p class="muted">${esc(what)}</p>` : ''}${lines.length ? `<ul>${lines.join('')}</ul>` : ''}${doing}`
     + (q ? `<p><span class="pill warn">Question</span> ${esc(short(q.question, 110))}</p>` : '')
-    + (lastText ? `<div class="last" title="${esc(lastText)}">${esc(short(lastText, 120))}</div>` : '')
+    + (lastText && !/^#\d+ updated$/.test(lastText) ? `<div class="last" title="${esc(lastText)}">${esc(short(lastText, 120))}</div>` : '') // "#12 updated" says nothing
     + `<div class="oc-a">${q ? `<button type="button" class="sm" data-go-q="${q.id}" data-fk="oq-${esc(a.name)}">Answer</button>` : ''}<button type="button" class="ghost sm" data-mention="${esc(a.name)}" data-fk="om-${esc(a.name)}">Message ${esc(a.name)}</button></div>`
     + agentControls(a) + '</div>';
 }
@@ -3007,7 +3013,7 @@ function renderAgents(si, qOpen) {
       + (S.integrator && S.integrator !== ANYONE && root(S.integrator) === p.name ? '<span class="pill role" title="Merges finished branches into main">merges to main</span>' : '');
     const filt = agents.length || tasks.length ? `<button type="button" class="o-ib pfilt" data-filter="${key}" data-fk="pf-${key}" aria-pressed="${sel}" aria-label="${sel ? 'Show everyone\'s tasks' : `Show only ${key}'s tasks`}" title="${sel ? 'Showing only their tasks: show everyone\'s' : `Show only ${key}'s tasks`}">${FUNNEL}</button>` : '';
     const lt = [...p.agents.values()].find((a) => a.lastText && !agents.some((x) => x.name === a.id))?.lastText;
-    return `<li class="person${sel ? ' sel' : ''}" ${hs(p.name)} data-person-row="${key}"><div class="o-pn"><span class="pdot" aria-hidden="true" data-i="${esc([...p.name][0]?.toUpperCase() || '')}"></span><b class="pc" ${hs(p.name)}>${key}</b>${p.name === me ? '<span class="muted">(you)</span>' : ''}${roles}${filt}</div>`
+    return `<li class="person${sel ? ' sel' : ''}" ${hs(p.name)} data-person-row="${key}"><div class="o-pn"><span class="pdot" aria-hidden="true" data-i="${esc([...p.name][0]?.toUpperCase() || '')}"></span><b class="pc" ${hs(p.name)}>${key}</b>${youTag(p.name) ? '<span class="muted">(you)</span>' : ''}${roles}${filt}</div>`
       + (agents.length ? `<ul class="o-agents" aria-label="${key}'s agents">${agents.map((a) => agentRow(a, p)).join('')}</ul>`
         : `<p class="o-none" title="${esc(lt || '')}">${p.r.humanOnline && p.name !== me ? 'watching · ' : ''}no AI agent</p>`)
       + '</li>';
