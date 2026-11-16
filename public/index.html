@@ -849,6 +849,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .df { display: flex; gap: var(--s4); margin-top: var(--s6); flex-wrap: wrap; align-items: center; }
   #task-dlg .df { position: sticky; bottom: calc(-1 * var(--dp)); z-index: 1; margin: var(--s6) calc(-1 * var(--dp)) calc(-1 * var(--dp)); padding: var(--s4) var(--dp) var(--dp); background: var(--panel); border-top: 2px solid var(--line); }
   #task-dlg .df .row label { margin-top: 0; }
+  /* Asking to cancel or reject: only that question, its red button and Keep task. */
+  #task-dlg.confirming .df > :is(#td-save, #td-close, #td-mention, #td-approve) { display: none; }
   /* Destructive, but not the main action: red text, filled red only once armed ("Click again to …"). */
   .df button.dz:not(.danger) { color: var(--bad); border-color: var(--bad-line); }
   /* A blocked task: why, its open question with an answer box, and the way back to In progress, above the form. */
@@ -1510,15 +1512,20 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <div id="td-err" class="err" role="alert"></div>
     <div class="hist" id="td-hist-wrap"><div class="sec-h">Activity on this task</div><div class="feed" id="td-history"></div></div>
     <!-- The footer stays in view while the dialog scrolls. Destructive actions sit on the left, apart from Close and Save;
-         Cancel task's reason field opens right above its button. -->
+         Cancel task's (or Reject's) reason field opens right above its button, and while it asks, the footer is only that
+         question: the red button and Keep task. Save changes shows once a field has changed. -->
     <div class="df">
       <div id="td-cancel-row" class="row" hidden><label for="td-cancel-reason">Reason for cancelling (optional)</label><input id="td-cancel-reason" maxlength="300" placeholder="e.g. duplicate of #4" autocomplete="off" aria-describedby="td-cancel-hint"><p class="hint" id="td-cancel-hint">Removes the task from the board and posts the reason in the feed, notifying the assignee if there is one.</p>
         <p class="hint td-del-alt" id="td-del-alt">Or remove it without a note in the feed: <button type="button" class="ghost sm" id="td-delete" hidden>Delete task</button></p></div>
+      <div id="td-rej-row" class="row" hidden><label for="td-rej-reason" id="td-rej-l">Why reject it? (optional)</label><input id="td-rej-reason" maxlength="300" placeholder="e.g. already covered by #4" autocomplete="off"></div>
       <button type="button" class="ghost dz" id="td-cancel" hidden>Cancel task…</button>
+      <button type="button" class="ghost dz" id="td-reject" hidden>Reject…</button>
+      <button type="button" class="ghost" id="td-keep-task" hidden>Keep task</button>
       <span class="sp"></span>
       <button type="button" class="ghost" id="td-mention" hidden>Message assignee</button>
-      <button type="button" class="ghost" data-close>Close</button>
+      <button type="button" class="ghost" data-close id="td-close">Close</button>
       <button type="submit" id="td-save">Save</button>
+      <button type="button" id="td-approve" hidden title="Make it a normal open task agents can claim">Approve</button>
     </div>
   </form>
 </dialog>
@@ -3977,6 +3984,9 @@ function openTask(id) {
   for (const n of ['td-name', 'td-deps', 'td-prio', 'td-size', 'td-res']) $(n).removeAttribute('aria-invalid');
   $('td-conflict').hidden = true; $('td-discard').hidden = true;
   $('td-save').textContent = t ? 'Save changes' : 'Create task';
+  // A proposal: Approve and Reject… (an approved task can be cancelled like any other).
+  const prop = t?.status === 'proposed';
+  $('td-approve').hidden = !prop; $('td-reject').hidden = !prop;
   $('td-hist-wrap').hidden = !t;
   $('td-history')._html = undefined;
   $('td-mention').hidden = !t?.assignee;
@@ -3985,9 +3995,12 @@ function openTask(id) {
   const del = $('td-delete'); const doneT = t?.status === 'done';
   if (doneT) $('td-cancel').before(del); else $('td-del-alt').append(del);
   del.className = doneT ? 'ghost dz' : 'ghost sm'; del.hidden = !t; resetDelete();
-  $('td-cancel').hidden = !t || t.status === 'done'; resetCancel();
+  $('td-cancel').hidden = !t || t.status === 'done' || prop; resetCancel();
+  dlg.style.marginTop = ''; dlg.style.maxHeight = '';
   if (!dlg.open) dlg.showModal();
-  renderDialogLive();
+  renderDialogLive(); syncSave();
+  // Pinned where it opened: what opens inside it later (a reason field, a note) makes it grow downward, never jump.
+  const top = dlg.offsetTop; dlg.style.marginTop = top + 'px'; dlg.style.maxHeight = `calc(100vh - ${top + 12}px)`;
   // A blocked task with a question: the answer box is the job; otherwise the title.
   ($('td-block').querySelector('textarea') || $('td-name')).focus();
 }
@@ -4008,9 +4021,9 @@ function renderDialogLive() {
   $('td-mention').hidden = !t.assignee;
   renderTaskBlock(t);
   const deps = t.depends_on.map((d) => { const x = taskById(d); return `<button type="button" class="link tref" data-open-task="${d}">#${d}</button> ${x ? `(${LABEL[x.status]})` : '(missing)'}`; });
+  syncSave();
+  // The status and the assignee are the fields below; the meta line says what they don't.
   patch($('td-meta'), [
-    `<span>${LABEL[t.status]}</span>`,
-    t.assignee ? `<span>assignee ${who(t.assignee)}</span>` : '<span>unassigned</span>',
     t.branch ? `<span>branch <code>${esc(t.branch)}</code></span>` : '',
     (() => { const pr = prInfo(t); return pr ? `<span>pull request <a href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer">${esc(pr.url.replace(/^https?:\/\/(www\.)?/, ''))}</a>${pr.text ? ` <span class="pill ${pr.cls}">${esc(pr.text)}</span>` : ''}</span>${prFeedback(t)}` : ''; })(),
     t.status === 'review' && t.reviewer ? `<span>being merged by ${who(t.reviewer)}</span>` : '',
@@ -4086,13 +4099,24 @@ $('td-delete').onclick = async () => {
 };
 // Cancel: like delete it removes the task, but records why in the feed and @-mentions the assignee. Two clicks.
 let cancelArmed = null;
-function resetCancel() { resetDelete(); clearTimeout(cancelArmed); cancelArmed = null; $('td-cancel').textContent = 'Cancel task…'; $('td-cancel').classList.remove('danger'); $('td-cancel-row').hidden = true; $('td-cancel-reason').value = ''; }
+function resetCancel() {
+  resetDelete(); cancelArmed = null; $('td-cancel').textContent = 'Cancel task…'; $('td-cancel').classList.remove('danger'); $('td-cancel-row').hidden = true; $('td-cancel-reason').value = '';
+  rejectArmed = false; $('td-reject').textContent = 'Reject…'; $('td-reject').classList.remove('danger'); $('td-rej-row').hidden = true; $('td-rej-reason').value = '';
+  const prop = editing?.status === 'proposed'; $('td-cancel').hidden = !editing || editing.status === 'done' || prop; $('td-reject').hidden = !prop;
+  $('td-keep-task').hidden = true; dlg.classList.remove('confirming');
+}
+// Asking: the footer is only the question (CSS hides Save, Close, Message assignee and Approve), with Keep task.
+function confirmMode(btn) {
+  dlg.classList.add('confirming'); $('td-keep-task').hidden = false;
+  for (const b of ['td-cancel', 'td-reject']) if ($(b) !== btn) $(b).hidden = true;
+}
+$('td-keep-task').onclick = () => { const b = rejectArmed ? $('td-reject') : $('td-cancel'); resetCancel(); b.focus(); };
 $('td-cancel').onclick = async () => {
   const t = editing; if (!t) return;
   if (!cancelArmed) {
-    $('td-cancel').textContent = `Click again to cancel #${t.id}`; $('td-cancel').classList.add('danger');
-    $('td-cancel-row').hidden = false; $('td-cancel-reason').focus();
-    cancelArmed = setTimeout(() => { if (document.activeElement !== $('td-cancel-reason') && !$('td-cancel-reason').value) resetCancel(); }, 15000);
+    $('td-cancel').textContent = `Cancel #${t.id}`; $('td-cancel').classList.add('danger');
+    $('td-cancel-row').hidden = false; confirmMode($('td-cancel')); $('td-cancel-reason').focus();
+    cancelArmed = true;
     return;
   }
   const reason = $('td-cancel-reason').value.trim();
@@ -4102,8 +4126,33 @@ $('td-cancel').onclick = async () => {
     dlg.close(); toast(`Cancelled #${t.id} ${t.title}`); scheduleReload();
   } catch (e) { $('td-err').textContent = `Couldn't cancel: ${e.message}`; }
 };
+// Reject… (a proposal): why, then Reject #id; the proposer is told.
+let rejectArmed = false;
+$('td-reject').onclick = async () => {
+  const t = editing; if (!t) return;
+  if (!rejectArmed) {
+    rejectArmed = true; $('td-reject').textContent = `Reject #${t.id}`; $('td-reject').classList.add('danger');
+    $('td-rej-l').textContent = `Why reject it? (optional, sent to ${t.created_by})`;
+    $('td-rej-row').hidden = false; confirmMode($('td-reject')); $('td-rej-reason').focus();
+    return;
+  }
+  const note = $('td-rej-reason').value.trim();
+  try {
+    await api(`/tasks/${t.id}/decide`, { method: 'POST', body: JSON.stringify({ approve: false, note }) });
+    dlg.close(); toast(`Rejected proposal #${t.id}`); scheduleReload();
+    state.tasks = state.tasks.filter((x) => x.id !== t.id); render(); // optimistic: it's gone
+  } catch (e) { $('td-err').textContent = `Couldn't reject: ${e.message}`; }
+};
+for (const [inp, btn] of [['td-cancel-reason', 'td-cancel'], ['td-rej-reason', 'td-reject']]) $(inp).addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.isComposing) { ev.preventDefault(); $(btn).click(); } });
+// Save changes: only once a field differs from the task (a new task always has Create task).
+function syncSave() { $('td-save').hidden = !!editing && !dlgDirty(); }
+$('task-form').addEventListener('input', syncSave); $('task-form').addEventListener('change', syncSave);
+// Approve (a proposal): any edits are saved first, through the form, then it's approved.
+let approving = false;
+$('td-approve').onclick = () => { approving = true; $('task-form').requestSubmit(); };
 $('task-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
+  const approve = approving && editing?.status === 'proposed'; approving = false;
   const err = $('td-err'); err.textContent = '';
   const title = $('td-name').value.trim();
   if (!title) { err.textContent = 'Give the task a title.'; $('td-name').setAttribute('aria-invalid', 'true'); return $('td-name').focus(); }
@@ -4121,14 +4170,16 @@ $('task-form').addEventListener('submit', async (ev) => {
       const assignee = $('td-asg').value || null; const to = $('td-status').value;
       // A status change goes through moveTask, like Move… and drag: it asks who a Claimed / In progress
       // task is for (unless Assign to is set here) and offers "Move anyway" past unfinished dependencies.
-      const move = to !== o.status;
+      const move = to !== o.status && !approve;
       if (assignee !== o.assignee && !(move && assignee)) body.assignee = assignee || '';
       if (Object.keys(body).length) {
         const saved = await api(`/tasks/${o.id}`, { method: 'PATCH', body: JSON.stringify(body) });
         noteSave(o.id, body, saved);
-        if (!move) toast(`Saved #${o.id}`);
+        if (!move && !approve) toast(`Saved #${o.id}`);
         scheduleReload();
       }
+      if (approve) { await api(`/tasks/${o.id}/decide`, { method: 'POST', body: JSON.stringify({ approve: true }) }); toast(`Approved #${o.id}: agents can claim it now`); scheduleReload(); }
+
       if (move) {
         const t = taskById(o.id) || o; if ('assignee' in body) t.assignee = assignee;
         dlg.close();

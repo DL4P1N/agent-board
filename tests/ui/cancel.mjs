@@ -39,7 +39,9 @@ try {
   await page.waitForSelector('#task-dlg[open]');
   check('cancel button visible for an existing task', await page.$eval('#td-cancel', (e) => !e.hidden));
   await page.click('#td-cancel');
-  check('first click only asks to confirm', /Click again/.test(await page.$eval('#td-cancel', (e) => e.textContent)) && !!(await page.$('#task-dlg[open]')));
+  check('first click only asks to confirm', /^Cancel #\d+$/.test(await page.$eval('#td-cancel', (e) => e.textContent)) && !!(await page.$('#task-dlg[open]')));
+  check('while it asks, the footer is the red button, Keep task and Delete (no Save or Close)', await page.evaluate(() => [...document.querySelectorAll('#task-dlg .df button')].filter((b) => b.offsetWidth).map((b) => b.id).join() === 'td-delete,td-cancel,td-keep-task'),
+    await page.evaluate(() => [...document.querySelectorAll('#task-dlg .df button')].filter((b) => b.offsetWidth).map((b) => b.id || b.textContent).join()));
   check('task still exists after one click', (await rest(board, 'dana', '/state')).tasks.some((t) => t.id === a.id));
   await page.type('#td-cancel-reason', 'duplicate of another one');
   await page.screenshot({ path: `${out}/confirm.png` });
