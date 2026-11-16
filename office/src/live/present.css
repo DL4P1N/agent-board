@@ -216,8 +216,11 @@ ul.list .what { flex: 1 1 100%; min-width: 0; overflow: hidden; display: -webkit
 
 @media (max-width: 760px) {
   body { overflow: auto; }
-  #live { position: static; min-height: 100vh; grid-template: auto 60vh auto / minmax(0, 1fr); }
+  #live { position: static; min-height: 100vh; grid-template: auto auto auto / minmax(0, 1fr); }
+  /* The room in a 4:3 box (as wide as the screen), not a tall one with the room small in its middle. */
+  #scene { aspect-ratio: 4 / 3; }
   .head { grid-template-columns: minmax(0, 1fr); }
   .time { text-align: left; }
 }
+@media (max-width: 600px) { :root { --label-scale: 1; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

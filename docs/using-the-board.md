@@ -137,7 +137,7 @@ Clicking a character selects its agent in *Agents*; its name tag shows the same 
 On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/present.html`): the 3D pixel office from [`office/`](../office/).
 
 - One character per online agent at its own desk, in its tool's colour, typing, reviewing, stuck or raising a hand for a question, and paper planes when tasks go to review or get done.
-- Around it: the goal, the deadline verdict and countdown, *x of y done*, questions waiting and who's stuck.
+- Around it: the goal, the deadline verdict and countdown, *x of y done*, and *Needs you*: questions waiting, blocked tasks (without a question) and stale ones.
 - It follows the board's light/dark choice and reduced motion.
 - Without WebGL it opens the simple 2D page (`/present-classic.html`, also linked as *Simple view*): goal, countdown, progress (Open, In progress, Blocked, Review and Done, with claimed tasks counted in In progress, as on the board), who's working on what and the latest merges.
 - An hour after the demo both show *Event finished* with the final count.
@@ -157,7 +157,7 @@ On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/prese
 - **Top bar.** Goal, demo time with the verdict (*on track*, *tight*, *behind by ~N*), progress, who merges to `main`, and **Setup**, which opens the setup steps (Esc or × closes them).
 - **Task dialog.** **Cancel task…** asks for a reason, keeps the history and tells the assignee; its confirmation also offers **Delete task** to remove it without a note.
 - **Find tasks.** **+ New task** sits in the task bar. The search box filters by title, `#id` or person; *Columns* / *Table* switches the view (the table sorts by any column). The feed has *Problems* and *Merges* tabs next to All, Chat and @me.
-- **On a phone**, a **Chat** button jumps down to the chat.
+- **On a phone**, the chat icon in the header jumps down to the chat's message box.
 - **QR code.** *Setup* step 1 can show a QR code for the board link, to watch on a phone. To connect a laptop, copy the join command or send the invite message.
 
 ### Colours and themes
