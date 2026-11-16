@@ -1084,6 +1084,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .office-view { display: none; }
   html:not([data-board-view="office"]) #o-left { position: sticky; top: var(--top); max-height: calc(100vh - var(--top) - var(--s5)); margin: 2px; }
   html:not([data-board-view="office"]) #o-left-pill { position: sticky; top: var(--top); margin: 2px; justify-self: start; }
+  /* Folded on the Board view it stands on its side, like the folded Done rail, so the board gets the width back. */
+  @media (min-width: 1101px) { html:not([data-board-view="office"]) #o-left-pill { writing-mode: vertical-rl; padding: var(--s4) var(--s2); min-height: 140px; } }
   html:not([data-board-view="office"]) .topbar { margin: 2px; }
   .o-rcol { display: flex; flex-direction: column; gap: calc(var(--gap) + 4px); min-width: 0; min-height: 0; }
   html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top); height: calc(100vh - var(--top) - var(--s5)); padding: 2px 8px 6px 2px; margin-right: -6px; } /* its panels as wide as Needs attention's, 14px from the edge */
