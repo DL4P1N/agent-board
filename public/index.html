@@ -944,8 +944,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   /* The goal gives way last (never under 16ch); the demo time, merges and Setup shrink first, cut with an ellipsis. */
   .topbar .tb-goal { flex: 0 1 auto; min-width: 16ch; }
   .topbar .clock { flex: 0 0 auto; } /* the time is never cut */
-  .topbar .tb-merge { flex: 0 0 auto; max-width: 260px; }
-  .topbar .tb-merge .o-x { max-width: 16ch; } /* a long name is cut, a short one never */
+  .topbar :is(.tb-merge, .tb-plan) { flex: 0 0 auto; max-width: 260px; }
+  .topbar :is(.tb-merge, .tb-plan) .o-x { max-width: 16ch; } /* a long name is cut, a short one never */
   /* The demo chip: the time never shrinks; the freeze time and the verdict after it are cut first. */
   .clock .o-x { display: inline-flex; min-width: 0; }
   .clock .o-x .tm { flex: none; }
@@ -960,16 +960,17 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   @media (max-width: 1600px) { .topbar .repo-s, .clock .fz { display: none; } }
   @media (max-width: 1500px) { .topbar .stat .mbar { display: none; } }
   /* Narrower, while the top bar is one row: the verdict word goes (its colour stays on the time, the words are the tooltip), the merger is cut at 7ch. */
-  @media (min-width: 1101px) and (max-width: 1279px) { .clock .vdw { display: none; } .clock.v-ok .tm { color: var(--ok); } .clock:is(.v-tight, .v-behind) .tm { color: var(--warn); } .topbar .tb-merge .o-x { max-width: 7ch; } .topbar .tb-goal { min-width: 10ch; } }
+  @media (min-width: 1101px) and (max-width: 1279px) { .clock .vdw { display: none; } .clock.v-ok .tm { color: var(--ok); } .clock:is(.v-tight, .v-behind) .tm { color: var(--warn); } .topbar :is(.tb-merge, .tb-plan) .o-x { max-width: 7ch; } .topbar .tb-goal { min-width: 10ch; } }
   @media (max-width: 600px) { .topbar .tb-goal { flex-basis: 100%; } }
   /* Popovers: the goal (under the top bar) and the demo time and who merges (under their top bar chips), each edited in place. */
   .o-pop { position: absolute; z-index: 8; max-height: min(70vh, 560px); }
   .o-goal { top: calc(100% + var(--s4)); left: 0; width: min(560px, 100%); }
   .centre > .o-goal { top: 50px; }
-  .o-dl, .o-merge { position: fixed; top: calc(var(--hdr, 54px) + var(--s2)); width: min(400px, calc(100vw - 24px)); z-index: 30; }
-  .o-merge { width: min(460px, calc(100vw - 24px)); }
-  .o-merge .inl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
-  .o-merge select { width: 100%; }
+  .o-dl, .o-merge, .o-plan { position: fixed; top: calc(var(--hdr, 54px) + var(--s2)); width: min(400px, calc(100vw - 24px)); z-index: 30; }
+  .o-merge, .o-plan { width: min(460px, calc(100vw - 24px)); }
+  :is(.o-merge, .o-plan) .inl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
+  .o-merge select, #o-plan-sel { width: 100%; }
+  .o-plan .inl + .inl { margin-top: var(--s3); }
   .o-goal .o-body p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-body); }
   .o-pop .xacts { margin-top: var(--s4); }
   .o-form label { margin: 0 0 var(--s2); }
@@ -1377,6 +1378,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       <div class="o-head"><h2 id="o-dl-h">Demo time</h2><button type="button" class="o-ib" data-o-close="dl" aria-label="Close the demo time">×</button></div>
       <div class="o-body" id="o-dl-b"></div>
       <div class="o-ph" id="o-dl-ph"></div>
+    </section>
+    <section class="o-panel o-pop o-plan" id="o-plan" aria-labelledby="o-plan-h" hidden>
+      <div class="o-head"><h2 id="o-plan-h">Planner</h2><button type="button" class="o-ib" data-o-close="plan" aria-label="Close planner">×</button></div>
+      <div class="o-body" id="o-plan-b"></div>
     </section>
     <section class="o-panel o-pop o-merge" id="o-merge" aria-labelledby="o-merge-h" hidden>
       <div class="o-head"><h2 id="o-merge-h">Merges to main</h2><button type="button" class="o-ib" data-o-close="merge" aria-label="Close merges to main">×</button></div>
@@ -2530,7 +2535,7 @@ function renderNow(qOpen, unread, si) {
 }
 
 // The top bar, the same in both views: chips for the goal (opens it in place), the demo time (#clock, renderClock), progress
-// (done of all tasks except proposals), the repo, who merges to main with main's CI (the merger choice in place), then
+// (done of all tasks except proposals), the repo, the planner (chosen in place), who merges to main with main's CI (the merger choice in place), then
 // the way into setup.
 function mergerText() {
   const S = state.settings;
@@ -2548,6 +2553,7 @@ function renderTopbar(si) {
   patch($('tb-a'), `<button type="button" class="tbc tb-goal" id="goal-btn" data-act="goal" data-fk="tb-goal" aria-expanded="${!!ui.oGoal}" aria-controls="o-goal" title="${esc(goal || 'No goal set yet')}" aria-label="Goal: ${esc(goal ? short(head, 120) : 'not set yet')}. ${ui.oGoal ? 'Close' : 'Show'} the full goal"><span class="tbl">Goal</span><span class="o-x">${goal ? esc(head) : '<span class="muted">not set</span>'}</span><span class="o-ar" aria-hidden="true">▾</span></button>`);
   patch($('tb-b'), `${T.length ? `<span class="tbc stat" id="done-count" title="${done} of ${T.length} tasks merged into main (${pct}%)"><span class="tbl">Done</span><b>${done} of ${T.length}</b><span class="mbar" aria-hidden="true"><i style="width:${pct}%"></i></span></span>` : ''}
       ${S.repo ? `<span class="tbc repo-s" title="Project repo: ${esc(S.repo)}"><span class="tbl">Repo</span><span class="o-x">${esc(S.repo)}</span></span>` : ''}
+      <button type="button" class="tbc tb-plan" id="plan-btn" data-act="planner" data-fk="tb-plan" aria-expanded="${!!ui.oPlan}" aria-controls="o-plan" title="The agent that writes the task list from the goal and approves proposed tasks${S.planner ? '' : ' (none picked: the first agent that starts plans)'}" aria-label="Planner: ${esc(S.planner || 'the first agent that starts')}. ${ui.oPlan ? 'Close' : 'Choose the planner'}"><span class="tbl">Planner</span><span class="o-x">${S.planner ? nameTag(S.planner) : '<span class="muted">first agent</span>'}</span><span class="o-ar" aria-hidden="true">▾</span></button>
       <button type="button" class="tbc tb-merge" id="merge-btn" data-act="merge" data-fk="tb-merge" aria-expanded="${!!ui.oMerge}" aria-controls="o-merge" title="The person whose agent merges finished branches into main${away ? ` (${S.integrator} is away: whoever is free merges meanwhile)` : ''}" aria-label="Merges to main: ${esc(m || 'not picked yet')}${away ? ' (away)' : ''}${ci}. ${ui.oMerge ? 'Close' : 'Choose who merges'}"><span class="tbl">Merges</span><span class="o-x">${m ? (S.integrator === ANYONE ? 'whoever is free' : nameTag(S.integrator)) + (away ? ' <span class="muted">(away)</span>' : '') : '<span class="muted">not picked</span>'}</span>${ciPill()}<span class="o-ar" aria-hidden="true">▾</span></button>
       <span class="acts"><button type="button" class="tbc tb-act" data-act="${open ? 'setup-close' : 'setup-open'}" data-fk="s-open" aria-expanded="${open}" aria-controls="setup" ${left ? `aria-label="${open ? 'Hide' : 'Open'} Setup. Left to do: ${esc(left.left)}"` : ''}><span class="o-x">Setup${left ? `: ${esc(left.left)}` : ''}</span><span class="o-ar" aria-hidden="true">▾</span></button></span>`);
 }
@@ -2772,13 +2778,13 @@ function agentNames(extra = []) {
   const assignees = state.tasks.map((t) => t.assignee && agentRoot(t.assignee));
   return [...new Set([...agentNames, ...assignees, ...extra].filter((n) => n && n !== ANYONE))].sort();
 }
-function plannerBox() {
+function plannerBox(pre = '') {
   const S = state.settings; const names = agentNames([S.planner]);
   const ex = Math.max(0, Math.min(5, Number(S.planner_extra ?? 2) || 0));
-  return `<div class="inl"><label for="plan-sel" class="m0">Planner</label>
-      <select id="plan-sel" data-fk="plan-sel" class="w-auto"><option value="">The first agent that starts</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.planner ? 'selected' : ''}>${esc(n)}${root(n) === root(me) ? ' (yours)' : ''}</option>`).join('')}</select></div>
-    <div class="inl"><label for="pex-sel" class="m0 fw-normal">When nobody else is free, the planner may take up to</label>
-      <select id="pex-sel" data-fk="pex" class="w-auto">${[0, 1, 2, 3, 4, 5].map((i) => `<option value="${i}" ${i === ex ? 'selected' : ''}>${i}</option>`).join('')}</select>
+  return `<div class="inl"><label for="${pre}plan-sel" class="m0">Planner</label>
+      <select id="${pre}plan-sel" data-fk="${pre}plan-sel" class="w-auto"><option value="">The first agent that starts</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.planner ? 'selected' : ''}>${esc(n)}${root(n) === root(me) ? ' (yours)' : ''}</option>`).join('')}</select></div>
+    <div class="inl"><label for="${pre}pex-sel" class="m0 fw-normal">When nobody else is free, the planner may take up to</label>
+      <select id="${pre}pex-sel" data-fk="${pre}pex" class="w-auto">${[0, 1, 2, 3, 4, 5].map((i) => `<option value="${i}" ${i === ex ? 'selected' : ''}>${i}</option>`).join('')}</select>
       <span class="muted t-meta">extra small/medium tasks with subagents</span></div>
     <p class="hint">Other agents' new tasks wait as <b>proposed</b> until the planner (or you) approves them.</p>`;
 }
@@ -3732,11 +3738,12 @@ document.addEventListener('change', async (ev) => {
     } catch (e) { toast(e.message, true); render(); }
     return;
   }
-  if (ev.target.id === 'plan-sel' || ev.target.id === 'pex-sel') {
-    const v = ev.target.value; const body = ev.target.id === 'plan-sel' ? { planner: v } : { planner_extra: Number(v) };
+  if (['plan-sel', 'pex-sel', 'o-plan-sel', 'o-pex-sel'].includes(ev.target.id)) {
+    const pex = ev.target.id.endsWith('pex-sel');
+    const v = ev.target.value; const body = pex ? { planner_extra: Number(v) } : { planner: v };
     try {
       state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify(body) });
-      toast(ev.target.id === 'pex-sel' ? (Number(v) ? `When nobody else is free, the planner may take up to ${plural(Number(v), 'extra task')}` : 'The planner sticks to its own task limit') : v ? `${v} is the planner` : 'Cleared. The first agent that starts will plan.');
+      toast(pex ? (Number(v) ? `When nobody else is free, the planner may take up to ${plural(Number(v), 'extra task')}` : 'The planner sticks to its own task limit') : v ? `${v} is the planner` : 'Cleared. The first agent that starts will plan.');
       render(); scheduleReload();
     } catch (e) { toast(e.message, true); render(); }
     return;
@@ -3785,6 +3792,7 @@ function doAct(a, el) {
   if (a === 'clock') return oDl(el?.id === 'clock' ? !ui.oDl : true);
   if (a === 'goal') return oGoal(!ui.oGoal);
   if (a === 'merge') return oMerge(!ui.oMerge);
+  if (a === 'planner') return oPlan(!ui.oPlan);
   if (a === 'o-goal-edit') return oGoal(true, { edit: true });
   if (a === 'o-goal-cancel') { ui.oGoalEdit = false; ui.goalErr = ''; renderDocks(); return document.querySelector('[data-fk="o-goal-edit"]')?.focus(); }
   if (a === 'dl-edit') { ui.editDeadline = true; render(); return $('dl-in')?.focus(); }
@@ -4395,7 +4403,7 @@ function placeThemePop() {
 function themePop(open, focus = true) {
   ui.themeOpen = open; $('theme-pop').hidden = !open; $('theme-btn').setAttribute('aria-expanded', String(open));
   if (open) placeThemePop();
-  if (open && (ui.oGoal || ui.oDl || ui.oMerge)) { ui.oGoal = false; ui.oDl = false; ui.oMerge = false; renderDocks(); }
+  if (open && (ui.oGoal || ui.oDl || ui.oMerge || ui.oPlan)) { ui.oGoal = false; ui.oDl = false; ui.oMerge = false; ui.oPlan = false; renderDocks(); }
   if (!focus) return;
   if (open) $('theme-pop').querySelector('[aria-checked="true"]')?.focus({ preventScroll: true }); else $('theme-btn').focus({ preventScroll: true });
 }
@@ -4549,6 +4557,8 @@ function oApply() {
   $('o-goal').hidden = !ui.oGoal; $('goal-btn')?.setAttribute('aria-expanded', String(!!ui.oGoal));
   $('o-dl').hidden = !ui.oDl; $('clock').setAttribute('aria-expanded', String(!!ui.oDl));
   $('o-merge').hidden = !ui.oMerge; $('merge-btn')?.setAttribute('aria-expanded', String(!!ui.oMerge));
+  $('o-plan').hidden = !ui.oPlan; $('plan-btn')?.setAttribute('aria-expanded', String(!!ui.oPlan));
+  if (ui.oPlan) { const c = $('plan-btn'); const r = c?.offsetWidth ? c.getBoundingClientRect() : null; const w = $('o-plan').offsetWidth || 460; $('o-plan').style.left = `${Math.max(8, Math.min((r ? r.left : 8), innerWidth - w - 8))}px`; if (r) $('o-plan').style.top = `${Math.round(r.bottom + 8)}px`; }
   if (ui.oMerge) { const c = $('merge-btn'); const r = c?.offsetWidth ? c.getBoundingClientRect() : null; const w = $('o-merge').offsetWidth || 460; $('o-merge').style.left = `${Math.max(8, Math.min((r ? r.left : 8), innerWidth - w - 8))}px`; if (r) $('o-merge').style.top = `${Math.round(r.bottom + 8)}px`; }
   if (ui.oDl) { const c = $('clock'); const r = c.offsetWidth ? c.getBoundingClientRect() : null; const w = $('o-dl').offsetWidth || 400; $('o-dl').style.left = `${Math.max(8, Math.min((r ? r.left : 8), innerWidth - w - 8))}px`; if (r) $('o-dl').style.top = `${Math.round(r.bottom + 8)}px`; }
   syncNeeds();
@@ -4587,22 +4597,22 @@ function oAct(focus = true) {
   oShow('act');
   const f = $('feed'); f.scrollTop = f.scrollHeight; if (focus) f.focus({ preventScroll: true });
 }
-// The goal, the demo time and who merges open in place under their chips in the top bar (one at a time), and each is
+// The goal, the demo time, the planner and who merges open in place under their chips in the top bar (one at a time), and each is
 // edited there. A click elsewhere or Esc closes them.
 function oGoal(open, { edit = false } = {}) {
-  ui.oGoal = open; ui.oGoalEdit = open && edit; ui.goalErr = ''; if (open) { ui.oDl = false; ui.oMerge = false; ui.oSetup = false; if (ui.themeOpen) themePop(false, false); }
+  ui.oGoal = open; ui.oGoalEdit = open && edit; ui.goalErr = ''; if (open) { ui.oDl = false; ui.oMerge = false; ui.oPlan = false; ui.oSetup = false; if (ui.themeOpen) themePop(false, false); }
   $('o-goal-b')._html = undefined; renderDocks(); $('tb-a')._html = undefined; $('tb-b')._html = undefined; renderTopbar(setupInfo());
   if (!open) return $('goal-btn')?.focus({ preventScroll: true });
   const ta = $('o-goal-in');
   if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } else $('o-goal').querySelector('.o-ib').focus({ preventScroll: true });
 }
 function oDl(open) {
-  ui.oDl = open; ui.dlErr = ''; if (open) { ui.oGoal = false; ui.oMerge = false; ui.oSetup = false; if (ui.themeOpen) themePop(false, false); }
+  ui.oDl = open; ui.dlErr = ''; if (open) { ui.oGoal = false; ui.oMerge = false; ui.oPlan = false; ui.oSetup = false; if (ui.themeOpen) themePop(false, false); }
   $('o-dl-b').innerHTML = ''; $('o-dl-b')._html = undefined; renderDocks();
   if (open) $('o-dl-in')?.focus(); else $('clock').focus({ preventScroll: true });
 }
 function oSetup(open, focus = true) {
-  ui.oSetup = open; if (open) { ui.oGoal = false; ui.oDl = false; ui.oMerge = false; if (ui.themeOpen) themePop(false, false); }
+  ui.oSetup = open; if (open) { ui.oGoal = false; ui.oDl = false; ui.oMerge = false; ui.oPlan = false; if (ui.themeOpen) themePop(false, false); }
   render();
   if (focus) setupFocus(open);
 }
@@ -4617,14 +4627,20 @@ function setupFocus(open) {
   if (boardView !== 'office' && (r.top < 0 || r.top > innerHeight * 0.6)) el.scrollIntoView({ behavior: smooth(), block: 'start' });
 }
 function oMerge(open) {
-  ui.oMerge = open; if (open) { ui.oGoal = false; ui.oDl = false; ui.oSetup = false; if (ui.themeOpen) themePop(false, false); }
+  ui.oMerge = open; if (open) { ui.oGoal = false; ui.oDl = false; ui.oPlan = false; ui.oSetup = false; if (ui.themeOpen) themePop(false, false); }
   $('o-merge-b')._html = undefined; renderDocks(); $('tb-b')._html = undefined; renderTopbar(setupInfo());
   if (open) $('o-integ-sel')?.focus(); else $('merge-btn')?.focus({ preventScroll: true });
+}
+function oPlan(open) {
+  ui.oPlan = open; if (open) { ui.oGoal = false; ui.oDl = false; ui.oMerge = false; ui.oSetup = false; if (ui.themeOpen) themePop(false, false); }
+  $('o-plan-b')._html = undefined; renderDocks(); $('tb-b')._html = undefined; renderTopbar(setupInfo());
+  if (open) $('o-plan-sel')?.focus(); else $('plan-btn')?.focus({ preventScroll: true });
 }
 document.addEventListener('click', (ev) => {
   if (ui.oGoal && !ev.target.closest?.('#o-goal, #goal-btn') && ev.target.isConnected) { ui.oGoal = false; renderDocks(); }
   if (ui.oDl && !ev.target.closest?.('#o-dl, #clock, [data-act="clock"]') && ev.target.isConnected) { ui.oDl = false; renderDocks(); }
   if (ui.oMerge && !ev.target.closest?.('#o-merge, #merge-btn') && ev.target.isConnected) { ui.oMerge = false; renderDocks(); renderTopbar(setupInfo()); }
+  if (ui.oPlan && !ev.target.closest?.('#o-plan, #plan-btn') && ev.target.isConnected) { ui.oPlan = false; renderDocks(); renderTopbar(setupInfo()); }
   if (ui.oSetup && boardView === 'office' && ev.target.isConnected && !ev.target.closest?.('#setup, [data-fk="s-open"], [data-go^="step-"], [data-act="invite"], dialog, #toasts')) { ui.oSetup = false; render(); }
 });
 // The demo time form for its popover: the board's own (step 2 of Setup), with ids of its own.
@@ -4663,6 +4679,7 @@ function renderDocks(qOpen = openQuestions(), si = setupInfo()) {
     : `<p>${esc(goal)}</p><div class="xacts"><button type="button" class="ghost sm" data-act="o-goal-edit" data-fk="o-goal-edit">Edit the goal</button></div>`);
   if (ui.oDl) patch($('o-dl-b'), oDlForm());
   if (ui.oMerge) patch($('o-merge-b'), stepIntegrator(null, 'o-integ-sel'));
+  if (ui.oPlan) patch($('o-plan-b'), plannerBox('o-'));
   oApply();
 }
 // ---------- 3D view: the room and the Tasks window ----------
@@ -4790,16 +4807,18 @@ $('app').addEventListener('click', (ev) => {
   if (d.oClose === 'goal') return oGoal(false);
   if (d.oClose === 'dl') return oDl(false);
   if (d.oClose === 'merge') return oMerge(false);
+  if (d.oClose === 'plan') return oPlan(false);
   if (d.oAgent) { const n = d.oAgent; pickAgent(ui.picked === n ? null : n, true); return document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }
 });
 // Esc closes the window on top: a popover (goal, demo time; the theme picker closes itself), then the maximised tasks,
 // then the selected agent.
 document.addEventListener('keydown', (ev) => {
   if (ev.key !== 'Escape' || ev.defaultPrevented || ev.target.closest?.('dialog')) return;
-  if (ev.target.matches?.('input, textarea, select') && !ev.target.closest('#o-goal, #o-dl, #o-merge, #setup')) return;
+  if (ev.target.matches?.('input, textarea, select') && !ev.target.closest('#o-goal, #o-dl, #o-merge, #o-plan, #setup')) return;
   if (ac.open) return;
   if (ui.oDl) return oDl(false);
   if (ui.oMerge) return oMerge(false);
+  if (ui.oPlan) return oPlan(false);
   if (ui.oSetup && boardView === 'office') return oSetup(false);
   if (boardView !== 'office' && setupShown() && ev.target.closest?.('#setup, [data-fk="s-open"]')) { store.set('board-setup', 'closed'); ui.forceSetup = false; render(); return setupFocus(false); }
   if (ui.oGoal) return oGoal(false);

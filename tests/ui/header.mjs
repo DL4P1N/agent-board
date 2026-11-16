@@ -98,8 +98,8 @@ try {
   await reload();
   for (const w of [1440, 1366]) {
     await page.setViewport({ width: w, height: 900 }); await sleep(300);
-    const hd = await page.evaluate(() => { const h = document.querySelector('#app > header'); const c = $('clock').getBoundingClientRect(); const g = $('goal-btn').getBoundingClientRect(); const m = $('merge-btn').getBoundingClientRect(); return { h: h.offsetHeight, tb: $('topbar').offsetHeight, same: Math.abs(c.top - g.top) < 4 && Math.abs(m.top - g.top) < 4, clock: /Demo in/.test($('clock').textContent), noHeaderClock: !document.querySelector('#app > header #clock') }; });
-    check(`ONB-9 ${w}px: one header row, and the top bar's chips (goal, demo time, merges) on one row`, hd.clock && hd.same && hd.noHeaderClock && hd.h < 70 && hd.tb < 56, JSON.stringify(hd));
+    const hd = await page.evaluate(() => { const h = document.querySelector('#app > header'); const c = $('clock').getBoundingClientRect(); const g = $('goal-btn').getBoundingClientRect(); const m = $('merge-btn').getBoundingClientRect(); const p = $('plan-btn').getBoundingClientRect(); return { h: h.offsetHeight, tb: $('topbar').offsetHeight, same: Math.abs(c.top - g.top) < 4 && Math.abs(m.top - g.top) < 4 && Math.abs(p.top - g.top) < 4, clock: /Demo in/.test($('clock').textContent), noHeaderClock: !document.querySelector('#app > header #clock') }; });
+    check(`ONB-9 ${w}px: one header row, and the top bar's chips (goal, demo time, planner, merges) on one row`, hd.clock && hd.same && hd.noHeaderClock && hd.h < 70 && hd.tb < 56, JSON.stringify(hd));
     await page.screenshot({ path: `${out}/h-header-${w}.png`, clip: { x: 0, y: 0, width: w, height: 120 } });
   }
   await page.setViewport({ width: 1440, height: 900 }); await sleep(200);
