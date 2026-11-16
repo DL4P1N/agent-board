@@ -81,8 +81,9 @@ const FIXED = {
     bg: '#020a04', sunken: '#03100a', panel: '#04140a', raised: '#071c0e', chip: '#0b2814', field: '#010703',
     ink: '#a4ffb5', muted: '#5fc477', line: '#0f4a1f', 'line-strong': '#1d7a37', 'field-line': '#2fb352',
     border: '#1d9a3d', outline: '#000', hi: 'rgba(57, 255, 106, .16)', lo: 'rgba(0, 0, 0, .5)',
-    accent: '#ffb547', 'accent-hover': '#ffc870', 'accent-ink': '#1a0f00', 'accent-soft': '#2e2008', 'accent-line': '#8a6420',
-    info: '#4de0ff', review: '#e8fff0',
+    // A cyan accent (an amber one read as the same colour as warn); In progress moves to a periwinkle blue beside it.
+    accent: '#4de0ff', 'accent-hover': '#85eaff', 'accent-ink': '#001418', 'accent-soft': '#062a30', 'accent-line': '#1f7f8f',
+    info: '#8ab4ff', review: '#e8fff0',
     ok: '#39ff6a', warn: '#e5ff4d', 'warn-soft': '#1c260a', 'warn-line': '#7a8a2a', stale: '#0a1d0e',
     bad: '#ff6b6b', 'bad-hover': '#ff8f8f', 'bad-soft': '#2e1010', 'bad-line': '#8a2a2a',
     mention: '#1c2a10', 'mention-line': '#9aa83a', 'on-fill': '#020a04',

@@ -58,8 +58,8 @@
 :root[data-theme="terminal"], [data-tp="terminal"] {
   color-scheme: dark;
   --bg: #020a04; --panel: #04140a; --chip: #0b2814; --ink: #a4ffb5; --muted: #5fc477; --line: #1d9a3d;
-  --field-line: #2fb352; --outline: #000; --hi: rgba(57, 255, 106, .16); --lo: rgba(0, 0, 0, .5); --shade: 2px 2px 0 rgba(0, 0, 0, .5); --accent: #4de0ff;
-  --review: #e8fff0; --mark: #ffb547; --mark-ink: #1a0f00; --accent-ink: #020a04; --ok: #39ff6a; --warn: #e5ff4d;
+  --field-line: #2fb352; --outline: #000; --hi: rgba(57, 255, 106, .16); --lo: rgba(0, 0, 0, .5); --shade: 2px 2px 0 rgba(0, 0, 0, .5); --accent: #8ab4ff;
+  --review: #e8fff0; --mark: #4de0ff; --mark-ink: #001418; --accent-ink: #020a04; --ok: #39ff6a; --warn: #e5ff4d;
   --warn-soft: #1c260a; --bad: #ff6b6b; --bad-soft: #2e1010; --pl: 72%; --ps: 70%;
 }
 :root[data-theme="contrast"], [data-tp="contrast"] {
