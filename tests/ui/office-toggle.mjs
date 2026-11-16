@@ -17,7 +17,7 @@ const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const human = (p, method = 'GET', body) => rest(board, 'dana', p, method, body);
 
-await human('/settings', 'PUT', { goal: 'A voting app for hackathon projects', deadline: Date.now() + 3 * 3600e3, freeze_minutes: 60 });
+await human('/settings', 'PUT', { goal: 'A voting app for hackathon projects: teams submit, everyone votes, and a live leaderboard runs on the big screen', deadline: Date.now() + 3 * 3600e3, freeze_minutes: 60 });
 const ana = await agent(board, 'ana-claude'); await ana('board_status');
 const t1 = await ana('create_task', { title: 'Vote API', size: 'S' });
 const t2 = await ana('create_task', { title: 'Leaderboard page' });
@@ -75,14 +75,23 @@ try {
   check('the need-you badge hides while What to do now is on screen (in its rail, also with the board scrolled)', await page.$eval('#needs', (n) => n.hidden));
   await page.setViewport({ width: 1440, height: 900 }); await sleep(200);
 
-  // ---- PLANNER: a top bar chip right before Merges, the planner chosen in place (Setup's own select) ----
-  check('Board view: a Planner chip right before the Merges chip', await page.evaluate(() => { const p = $('plan-btn'); return !!p?.offsetWidth && p.nextElementSibling === $('merge-btn') && p.querySelector('.tbl').textContent === 'Planner' && p.getAttribute('aria-expanded') === 'false' && p.getAttribute('aria-controls') === 'o-plan'; }));
-  for (const w of [1280, 1366, 1440]) {
+  // ---- PLANNER and MERGES: two top bar chips from 1600px, one ROLES chip below it; each choice made in place ----
+  // The top bar's chips, as the eye sees them: label, width, and whether any of them runs past the bar's right edge.
+  const topbar = () => page.evaluate(() => {
+    const tb = $('topbar').getBoundingClientRect(); const g = $('goal-btn').getBoundingClientRect(); const gx = $('goal-btn').querySelector('.o-x');
+    const vis = [...$('topbar').querySelectorAll('.tbc')].filter((c) => c.offsetWidth);
+    return { h: $('topbar').offsetHeight, row: vis.every((c) => Math.abs(c.getBoundingClientRect().top - g.top) < 4), over: vis.filter((c) => c.getBoundingClientRect().right > Math.min(tb.right, innerWidth) + 0.5).map((c) => c.className),
+      chips: vis.map((c) => c.querySelector('.tbl')?.textContent || 'Setup').join(), goalPx: Math.round(gx.getBoundingClientRect().width), goalCut: gx.scrollWidth > gx.clientWidth + 1, sw: document.documentElement.scrollWidth <= innerWidth };
+  });
+  for (const w of [1280, 1440, 1920]) {
     await page.setViewport({ width: w, height: 900 }); await sleep(250);
-    const tb = await page.evaluate(() => { const g = $('goal-btn').getBoundingClientRect(); return { h: $('topbar').offsetHeight, same: ['plan-btn', 'merge-btn', 'clock'].every((id) => Math.abs($(id).getBoundingClientRect().top - g.top) < 4), plan: $('plan-btn').offsetWidth, sw: document.documentElement.scrollWidth <= innerWidth }; });
-    check(`${w}px: the top bar with the Planner chip stays on one row`, tb.h < 56 && tb.same && tb.plan > 0 && tb.sw, JSON.stringify(tb));
+    const tb = await topbar();
+    const want = w < 1600 ? 'Goal,Demo,Done,Roles,Setup' : 'Goal,Demo,Done,Planner,Merges,Setup';
+    // About 20 characters of the goal at least (16ch of this font is ~115px); a goal that fits isn't cut at all.
+    check(`${w}px: the top bar is one row, nothing past its right edge, the goal readable (${w < 1600 ? 'one Roles chip' : 'Planner and Merges chips'})`, tb.h < 56 && tb.row && !tb.over.length && tb.sw && tb.chips === want && (tb.goalPx >= 115 || !tb.goalCut), JSON.stringify(tb));
   }
-  await page.setViewport({ width: 1440, height: 900 }); await sleep(200);
+  await page.setViewport({ width: 1600, height: 900 }); await sleep(200);
+  check('Board view, 1600px: a Planner chip right before the Merges chip, no Roles chip', await page.evaluate(() => { const p = $('plan-btn'); return !!p?.offsetWidth && p.nextElementSibling === $('merge-btn') && p.querySelector('.tbl').textContent === 'Planner' && p.getAttribute('aria-expanded') === 'false' && p.getAttribute('aria-controls') === 'o-plan' && !$('roles-btn').offsetWidth; }));
   await page.click('#plan-btn');
   check('the Planner chip opens the planner in place, focus on the choice', await page.evaluate(() => !$('o-plan').hidden && document.activeElement === $('o-plan-sel') && $('plan-btn').getAttribute('aria-expanded') === 'true' && !!$('o-pex-sel') && $('o-plan-h').textContent === 'Planner'));
   const pick = await page.evaluate(() => [...$('o-plan-sel').options].map((o) => o.value).find((v) => v && v !== state.settings.planner));
@@ -94,6 +103,26 @@ try {
   check('one top bar popover at a time: opening Merges closes Planner', await page.evaluate(() => $('o-plan').hidden && !$('o-merge').hidden));
   await page.keyboard.press('Escape'); await page.click('#plan-btn'); await page.mouse.click(4, 30);
   check('a click elsewhere closes the Planner popover', await page.evaluate(() => $('o-plan').hidden && $('plan-btn').getAttribute('aria-expanded') === 'false'));
+  // ROLES (below 1600px): the planner's and the merger's names in one chip, both choices in one popover.
+  await page.setViewport({ width: 1440, height: 900 }); await sleep(250);
+  check('1440px: one Roles chip (the planner and who merges, full names in its tooltip and label) where Planner and Merges were', await page.evaluate(() => { const r = $('roles-btn'); return !!r.offsetWidth && !$('plan-btn').offsetWidth && !$('merge-btn').offsetWidth && r.nextElementSibling === $('plan-btn') && r.querySelector('.tbl').textContent === 'Roles' && r.querySelectorAll('.rn').length === 2 && r.textContent.includes(state.settings.planner || 'first agent') && r.title.includes('Planner: ') && r.title.includes('Merges to main: ') && /^Roles\. Planner: .+\. Merges to main: .+\. Choose the planner and who merges$/.test(r.getAttribute('aria-label')) && r.getAttribute('aria-expanded') === 'false' && r.getAttribute('aria-controls') === 'o-roles'; }), await page.$eval('#roles-btn', (r) => r.getAttribute('aria-label')));
+  await page.click('#roles-btn');
+  check('the Roles chip opens one popover with both choices (planner + extra tasks, who merges), focus on the planner', await page.evaluate(() => !$('o-roles').hidden && $('o-roles-h').textContent === 'Roles' && document.activeElement === $('r-plan-sel') && !!$('r-pex-sel') && !!$('r-integ-sel') && $('roles-btn').getAttribute('aria-expanded') === 'true' && $('o-plan').hidden && $('o-merge').hidden));
+  const rPick = await page.evaluate(() => [...$('r-plan-sel').options].map((o) => o.value).find((v) => v !== state.settings.planner));
+  await page.select('#r-plan-sel', rPick);
+  check('choosing the planner there saves it, the Roles chip says the name, the popover stays open', await until(page, (n) => state.settings.planner === n && document.getElementById('roles-btn').textContent.includes(n || 'first agent') && !document.getElementById('o-roles').hidden, rPick), rPick);
+  await page.select('#r-pex-sel', '3');
+  check('the planner\'s extra tasks are saved from there too', await until(page, () => Number(state.settings.planner_extra) === 3));
+  await page.select('#r-integ-sel', 'ana-claude');
+  check('choosing who merges there saves it; the Roles chip says the name', await until(page, () => state.settings.integrator === 'ana-claude' && document.querySelectorAll('#roles-btn .rn')[1]?.textContent.includes('ana-claude') && /Merges to main: ana-claude/.test(document.getElementById('roles-btn').getAttribute('aria-label'))));
+  await page.focus('#r-integ-sel'); await page.keyboard.press('Escape');
+  check('Esc closes the Roles popover, focus back on the Roles chip', await until(page, () => document.getElementById('o-roles').hidden && document.activeElement?.id === 'roles-btn' && document.getElementById('roles-btn').getAttribute('aria-expanded') === 'false'));
+  await page.click('#roles-btn'); await page.click('[data-o-close="roles"]');
+  check('its × closes it, focus back on the chip', await page.evaluate(() => $('o-roles').hidden && document.activeElement === $('roles-btn')));
+  await page.click('#roles-btn'); await page.click('#clock');
+  check('one top bar popover at a time: opening the demo time closes Roles', await page.evaluate(() => $('o-roles').hidden && !$('o-dl').hidden && $('roles-btn').getAttribute('aria-expanded') === 'false'));
+  await page.keyboard.press('Escape'); await page.click('#roles-btn'); await page.mouse.click(4, 30);
+  check('a click elsewhere closes the Roles popover', await page.evaluate(() => $('o-roles').hidden && $('roles-btn').getAttribute('aria-expanded') === 'false'));
 
   // ---- Switch to the office ----
   await page.click('#vseg [data-vset="office"]');
@@ -142,9 +171,9 @@ try {
         && c.every((x) => x.querySelector('.o-c').textContent === (document.getElementById('col-' + x.dataset.s)?.getAttribute('aria-label') || '').match(/(\d+) tasks?$/)?.[1]);
     }), await page.evaluate(() => [...document.querySelectorAll('#o-cols .o-col')].map((x) => `${x.querySelector('h3 span').textContent}=${x.querySelector('.o-c')?.textContent}/${document.getElementById('col-' + x.dataset.s)?.getAttribute('aria-label')}`).join(' ')));
     check('Tasks: one Tab stop per column (the board\'s model)', await page.evaluate(() => [...document.querySelectorAll('#o-cols .o-col')].every((c) => { const k = [...c.querySelectorAll('.o-card')]; return !k.length || k.filter((x) => x.tabIndex === 0).length === 1; })));
-    const tb = await page.evaluate(() => ({ t: $('topbar').innerText.replace(/\s+/g, ' '), merge: !!$('topbar').querySelector('.tb-merge')?.offsetWidth, inv: !$('topbar').querySelector('[data-act="invite"]'), setup: !!$('topbar').querySelector('[data-fk="s-open"]')?.offsetWidth, actChips: [...$('topbar').querySelectorAll('.acts button')].every((b) => b.classList.contains('tbc') && b.offsetHeight === $('goal-btn').offsetHeight), clock: !!$('clock').offsetWidth && $('topbar').contains($('clock')) && /Demo in/.test($('clock').textContent), rows: $('topbar').offsetHeight < 56,
-      chips: [...$('topbar').querySelectorAll('.tbc:not(.tb-act)')].map((c) => getComputedStyle(c.querySelector('.tbl')).color === getComputedStyle(document.documentElement).getPropertyValue('--muted').trim().replace(/^#(..)(..)(..)$/, (m, r, g, b) => `rgb(${[r, g, b].map((x) => parseInt(x, 16)).join(', ')})`) ? c.querySelector('.tbl').textContent : '!').join() }));
-    check('the top bar is the Board view\'s: chips GOAL, DEMO, DONE, PLANNER, MERGES (labels muted), then Setup as a chip (one row)', /GOAL A voting app/.test(tb.t) && /DONE 0 of 2/.test(tb.t) && /PLANNER/.test(tb.t) && /MERGES/.test(tb.t) && tb.chips === 'Goal,Demo,Done,Planner,Merges' && tb.merge && tb.inv && tb.setup && tb.actChips && tb.clock && tb.rows, JSON.stringify(tb));
+    const tb = await page.evaluate(() => ({ t: $('topbar').innerText.replace(/\s+/g, ' '), roles: !!$('topbar').querySelector('.tb-roles')?.offsetWidth, inv: !$('topbar').querySelector('[data-act="invite"]'), setup: !!$('topbar').querySelector('[data-fk="s-open"]')?.offsetWidth, actChips: [...$('topbar').querySelectorAll('.acts button')].every((b) => b.classList.contains('tbc') && b.offsetHeight === $('goal-btn').offsetHeight), clock: !!$('clock').offsetWidth && $('topbar').contains($('clock')) && /Demo in/.test($('clock').textContent), rows: $('topbar').offsetHeight < 56,
+      chips: [...$('topbar').querySelectorAll('.tbc:not(.tb-act)')].filter((c) => c.offsetWidth).map((c) => getComputedStyle(c.querySelector('.tbl')).color === getComputedStyle(document.documentElement).getPropertyValue('--muted').trim().replace(/^#(..)(..)(..)$/, (m, r, g, b) => `rgb(${[r, g, b].map((x) => parseInt(x, 16)).join(', ')})`) ? c.querySelector('.tbl').textContent : '!').join() }));
+    check('the top bar is the Board view\'s: chips GOAL, DEMO, DONE, ROLES at 1440px (labels muted), then Setup as a chip (one row)', /GOAL A voting app/.test(tb.t) && /DONE 0 of 2/.test(tb.t) && /ROLES/.test(tb.t) && !/PLANNER|MERGES/.test(tb.t) && tb.chips === 'Goal,Demo,Done,Roles' && tb.roles && tb.inv && tb.setup && tb.actChips && tb.clock && tb.rows, JSON.stringify(tb));
     await page.click('#clock');
     check('the Demo chip opens the demo time in place (still the 3D view), focus in its time field', await view(page) === 'office' && await page.evaluate(() => !$('o-dl').hidden && document.activeElement === $('o-dl-in') && $('clock').getAttribute('aria-expanded') === 'true'));
     await page.$eval('#o-fz-in', (i) => { i.value = '45'; });
@@ -152,7 +181,22 @@ try {
     check('saving it closes the popover, back on the clock, still in 3D; the board has the new freeze', await until(page, () => document.getElementById('o-dl').hidden && document.activeElement?.id === 'clock' && String(state.settings.freeze_minutes) === '45') && await view(page) === 'office');
     await page.click('#clock'); await page.keyboard.press('Escape');
     check('Esc closes the demo time popover, focus back on the Demo chip', await page.evaluate(() => $('o-dl').hidden && document.activeElement === $('clock')));
-    // MERGES: who merges to main (and main's CI), chosen in place under the chip.
+    // The top bar in 3D: one row, nothing past its edge, Roles below 1600px, Planner and Merges from there.
+    for (const w of [1280, 1440, 1920]) {
+      await page.setViewport({ width: w, height: 900 }); await sleep(300);
+      const t3 = await topbar();
+      check(`3D, ${w}px: the top bar is one row, nothing past its right edge, the goal readable`, t3.h < 56 && t3.row && !t3.over.length && t3.sw && t3.chips === (w < 1600 ? 'Goal,Demo,Done,Roles,Setup' : 'Goal,Demo,Done,Planner,Merges,Setup') && (t3.goalPx >= 115 || !t3.goalCut), JSON.stringify(t3));
+    }
+    // ROLES: both choices in one popover, the same in the 3D view.
+    await page.setViewport({ width: 1280, height: 900 }); await sleep(300);
+    await page.click('#roles-btn');
+    check('3D: the Roles chip opens the planner and who merges in place, focus on the planner', await view(page) === 'office' && await page.evaluate(() => !$('o-roles').hidden && document.activeElement === $('r-plan-sel') && !!$('r-integ-sel') && $('roles-btn').getAttribute('aria-expanded') === 'true'));
+    await page.select('#r-integ-sel', '');
+    check('3D: choosing there saves it; the Roles chip says not picked', await until(page, () => state.settings.integrator === '' && /not picked/.test(document.querySelectorAll('#roles-btn .rn')[1]?.textContent || '')));
+    await page.focus('#r-integ-sel'); await page.keyboard.press('Escape');
+    check('3D: Esc closes it, focus back on the Roles chip', await until(page, () => document.getElementById('o-roles').hidden && document.activeElement?.id === 'roles-btn') && await view(page) === 'office');
+    await page.setViewport({ width: 1600, height: 900 }); await sleep(300);
+    // MERGES (from 1600px): who merges to main (and main's CI), chosen in place under the chip.
     await page.click('#merge-btn');
     check('the Merges chip opens who merges to main in place (still 3D), focus on the choice', await view(page) === 'office' && await page.evaluate(() => !$('o-merge').hidden && document.activeElement === $('o-integ-sel') && $('merge-btn').getAttribute('aria-expanded') === 'true'));
     await page.select('#o-integ-sel', '*');
@@ -166,6 +210,7 @@ try {
     check('3D: choosing "the first agent that starts" saves it; the chip says first agent', await until(page, () => state.settings.planner === '' && /first agent/.test(document.getElementById('plan-btn').textContent)));
     await page.focus('#o-plan-sel'); await page.keyboard.press('Escape');
     check('3D: Esc closes it, focus back on the Planner chip', await until(page, () => document.getElementById('o-plan').hidden && document.activeElement?.id === 'plan-btn') && await view(page) === 'office');
+    await page.setViewport({ width: 1440, height: 900 }); await sleep(300);
     check('progress (x of y done, bar) in the top bar; chat lives in Activity, no separate Chat chip', await page.evaluate(() => $('topbar').contains($('done-count')) && !!$('done-count').querySelector('.mbar') && !$('o-chat-chip')));
     // File locks: the Board view's panel, folded to its title bar with the count, at the foot of the right column.
     check('3D: File locks under Activity, folded, with the count; opening it lists the lock with Release', await page.evaluate(() => $('o-rcol').contains($('o-locks')) && !!$('o-locks').offsetWidth && /1 held/.test($('l-count').textContent) && $('l-body').hidden));

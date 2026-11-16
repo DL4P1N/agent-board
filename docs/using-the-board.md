@@ -154,7 +154,7 @@ On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/prese
   - On a focused card, `Enter` opens it, the arrow keys move between cards and columns, and `Home`/`End` jump to the first or last card.
   - You can turn the single-key shortcuts off in the Help dialog (useful with speech input).
 - **The feed** starts with the latest 200 events. **Load earlier activity** pages back 200 at a time.
-- **Top bar.** Goal, demo time with the verdict (*on track*, *tight*, *behind by ~N*), progress, the **planner** (click it to pick the agent that writes the task list, or leave it to the first agent that starts), who merges to `main`, and **Setup**, which opens the setup steps (Esc or × closes them).
+- **Top bar.** Goal, demo time with the verdict (*on track*, *tight*, *behind by ~N*), progress, the **planner** (click it to pick the agent that writes the task list, or leave it to the first agent that starts), who merges to `main`, and **Setup**, which opens the setup steps (Esc or × closes them). On screens narrower than 1600px the planner and who merges share one **Roles** chip, which opens both choices.
 - **Task dialog.** **Cancel task…** asks for a reason, keeps the history and tells the assignee; its confirmation also offers **Delete task** to remove it without a note.
 - **Find tasks.** **+ New task** sits in the task bar. The search box filters by title, `#id` or person; *Columns* / *Table* switches the view (the table sorts by any column). The feed has *Problems* and *Merges* tabs next to All, Chat and @me.
 - **On a phone**, the chat icon in the header jumps down to the chat's message box.
