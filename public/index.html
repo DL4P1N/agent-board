@@ -1259,7 +1259,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .toast button { pointer-events: auto; background: transparent; color: inherit; border: 2px solid currentColor; box-shadow: none; font-size: var(--fs-meta); padding: 0 10px; min-height: var(--ctl-xs); }
   .toast button:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
 
-  .tochat { display: none; }
+  button.tochat { display: none; } /* phones only (below) */
   /* ---------- small screens ---------- */
   @media (max-width: 600px) {
     /* One row: the logo, Live, then theme, bell, you and help. The need-you badge (only while What to do now is
@@ -1289,13 +1289,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     .tool-r .tw { grid-column: 1; }
     .capw { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     dialog { --dp: var(--s5); }
-    /* Chat sits far down on a phone: a button jumps to it, hidden while the chat is on screen. */
-    /* It hides while an Approve/Reject row or an answer box is under it; the page ends with room for it, so the last
-       card's controls can always scroll clear. Plain ink on a raised panel: the accent is for what needs you. */
-    /* Not while a dialog is open (nor while Setup reaches the bottom of the screen, see chatHide): it would sit on their buttons. */
-    body:has(dialog[open]) .tochat { display: none !important; }
-    .tochat { display: inline-flex; align-items: center; position: fixed; right: var(--s5); bottom: var(--s5); z-index: 40; min-height: var(--ctl); padding: 0 var(--s6); border-radius: var(--r-full); border: 2px solid var(--outline); background: var(--raised); color: var(--ink); font-size: var(--fs-sm); font-weight: 700; text-decoration: none; box-shadow: var(--e2); }
-    main { padding-bottom: 72px; }
+    /* Chat sits far down on a phone: a header icon (next to Help) jumps to its message box. */
+    button.tochat { display: inline-flex; }
   }
 
   /* ---------- touch: every control at least 32px tall ---------- */
@@ -1370,6 +1365,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       <span class="hpair">
         <button id="notify-btn" class="ghost icon bell" type="button" aria-pressed="false" aria-label="Desktop notifications" title="Notify me when this tab is in the background"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.5V7a4 4 0 018 0v4.5l1.2 1.2H2.8zM6.5 13.5a1.6 1.6 0 003 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><path class="slash" d="M2.5 2.5l11 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
         <button id="me-btn" class="ghost" title="Change your name or token" aria-label="You. Change your name"><b id="me"></b></button>
+        <button id="tochat" class="ghost icon tochat" type="button" aria-label="Chat" title="Write a message in chat"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
         <button id="help-btn" class="ghost icon help" title="What does everything mean? (?)" aria-label="Help: what everything on this page means">?</button>
       </span>
     </div>
@@ -1388,7 +1384,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   <div id="downbar" class="downbar" role="alert" hidden></div>
   <div id="announcer" class="vh" aria-live="polite"></div>
   <div id="activity-live" class="vh" aria-live="polite" aria-atomic="true"></div>
-  <a class="tochat" id="tochat" href="#f-h">Chat</a>
   <main id="main">
     <!-- One set of regions for both views. Left: Needs you. Centre: the top bar (goal, progress, who merges), then the
          Board view's task board or the 3D view's room. Right: Agents, Activity, File locks. The Board view lays them out
@@ -3484,29 +3479,9 @@ function skipTo(where) {
   const c = $('board').querySelector('.card'); ($('board').hidden || !state.tasks.length ? $('board-empty') : $('board')).scrollIntoView({ block: 'start' });
   if (c) c.focus({ preventScroll: true }); else { $('board').focus({ preventScroll: true }); }
 }
-// Phones: the floating Chat button (CSS shows it under 600px) hides while the Activity panel is on screen, while the
-// questions reach the bottom of the screen where it floats (it would cover an Answer button), and while an answer is typed.
-// It also steps aside while it would sit on a card's own controls (Move…, Release, Approve…) as you scroll past them.
-const chatHide = { feed: false, q: false, typing: false, card: false, setup: false };
-const syncChat = () => { $('tochat').hidden = chatHide.feed || chatHide.q || chatHide.typing || chatHide.card || chatHide.setup; };
-let chatRaf = 0;
-function chatOverCard() {
-  chatRaf = 0;
-  if (!phoneMq.matches) { if (chatHide.card) { chatHide.card = false; syncChat(); } return; }
-  // Where the button floats (bottom right, about 110 x 48 px), whether or not it is showing now.
-  const W = innerWidth, H = innerHeight; const pts = [];
-  for (const x of [W - 112, W - 64, W - 16]) for (const y of [H - 52, H - 32, H - 14]) pts.push([x, y]);
-  const hit = pts.some(([x, y]) => document.elementsFromPoint(x, y).some((e) => e.matches?.('.card .ca, .card .mvmenu, .card .rj, .qcard form')));
-  if (hit !== chatHide.card) { chatHide.card = hit; syncChat(); }
-}
-addEventListener('scroll', () => { if (!chatRaf) chatRaf = requestAnimationFrame(chatOverCard); }, { passive: true });
-if ('IntersectionObserver' in window) {
-  new IntersectionObserver(([e]) => { chatHide.feed = e.isIntersecting; syncChat(); }).observe($('o-act'));
-  new IntersectionObserver(([e]) => { chatHide.q = e.isIntersecting; syncChat(); }, { rootMargin: '-80% 0px 0px 0px' }).observe($('q-panel'));
-  new IntersectionObserver(([e]) => { chatHide.setup = e.isIntersecting; syncChat(); }, { rootMargin: '-80% 0px 0px 0px' }).observe($('setup'));
-}
-const answering = () => { chatHide.typing = !!document.activeElement?.closest?.('#questions textarea'); syncChat(); };
-document.addEventListener('focusin', answering); document.addEventListener('focusout', () => setTimeout(answering));
+// Phones: Chat sits far down the page; the header's chat icon jumps to its message box.
+$('tochat').onclick = () => { oShow('act'); $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); $('msg').focus({ preventScroll: true }); };
+
 document.addEventListener('click', (ev) => {
   const sk = ev.target.closest('[data-skip]'); if (sk) { ev.preventDefault(); return skipTo(sk.dataset.skip); }
   if (ev.target.closest('a[href]')) return; // links (PRs, URLs in chat) open by themselves
