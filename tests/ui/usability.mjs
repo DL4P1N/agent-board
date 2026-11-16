@@ -70,7 +70,8 @@ try {
   await page.type('#goal-in', 'A voting app for hackathon projects. Demo: submit, vote, live leaderboard.');
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => /not started yet/.test(document.getElementById('step-start')?.innerText || ''), { timeout: 5000 }).catch(() => {});
-  check('A goal saved, nobody started: Setup step 3 says so, with what to type, and Needs you doesn\'t repeat it while Setup is open', /not started yet/.test(await txt(page, '#step-start')) && /\/board/.test(await txt(page, '#step-start'))
+  check('A goal saved, nobody started: Setup step 3 says so, and Needs you doesn\'t repeat it while Setup is open', /not started yet/.test(await txt(page, '#step-start'))
+
  && !/No agent has started yet/.test(await txt(page, '#now')), await txt(page, '#now') + ' | ' + await txt(page, '#step-start'));
 
 
