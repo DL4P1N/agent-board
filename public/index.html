@@ -3411,6 +3411,11 @@ function renderLocks() {
 
 // ---------- events (delegated) ----------
 function focusCard(id) { document.querySelector(`.card[data-id="${id}"]`)?.focus({ preventScroll: true }); }
+// A task's card in the view on screen (the Board's card or the 3D Tasks window's).
+function focusTask(id) {
+  const c = boardView === 'office' ? document.querySelector(`.o-card[data-open-task="${id}"]`) : document.querySelector(`.card[data-id="${id}"]`);
+  if (c?.offsetParent) { c.focus({ preventScroll: true }); c.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+}
 function focusNow() { const b = $('now').querySelector('button'); if (b) b.focus({ preventScroll: true }); else { $('now').tabIndex = -1; $('now').focus({ preventScroll: true }); } }
 function goQuestion(id) {
   oShow('left');
@@ -4078,7 +4083,14 @@ $('td-keep').onclick = () => { $('td-discard').hidden = true; $('td-name').focus
 $('td-drop').onclick = () => dlg.close();
 dlg.addEventListener('click', (ev) => { if (ev.target.closest('[data-close]')) return requestCloseTask();
   if (ev.target === dlg) { const r = dlg.getBoundingClientRect(); if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) requestCloseTask(); } });
-dlg.addEventListener('close', () => { editing = null; $('td-discard').hidden = true; });
+// Closed: focus goes back where it was (the browser does that), or to the task's card when that's gone or the task was
+// opened from the palette (dlgBackTo).
+let dlgBackTo = null;
+dlg.addEventListener('close', () => {
+  const id = editing?.id; const back = dlgBackTo; dlgBackTo = null;
+  editing = null; $('td-discard').hidden = true; resetCancel();
+  setTimeout(() => { const a = document.activeElement; if (id && (back === id || !a || a === document.body)) focusTask(id); });
+});
 $('td-desc').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); $('task-form').requestSubmit(); } });
 $('td-mention').onclick = () => { const a = editing?.assignee; const id = editing?.id; if (a) { mention(a); $('msg').value += `re #${id}: `; growMsg(); } };
 // Delete asks for a second click (inline confirm, no browser popup).
@@ -4797,7 +4809,7 @@ document.addEventListener('keydown', (ev) => {
 // ---------- command palette (Ctrl+K) ----------
 // Every command runs something that already exists in the page: it never does anything new by itself.
 const palDlg = $('pal-dlg'), palIn = $('pal-in'), palList = $('pal-list');
-let palItems = [], palSel = 0, palPrev = null, palRan = false, palNext = null;
+let palItems = [], palSel = 0, palPrev = null, palNext = null;
 const PAL_MAX = 40;
 function palCommands() {
   const cmds = [];
@@ -4824,7 +4836,7 @@ function palCommands() {
     if (el && !el.matches('button')) el.tabIndex = -1;
     el?.scrollIntoView({ behavior: smooth(), block: 'center' }); el?.focus({ preventScroll: true });
   }, p.name + ' person agent people');
-  for (const t of state.tasks) add('Task', `#${t.id} ${t.title}`, () => openTask(t.id), `${LABEL[t.status] || t.status} ${t.assignee || ''}`);
+  for (const t of state.tasks) add('Task', `#${t.id} ${t.title}`, () => { openTask(t.id); dlgBackTo = t.id; }, `${LABEL[t.status] || t.status} ${t.assignee || ''}`);
   return cmds;
 }
 function palFilter(q) {
@@ -4851,7 +4863,7 @@ function palSelect(i) {
 }
 function openPalette() {
   if ($('app').hidden || $('task-dlg').open || palDlg.open) return;
-  palPrev = document.activeElement; palRan = false; palSel = 0; palIn.value = '';
+  palPrev = document.activeElement; palSel = 0; palIn.value = '';
   if (helpDlg.open) helpDlg.close();
   palDlg.showModal(); palRender(); palIn.focus();
 }
@@ -4859,12 +4871,14 @@ function togglePalette() { if (palDlg.open) palDlg.close(); else openPalette(); 
 function palRun(i) {
   const c = palItems[i]; if (!c) return;
   // The command runs once the palette has closed and handed focus back, so the focus it sets is where you land.
-  palRan = true; palNext = c.run; palDlg.close();
+  palNext = c.run; palDlg.close();
 }
+// Closed: focus goes back where it was first, so a command that opens something (help, a task) hands focus back there.
 palDlg.addEventListener('close', () => {
   const run = palNext; palNext = null;
-  if (!palRan && palPrev?.isConnected) palPrev.focus({ preventScroll: true });
+  if (palPrev?.isConnected) palPrev.focus({ preventScroll: true });
   palPrev = null;
+
   if (run) setTimeout(run);
 });
 palIn.addEventListener('input', () => { palSel = 0; palRender(); });

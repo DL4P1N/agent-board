@@ -166,6 +166,8 @@ try {
   await page.keyboard.press('Enter'); await page.waitForSelector('#task-dlg[open]');
   check('Enter opens the task by id', /Task #/.test(await page.$eval('#td-title', (e) => e.textContent)) && (await page.$eval('#td-name', (e) => e.value)).startsWith('Database schema'));
   await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.getElementById('task-dlg').open);
+  await sleep(100);
+  check('closing a task opened from the palette puts focus on its card', await page.evaluate((id) => document.activeElement?.matches?.(`.card[data-id="${id}"]`), s.schema.id), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
 
   // nothing matches
   await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control');
@@ -175,7 +177,7 @@ try {
   await page.keyboard.press('Enter');
   check('Enter with no match does nothing', !!(await page.$('#pal-dlg[open]')));
   await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.getElementById('pal-dlg').open);
-  check('Esc closes the palette and focus returns to the chat box', await page.evaluate(() => document.activeElement.id === 'msg'));
+  check('Esc closes the palette and focus returns to where it was (the card)', await page.evaluate((id) => document.activeElement?.matches?.(`.card[data-id="${id}"]`), s.schema.id));
 
   // Ctrl+K again toggles it shut; from a card, focus comes back to the card
   await page.focus('.card');
@@ -185,6 +187,9 @@ try {
   await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control');
   await page.waitForFunction(() => !document.getElementById('pal-dlg').open);
   check('Ctrl+K again closes it, focus is back on the card', await page.evaluate((id) => document.activeElement.dataset?.id === id, cardId));
+  await page.keyboard.press('?'); await page.waitForSelector('#help-dlg[open]');
+  await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.getElementById('help-dlg').open);
+  check('? opens help; Esc closes it and focus is back on the card', await page.evaluate((id) => document.activeElement.dataset?.id === id, cardId));
 
   // ---- other commands ----
   const run = async (q) => { await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control'); await page.waitForSelector('#pal-dlg[open]'); await page.keyboard.type(q); await page.keyboard.press('Enter'); await page.waitForFunction(() => !document.getElementById('pal-dlg').open); await sleep(250); };
