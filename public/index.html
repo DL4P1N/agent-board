@@ -4849,8 +4849,9 @@ function palCommands() {
   add('Filter', 'Show tasks for everyone', () => setFilter(''), 'filter show');
   add('Filter', `Show tasks for my team (${me})`, () => setFilter('me'), 'filter show mine');
   for (const n of others) add('Filter', `Show tasks for ${n}`, () => setFilter(n), 'filter show');
-  for (const [v, l, d] of THEME_LIST) add('Theme', `Theme: ${l}${v === 'auto' ? ' (follow the device)' : ''}${v === themePref ? ' (current)' : ''}`, () => setTheme(v), `switch colour mode palette ${d} ${v}`);
-  for (const p of people()) add('Person', `Go to ${p.name}${p.name === me ? ' (you)' : ''} in Agents`, () => {
+  for (const [v, l, d] of THEME_LIST) add('Theme', `Theme: ${l}${v === themePref ? ' ✓' : ''}`, () => setTheme(v), `switch colour mode palette ${d} ${v}${v === 'auto' ? ' follow the device' : ''}${v === themePref ? ' current' : ''}`);
+  for (const p of people()) add('Person', `Go to ${p.name}${youTag(p.name)} in Agents`, () => {
+
     // Their first agent, selected (what it holds and its controls), or their row when they have none.
     oShow('right'); const a = p.r.agents?.[0];
     if (a && ui.picked !== a.name) pickAgent(a.name, true);
@@ -4871,7 +4872,9 @@ function palFilter(q) {
 function palRender() {
   palItems = palFilter(palIn.value);
   palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
-  palList.innerHTML = palItems.map((c, i) => `<li role="option" id="pal-o-${i}" data-i="${i}" aria-selected="${i === palSel}"><span class="pl">${esc(c.label)}</span><span class="pk">${c.kind}</span></li>`).join('');
+  // The kind only where the label doesn't say it: actions and themes ("Theme: Dusk") go without.
+  palList.innerHTML = palItems.map((c, i) => `<li role="option" id="pal-o-${i}" data-i="${i}" aria-selected="${i === palSel}"><span class="pl">${esc(c.label)}</span>${c.kind === 'Action' || c.kind === 'Theme' ? '' : `<span class="pk">${c.kind}</span>`}</li>`).join('');
+
   $('pal-empty').hidden = palItems.length > 0;
   palIn.setAttribute('aria-activedescendant', palItems.length ? 'pal-o-' + palSel : '');
   announce(palItems.length ? `${palItems.length} result${palItems.length === 1 ? '' : 's'}` : 'Nothing matches');
