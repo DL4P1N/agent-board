@@ -209,9 +209,10 @@ await page.evaluate((id) => openTask(id), dlgT.id);
 await page.waitForSelector('#task-dlg[open]');
 await page.select('#td-asg', 'bob'); await page.select('#td-status', 'claimed');
 await page.click('#td-save');
-await page.waitForFunction((id) => document.querySelector(`#col-claimed .card[data-id="${id}"]`), { timeout: 5000 }, dlgT.id).catch(() => {});
+await page.waitForFunction((id) => document.querySelector(`#col-in_progress .card[data-id="${id}"]`), { timeout: 5000 }, dlgT.id).catch(() => {});
 const dc = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === dlgT.id);
 check('DLG-1 dialog Status Claimed + Assign to bob: claimed for bob, no question asked', dc.status === 'claimed' && dc.assignee === 'bob' && !(await page.$(`.card[data-id="${dlgT.id}"] .mvask`)), `${dc.status} ${dc.assignee}`);
+check('a claimed task sits in In progress, marked "claimed, not started"', await page.evaluate((id) => /claimed, not started/.test(document.querySelector(`#col-in_progress .card[data-id="${id}"]`)?.innerText || '') && !document.getElementById('col-claimed'), dlgT.id));
 
 // WB-19: column names read "Open, 3 tasks" (no stray space before the comma)
 check('WB-19 column region names', await page.evaluate(() => { const c = document.getElementById('col-open'); const n = c.getAttribute('aria-label') || ''; return /^Open, \d+ tasks?$/.test(n) ? true : n; }) === true);

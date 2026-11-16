@@ -721,12 +721,19 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .card .mv { margin-left: auto; font-size: var(--fs-micro); font-weight: 400; padding: 0 6px; min-height: calc(var(--ctl-xs) - 2px); background: transparent; color: var(--muted); border: 2px solid var(--line); box-shadow: none; border-radius: var(--r-sm); }
   .card .mv:hover, .card .mv[aria-expanded="true"] { background: var(--chip); color: var(--ink); border-color: var(--field-line); }
   /* Move… shows on the card under the pointer or with focus (it stays in the Tab order and for screen readers); twenty
-     of them at once were the loudest repeated shape on the board. Phones always show it (no hover there; a laptop with a
-     touch screen still has a pointer, and a tapped card opens its dialog, which has the status too). */
+     of them at once were the loudest repeated shape on the board. With a mouse it floats over the end of the facts line,
+     so it never takes a line of its own; touch screens (no hover) and phones keep it in the line, always shown. */
   @media (min-width: 761px) {
-    .card .mv { opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+    .card .cm { position: relative; }
+    .card .mv { position: absolute; right: 0; bottom: 0; background: var(--raised); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+    .card.stale .mv { background: var(--stale); }
+    .card.held .mv { background: var(--sunken); }
     .card:hover .mv, .card:focus-within .mv, .card .mv[aria-expanded="true"] { opacity: 1; }
   }
+  @media (min-width: 761px) and (hover: none) and (pointer: coarse) {
+    .card .mv { position: static; opacity: 1; background: transparent; }
+  }
+
   /* The PR link is a target of its own: at least 24px. */
   .card .cm a.pill { display: inline-flex; align-items: center; justify-content: center; min-height: var(--ctl-xs); min-width: var(--ctl-xs); padding: 0 var(--s3); }
   .card .ca { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); align-items: center; }
