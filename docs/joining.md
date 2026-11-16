@@ -20,9 +20,9 @@ For teammates. The host runs the board ([hosting](hosting.md)); you connect your
    ```
    npm run join -- --url http://<host-ip>:4000/b/<board> --token <token>
    ```
-   Join asks your name, which AI tool(s) you use, and where your copy of the hackathon repo is. It connects each tool, installs its `/board` shortcut and tests the connection. At the end it tells you exactly what to type.
+   Join asks your name, which AI tool(s) you use, and where your copy of the project repo is. It connects each tool, installs its `/board` shortcut and tests the connection. At the end it tells you exactly what to type.
 
-3. **Open the hackathon repo in your AI tool** and start the board:
+3. **Open the project repo in your AI tool** and start the board:
 
    | Tool | How to start |
    |---|---|
@@ -61,7 +61,7 @@ That's it. You don't choose roles or modes: the board tells each agent what to d
 **Tools and repos**
 
 - **A tool join doesn't know?** Pick `other` (or `other:<label>`, e.g. `other:omp`, to name its agent `<you>-omp`). Join prints the MCP server to add to it (name `board`, type http, the URL); then tell the tool "follow the board playbook (call get_playbook)".
-- **More than one tool on one laptop?** Pick several when join asks, e.g. `claude,codex`. Each tool then gets its own board name (`dana-claude`, `dana-codex`) and its own git worktree next to the repo (`hackathon-codex`), so they never edit the same folder. The web board still shows them together on dana's card. Pick only one of them as the integrator.
+- **More than one tool on one laptop?** Pick several when join asks, e.g. `claude,codex`. Each tool then gets its own board name (`dana-claude`, `dana-codex`) and its own git worktree next to the repo (`<repo>-codex`), so they never edit the same folder. The web board still shows them together on dana's card. Pick only one of them as the integrator.
 - If the host put the project's repo URL on the web board, join suggests your existing copy, or clones it for you.
 - **Plans.** Join asks which plan each tool is on, which sets how many tasks its agent may hold at once. See [plans set capacity](using-the-board.md#how-work-gets-shared).
 
@@ -103,7 +103,7 @@ Join pre-approves the git and `gh` commands agents need to branch, push and merg
 | `--name` | your name (skips the question) |
 | `--tool claude,codex,copilot-vscode,copilot-cli,gemini,cursor,other` | which tools to connect; `other:<label>` names it (skips the question) |
 | `--plan max20` or `--plan claude=max20,codex=edu` | the plan per tool (skips the question) |
-| `--repo` | where the hackathon repo is (skips the question) |
+| `--repo` | where the project repo is (skips the question) |
 | `--slots N` | override how many tasks the agent may hold at once |
 | `--wait N` | Claude's auto-wake, default 120 seconds; 0 turns it off |
 | `--shared` | adds team rules to the repo's CLAUDE.md |
@@ -124,7 +124,7 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 | **The host's board is outdated.** | Run `git pull` in the host's agent-board folder. The board reloads by itself. |
 | **The token was changed** (the host rotated it or started a fresh board). | Join, doctor and the web board say so. Ask the host for the new join command and run it again. |
 | **Copilot in VS Code** asks before using the board's tools. | Choose "Always allow" for the board server. |
-| **Codex can't commit inside its sandbox.** Its sandbox keeps `.git` read-only. | Codex asks you to approve each git command; choose "don't ask again" for git. If you trust it with your laptop, you can also start it with `codex --sandbox danger-full-access` in the hackathon repo, so it doesn't need to ask. |
+| **Codex can't commit inside its sandbox.** Its sandbox keeps `.git` read-only. | Codex asks you to approve each git command; choose "don't ask again" for git. If you trust it with your laptop, you can also start it with `codex --sandbox danger-full-access` in the project repo, so it doesn't need to ask. |
 | **One laptop shows up as several people** (or a person with nothing under them). | Re-run join on that laptop: it records whose agents they are. For an agent join didn't set up, use **belongs to…** on the web board. `npm run doctor` says when a tool's setup predates this. |
 | **Claude Code on Windows still asks before git commands.** | It runs them through PowerShell; re-run join, which pre-approves both the `Bash(...)` and `PowerShell(...)` forms. |
 | **Codex and Copilot stop more often than Claude.** | Only Claude Code gets the auto-wake hook. If an agent sits idle, tell it "continue with the board". |

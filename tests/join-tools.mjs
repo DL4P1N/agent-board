@@ -11,7 +11,7 @@ const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
 const board = await startBoard();
 
-// A fake home, a hackathon repo with an origin (a local bare repo, so doctor's dry-run push works).
+// A fake home, a project repo with an origin (a local bare repo, so doctor's dry-run push works).
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-jt-'));
 const home = path.join(tmp, 'home'); fs.mkdirSync(home);
 const bare = path.join(tmp, 'origin.git');

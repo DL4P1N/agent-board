@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `npm run rehearse`: a short hackathon with REAL headless agents (Claude Code and/or Codex) on a scratch
+// `npm run rehearse`: a short project with REAL headless agents (Claude Code and/or Codex) on a scratch
 // project, to check permissions, the playbook and the board end to end before an event.
 // It never writes your tool configs: each agent gets the board through per-run flags. It does run with
 // your existing ~/.claude and ~/.codex settings (other MCP servers, permission rules, Codex's rules

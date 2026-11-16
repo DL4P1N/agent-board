@@ -137,7 +137,7 @@ export async function runDoctor({ header = true } = {}) {
       console.log('        name: board');
       console.log('        type: http (streamable HTTP)');
       console.log(`        url:  ${mcpUrlFor(a, cfg)}`);
-    } else if (a.tool === 'copilot-vscode' && !a.dir) bad('    Copilot in VS Code is set up per repo, and no repo was given', 'Run npm run join again with --repo <path to your hackathon repo>.');
+    } else if (a.tool === 'copilot-vscode' && !a.dir) bad('    Copilot in VS Code is set up per repo, and no repo was given', 'Run npm run join again with --repo <path to your project repo>.');
     else if (found === null) console.log('    • (can\'t inspect this tool\'s config from here)');
     else if (!found) bad(`    ${LABEL[a.tool]} isn't connected to this board`, 'Run npm run join again and pick this tool.');
     // Names are case-insensitive on the board, so a config written as "Dana" still matches "dana".
@@ -175,7 +175,7 @@ export async function runDoctor({ header = true } = {}) {
       agents.some((a) => a.tool === 'other') && 'Next: add the server shown above to your tool.',
     ].filter(Boolean);
     console.log(`\n  ${next.length ? next.join(' ') : 'All good.'} To start:`);
-    for (const a of agents) console.log(`    ${(LABEL[a.tool] || a.tool).padEnd(20)} ${a.dir ? `in "${a.dir}": ` : 'in your hackathon repo: '}${START[a.tool]}`);
+    for (const a of agents) console.log(`    ${(LABEL[a.tool] || a.tool).padEnd(20)} ${a.dir ? `in "${a.dir}": ` : 'in your project repo: '}${START[a.tool]}`);
   }
   return problems;
 }

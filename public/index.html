@@ -1336,7 +1336,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 </section>
 <form id="gate" class="gate" hidden novalidate>
   <h1><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><g transform="translate(-.5 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(18.7 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(6.1 6.8) scale(.76)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="mi"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="mi"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g></svg>Agent Board</h1>
-  <p class="lede">Your hackathon team's shared task board. Every teammate's AI coding agent (Claude Code, Codex, GitHub Copilot, Gemini CLI, Cursor or any MCP tool) takes tasks from here; on this page you watch progress, answer the agents' questions and steer.</p>
+  <p class="lede">Your team's shared task board. Every teammate's AI coding agent (Claude Code, Codex, GitHub Copilot, Gemini CLI, Cursor or any MCP tool) takes tasks from here; on this page you watch progress, answer the agents' questions and steer.</p>
   <label for="g-token">Board token</label>
   <input id="g-token" autocomplete="off" spellcheck="false" required>
   <p class="hint">The password for this board. It's in the link the host shared (<code>…?token=…</code>), or printed by <code>npm start</code> on the host laptop.</p>
@@ -1537,7 +1537,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   <div class="dh"><h2 id="hd-title">What everything means</h2><button type="button" class="x" data-close aria-label="Close">×</button></div>
   <dl class="gloss">
     <dt>Agent Board</dt>
-    <dd>A shared to-do list for a hackathon team that builds with AI coding agents. Each teammate's agent takes tasks from here, works on them in its own git branch, and reports back. Humans watch, answer questions and steer from this page.</dd>
+    <dd>A shared to-do list for a team that builds with AI coding agents. Each teammate's agent takes tasks from here, works on them in its own git branch, and reports back. Humans watch, answer questions and steer from this page.</dd>
     <dt>Agent (and which tool)</dt>
     <dd>The AI coding tool on a teammate's laptop, connected to this board. A team can mix tools: <b>Claude Code</b>, <b>Codex (ChatGPT)</b>, <b>GitHub Copilot in VS Code</b>, <b>GitHub Copilot CLI</b>, <b>Gemini CLI</b> or <b>Cursor</b> (or any MCP tool). The small label next to a name (e.g. <span class="pill tool">Codex</span>) shows which one; it appears once that agent has connected.</dd>
     <dt>Main agent (orchestrator)</dt>
@@ -2600,7 +2600,7 @@ function boardLink() {
 function inviteText() {
   const su = state.setup || {}; const best = su.join_commands?.[0]; const S = state.settings;
   const join = best?.command || 'npm run join -- --url <board address> --token <token>  (ask the host)';
-  const L = ['Join our hackathon board (Agent Board). On your laptop:', ''];
+  const L = ['Join our team board (Agent Board). On your laptop:', ''];
   let n = 1;
   L.push(`${n++}. First time only, get the board tool:`, `   ${su.clone_command || 'git clone https://github.com/DL4P1N/agent-board && cd agent-board'}`, '   (already have an agent-board folder, or an older claude-board one? run git pull in it)');
   L.push(`${n++}. In the agent-board folder, connect your laptop (it asks your name, AI tool and project folder):`, `   ${join}`);
@@ -2705,7 +2705,7 @@ function stepGoal() {
     ? `<p class="goaltext">${esc(S.goal)}</p><button type="button" class="ghost sm" data-act="goal-edit" data-fk="goal-edit">Edit goal</button>`
     : `<p>In 1–3 sentences: what are you building, and what should the demo show? The agents plan their tasks from this. Your agent may also ask you for the goal in its terminal — either works.</p>
     <form class="goalform" data-goalform><label class="vh" for="goal-in">Project goal</label>
-      <textarea id="goal-in" data-keep="goal" rows="2" maxlength="1000" title="Enter saves · Shift+Enter adds a new line" aria-describedby="goal-err" ${ui.goalErr ? 'aria-invalid="true"' : ''} placeholder="e.g. A web app where hackathon teams submit their project and everyone votes. The demo shows submitting, voting and a live leaderboard.">${esc(S.goal)}</textarea>
+      <textarea id="goal-in" data-keep="goal" rows="2" maxlength="1000" title="Enter saves · Shift+Enter adds a new line" aria-describedby="goal-err" ${ui.goalErr ? 'aria-invalid="true"' : ''} placeholder="e.g. A web app where teams submit their project and everyone votes. The demo shows submitting, voting and a live leaderboard.">${esc(S.goal)}</textarea>
       <button type="submit" data-fk="goal-save">Save goal</button>${S.goal ? '<button type="button" class="ghost" data-act="goal-cancel" data-fk="goal-cancel">Cancel</button>' : ''}</form>
     <div class="err" id="goal-err">${esc(ui.goalErr || '')}</div>`;
   const repo = S.repo && !ui.editRepo
@@ -2740,16 +2740,16 @@ function deadlineBlock() {
       <div class="err row m0" id="dl-err">${esc(ui.dlErr || '')}</div></form>`;
 }
 function stepStart(si) {
-  const tools = state.setup?.agent_tools?.length ? state.setup.agent_tools : [{ id: 'claude', name: 'Claude Code', start: '/board', where: 'Type it in Claude Code, opened in the hackathon repo.' }];
+  const tools = state.setup?.agent_tools?.length ? state.setup.agent_tools : [{ id: 'claude', name: 'Claude Code', start: '/board', where: 'Type it in Claude Code, opened in the project repo.' }];
   const label = (a) => { const d = [a.client, a.plan].filter(Boolean).join(' · '); return `${nameTag(a.name)}${d ? ` <span class="muted">(${esc(d)}${a.started ? `, ${a.slots} at once` : ''})</span>` : ''}`; };
-  return `<p>On each laptop, open your AI tool in the hackathon project folder and start the board. Find your tool below:</p>
+  return `<p>On each laptop, open your AI tool in the project folder and start the board. Find your tool below:</p>
     <ul class="tools">${tools.map((t) => {
       // Copilot CLI needs launching with the board tool allowed first: two commands.
       const launch = t.launch;
       const cmds = launch
         ? `<div class="cmds"><div class="sub">1. Launch it with the board allowed:</div>${cmdBox(launch, 'start-' + t.id + '-launch', 'launch command for ' + t.name)}<div class="sub">2. Then type:</div>${cmdBox(t.start, 'start-' + t.id, 'start command for ' + t.name)}</div>`
         : cmdBox(t.start, 'start-' + t.id, `start command for ${t.name}`);
-      return `<li class="tool-r"><span class="tn">${esc(t.name)}</span>${cmds}<span class="tw">${esc(launch ? 'Run both in the hackathon repo.' : t.where || '')}</span></li>`;
+      return `<li class="tool-r"><span class="tn">${esc(t.name)}</span>${cmds}<span class="tw">${esc(launch ? 'Run both in the project repo.' : t.where || '')}</span></li>`;
     }).join('')}</ul>
     <p class="hint">Two tools on one laptop? Start each one in the folder join printed for it.</p>
     <p class="muted">That session becomes the laptop's <b>main agent</b> (the "orchestrator"): it takes tasks from this board and builds each one in its own git branch. Claude Code can also hand tasks to several subagents at once; the other tools work one task at a time. If the tool doesn't know the command or can't see the board, run <code>npm run doctor</code> in the agent-board folder: it checks the connection and says what to fix.</p>

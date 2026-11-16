@@ -23,7 +23,7 @@ You need [Node.js](https://nodejs.org) 22.13+ and git. Dependencies install them
 ```
 npm run demo
 ```
-A throwaway board with a seeded, moving mid-hackathon team (8 agents, subagents, 20 tasks, questions, locks, a deadline). It prints the Board, 3D view and presenter links. Ctrl+C stops it and deletes its temp data; your real board and `data/` are never touched. Flags: `--static`, `--speed 2`, `--port N`, `--open`, `--keep`.
+A throwaway board with a seeded, moving mid-project team (8 agents, subagents, 20 tasks, questions, locks, a deadline). It prints the Board, 3D view and presenter links. Ctrl+C stops it and deletes its temp data; your real board and `data/` are never touched. Flags: `--static`, `--speed 2`, `--port N`, `--open`, `--keep`.
 
 **Host a board** (one laptop, kept awake all day):
 ```
@@ -38,7 +38,7 @@ It prints the web board link and the join command for teammates. See [docs/hosti
 git clone https://github.com/DL4P1N/agent-board && cd agent-board
 npm run join -- --url http://<host-ip>:4000/b/<board> --token <token>
 ```
-Use the join command the host gives you (it's also in the web board's *Setup* step 1). Join asks your name, your AI tool(s) and where your copy of the hackathon repo is, then tells you exactly what to type. Then open the hackathon repo in your tool and start the board:
+Use the join command the host gives you (it's also in the web board's *Setup* step 1). Join asks your name, your AI tool(s) and where your copy of the project repo is, then tells you exactly what to type. Then open the project repo in your tool and start the board:
 
 | Tool | How to start |
 |---|---|

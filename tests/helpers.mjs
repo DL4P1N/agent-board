@@ -134,7 +134,7 @@ export async function ageTask(board, taskId, minutes) {
   db.close();
 }
 
-// A realistic mid-hackathon board: 3 people with helper agents, tasks in every status, locks, questions, mentions.
+// A realistic mid-project board: 3 people with helper agents, tasks in every status, locks, questions, mentions.
 export async function seed(board) {
   const alice = await agent(board, 'alice');
   const bob = await agent(board, 'bob');

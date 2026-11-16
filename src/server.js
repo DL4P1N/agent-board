@@ -99,12 +99,12 @@ function clientLabel(info) {
 
 // How to start the orchestrator in each supported tool (shown on the web board).
 const AGENT_TOOLS = [
-  { id: 'claude', name: 'Claude Code', start: '/board', where: 'Type it in Claude Code, opened in the hackathon repo.' },
-  { id: 'codex', name: 'Codex (ChatGPT)', start: '$board', where: 'Type it in the Codex CLI, opened in the hackathon repo.' },
-  { id: 'copilot-vscode', name: 'GitHub Copilot in VS Code', start: '/board', where: 'Open the hackathon repo in VS Code, switch Copilot Chat to Agent mode, then type it.' },
-  { id: 'copilot-cli', name: 'GitHub Copilot CLI', start: '/board', launch: 'copilot --allow-tool board --autopilot --max-autopilot-continues 50', where: 'Start it with  copilot --allow-tool board --autopilot --max-autopilot-continues 50  in the hackathon repo, then type it. (--autopilot keeps it working without you typing "continue".)' },
-  { id: 'gemini', name: 'Gemini CLI', start: '/board', where: 'Type it in Gemini CLI, opened in the hackathon repo.' },
-  { id: 'cursor', name: 'Cursor', start: '/board', where: 'In Cursor\'s Agent chat, opened in the hackathon repo.' },
+  { id: 'claude', name: 'Claude Code', start: '/board', where: 'Type it in Claude Code, opened in the project repo.' },
+  { id: 'codex', name: 'Codex (ChatGPT)', start: '$board', where: 'Type it in the Codex CLI, opened in the project repo.' },
+  { id: 'copilot-vscode', name: 'GitHub Copilot in VS Code', start: '/board', where: 'Open the project repo in VS Code, switch Copilot Chat to Agent mode, then type it.' },
+  { id: 'copilot-cli', name: 'GitHub Copilot CLI', start: '/board', launch: 'copilot --allow-tool board --autopilot --max-autopilot-continues 50', where: 'Start it with  copilot --allow-tool board --autopilot --max-autopilot-continues 50  in the project repo, then type it. (--autopilot keeps it working without you typing "continue".)' },
+  { id: 'gemini', name: 'Gemini CLI', start: '/board', where: 'Type it in Gemini CLI, opened in the project repo.' },
+  { id: 'cursor', name: 'Cursor', start: '/board', where: 'In Cursor\'s Agent chat, opened in the project repo.' },
 ];
 
 // Where teammates can reach this server, best first: the public tunnel (if any), then network addresses.

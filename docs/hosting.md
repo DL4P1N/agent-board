@@ -40,7 +40,7 @@ If you have a domain on Cloudflare, set up a named tunnel once on the host:
 
 ```
 npm run tunnel -- --setup <tunnel-name> <hostname>
-# e.g. npm run tunnel -- --setup hackathon-board board.example.com
+# e.g. npm run tunnel -- --setup team-board board.example.com
 ```
 
 - It logs in to Cloudflare in the browser (skipped when you're already logged in), creates the tunnel and points the hostname at it.

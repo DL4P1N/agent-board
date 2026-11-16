@@ -22,7 +22,7 @@ const B = `${A}/b/${slug}`;
 const tokenB = created.token;
 check('second board created', !!slug && !!tokenB && /\/b\//.test(created.join_command || ''), JSON.stringify(created).slice(0, 200));
 
-// A fake home and a hackathon repo with an origin (a local bare repo, so doctor's dry-run push works).
+// A fake home and a project repo with an origin (a local bare repo, so doctor's dry-run push works).
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-jb-'));
 const home = path.join(tmp, 'home'); fs.mkdirSync(home);
 const bare = path.join(tmp, 'origin.git');

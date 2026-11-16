@@ -1,4 +1,4 @@
-// Dress rehearsal: a whole hackathon day, compressed, modelled on the real Kubecon board.
+// Dress rehearsal: a whole day of work, compressed, modelled on the real Kubecon board.
 // Five agents (two Claude Code with helpers, two Codex, one tool join doesn't know), a planner,
 // proposals, "whoever is free" merging with review bounces, an agent going offline, one running
 // out of usage, role hand-overs, questions, a feature freeze and the deadline passing.

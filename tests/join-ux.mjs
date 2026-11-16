@@ -141,7 +141,7 @@ const a1 = await converse(l5.env, ['--url', board.base, '--token', TOKEN, '--wai
   [/Your name on the board[^\n]*: /, 'uma'],
   [/Tool\(s\), comma-separated[^\n]*: /, 'copilt-cli'],
   [/Tool\(s\), comma-separated[^\n]*: /, 'copilot-cli'],
-  [/Path to your copy of the hackathon repo[^\n]*: /, ''],
+  [/Path to your copy of the project repo[^\n]*: /, ''],
 ]);
 check('name default is the git user name\'s first word ([zed])', /\[zed\]: /.test(a1.out), a1.out.slice(0, 200));
 check('clash found in the interactive flow too, with where it was seen', /"vera" is already on this board \((on the web board|on a task|in the feed|reserved by another laptop[^)]*)\)/.test(a1.out), a1.out.slice(0, 500));
@@ -157,7 +157,7 @@ const a2 = await converse(l6.env, ['--url', board.base, '--token', TOKEN, '--wai
   [/Tool\(s\), comma-separated[^\n]*: /, 'claude'],
   [/Which plan is Claude Code on\?/, ''],
   [/Plan \[pro\]: /, ''],
-  [/Path to your copy of the hackathon repo[^\n]*: /, null],
+  [/Path to your copy of the project repo[^\n]*: /, null],
 ]);
 check('Claude plan question defaults to pro', /Plan \[pro\]: /.test(a2.out), a2.out.slice(-600));
 check('Claude repo prompt: mentions pre-approving git/gh, defaults to the current folder\'s repo', /installs the auto-wake hook and pre-approves git\/gh there, so agents don't stall on permission prompts; blank to skip\) \[[^\]]*hack\]: /.test(a2.out), (a2.out.match(/Path to your copy.*$/m) || [''])[0]);

@@ -8,7 +8,7 @@
 //                    so after a restart everyone re-runs join.
 //   named            a fixed address on your own domain (in Cloudflare), the same after every restart.
 //                    One-time setup on the host:  npm run tunnel -- --setup <tunnel-name> <hostname>
-//                    e.g.  npm run tunnel -- --setup hackathon-board board.example.com
+//                    e.g.  npm run tunnel -- --setup team-board board.example.com
 //                    That logs in to Cloudflare (browser), creates the tunnel, points the hostname at it
 //                    and saves both in data/tunnel.json; from then on `npm run tunnel` uses it.
 //
@@ -70,7 +70,7 @@ if (argv.includes('--setup')) {
   const validHost = isHostname(hostname);
   if (!validName || !validHost) {
     console.error('usage: npm run tunnel -- --setup <tunnel-name> <hostname>');
-    console.error('  e.g. npm run tunnel -- --setup hackathon-board board.example.com');
+    console.error('  e.g. npm run tunnel -- --setup team-board board.example.com');
     console.error('  The hostname must be on a domain you manage in Cloudflare.');
     process.exit(1);
   }
@@ -107,7 +107,7 @@ const named = argv.includes('--quick') ? null : (() => {
   const hostname = String(flag('hostname') || process.env.TUNNEL_HOSTNAME || saved?.hostname || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
   if (!name || !hostname) return null;
   if (!/^[\w-]{1,64}$/.test(name) || !isHostname(hostname)) {
-    console.error(`✗ Not a valid tunnel name and hostname: "${name}" "${hostname}". Expected e.g. --name hackathon-board --hostname board.example.com`);
+    console.error(`✗ Not a valid tunnel name and hostname: "${name}" "${hostname}". Expected e.g. --name team-board --hostname board.example.com`);
     process.exit(1);
   }
   return { name, hostname };

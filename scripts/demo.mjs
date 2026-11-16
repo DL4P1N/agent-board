@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `npm run demo`: a throwaway board full of fake (but plausible) hackathon data, kept alive by a light
+// `npm run demo`: a throwaway board full of fake (but plausible) project data, kept alive by a light
 // simulation, so you can see the Board and 3D views without any real agents or tasks. It never touches
 // data/ or your real board: it runs its own server on a free port with a temp data folder.
 //   --port N     use this port (default: a free one)

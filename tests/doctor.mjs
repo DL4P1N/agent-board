@@ -55,7 +55,7 @@ const j3 = join('--tool', 'gemini');
 const d3 = doctor();
 if (onPath('gemini')) check('JOIN-8: gemini installed → All good', /All good/.test(d3.out), d3.out.slice(-400));
 else check('JOIN-8: gemini not installed → "Ready once you install gemini", not "All good"', d3.status === 0 && /`gemini` isn't installed yet/.test(d3.out) && /Ready once you install gemini \(npm i -g @google\/gemini-cli\)\./.test(d3.out) && !/All good/.test(d3.out), d3.out.slice(-500));
-check('JOIN-8: the start line is still shown', /Gemini CLI\s+in your hackathon repo: open Gemini CLI there/.test(d3.out), j3.out.slice(-300));
+check('JOIN-8: the start line is still shown', /Gemini CLI\s+in your project repo: open Gemini CLI there/.test(d3.out), j3.out.slice(-300));
 
 // ---- JOIN-14: a rotated token ----
 const cfg4 = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));

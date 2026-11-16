@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Per-machine setup. Paste the command the host's `npm start` (or the web board) prints:
 //   npm run join -- --url http://100.x.y.z:4000 --token TOKEN
-// It asks for your name, which AI tool(s) you use, and your hackathon repo path, then connects
+// It asks for your name, which AI tool(s) you use, and your project repo path, then connects
 // those tools to the board and installs a "join the board" shortcut in each.
 //
 // Supported tools (--tool, comma-separated):
@@ -256,9 +256,9 @@ if (!args.repo) {
     : tools.includes('claude') ? `installs the auto-wake hook${gitAllow ? ' and pre-approves git/gh' : ''} there, so agents don't stall on permission prompts; blank to skip` :'so join can tell you where to start your agent; blank to skip';
   const def = previous?.agents?.[0]?.dir || hereRepo() || (sibling && fs.existsSync(sibling) ? sibling : '');
   if (projectUrl && !def && rl) console.log(`\nThe team's project is ${projectUrl}. Leave the next answer blank to clone it into ${sibling}.`);
-  let r = await ask(`Path to your copy of the hackathon repo (${why})`, def);
+  let r = await ask(`Path to your copy of the project repo (${why})`, def);
   // Required here (and blank won't clone it): ask again rather than fail later.
-  for (let i = 0; i < 3 && !r && rl && /^required/.test(why) && !(projectUrl && !fs.existsSync(sibling)); i++) r = await ask(`A repo path is ${why}. Path to your copy of the hackathon repo`, def);
+  for (let i = 0; i < 3 && !r && rl && /^required/.test(why) && !(projectUrl && !fs.existsSync(sibling)); i++) r = await ask(`A repo path is ${why}. Path to your copy of the project repo`, def);
   if (r) args.repo = r.replace(/^["']|["']$/g, '');
   else if (projectUrl && rl && !fs.existsSync(sibling)) {
     const c = sh(`git clone ${q(projectUrl)} ${q(sibling)}`);
@@ -478,12 +478,12 @@ function setupOther({ mcpUrl, agent }) {
   console.log('    name: board');
   console.log('    type: http (streamable HTTP)');
   console.log(`    url:  ${mcpUrl}`);
-  console.log(`  Then start it in the hackathon repo and tell it: "follow the board playbook (call get_playbook)". It joins as "${agent}".`);
+  console.log(`  Then start it in the project repo and tell it: "follow the board playbook (call get_playbook)". It joins as "${agent}".`);
   ok('board address printed for your tool (keep it private: it contains the agent token)');
 }
 
 function setupCopilotVSCode({ mcpUrl, dir }) {
-  if (!dir) throw new Error('Copilot in VS Code is configured per repo: re-run with --repo <path-to-hackathon-repo>.');
+  if (!dir) throw new Error('Copilot in VS Code is configured per repo: re-run with --repo <path-to-project-repo>.');
   const mcpPath = path.join(dir, '.vscode', 'mcp.json');
   const created = !fs.existsSync(mcpPath);
   const cfg = readJson(mcpPath, {});
