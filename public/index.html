@@ -521,6 +521,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   /* Title bar: "What to do now" on the left, the phase track on the right. */
   .now .nl { order: -3; flex: 1 0 auto; align-self: stretch; display: inline-flex; align-items: center; gap: var(--s4); margin: 0 0 var(--s1) calc(-1 * var(--s5)); padding: var(--s2) var(--s5); min-height: 32px; border-bottom: 2px solid var(--line); font-size: .8125rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
   .o-ph .phases { padding: 0 var(--s5) var(--s4); }
+  .q-sum { margin: var(--s3) 0 0; font-size: var(--fs-meta); color: var(--muted); }
   .now .na-sub { margin: 0; flex: 1 1 100%; font-size: var(--fs-sm); color: var(--muted); }
   .now::after { content: ""; order: -1; flex: 0 0 100%; height: 0; margin-bottom: calc(-1 * var(--s3)); }
   /* The lead: the demo's first "needs attention" row, bigger, with a status flag. */
@@ -1447,6 +1448,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
           <section id="q-panel" class="panel attn" aria-labelledby="q-h" hidden>
             <h2 id="q-h" class="vh"></h2>
             <div class="qs" id="questions"></div>
+            <p class="q-sum" id="q-sum" hidden></p>
           </section>
         </div>
         <div id="o-blocked"></div>
@@ -2552,11 +2554,11 @@ function renderNow(qOpen, unread, si) {
   const moreHtml = more.length ? `<div class="also">${more.length > 1 ? '<span class="n">Also:</span>' : ''}${more.slice(0, 2).map((m, i) => `<button type="button" class="link" ${m.act ? `data-act="${m.act}"` : `data-go="${m.go}"${lv(m.go)}`} data-fk="now-more-${i}">${esc(m.text)} <span aria-hidden="true">→</span></button>`).join('')}</div>` : '';
   const cutHtml = ui.showCut && cut?.list.length && !over ? `<ul class="cut-list" id="cut-list" aria-label="P3 tasks that probably won't make it"><li class="n">Probably won't make it:</li>${cut.list.map((t) => `<li><button type="button" class="link" data-open-task="${t.id}" data-fk="cut-${t.id}">#${t.id} ${esc(short(t.title, 48))}</button></li>`).join('')}</ul>` : '';
   const el = $('now'); el.className = 'now k-' + kind;
-  // No lead where it would repeat what's right there: the question cards under it (what they block stays, as a muted
-  // line), or the open Setup step it points to.
+  // No lead where it would repeat what's right there: the question cards under it (what they block is a muted line
+  // under them), or the open Setup step it points to.
   const qLead = go === 'questions' && qOpen.length;
   const hideLead = qLead || (kind === 'setup' && String(go).startsWith('step-') && setupShown(si));
-  const lead = qLead ? (bs.asked.length ? `<p class="na-sub">${plural(bs.asked.length, 'task')} blocked on ${qOpen.length > 1 ? 'them' : 'it'}</p>` : '')
+  const lead = qLead ? ''
     : hideLead ? (more.length || text2 ? '' : '<p class="na-sub">Nothing needs attention yet: Setup shows what\'s next.</p>') : go
 
       ? `<button type="button" class="link na" data-go="${go}"${lv(go)} data-fk="now-go">${esc(text)} <span class="go" aria-hidden="true">→</span></button>`
@@ -2907,7 +2909,7 @@ function renderBoardNote() {
 
 function renderQuestions(qOpen) {
   $('q-panel').hidden = !qOpen.length;
-  // Screen readers only: the lead line above already says it.
+  // Screen readers only: the cards say it.
   patch($('q-h'), qOpen.length ? `${qOpen.length === 1 ? 'An agent is' : `${qOpen.length} agents are`} waiting for a human answer` : '');
   patch($('questions'), qOpen.map((q) => {
     const t = q.task_id && taskById(q.task_id);
@@ -2922,6 +2924,10 @@ function renderQuestions(qOpen) {
         <button type="submit" data-fk="qb-${q.id}">Answer</button>
       </form><div class="err" id="qe-${q.id}" role="alert">${esc(ui.qErr?.[q.id] || '')}</div></article>`;
   }).join(''));
+  // Under the cards, muted: what answering them unblocks (each card's task says "question waiting").
+  const nb = blockedSplit(qOpen).asked.length;
+  $('q-sum').hidden = !nb;
+  patch($('q-sum'), nb ? `Answering ${qOpen.length > 1 ? 'these' : 'it'} unblocks ${plural(nb, 'task')}` : '');
 }
 
 // ---------- Agents: one component for both views ----------
