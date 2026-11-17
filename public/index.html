@@ -661,8 +661,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .boardwrap { min-width: 0; }
   .boardwrap > .hint { margin-top: var(--s4); }
   .filterbar { font-size: var(--fs-sm); display: flex; gap: var(--s4); align-items: center; flex-wrap: wrap; margin-bottom: var(--s4); }
-  .board { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)) var(--done-w, minmax(120px, 1fr)); gap: var(--s4); overflow-x: auto; align-items: start; padding: 2px 2px var(--s2); position: relative; }
-  .board.done-closed { --done-w: 48px; }
+  .board { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: var(--s4); overflow-x: auto; align-items: start; padding: 2px 2px var(--s2); position: relative; }
+  .board.done-closed { grid-template-columns: repeat(4, minmax(0, 1fr)) 48px; } /* the folded Done rail always fits: the four columns give way */
   @media (max-width: 760px) { .board, .board.done-closed { grid-template-columns: minmax(0, 1fr); overflow: visible; } .board.none { display: none; } }
   /* Columns: the demo's .tv-col, a sunken box whose heading is a title bar. */
   .col { background: var(--sunken); border-radius: var(--r-lg); padding: 0 var(--s3) var(--s3); min-height: 90px; border: 2px solid var(--line); min-width: 0; transition: background-color var(--t-base) var(--ease), border-color var(--t-base) var(--ease); }
