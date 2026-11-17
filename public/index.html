@@ -1191,6 +1191,18 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .office-scene .ab-more { border-top-color: var(--border); }
   .office-scene .ab-bub { background: var(--panel); color: var(--ink); border-color: var(--ink); }
   .office-scene .ab-bub:after { border-top-color: var(--ink); }
+  /* Switching views (viewFade): the panels both views share stay still; only the centre changes, in about 250ms. The
+     board fades in; the room fades in and the Tasks window settles from a taller box at the foot, like the board
+     shrinking into it. The room's picture itself fades in once its first frame is drawn (it loads on the first
+     switch). Reduced motion: none of it (the rule at the end of this sheet). */
+  @keyframes vt-in { from { opacity: 0; } }
+  @keyframes vt-board { from { opacity: 0; transform: scale(.985); } }
+  @keyframes vt-tasks { from { opacity: 0; transform: scale(1.04, 1.6); } }
+  main.vt-board #boardwrap { animation: vt-board 220ms var(--ease) both; transform-origin: 50% 0; }
+  main.vt-office #office-view { animation: vt-in 260ms var(--ease) both; }
+  main.vt-office .o-tasks { animation: vt-tasks 260ms var(--ease) both; transform-origin: 50% 100%; }
+  .office-scene { transition: opacity 300ms var(--ease); }
+  .office-view.loading .office-scene { opacity: 0; transition: none; }
   .office-load { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; margin: 0; color: var(--muted); font: var(--fs-sm) var(--mono); }
   .office-view.loading .office-load { display: flex; }
   html[data-board-view="office"] #o-left { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); width: var(--o-w); max-height: calc(100% - var(--o-y) - var(--o-bottom)); } /* as tall as its content, like on the Board view */
@@ -4574,6 +4586,17 @@ function setBoardView(v, { save = true, quiet = false } = {}) {
   if (v === 'office') showOffice();
   else office.mod?.setActive(false);
   if (changed && !quiet) announce(v === 'office' ? 'Showing the 3D office' : 'Showing the board');
+  if (changed && !quiet && state.loaded) viewFade(v);
+}
+// The switch's short fade (CSS: main.vt-board / main.vt-office). A second switch while one runs goes straight to its
+// end state; reduced motion switches at once. Nothing waits on it: the DOM is already in the new view.
+let vtTimer = 0;
+function viewFade(v) {
+  const m = $('main'); const busy = m.classList.contains('vt-board') || m.classList.contains('vt-office');
+  m.classList.remove('vt-board', 'vt-office'); clearTimeout(vtTimer);
+  if (busy || reduceMotion()) return;
+  void m.offsetWidth; // restart the animation
+  m.classList.add('vt-' + v); vtTimer = setTimeout(() => { m.classList.remove('vt-' + v); oFrame(); }, 300); // the room's framing measures the settled Tasks window
 }
 // Anything that leads to a part of the board the office view hides (the task columns).
 function needBoard() { if (boardView === 'office') setBoardView('board'); }
@@ -4588,7 +4611,10 @@ function showOffice() {
     if (state) o.update(state);
     o.select(ui.picked || null);
     if (boardView !== 'office') o.setActive(false);
+    // The room fades in once its first frame is drawn (it stays hidden while .loading): no empty room first.
+    return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   }).catch((e) => {
+
     console.warn('3D office did not load', e);
     if (boardView === 'office') setBoardView('board', { save: false, quiet: true });
     toast("The 3D office didn't load (offline?). Staying on the board.");

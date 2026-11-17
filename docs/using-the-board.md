@@ -129,6 +129,7 @@ The header's **Board | 3D office** switch swaps the main area in place. The offi
 Clicking a character selects its agent in *Agents*; its name tag shows the same status as its row. Panels fold the same way in both views.
 
 - Board is the default; the office code (three.js) downloads only on the first switch.
+- Switching is a quick fade of the centre (about a quarter of a second, the room once its first frame is drawn); the panels stay where they are. With reduced motion it switches at once.
 - The choice is remembered per board in this browser. `?view=office` / `?view=board` overrides it, and it's also in the command palette (Ctrl+K).
 - Not on phones, and without WebGL the board stays, with a note.
 
