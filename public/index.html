@@ -3247,6 +3247,12 @@ $('tasktable').addEventListener('click', (ev) => {
   if (tv.sort === b.dataset.tsort) tv.dir = -tv.dir; else { tv.sort = b.dataset.tsort; tv.dir = 1; }
   renderBoard();
 });
+// A column's cards, the same order in both views: proposals at the top of Open, then priority, then oldest first (the
+// order agents claim them in); Done newest first.
+function colSort(list, col) {
+  if (col === 'done') return list.sort((a, b) => b.updated_at - a.updated_at);
+  return list.sort((a, b) => (col === 'open' && (b.status === 'proposed') - (a.status === 'proposed')) || a.priority - b.priority || a.id - b.id);
+}
 function renderBoard() {
   const visible = state.tasks.filter(taskShown);
   const table = tv.view === 'table';
@@ -3263,15 +3269,13 @@ function renderBoard() {
   $('board').classList.toggle('done-closed', !dOpen);
   const html = COLS.map((s) => {
     // Proposed tasks sit at the top of Open until someone approves them; claimed ones in In progress.
-    let items = visible.filter((t) => colOf(t) === s);
-    if (s === 'open') items = items.sort((a, b) => (b.status === 'proposed') - (a.status === 'proposed'));
+    let items = colSort(visible.filter((t) => colOf(t) === s), s);
     const total = items.length;
     if (s === 'done' && !dOpen) {
       return `<div class="col s-done collapsed" data-status="done" id="col-done" role="region" aria-label="Done, ${plural(total, 'task')}"><button type="button" class="dtog" id="colh-done" data-act="done-toggle" data-fk="done-tog" aria-expanded="false" aria-label="Done, ${plural(total, 'task')}: show the column" title="Show the Done column (tasks merged into main). You can still drop cards here."><span class="ok-mk" aria-hidden="true">✓</span>Done ${total} <span class="chev" aria-hidden="true">▾</span></button></div>`;
     }
     let more = '';
     if (s === 'done') {
-      items = items.sort((a, b) => b.updated_at - a.updated_at);
       if (!ui.showAllDone && items.length > DONE_SHOWN) { more = `<button class="ghost more" data-show-done data-fk="more-done">Show ${items.length - DONE_SHOWN} older</button>`; items = items.slice(0, DONE_SHOWN); }
       else if (ui.showAllDone && items.length > DONE_SHOWN) more = `<button class="ghost more" data-show-done data-fk="more-done">Show fewer</button>`;
     } else if (items.length > COL_SHOWN + 3) {
@@ -4790,8 +4794,8 @@ function renderOffice() {
   // Done folds the same way as on the Board view (one setting, the same auto rule).
   const dOpen = doneOpen(); $('o-cols').classList.toggle('done-closed', !dOpen);
   if (patch($('o-cols'), O_COLS.map(([k, label]) => {
-    let list = tasks.filter((t) => colOf(t) === k);
-    list = k === 'open' ? list.sort((a, b) => (b.status === 'proposed') - (a.status === 'proposed') || a.priority - b.priority || a.id - b.id) : list.sort((a, b) => b.updated_at - a.updated_at);
+    const list = colSort(tasks.filter((t) => colOf(t) === k), k);
+
     if (k === 'done' && !dOpen) return `<section class="o-col s-done collapsed" data-s="done" aria-label="Done, ${plural(list.length, 'task')}"><h3><button type="button" class="dtog" data-act="done-toggle" data-fk="o-done-tog" aria-expanded="false" aria-label="Done, ${plural(list.length, 'task')}: show the column" title="Show the Done column (tasks merged into main)"><i class="ok-mk" aria-hidden="true">✓</i><span>${label}</span> <span class="o-c">${list.length}</span> ${CHEV}</button></h3></section>`;
     return `<section class="o-col s-${k}${list.length ? ' has' : ''}" data-s="${k}" aria-label="${label}, ${plural(list.length, 'task')}"><h3 title="${COL_DESC[k]}"><span>${label}</span><span class="o-c">${list.length}</span>${k === 'done' ? `<button type="button" class="dclose" data-act="done-toggle" data-fk="o-done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse">${CHEV}</button>` : ''}</h3>${list.length ? `<ul>${list.map(oCard).join('')}</ul><button type="button" class="o-more" tabindex="-1" aria-hidden="true" data-o-more hidden></button>` : `<p class="o-none">${filterRoot() ? `None for ${esc(filterRoot())}` : 'None'}</p>`}</section>`;
   }).join(''))) oRove();
