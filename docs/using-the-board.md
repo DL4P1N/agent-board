@@ -147,7 +147,7 @@ On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/prese
 ## On the web board
 
 - **Columns.** Open, In progress, Blocked, Review and Done, in both views. A task an agent has claimed but not started sits in In progress, marked *claimed, not started*; the Table view and the task dialog give the exact status.
-- **Moving cards.** Drag a card or use its **Move…** button. A move to *In progress* asks who it's for, and a task whose dependencies aren't done yet needs **Move anyway**.
+- **Moving cards.** Drag a card to another column, in the Board view or the 3D view's *Tasks* window (maximised too), or use its **Move…** button (in 3D: *Status* in its dialog). A move to *In progress* asks who it's for, and a task whose dependencies aren't done yet needs **Move anyway**.
 - **Keyboard.**
   - `Ctrl`+`K` (`⌘K` on a Mac) opens the command palette: jump to a task or person, add a task, answer a question, set the demo time, switch the filter or theme.
   - `n` new task, `/` write a message, `?` help, `Esc` closes dialogs.

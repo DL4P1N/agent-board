@@ -674,7 +674,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   @media (max-width: 760px) { .board, .board.done-closed { grid-template-columns: minmax(0, 1fr); overflow: visible; } .board.none { display: none; } }
   /* Columns: the demo's .tv-col, a sunken box whose heading is a title bar. */
   .col { background: var(--sunken); border-radius: var(--r-lg); padding: 0 var(--s3) var(--s3); min-height: 90px; border: 2px solid var(--line); min-width: 0; transition: background-color var(--t-base) var(--ease), border-color var(--t-base) var(--ease); }
-  .col.drop { border-color: var(--accent); background: var(--accent-soft); }
+  .col.drop, .o-col.drop { border-color: var(--accent); background: var(--accent-soft); }
   .col .cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s3); }
   /* Column heading: status dot, name, count. The dot is the status colour used everywhere. */
   .col h3 { font-size: var(--fs-meta); font-weight: 700; line-height: var(--lh-tight); color: var(--ink); margin: 0 calc(-1 * var(--s3)) var(--s2); padding: var(--s2) var(--s4); min-height: 28px; border-bottom: 2px solid var(--line); display: flex; align-items: center; gap: var(--s3); }
@@ -719,7 +719,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .card.has-owner { border-left-color: hsl(var(--h) 60% var(--dl)); }
   .card:hover { box-shadow: inset 0 0 0 2px var(--line-strong); }
   .card:active { transform: translate(1px, 1px); }
-  .card.dragging { opacity: .4; }
+  .card.dragging, .o-card.dragging { opacity: .4; }
+
   .card.stale { background: var(--stale); }
   .card.proposed { box-shadow: inset 0 0 0 2px var(--line); }
   /* Feature freeze: open tasks that won't start sink into the column (text stays readable, muted). */
@@ -2421,7 +2422,7 @@ function render() {
   renderDocks(qOpen, si);
   if ($('task-dlg').open) renderDialogLive();
   checkNotify(); announceActivity();
-  if (boardView === 'office') { office.mod?.update(officeState()); renderOffice(); }
+  if (boardView === 'office') { office.mod?.update(officeState()); if (!ui.dragging) renderOffice(); }
 }
 
 // ---------- one vocabulary and one counting rule: the Board view, the 3D view and both presenters ----------
@@ -3190,7 +3191,7 @@ function card(t) {
   const tm = timeNow(); const held = tm.frozen && !tm.past && (t.status === 'open' || prop) && t.priority !== 1;
   const aria = `#${t.id} ${t.title}. ${LABEL[t.status]}${prop ? ` by ${t.created_by}, waiting for approval` : ''}, ${t.assignee ? 'assigned to ' + t.assignee : 'unassigned'}, ${prio}${waiting.length ? `, waits on ${waiting.map((d) => '#' + d.id).join(' and ')}` : ''}${size !== 'M' ? `, size ${size}` : ''}${rsv ? `, reserved for ${t.reserved_for}` : ''}${pr ? `, pull request${pr.text ? ': ' + pr.text : ''}` : ''}${merging ? `, being merged by ${t.reviewer}` : ''}${stale ? `, stale: no update for 15+ minutes${off ? ', owner offline: agents may take it over' : ''}` : ''}${outU ? ', owner out of usage: agents may take it over' : ''}${q ? ', question waiting' : ''}${note ? `, blocked: ${note}` : ''}${held ? ', on hold for the feature freeze' : ''}. Press Enter to open`;
   const menu = ui.moveMenu === t.id ? `<div class="mvmenu" role="group" aria-label="Move #${t.id} to"><span class="ml">Move to:</span>${COLS.filter((s) => s !== t.status).map((s) => `<button type="button" class="ghost" data-move-to="${s}" data-move-id="${t.id}" data-fk="mt-${t.id}-${s}">${LABEL[s]}</button>`).join('')}</div>` : '';
-  const ask = ui.moveAsk?.id === t.id ? `<div class="mvmenu mvask" role="group" aria-label="Who is #${t.id} for?"><span class="ml">${LABEL[ui.moveAsk.to]} needs an owner. Who is it for?</span>${askAgents(t).map((a) => `<button type="button" class="ghost" data-ask-to="${esc(a)}" data-ask-id="${t.id}" data-fk="ask-${t.id}-${esc(a)}">${esc(a)}</button>`).join('')}<button type="button" class="ghost" data-ask-cancel="${t.id}" data-fk="askc-${t.id}">Cancel</button></div>` : '';
+  const ask = moveAskHtml(t);
   const rej = ui.rejecting === t.id;
   const propActs = prop ? (rej
     ? `<form class="rj" data-rjform="${t.id}"><label class="vh" for="rj-${t.id}">Why reject #${t.id}? (optional)</label><input id="rj-${t.id}" data-keep="rj-${t.id}" placeholder="Why? (optional, sent to ${esc(t.created_by)})" maxlength="300"><button type="submit" class="danger" data-fk="rjy-${t.id}">Reject</button><button type="button" class="ghost" data-reject-no="${t.id}" data-fk="rjn-${t.id}">Cancel</button></form>`
@@ -3516,6 +3517,14 @@ function renderLocks() {
 
 // ---------- events (delegated) ----------
 function focusCard(id) { document.querySelector(`.card[data-id="${id}"]`)?.focus({ preventScroll: true }); }
+// Moving a task to Claimed / In progress without an owner asks who it is for, under its card (both views: pre keeps
+// the 3D card's focus keys apart).
+function moveAskHtml(t, pre = '') {
+  if (ui.moveAsk?.id !== t.id) return '';
+  return `<div class="mvmenu mvask" role="group" aria-label="Who is #${t.id} for?"><span class="ml">${LABEL[ui.moveAsk.to]} needs an owner. Who is it for?</span>${askAgents(t).map((a) => `<button type="button" class="ghost" data-ask-to="${esc(a)}" data-ask-id="${t.id}" data-fk="${pre}ask-${t.id}-${esc(a)}">${esc(a)}</button>`).join('')}<button type="button" class="ghost" data-ask-cancel="${t.id}" data-fk="${pre}askc-${t.id}">Cancel</button></div>`;
+}
+// The first button of that question, in the view on screen.
+const focusMoveAsk = () => [...document.querySelectorAll('.mvask button')].find((b) => b.offsetParent)?.focus({ preventScroll: true });
 // A task's card in the view on screen (the Board's card or the 3D Tasks window's).
 function focusTask(id) {
   const c = boardView === 'office' ? document.querySelector(`.o-card[data-open-task="${id}"]`) : document.querySelector(`.card[data-id="${id}"]`);
@@ -3583,8 +3592,8 @@ document.addEventListener('click', (ev) => {
   if (el.classList.contains('card')) return openTask(Number(d.id));
   if (d.move) { const id = Number(d.move); ui.moveMenu = ui.moveMenu === id ? null : id; render(); reveal(document.querySelector(`.card[data-id="${id}"] .mvmenu`)); return (ui.moveMenu ? document.querySelector(`.card[data-id="${id}"] .mvmenu button`) : document.querySelector(`[data-fk="mv-${id}"]`))?.focus({ preventScroll: true }); }
   if (d.moveTo) { const id = Number(d.moveId); const t = taskById(id); ui.moveMenu = null; if (t && t.status !== d.moveTo) moveTask(t, d.moveTo); render(); return ui.moveAsk?.id === id ? document.querySelector(`.card[data-id="${id}"] .mvask button`)?.focus({ preventScroll: true }) : focusCard(id); }
-  if (d.askTo) { const id = Number(d.askId); const t = taskById(id); const { to, force } = ui.moveAsk || {}; ui.moveAsk = null; if (t && to) moveTask(t, to, { force, assignee: d.askTo }); render(); return focusCard(id); }
-  if (d.askCancel) { const id = Number(d.askCancel); ui.moveAsk = null; render(); return focusCard(id); }
+  if (d.askTo) { const id = Number(d.askId); const t = taskById(id); const { to, force } = ui.moveAsk || {}; ui.moveAsk = null; if (t && to) moveTask(t, to, { force, assignee: d.askTo }); render(); return focusTask(id); }
+  if (d.askCancel) { const id = Number(d.askCancel); ui.moveAsk = null; render(); return focusTask(id); }
   if (d.release) { const t = taskById(Number(d.release)); if (t) { moveTask(t, 'open'); render(); } return; }
   if (d.approve) { const id = Number(d.approve); act(api(`/tasks/${id}/decide`, { method: 'POST', body: JSON.stringify({ approve: true }) }), `Approved #${id}: agents can claim it now`).then(() => focusCard(id)).catch(() => {}); return; }
   if (d.reject) { ui.rejecting = Number(d.reject); render(); return $((boardView === 'office' ? 'orj-' : 'rj-') + d.reject)?.focus(); }
@@ -3657,7 +3666,7 @@ document.addEventListener('click', (ev) => {
 document.addEventListener('keydown', (ev) => {
   if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === 'k') { ev.preventDefault(); return togglePalette(); }
   const card = ev.target.closest?.('.card');
-  if (ev.key === 'Escape' && ui.moveAsk && card) { const id = ui.moveAsk.id; ui.moveAsk = null; render(); return focusCard(id); }
+  if (ev.key === 'Escape' && ui.moveAsk && (card || ev.target.closest?.('.mvask'))) { const id = ui.moveAsk.id; ui.moveAsk = null; render(); return focusTask(id); }
   if (ev.key === 'Escape' && ui.moveMenu && card) { const id = ui.moveMenu; ui.moveMenu = null; render(); return document.querySelector(`[data-fk="mv-${id}"]`)?.focus(); }
   if (card && ev.target === card && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); return openTask(Number(card.dataset.id)); }
   const typing = ev.target.closest?.('input, textarea, select, dialog');
@@ -3953,27 +3962,31 @@ function mention(name) {
   m.focus(); m.setSelectionRange(m.value.length, m.value.length); growMsg(); closeAc();
 }
 
-// drag & drop between columns
+// Drag & drop between columns: the Board view's and the 3D Tasks window's (its cards and columns are .o-card / .o-col,
+// their status in data-s). The same rules either way (moveTask). Neither view re-renders its columns mid-drag. The
+// room's camera only listens on its canvas, which a drag over the window never reaches.
+const DRAG_CARD = '.card, .o-card', DROP_COL = '.col, .o-col';
 document.addEventListener('dragstart', (ev) => {
-  const c = ev.target.closest?.('.card'); if (!c) return;
+  const c = ev.target.closest?.(DRAG_CARD); if (!c) return;
   ui.dragging = true; c.classList.add('dragging');
-  ev.dataTransfer.setData('text/plain', c.dataset.id); ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', c.dataset.id || c.dataset.openTask); ev.dataTransfer.effectAllowed = 'move';
 });
 document.addEventListener('dragend', (ev) => {
-  ui.dragging = false; ev.target.closest?.('.card')?.classList.remove('dragging');
-  document.querySelectorAll('.col.drop').forEach((c) => c.classList.remove('drop'));
-  $('board')._html = undefined; render();
+  ui.dragging = false; ev.target.closest?.(DRAG_CARD)?.classList.remove('dragging');
+  document.querySelectorAll('.drop').forEach((c) => c.classList.remove('drop'));
+  $('board')._html = undefined; $('o-cols')._html = undefined; render();
 });
 document.addEventListener('dragover', (ev) => {
-  const col = ev.target.closest?.('.col'); if (!col || !ui.dragging) return;
+  const col = ev.target.closest?.(DROP_COL); if (!col || !ui.dragging) return;
   ev.preventDefault(); ev.dataTransfer.dropEffect = 'move';
-  document.querySelectorAll('.col.drop').forEach((c) => c !== col && c.classList.remove('drop'));
+  document.querySelectorAll('.drop').forEach((c) => c !== col && c.classList.remove('drop'));
   col.classList.add('drop');
 });
 document.addEventListener('drop', (ev) => {
-  const col = ev.target.closest?.('.col'); if (!col) return;
+  const col = ev.target.closest?.(DROP_COL); if (!col) return;
   ev.preventDefault();
-  const id = Number(ev.dataTransfer.getData('text/plain')); const t = taskById(id); const to = col.dataset.status;
+  const id = Number(ev.dataTransfer.getData('text/plain')); const t = taskById(id); const to = col.dataset.status || col.dataset.s;
+  ui.dragging = false; // dropped: the columns may render again (the owner question shows on the card)
   if (t && colOf(t) !== to) moveTask(t, to);
 });
 // Change a task's status (drag, Move… menu, Release). The toast offers Undo.
@@ -3987,7 +4000,7 @@ function moveTask(t, to, { force = false, assignee } = {}) {
   if (HOLDING.includes(to) && !assignee && !t.assignee) {
     if (!askAgents(t).length) return toast(`#${id} needs someone to work on it before it can be ${LABEL[to]}. No agent has joined yet.`, true);
     ui.moveAsk = { id, to, force }; render();
-    return document.querySelector(`.card[data-id="${id}"] .mvask button`)?.focus({ preventScroll: true });
+    return focusMoveAsk();
   }
   t.status = to; t.updated_at = Date.now(); t.stale = false; if (to === 'open') t.assignee = null; if (assignee) t.assignee = assignee; // optimistic
   api(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ status: to, ...(assignee ? { assignee } : {}), ...(force ? { force: true } : {}) }) })
@@ -4834,7 +4847,7 @@ function oCard(t) {
     ? `<form class="rj" data-rjform="${t.id}"><label class="vh" for="orj-${t.id}">Why reject #${t.id}? (optional)</label><input id="orj-${t.id}" data-keep="orj-${t.id}" placeholder="Why? (optional)" maxlength="300"><button type="submit" class="danger" data-fk="orjy-${t.id}">Reject</button><button type="button" class="ghost" data-reject-no="${t.id}" data-fk="orjn-${t.id}">Cancel</button></form>`
     : `<button type="button" data-approve="${t.id}" data-fk="oap-${t.id}" title="Make it a normal open task agents can claim">Approve</button><button type="button" class="ghost" data-reject="${t.id}" data-fk="orj-b-${t.id}" title="Remove it; ${esc(t.created_by)} is told why">Reject…</button>`) : '';
   const ca = acts || q ? `<div class="o-ca">${acts}${q ? `<button type="button" class="qb" data-go-q="${q.id}" data-fk="ocq-${t.id}" title="${esc(short(q.question, 120))}">question waiting</button>` : ''}</div>` : '';
-  return `<li><button type="button" class="o-card${who ? ' has-owner' : ''}${prop ? ' proposed' : ''}${isStale(t) ? ' stale' : ''}" ${who ? hs(who) : ''} data-open-task="${t.id}" data-fk="oc-${t.id}"><span class="o-ct"><span class="id">#${t.id}</span> ${esc(t.title)}</span>${note ? `<span class="o-cw bad">“${esc(short(note, 80))}”</span>` : ''}${facts ? `<span class="o-cm">${facts}</span>` : ''}</button>${ca}</li>`;
+  return `<li><button type="button" class="o-card${who ? ' has-owner' : ''}${prop ? ' proposed' : ''}${isStale(t) ? ' stale' : ''}" ${who ? hs(who) : ''} data-open-task="${t.id}" data-fk="oc-${t.id}" draggable="true"><span class="o-ct"><span class="id">#${t.id}</span> ${esc(t.title)}</span>${note ? `<span class="o-cw bad">“${esc(short(note, 80))}”</span>` : ''}${facts ? `<span class="o-cm">${facts}</span>` : ''}</button>${ca}${moveAskHtml(t, 'o')}</li>`;
 }
 // Tasks: one Tab stop per column, arrow keys between cards (Left / Right: the next column), as on the Board view.
 function oRove() {
