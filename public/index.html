@@ -986,10 +986,11 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   @media (min-width: 1101px) and (max-width: 1699px) { .clock .vdw { display: none; } .clock.v-ok .tm { color: var(--ok); } .clock:is(.v-tight, .v-behind) .tm { color: var(--warn); } }
   /* Below 1600px Planner and Merges are one Roles chip (phones too). */
   @media (max-width: 1599px) { .topbar :is(.tb-plan, .tb-merge) { display: none; } .topbar .tb-roles { display: inline-flex; } }
-  /* Tighter still while one row: chips and gaps a step tighter, the countdown without its DEMO label (the tooltip and
-     the colour say it); below 1200px the Roles chip is just its label (both names are its tooltip). */
-  @media (min-width: 1101px) and (max-width: 1279px) { #topbar.topbar { column-gap: var(--s3); } .topbar .tbc { padding: 0 var(--s3); } .clock:not(.unset, .past) > .tbl { display: none; } }
-  @media (min-width: 1101px) and (max-width: 1199px) { .tb-roles .o-x { display: none; } }
+  /* Narrow laptops, while one row: chips and gaps a step tighter. Only if the row still runs past its edge (the goal
+     down to its 10 characters, a wide font), tbFit() drops the Roles names (fit1), then the DEMO label (fit2): the
+     tooltips and the read-out labels keep both. */
+  @media (min-width: 1101px) and (max-width: 1279px) { #topbar.topbar { column-gap: var(--s3); } .topbar .tbc { padding: 0 var(--s3); } }
+  #topbar.fit1 .tb-roles .o-x, #topbar.fit2 .clock > .tbl { display: none; }
   @media (max-width: 600px) { .topbar .tb-goal { flex-basis: 100%; } }
   /* Popovers: the goal (under the top bar) and the demo time and who merges (under their top bar chips), each edited in place. */
   .o-pop { position: absolute; z-index: 8; max-height: min(70vh, 560px); }
@@ -2237,7 +2238,7 @@ ${tip}`;
   const html = chip(esc(tm), t.frozen && !t.past
     ? '&nbsp;· feature freeze<span class="fz"> — finish &amp; merge</span>'
     : `${detail ? `<span class="fz">&nbsp;${esc(detail.slice(1))}</span>` : ''}${vd ? `<span class="vdw">&nbsp;· <b class="vd ${vd.verdict}">${esc(word)}</b></span>` : ''}`);
-  if (b._html !== html) { b.innerHTML = html; b._html = html; }
+  if (b._html !== html) { b.innerHTML = html; b._html = html; tbFit(); }
   b.className = 'tbc clock ' + cls + (vd ? ' v-' + vd.verdict : ''); b.title = tip; b.setAttribute('aria-label', `${text}. Change the demo time`);
   // One polite announcement when the freeze starts while the page is open.
   if (prevFrozen === false && t.frozen && !t.past) announce(`Feature freeze started. Agents won't take new tasks; help merge and test.`);
@@ -2602,7 +2603,18 @@ function renderTopbar(si) {
       <button type="button" class="tbc tb-plan" id="plan-btn" data-act="planner" data-fk="tb-plan" aria-expanded="${!!ui.oPlan}" aria-controls="o-plan" title="The agent that writes the task list from the goal and approves proposed tasks${S.planner ? '' : ' (none picked: the first agent that starts plans)'}" aria-label="Planner: ${esc(pWho)}. ${ui.oPlan ? 'Close' : 'Choose the planner'}"><span class="tbl">Planner</span><span class="o-x">${pName}</span><span class="o-ar" aria-hidden="true">▾</span></button>
       <button type="button" class="tbc tb-merge" id="merge-btn" data-act="merge" data-fk="tb-merge" aria-expanded="${!!ui.oMerge}" aria-controls="o-merge" title="The person whose agent merges finished branches into main${away ? ` (${S.integrator} is away: whoever is free merges meanwhile)` : ''}${ci ? ` (${ci.slice(2)})` : ''}" aria-label="Merges to main: ${esc(m || 'not picked yet')}${away ? ' (away)' : ''}${ci}. ${ui.oMerge ? 'Close' : 'Choose who merges'}"><span class="tbl">Merges</span><span class="o-x">${mName}</span>${ciPill()}${state.main_ci?.status === 'fail' ? '<span class="ci-dot" aria-hidden="true"></span>' : ''}<span class="o-ar" aria-hidden="true">▾</span></button>
       <span class="acts"><button type="button" class="tbc tb-act" data-act="${open ? 'setup-close' : 'setup-open'}" data-fk="s-open" aria-expanded="${open}" aria-controls="setup" ${left ? `title="Setup: ${esc(left.left)}" aria-label="${open ? 'Hide' : 'Open'} Setup. Left to do: ${esc(left.left)}"` : ''}><span class="o-x">Setup${left ? `<span class="sl">: ${esc(left.left)}</span>` : ''}</span><span class="o-ar" aria-hidden="true">▾</span></button></span>`);
+  tbFit();
 }
+// The top bar's last resort (see the CSS): measured, so it works in any font.
+function tbFit() {
+  const tb = $('topbar'); if (!tb) return;
+  tb.classList.remove('fit1', 'fit2');
+  if (innerWidth < 1101 || !tb.offsetWidth) return;
+  const over = () => tb.scrollWidth > tb.clientWidth + 1;
+  if (over()) { tb.classList.add('fit1'); if (over()) tb.classList.add('fit2'); }
+}
+if ('ResizeObserver' in window) new ResizeObserver(() => tbFit()).observe($('topbar'));
+document.fonts?.ready.then(tbFit);
 function renderSetup(si) {
   const el = $('setup');
   el.hidden = !setupShown(si);
