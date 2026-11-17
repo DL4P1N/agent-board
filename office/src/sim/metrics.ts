@@ -65,7 +65,7 @@ export function updateMetrics(w: World): void {
     const orch = w.rts.get('orch');
     if (pct >= 80 && !w.warned) {
       w.warned = true;
-      w.log('orch', 'cost', `Budget ${pct.toFixed(0)}% used ($${projCost.toFixed(2)} of $${s.budgetUsd.toFixed(0)} this ${hack ? 'hackathon' : 'sprint'}), burning $${burn.toFixed(2)}/min`);
+      w.log('orch', 'cost', `Budget ${pct.toFixed(0)}% used ($${projCost.toFixed(2)} of $${s.budgetUsd.toFixed(0)} this ${hack ? 'project' : 'sprint'}), burning $${burn.toFixed(2)}/min`);
       if (orch) w.say(orch, `Budget ${pct.toFixed(0)}% used - watch burn`, 5);
       w.emit({ type: 'budget_warning', usedPct: pct });
     } else if (pct < 70) w.warned = false;

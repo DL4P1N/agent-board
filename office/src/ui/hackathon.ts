@@ -57,7 +57,7 @@ function ticks(host: HTMLElement, fracs: { f: number; title: string }[]): void {
 }
 
 export function createHackathon(ctx: UICtx): HackPanel {
-  const win = hudWindow(ctx, 'hack', 'Hack', true, 'hack-win', {
+  const win = hudWindow(ctx, 'hack', 'Project', true, 'hack-win', {
     zone: 'top', defaultSize: { w: 26, h: 34 }, minSize: { w: 19, h: 12 },
     place: (l, size) => { const y = l.topY + l.rem * 2.6; return { x: l.leftX, y, w: size.w, h: Math.min(size.h, l.bottomY - l.stripH - l.gap - y) }; }, // below the plan/skills chip row
   });
@@ -69,7 +69,7 @@ export function createHackathon(ctx: UICtx): HackPanel {
   // ----------------------------------------------------------------- header + stages
   const project = h('h3', { class: 'hk-project' });
   const stageChips = STAGES.map((s) => h('span', { class: 'chip mute hk-stage', dataset: { stage: s } }, s));
-  const stageRow = h('div', { class: 'hk-stages', role: 'list', 'aria-label': 'Hackathon stage' }, ...stageChips);
+  const stageRow = h('div', { class: 'hk-stages', role: 'list', 'aria-label': 'Project stage' }, ...stageChips);
   stageChips.forEach((c) => c.setAttribute('role', 'listitem'));
 
   // ----------------------------------------------------------------- countdown
@@ -93,7 +93,7 @@ export function createHackathon(ctx: UICtx): HackPanel {
 
   // ----------------------------------------------------------------- checklist
   const ckList = h('ul', { class: 'ck-list', 'aria-label': 'Submission checklist' });
-  const ckEmpty = h('p', { class: 'note' }, 'The checklist fills in when a hackathon starts.');
+  const ckEmpty = h('p', { class: 'note' }, 'The checklist fills in when a project starts.');
   const ckRows = new Map<string, Row & { btn: HTMLButtonElement; label: HTMLElement; auto: HTMLElement; item: ChecklistItem | null }>();
   const checklist = sec('ck', 'Checklist', true, ckList, ckEmpty);
 
@@ -150,10 +150,10 @@ export function createHackathon(ctx: UICtx): HackPanel {
     flash(kick, 'Kicked off!');
     ctx.refresh();
   });
-  const mode = segmented<'sprint' | 'hackathon'>([{ value: 'hackathon', label: 'Hackathon', title: 'Finite scope from a brief with milestones and a demo deadline' }, { value: 'sprint', label: 'Sprint', title: 'Endless rolling sprints' }],
+  const mode = segmented<'sprint' | 'hackathon'>([{ value: 'hackathon', label: 'Project', title: 'Finite scope from a brief with milestones and a demo deadline' }, { value: 'sprint', label: 'Sprint', title: 'Endless rolling sprints' }],
     st().mode, (v) => ctx.setSettings({ mode: v }), 'Mode');
   const length = sliderRow({
-    label: 'Hack length (sim min)', min: 5, max: 120, step: 1, value: st().deadlineMinutes, def: DEFAULT_SETTINGS.deadlineMinutes, idPrefix: 'hklen', unit: 'min',
+    label: 'Project length (sim min)', min: 5, max: 120, step: 1, value: st().deadlineMinutes, def: DEFAULT_SETTINGS.deadlineMinutes, idPrefix: 'hklen', unit: 'min',
     hint: 'How long the team has, in simulated minutes.', onInput: (v) => ctx.setSettings({ deadlineMinutes: v }),
   });
   const brief = sec('brief', 'Project brief', true,
@@ -222,7 +222,7 @@ export function createHackathon(ctx: UICtx): HackPanel {
     // countdown
     setText(count, idle ? '--:--' : submitted ? 'SUBMITTED' : mmss(remaining));
     setAttr(count, 'data-tone', tone);
-    setText(countSub, idle ? 'No hackathon running. Write a brief below and kick off.' : submitted ? 'The team shipped. Time to demo.' : 'left until submission');
+    setText(countSub, idle ? 'No project running. Write a brief below and kick off.' : submitted ? 'The team shipped. Time to demo.' : 'left until submission');
     setBar(timeBar, idle ? 0 : elapsed / total);
     setText(timeNote, idle ? '' : `elapsed ${mmss(elapsed)} of ${mmss(total)}`);
     toggleClass(timeBar.el, 'warn', tone === 'warn'); toggleClass(timeBar.el, 'bad', tone === 'bad');

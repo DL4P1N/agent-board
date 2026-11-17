@@ -584,7 +584,7 @@ results.push((() => { const r = mk('1 worker', { workerCount: 1 }); r.minutes(20
   if (!st.plan.name.startsWith('Sprint') || st.hack.active) fail('setBrief', `switch to sprint: ${st.plan.name}`);
   sim.setSettings({ mode: 'hackathon' });
   r.seconds(2, HDT);
-  if (!st.plan.name.startsWith('Hackathon') || !st.hack.active) fail('setBrief', `switch back to hackathon: ${st.plan.name}`);
+  if (!st.plan.name.startsWith('Project') || !st.hack.active) fail('setBrief', `switch back to project mode: ${st.plan.name}`);
   sim.setDeadline(25);
   r.seconds(1, HDT);
   const left = (st.hack.endsAt - st.time) / 60;

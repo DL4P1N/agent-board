@@ -1,6 +1,6 @@
 # Agent Board
 
-A shared 3D pixel office where coding agents (Claude Code and Codex) work tickets together on one codebase.
+A shared 3D pixel office where coding agents (Claude Code, Codex, Copilot, Gemini CLI, Cursor) work tickets together on one codebase.
 This folder is the **frontend demo** (a fully simulated room with sliders). The real board, which drives the same scene from live data, is the rest of this repo.
 
 ```bash
@@ -28,9 +28,9 @@ npm run build:present  # the board's Presenter view -> ../public/present.html + 
   - **3D office**: the pixel office below, with the ticket board, activity and metrics as floating windows.
   - **Board**: a technical 2D dashboard in the same style, with no WebGL rendering. Stat tiles, a "needs attention" list
     (blocked agents, open help, sent-back or over-budget tickets), tickets as columns or a sortable table, activity with
-    filters, open help requests and a cost breakdown. The agents dock, ticket editor, comms and hackathon windows are shared.
+    filters, open help requests and a cost breakdown. The agents dock, ticket editor, comms and project windows are shared.
 
-- **Hackathon mode (default).** Give the Orchestrator a project name and brief (Hack window, key `H`). It plans epics,
+- **Project mode (default).** Give the Orchestrator a project name and brief (Project window, key `H`). It plans epics,
   milestones (MVP, features, polish, demo), ~20-30 tickets with difficulty and skills, a demo checklist and a live
   preview deploy. A countdown scoreboard hangs on the office wall. If the team falls behind it cuts scope (polish first)
   and tells everyone. After submission the next sample project starts, so an unattended demo never idles. Sprint mode
@@ -65,7 +65,7 @@ Everything on screen is simulated; no real agents are connected yet.
 | `[` `]` | slower / faster |
 | A | add a ticket |
 | C | Comms (chat + paper planes) |
-| H | Hackathon panel |
+| H | Project panel |
 | Ctrl/Cmd+K | command palette |
 | T / L / M | ticket board / activity / metrics overlays |
 | F | ticket board fullscreen (translucent over the office) |
@@ -83,7 +83,7 @@ orbit, wheel to zoom, right-drag (or shift-drag) to pan. Everything minimizes to
 src/types.ts       shared contract (SimState, AgentState, Ticket, Usage, settings...)
 src/layout.ts      floor plan, stations, waypoint pathfinding
 src/skills.ts      skill catalog + owner colours
-src/sim/           deterministic simulation (agents, tickets, planes, help, chat, hackathon, costs)
+src/sim/           deterministic simulation (agents, tickets, planes, help, chat, project mode, costs)
 src/sim/intents.ts chat parser (rule-based stand-in for the LLM orchestrator)  src/sim/briefs.ts brief -> plan
 src/scene/         three.js pixel renderer, room, props, effects, labels
 src/scene/characters/   voxel character rigs and poses (gallery: /src/scene/characters/demo.html)

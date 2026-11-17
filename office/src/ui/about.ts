@@ -31,7 +31,7 @@ export function createAbout(): { el: HTMLDialogElement; open(): void; close(): v
         h('li', {}, h('b', {}, 'Owners'), ': the human who contributed the agent. The colour swatch next to a name is the owner\'s colour, also worn by the agent in the office.'),
         h('li', {}, h('b', {}, 'Costs'), ': every dollar shown is an ESTIMATE from an illustrative price table, never real billing.')),
       h('h3', {}, 'Keyboard'),
-      h('p', { class: 'keys' }, ...['V switch 3D office / board view', 'Space pause', '[ ] slower/faster', 'T board', 'L log', 'M metrics', 'P hide panels', 'C comms (chat + paper planes)', 'H hackathon panel', 'Ctrl+K command palette (or / or K)', 'Esc deselect'].flatMap((k) => [h('kbd', {}, k.split(' ')[0]), ` ${k.split(' ').slice(1).join(' ')}   `])),
+      h('p', { class: 'keys' }, ...['V switch 3D office / board view', 'Space pause', '[ ] slower/faster', 'T board', 'L log', 'M metrics', 'P hide panels', 'C comms (chat + paper planes)', 'H project panel', 'Ctrl+K command palette (or / or K)', 'Esc deselect'].flatMap((k) => [h('kbd', {}, k.split(' ')[0]), ` ${k.split(' ').slice(1).join(' ')}   `])),
       h('footer', {}, close)));
   close.addEventListener('click', () => el.close());
   el.addEventListener('click', (e) => { if (e.target === el) el.close(); });

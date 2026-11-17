@@ -160,7 +160,7 @@ export function createPalette(ctx: UICtx, hooks: PaletteHooks): Palette {
       add({ id: 'keys', group: 'View', label: on ? 'Turn off single-key shortcuts' : 'Turn on single-key shortcuts', ico: 'command', keywords: 'keyboard shortcuts hotkeys accessibility keys', run: () => { hooks.setKeys?.(!on); } });
     }
     add({ id: 'overlays', group: 'View', label: 'Toggle overlays', ico: 'panels', hint: 'P', keywords: 'hide show panels ui hud', run: () => { hooks.togglePanels(); } });
-    for (const [id, title, key] of [['comms', 'Comms', 'C'], ['hack', 'Hackathon', 'H'], ['board', 'Task board', 'T'], ['log', 'Activity log', 'L'], ['metrics', 'Metrics', 'M'], ['plan', 'Plan', ''], ['skills', 'Skill library', '']] as const) {
+    for (const [id, title, key] of [['comms', 'Comms', 'C'], ['hack', 'Project', 'H'], ['board', 'Task board', 'T'], ['log', 'Activity log', 'L'], ['metrics', 'Metrics', 'M'], ['plan', 'Plan', ''], ['skills', 'Skill library', '']] as const) {
       add({ id: `win-${id}`, group: 'View', bulk: true, label: `Toggle ${title} window`, hint: key, ico: 'panels', keywords: 'show hide window minimize', run: () => { hooks.toggleWindow(id); } });
     }
     add({ id: 'about', group: 'View', bulk: true, label: 'About / keyboard shortcuts', hint: '?', ico: 'help', keywords: 'help keys docs', run: () => { hooks.openAbout(); } });

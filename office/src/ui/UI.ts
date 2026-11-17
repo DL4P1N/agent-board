@@ -218,7 +218,7 @@ export class UI implements UICtx {
         this.toasts.push('milestone', 'Milestone reached', ms?.title ?? e.milestoneId, 'gold', 1500, true); break;
       }
       case 'hack_stage': {
-        this.toasts.push('stage', 'Hackathon stage', `Now in: ${e.stage}`, 'info', 3000); break;
+        this.toasts.push('stage', 'Project stage', `Now in: ${e.stage}`, 'info', 3000); break;
       }
       case 'chat': {
         const m = e.message;

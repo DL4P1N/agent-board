@@ -58,7 +58,7 @@ export function beginHackathon(w: World, first: boolean): void {
     demoReadiness: 0, deployUrl: null, deployStatus: 'none', pitch: plan.pitch, scopeCuts: 0,
   });
   Object.assign(st.plan, {
-    name: `Hackathon: ${s.projectName}`, totalTickets: w.hackPlanned, deadlineMinutes: h.endsAt / 60,
+    name: `Project: ${s.projectName}`, totalTickets: w.hackPlanned, deadlineMinutes: h.endsAt / 60,
     epics: plan.epics.length ? plan.epics.slice() : ['Core'], note: `Kickoff: breaking the brief into ${w.hackPlanned} tasks`,
   });
   s.totalScope = Math.min(60, Math.max(4, w.hackPlanned));
@@ -381,6 +381,6 @@ function nextHackathon(w: World): void {
     const nx = SAMPLE_BRIEFS[(cur >= 0 ? cur + 1 : w.sprintIdx + 1) % n];
     s.projectName = nx.project; s.brief = nx.brief;
   }
-  w.log('orch', 'plan', `Next hackathon: ${s.projectName}`);
+  w.log('orch', 'plan', `Next project: ${s.projectName}`);
   w.restartProject();
 }

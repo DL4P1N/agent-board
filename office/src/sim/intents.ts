@@ -780,7 +780,7 @@ function statusReply(sub: StatusSub, ctx: ChatContext, agent?: AgentState, ticke
     }
     case 'demo': {
       const h = ctx.hack;
-      if (!h?.active) return `Not in hackathon mode - ${merged}/${total} merged, ${Math.round(v.rem)} min left.`;
+      if (!h?.active) return `Not in project mode - ${merged}/${total} merged, ${Math.round(v.rem)} min left.`;
       const missing = (h.checklist ?? []).filter((c) => !c.done).map((c) => c.label);
       return `Demo readiness ${Math.round(num(h.demoReadiness) * 100)}% (${merged}/${total} merged). Deploy: ${h.deployStatus}${h.deployUrl ? ` at ${h.deployUrl}` : ''}. Checklist ${(h.checklist ?? []).length - missing.length}/${(h.checklist ?? []).length}${missing.length ? `, missing: ${missing.slice(0, 3).join(', ')}` : ''}.`;
     }
