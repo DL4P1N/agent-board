@@ -21,7 +21,7 @@ const opt = (k) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 
 const STATIC = flag('static');
 const SPEED = Math.max(0.1, Math.min(20, Number(opt('speed')) || 1));
 const TOKEN = 'demo-token';
-const REPO = 'https://github.com/demo-team/hackathon-voting';
+const REPO = 'https://github.com/demo-team/showcase-voting';
 
 const board = await startBoard({ token: TOKEN, port: Number(opt('port')) || undefined, prefix: 'agent-board-demo-' });
 const base = board.base;
@@ -106,7 +106,7 @@ async function seed() {
   for (const c of CAST) await connect(c);
   for (const c of CAST) await A[c.n].call('board_status', { model: c.model });
   await human('PUT', '/settings', {
-    goal: 'A voting app for the hackathon: teams submit projects, everyone votes, and a live leaderboard runs on the big screen.',
+    goal: 'A voting app for the team showcase: teams submit projects, everyone votes, and a live leaderboard runs on the big screen.',
     repo: REPO,
     deadline: String(Date.now() + 2 * 3600e3), freeze_minutes: 45,
     integrator: 'jon-claude',
