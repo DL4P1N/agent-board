@@ -660,7 +660,14 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 
   /* ---------- board ---------- */
   .boardwrap { min-width: 0; }
-  .boardwrap > .hint { margin-top: var(--s4); }
+  /* The page's foot: the board's one hint, at the bottom edge of the window (or under everything on a long page),
+     under the board (the side columns run down beside it and stay in view as the page scrolls). */
+  #app:not([hidden]) { display: flex; flex-direction: column; min-height: 100vh; }
+  #app > main { flex: 1 0 auto; }
+  .pagefoot { grid-area: foot; align-self: end; padding: var(--s4) 2px 0; }
+  .pagefoot .hint { margin: 0; }
+  html[data-board-view="office"] .pagefoot { display: none; }
+
   .filterbar { font-size: var(--fs-sm); display: flex; gap: var(--s4); align-items: center; flex-wrap: wrap; margin-bottom: var(--s4); }
   .board { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: var(--s4); overflow-x: auto; align-items: start; padding: 2px 2px var(--s2); position: relative; }
   .board.done-closed { grid-template-columns: repeat(4, minmax(0, 1fr)) 48px; } /* the folded Done rail always fits: the four columns give way */
@@ -1109,7 +1116,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
      side stands on its edge as a rail (Needs attention its chip; Agents, Activity and File locks once all three are
      folded), like the folded Done column, and gives the board the width: the same rails in the 3D view. */
   main { --dock: clamp(272px, 20vw, 340px); --rail: 26px; --top: calc(var(--hdr, 54px) + var(--s4)); isolation: isolate;
-    display: grid; grid-template-columns: var(--dock-l, var(--dock)) minmax(0, 1fr) var(--dock-r, var(--dock)); grid-template-areas: "left centre right"; gap: var(--s5); align-items: start;
+    display: grid; grid-template-columns: var(--dock-l, var(--dock)) minmax(0, 1fr) var(--dock-r, var(--dock)); grid-template-areas: "left centre right" "left foot right"; grid-template-rows: 1fr auto; gap: 0 var(--s5); align-items: start;
     padding: var(--s4) var(--s5) var(--s5); }
   @media (max-width: 1400px) { main { --dock: clamp(256px, 20vw, 280px); } }
   @media (min-width: 1101px) {
@@ -1141,7 +1148,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   /* Up to 1100px: two columns. Needs attention over Agents and Activity on the left, the board on the right; the page scrolls
      as one. */
   @media (max-width: 1100px) {
-    main { grid-template-columns: 264px minmax(0, 1fr); grid-template-areas: "left centre" "right centre"; grid-template-rows: auto 1fr; }
+    main { grid-template-columns: 264px minmax(0, 1fr); grid-template-areas: "left centre" "right centre" "foot foot"; grid-template-rows: auto 1fr auto; gap: var(--s5); }
     html:not([data-board-view="office"]) :is(#o-left, #o-left-pill, .o-rcol) { position: static; max-height: none; height: auto; }
     html:not([data-board-view="office"]) .o-rcol { padding: 2px; margin: 0; } /* 16px from the edges, like Needs attention (its 2px margin) */
     html:not([data-board-view="office"]) .o-rcol > .o-panel { flex: 0 0 auto; max-height: none; }
@@ -1149,7 +1156,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   }
   /* Tablets and phones: one column, in order of what matters: what needs attention, the board, the agents, Activity. */
   @media (max-width: 1000px) {
-    main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "left" "centre" "right"; grid-template-rows: none; }
+    main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "left" "centre" "right" "foot"; grid-template-rows: none; }
+
   }
 
   /* ---------- 3D view: the same panels over the room ---------- */
@@ -1476,7 +1484,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         <div class="board-empty" id="board-empty" role="status" hidden></div>
         <div class="board" id="board" tabindex="-1"></div>
         <div class="ttable" id="tasktable" hidden></div>
-        <p class="hint" id="cols-hint">Drag a card to another column, or use its <b>Move…</b> button, to change its status. Open a card (click / Enter) to edit it. Cards flag priority (P1, P3) and size (S, L) only when it isn't the usual P2 and M.</p>
       </section>
     </div>
 
@@ -1528,6 +1535,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         </div>
       </section>
     </div>
+    <!-- How the board's cards work: one muted line at the foot of the page (the Board view's columns only). -->
+    <footer class="pagefoot"><p class="hint" id="cols-hint">Drag a card to another column, or use its <b>Move…</b> button, to change its status. Open a card (click / Enter) to edit it. Cards flag priority (P1, P3) and size (S, L) only when it isn't the usual P2 and M.</p></footer>
   </main>
 </div>
 
