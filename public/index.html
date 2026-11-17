@@ -1093,12 +1093,12 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 
   /* Activity: filters, the feed, the chat. File locks: folded to their title bar (with the count) by default. */
   .o-act > .o-body { display: flex; flex-direction: column; padding: var(--s3) var(--s5) var(--s4); overflow: hidden; }
-  .o-act .tabs { justify-content: flex-start; margin: 0 0 var(--s3); flex: 0 0 auto; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .o-act .tabs { justify-content: flex-start; margin: 0 0 var(--s3); flex: 0 0 auto; flex-wrap: nowrap; gap: var(--s1); overflow-x: auto; scrollbar-width: none; }
   .o-act .tabs button { flex: 0 0 auto; }
   /* "New activity" sits between the feed and the composer, not over the last event. */
   .o-act .jump { position: static; translate: none; align-self: center; margin-top: var(--s2); }
   .o-act .jump:active { translate: 1px 1px; }
-  .o-act .tabs button { padding: 0 var(--s2); min-width: var(--ctl-xs); }
+  .o-act .tabs button { padding: 0 var(--s1); min-width: var(--ctl-xs); } /* all five fit a 256px panel */
   .o-act .feedwrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   @media (max-height: 760px) { .o-rcol > .o-right { max-height: 34%; } } /* short screens: Activity keeps room for a few events */
   .o-act .feed { max-height: none; flex: 1 1 auto; min-height: 96px; }
@@ -3048,7 +3048,9 @@ function renderAgents(si, qOpen) {
   const all = ps.flatMap((p) => p.r.agents || []);
   // The team at a glance: the count in the title bar (also on the folded chip), what can run at once in the panel.
   const cnt = agentsLine(si, true);
-  $('o-right-sub').textContent = all.length ? cnt : ''; $('o-right-sub').title = all.length ? 'Online = an agent someone started with /board, seen in the last 10 min and not out of usage. Not started = its tool is connected but nobody typed /board yet. Out of usage = hit its plan\'s limit. Offline = not seen for 10 min.' : '';
+  // The title bar says only how many are online (the rows say who is out of usage, offline or not started); the
+  // whole count is its tooltip.
+  $('o-right-sub').textContent = all.length ? `${si.onlineA.length} online` : ''; $('o-right-sub').title = all.length ? cnt + '.\nOnline = an agent someone started with /board, seen in the last 10 min and not out of usage. Not started = its tool is connected but nobody typed /board yet. Out of usage = hit its plan\'s limit. Offline = not seen for 10 min.' : '';
   $('o-right-n').textContent = all.length ? `${si.onlineA.length} online` : '';
   $('o-right-pill').setAttribute('aria-label', `Agents${all.length ? `: ${cnt}` : ''}. Open the panel`);
   patch($('p-sum'), teamCapHtml());

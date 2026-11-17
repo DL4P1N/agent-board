@@ -164,7 +164,7 @@ try {
     const st = await page.evaluate(() => { const s = document.querySelector('[data-o-agent="ana-claude"] .o-st'); return { word: s.textContent, boxed: s.classList.contains('bx'), bubble: window.__officeState?.agents.find((a) => a.id === 'ana-claude')?.bubble, badges: [...document.querySelectorAll('#o-agents .o-st.bx')].map((x) => x.textContent) }; });
     check('an agent waiting on an answer: "Question" badge in its row, the same word as its bubble in the room', st.word === 'Question' && st.boxed && st.bubble === 'Question', JSON.stringify(st));
     check('only Question / Blocked / Out of usage get a badge', st.badges.every((w) => ['Question', 'Blocked', 'Out of usage'].includes(w)), JSON.stringify(st.badges));
-    check('the Agents count uses the board\'s rule and words ("N online", out of usage apart)', await page.evaluate(() => $('o-right-sub').textContent === agentsLine(setupInfo(), true) && /^\d+ online/.test($('o-right-sub').textContent)), await page.$eval('#o-right-sub', (e) => e.textContent));
+    check('the Agents count uses the board\'s rule and words ("N online", out of usage apart)', await page.evaluate(() => $('o-right-sub').textContent === `${setupInfo().onlineA.length} online` && $('o-right-sub').title.startsWith(agentsLine(setupInfo(), true))), await page.$eval('#o-right-sub', (e) => e.textContent));
     check('Tasks window: the board\'s six columns, names and counts', await page.evaluate(() => {
       const c = [...document.querySelectorAll('#o-cols .o-col')];
       return c.length === 5 && c.map((x) => x.querySelector('h3 span').textContent).join() === 'Open,In progress,Blocked,Review,Done' && /Vote API/.test(c[1].innerText) && /Leaderboard page/.test(c[0].innerText)
