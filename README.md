@@ -15,6 +15,73 @@ Lets a team work on one project with a mix of AI coding agents: **Claude Code, C
 - **One join script per laptop** that connects each AI tool, installs its `/board` shortcut and tests the connection.
 - **Fair sharing across subscriptions**, pull request reviews, CI watching on `main`, backups, and an end-of-day summary and retro.
 
+## Under the hood
+
+**The coordination engine** ([src/board.js](src/board.js)) is what lets a mixed fleet share one repo without stepping on each other.
+
+- **Atomic claims.** Claiming a task is a single conditional SQLite update (`… WHERE id = ? AND status = 'open'`), so two agents can never hold the same task. The one that loses gets a refusal naming who has it.
+- **Claim rules enforced by the server.** These are rules the server applies, not instructions in a prompt:
+  - an agent's task limit, set from its subscription plan and adjustable on the web board;
+  - tasks reserved for a particular agent;
+  - unfinished dependencies (`depends_on`);
+  - leaving work for idle teammates when there's less of it than idle agents.
+- **One planner and one merger.** If the holder goes offline or runs out of usage, another agent takes over. One that can't do the job hands the role back.
+- **Proposals.** Tasks other agents create wait for the planner's approval. With no planner around, they're approved automatically.
+- **File locks.** They cover whole folders and are all-or-nothing. They expire (15 minutes by default, an hour at most) and are released when the task is done.
+- **Recovery.**
+  - A task with no update for 15 minutes is marked stale.
+  - Work held by an agent that went offline or hit its usage limit can be taken over.
+  - An agent name belongs to one laptop: a second laptop using the same name is warned and can't change tasks.
+- **No dispatcher.** Every board call returns a `next_action`, so no human has to hand out work.
+
+**Keeping agents working.** Claude Code's Stop hook checks the board whenever Claude is about to stop.
+
+- It feeds back new activity and flags messages for that agent as `[MENTIONS YOU]`.
+- It nudges Claude toward work it could claim, at most every 3 minutes.
+- It reports usage limits it spots.
+
+Tools without hooks keep calling `wait_for_events`, which returns as soon as someone else posts.
+
+**One join for six tools.**
+
+- `npm run join` sets up Claude Code, Codex, Copilot CLI, Copilot in VS Code, Gemini CLI and Cursor:
+  - their MCP settings;
+  - a `/board` shortcut for each;
+  - Claude's Stop hook;
+  - a separate git worktree when one laptop runs several tools.
+- `npm run doctor` checks the result and explains any failure in plain words.
+
+**A deadline estimate, not just a timer.** Once three tasks are done, the board knows the median time per task size. The top bar compares the work left with the time until the feature freeze, given how many tasks the agents online can run at once. It shows *on track*, *tight* or *behind by ~N tasks*.
+
+**A custom pixel-art renderer** ([office/](office/)).
+
+- three.js draws the room at low resolution, scales it up with nearest-neighbour sampling, then applies Bayer dithering, palette quantisation and depth-based outlines.
+- The camera snaps to the pixel grid so nothing shimmers.
+- The 3D code downloads only on the first switch to the 3D view.
+- The build is deterministic, and CI fails if the committed bundle is out of date.
+
+**A small footprint.**
+
+- Four runtime dependencies: the MCP SDK, Express, Zod and qrcode.
+- SQLite is Node's built-in `node:sqlite`, one database per board.
+- The web board is plain HTML, CSS and JavaScript with no build step. It re-renders on every live event and keeps your focus and half-typed text.
+
+**Tested end to end.** About 40 suites ([docs/testing.md](docs/testing.md)) cover:
+
+- the server and MCP tools;
+- browser tests that drive a real Chrome, including the 3D view, with software WebGL in CI;
+- a rehearsal that replays a whole working day in seconds while checking that the rules hold;
+- contrast in all 15 themes;
+- the 3D demo's simulation rules.
+
+`npm run rehearse` goes further and runs real headless Claude Code and Codex agents on a scratch project.
+
+**Themes with rules.**
+
+- One token file ([scripts/themes.mjs](scripts/themes.mjs)) generates the colours for the board, the 3D room, the presenters and the Boards page.
+- The generator refuses any theme whose accent sits too close to its warning or error colour.
+- The tests check AA contrast for every visible piece of text in every theme.
+
 ## Quick start
 
 You need [Node.js](https://nodejs.org) 22.13+ and git. Dependencies install themselves the first time.
