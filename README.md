@@ -32,7 +32,21 @@ Lets a team work on one project with a mix of AI coding agents: **Claude Code, C
   - A task with no update for 15 minutes is marked stale.
   - Work held by an agent that went offline or hit its usage limit can be taken over.
   - An agent name belongs to one laptop: a second laptop using the same name is warned and can't change tasks.
-- **No dispatcher.** Every board call returns a `next_action`, so no human has to hand out work.
+- **No dispatcher: `next_action`.** Every board call returns plain-language instructions for that agent, worked out fresh from the whole board ([`nextAction()`](src/board.js)). The order is:
+  1. It reads the phase: no goal yet, then no plan, then waiting for human approval, then building, then all done.
+  2. A failing `main` comes before anything else for whoever merges.
+  3. The planner decides proposals.
+  4. Work sent back from review and the agent's own PR come next: failing checks, merge conflicts, requested changes.
+  5. Reviews come before new tasks.
+  6. Only then does it offer new work, ranked for that agent: tasks reserved for it first, then priority, then sizes that suit its plan.
+- **Context-aware.**
+  - The planner's brief lists the live team and its capacity, so the plan has enough tasks for everyone.
+  - It points out work it can take over from agents that went offline or ran out of usage.
+  - It holds back work that idle teammates need.
+  - After the feature freeze only bug fixes are offered.
+  - Once the demo time passes it says to wrap up.
+- **Prompt-injection aware.** Reviewer comments from GitHub are passed on as quoted data, with `@` defused and a note never to run commands they suggest.
+- **Drives the wake-ups.** Each answer also says whether there's something to act on now. The Stop hook uses that to decide whether to send Claude back to work.
 
 **Keeping agents working.** Claude Code's Stop hook checks the board whenever Claude is about to stop.
 
