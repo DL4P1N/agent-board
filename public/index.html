@@ -1103,20 +1103,26 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-locks .panel-hint { margin: 0 0 var(--s3); }
 
   /* ---------- Board view: the panels as three columns ---------- */
-  /* The side columns stick under the header and scroll on their own, so the board never leaves the screen. A folded
-     Needs attention leaves its chip and gives the board the width. */
-  main { --dock: clamp(272px, 20vw, 340px); --top: calc(var(--hdr, 54px) + var(--s4)); isolation: isolate;
-    display: grid; grid-template-columns: var(--dock-l, var(--dock)) minmax(0, 1fr) var(--dock); grid-template-areas: "left centre right"; gap: var(--s5); align-items: start;
+  /* The side columns stick under the header and scroll on their own, so the board never leaves the screen. Folded, a
+     side stands on its edge as a rail (Needs attention its chip; Agents, Activity and File locks once all three are
+     folded), like the folded Done column, and gives the board the width: the same rails in the 3D view. */
+  main { --dock: clamp(272px, 20vw, 340px); --rail: 26px; --top: calc(var(--hdr, 54px) + var(--s4)); isolation: isolate;
+    display: grid; grid-template-columns: var(--dock-l, var(--dock)) minmax(0, 1fr) var(--dock-r, var(--dock)); grid-template-areas: "left centre right"; gap: var(--s5); align-items: start;
     padding: var(--s4) var(--s5) var(--s5); }
   @media (max-width: 1400px) { main { --dock: clamp(256px, 20vw, 280px); } }
-  main.l-off { --dock-l: max-content; }
+  @media (min-width: 1101px) {
+    main.l-off { --dock-l: calc(var(--rail) + 4px); }
+    main.r-rail { --dock-r: calc(var(--rail) + 4px); }
+    main.l-off #o-left-pill, main.r-rail #o-right-pill { writing-mode: vertical-rl; width: var(--rail); padding: var(--s4) 0; min-height: 140px; justify-content: flex-start; }
+    main.r-rail .o-rcol > :is(.o-act, .o-locks) { writing-mode: vertical-rl; width: var(--rail); }
+    main.r-rail .o-rcol > :is(.o-act, .o-locks) > .o-head { padding: var(--s4) 0 var(--s2); gap: var(--s3); }
+    main.r-rail #o-act-x { display: none; } /* the latest event needs the width: it shows again when Activity opens */
+  }
   #o-left, #o-left-pill { grid-area: left; } .centre { grid-area: centre; } .o-rcol { grid-area: right; }
   .centre { position: relative; display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
   .office-view { display: none; }
   html:not([data-board-view="office"]) #o-left { position: sticky; top: var(--top); max-height: calc(100vh - var(--top) - var(--s5)); margin: 2px; }
   html:not([data-board-view="office"]) #o-left-pill { position: sticky; top: var(--top); margin: 2px; justify-self: start; }
-  /* Folded on the Board view it stands on its side, like the folded Done rail, so the board gets the width back. */
-  @media (min-width: 1101px) { html:not([data-board-view="office"]) #o-left-pill { writing-mode: vertical-rl; padding: var(--s4) var(--s2); min-height: 140px; } }
   html:not([data-board-view="office"]) .topbar { margin: 2px; }
   .o-rcol { display: flex; flex-direction: column; gap: calc(var(--gap) + 4px); min-width: 0; min-height: 0; }
   html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top); height: calc(100vh - var(--top) - var(--s5)); padding: 2px 8px 6px 2px; margin-right: -6px; } /* its panels as wide as Needs attention's, 14px from the edge */
@@ -1154,7 +1160,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     /* The Board view's geometry, so a switch moves nothing: panels 14px from the sides (main's 12px padding and their
        2px margin) and 10px under the header, docks as wide as the Board view's (its column less the margins), the top
        bar and the Tasks window between them where the Board view's centre column is. */
-    --o-x: calc(var(--s5) + 2px); --o-y: calc(var(--s4) + 2px); --o-w: calc(var(--dock) - 4px); --o-c: calc(var(--dock) + var(--s5) * 2 + 2px);
+    --o-x: calc(var(--s5) + 2px); --o-y: calc(var(--s4) + 2px); --o-w: calc(var(--dock) - 4px);
+    --o-cl: calc(var(--dock-l, var(--dock)) + var(--s5) * 2 + 2px); --o-cr: calc(var(--dock-r, var(--dock)) + var(--s5) * 2 + 2px);
     --o-gap: 8px; --o-bottom: 18px; --o-tasks-h: clamp(176px, 27%, 270px); --glass: color-mix(in srgb, var(--panel) 92%, transparent); }
   html[data-board-view="office"] :is(.o-panel, .o-pill) { background: var(--glass); box-shadow: 4px 4px 0 rgba(0, 0, 0, .28);
     -webkit-backdrop-filter: blur(8px) saturate(1.15); backdrop-filter: blur(8px) saturate(1.15); }
@@ -1177,10 +1184,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .office-view.loading .office-load { display: flex; }
   html[data-board-view="office"] #o-left { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); width: var(--o-w); max-height: calc(100% - var(--o-y) - var(--o-bottom)); } /* as tall as its content, like on the Board view */
   html[data-board-view="office"] #o-left-pill { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); }
-  html[data-board-view="office"] .o-rcol { position: absolute; z-index: 3; top: var(--o-y); bottom: var(--o-bottom); right: var(--o-x); width: var(--o-w); pointer-events: none; }
+  html[data-board-view="office"] .o-rcol { position: absolute; z-index: 3; top: var(--o-y); bottom: var(--o-bottom); right: var(--o-x); width: calc(var(--dock-r, var(--dock)) - 4px); pointer-events: none; }
   html[data-board-view="office"] .o-rcol > * { pointer-events: auto; }
   /* The centre column keeps only the top bar (and the goal under it), between the docks. */
-  html[data-board-view="office"] .centre { position: absolute; top: var(--o-y); left: var(--o-c); right: var(--o-c); display: block; pointer-events: none; }
+  html[data-board-view="office"] .centre { position: absolute; top: var(--o-y); left: var(--o-cl); right: var(--o-cr); display: block; pointer-events: none; }
   html[data-board-view="office"] .centre > :not(#topbar, #o-goal, #setup) { display: none !important; }
   /* Setup: a popover under the top bar, like the goal, scrolling inside itself. */
   html[data-board-view="office"] #setup { position: absolute; z-index: 7; top: calc(var(--tb-h, 48px) + var(--s4)); left: 0; right: 0; margin: 0; max-height: calc(100vh - var(--hdr, 54px) - var(--tb-h, 48px) - 40px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
@@ -1191,7 +1198,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   html[data-board-view="office"] .centre > .o-goal { left: 50%; translate: -50% 0; }
   /* Tasks: the board's columns (or its table) in a window between the docks at the bottom. Its title bar is the
      board's task bar: Tasks, search, Show and Columns / Table. Maximised, it covers the room under the top bar (still glass). */
-  .o-tasks { position: absolute; z-index: 3; left: var(--o-c); right: var(--o-c); bottom: var(--o-bottom); height: var(--o-tasks-h); }
+  .o-tasks { position: absolute; z-index: 3; left: var(--o-cl); right: var(--o-cr); bottom: var(--o-bottom); height: var(--o-tasks-h); }
   .o-tasks.max { left: var(--o-x); right: var(--o-x); top: calc(var(--o-y) + var(--o-gap) + var(--tb-h, 48px)); height: auto; z-index: 6; } /* under the top bar, which stays */
   .o-tasks > .o-head { padding-left: var(--s4); }
   .o-tasks .taskbar { flex: 1 1 auto; min-width: 0; margin: 0; flex-wrap: nowrap; gap: var(--s4); }
@@ -1205,7 +1212,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-tasks.folded .taskbar > #new-task-btn { display: none; }
   .o-tasks.folded .taskbar > :not(h2) { display: none; }
   /* Folded, the Tasks window is just its title bar, centred at the foot. */
-  .o-tasks.folded { left: 50%; right: auto; translate: -50% 0; width: max-content; height: auto; max-width: calc(100% - 2 * var(--o-c)); }
+  .o-tasks.folded { left: 50%; right: auto; translate: -50% 0; width: max-content; height: auto; max-width: calc(100% - var(--o-cl) - var(--o-cr)); }
   .o-tasks.folded > .o-head { gap: var(--s5); }
   .o-tasks.folded #o-tasks-max { display: none; }
   .o-cols { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s3); height: 100%; min-height: 0; }
@@ -4592,6 +4599,7 @@ function oApply() {
     $('o-' + s).hidden = !!oUi[s]; $('o-' + s + '-pill').hidden = !oUi[s];
     m.classList.toggle(s[0] + '-off', !!oUi[s]);
   }
+  m.classList.toggle('r-rail', !!oUi.right && !!oUi.actOff && oLocksOff()); // all three folded: the right side is a rail
   const tOff = oTasksOff();
   $('o-tasks').classList.toggle('max', !!oUi.max && !tOff);
   $('o-tasks-max').setAttribute('aria-pressed', String(!!oUi.max)); $('o-tasks-max').setAttribute('aria-label', oUi.max ? 'Restore the tasks window' : 'Maximise the tasks'); $('o-tasks-max').title = oUi.max ? 'Restore (Esc)' : 'Maximise';
