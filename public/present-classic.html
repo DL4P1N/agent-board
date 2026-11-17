@@ -295,7 +295,7 @@ function personOf(name) {
 const nameHash = (n) => { let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
 // A person's colour comes from their name alone, like the board: it never changes when someone else joins.
 const hue = (name) => HUES[nameHash(String(personOf(name)).toLowerCase()) % HUES.length];
-const clock = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const clock = (ts) => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 function ago(ts) { const m = Math.round((Date.now() - ts) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : `${Math.floor(m / 60)}h ${m % 60}m ago`; }
 // The goal is often pasted from a doc: show it as plain words (no `code`, **bold**, [links](…) or # headings).
 const plain = (s) => String(s || '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/`+|\*\*|__/g, '').replace(/^\s*#+\s+/gm, '').replace(/\s+/g, ' ').trim();
@@ -403,7 +403,7 @@ function countdown() {
   if (now - t.deadline >= 60 * 60e3) { const ts = (state.tasks || []).filter((x) => x.status !== 'proposed'); return { big: 'Event finished', sub: `Demo was at ${clock(t.deadline)}. Final: ${ts.filter((x) => x.status === 'done').length} of ${ts.length} tasks done.`, cls: 'none' }; }
   if (t.past || now >= t.deadline) return { big: 'Demo time', sub: `Demo was at ${clock(t.deadline)}. Wrapping up.`, cls: 'warn' };
   if (t.freezeAt && now >= t.freezeAt) return { big: dur(t.deadline - now), sub: `Feature freeze · demo at ${clock(t.deadline)}`, cls: 'bad' };
-  return { big: dur(t.deadline - now), sub: `until the demo (${clock(t.deadline)})${t.freezeAt && t.freezeAt < t.deadline ? ` · feature freeze at ${clock(t.freezeAt)}` : ''}`, cls: t.freezeAt && t.freezeAt - now < 30 * 60e3 ? 'warn' : '' };
+  return { big: dur(t.deadline - now), sub: `until the demo (${clock(t.deadline)})${t.freezeAt && t.freezeAt < t.deadline ? ` · freeze ${clock(t.freezeAt)}` : ''}`, cls: t.freezeAt && t.freezeAt - now < 30 * 60e3 ? 'warn' : '' };
 }
 
 function render() {

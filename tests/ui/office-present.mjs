@@ -44,7 +44,7 @@ try {
     check('token removed from the address bar, kept under the viewer key only', !/token=/.test(page.url()) && await page.evaluate(() => !!localStorage.getItem('board-view-token') && !localStorage.getItem('board-token')), page.url());
     check('goal shown large, as text (no HTML injected)', await page.$eval('#goal', (h) => h.textContent.includes('<b>live</b>') && !h.querySelector('b') && parseFloat(getComputedStyle(h).fontSize) >= 22));
     check('done count: 1 of 3 done, with a progress bar', /1 of 3 done/.test(txt) && await page.$eval('[role=progressbar]', (b) => b.getAttribute('aria-valuenow') === '1' && b.getAttribute('aria-valuemax') === '3'), txt.replace(/\s+/g, ' ').slice(0, 160));
-    check('countdown to the demo with the freeze time', /^2h 0\dm$/.test(await page.$eval('#clock', (c) => c.textContent)) && /freeze at/.test(await page.$eval('#clock-sub', (c) => c.textContent)), await page.$eval('#clock', (c) => c.textContent));
+    check('countdown to the demo with the freeze time', /^2h 0\dm$/.test(await page.$eval('#clock', (c) => c.textContent)) && /· freeze \d/.test(await page.$eval('#clock-sub', (c) => c.textContent)), await page.$eval('#clock', (c) => c.textContent));
     check('nothing waiting on a human yet', /Nothing needs attention/.test(txt));
     check('body text is at least 14px', await page.evaluate(() => [...document.querySelectorAll('#top, #bottom')].flatMap((r) => [...r.querySelectorAll('*')]).filter((e) => e.childNodes.length && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())).every((e) => parseFloat(getComputedStyle(e).fontSize) >= 14)));
     const s0 = await S(page);

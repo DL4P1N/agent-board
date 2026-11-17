@@ -79,7 +79,8 @@ export function goalHead(s: unknown): string {
   return m ? m[1] : line;
 }
 export const plural = (n: number, w: string, ws = w + 's'): string => `${n} ${n === 1 ? w : ws}`;
-export const clock = (ts: number): string => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+/** The board's clock(): "2:49 AM" (the top bar, both presenters). */
+export const clock = (ts: number): string => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
 /** Countdown digits, like the classic presenter: "2h 05m" or "4:59". */
 export function durClock(ms: number): string {
@@ -202,5 +203,5 @@ export function countdown(b: BoardState, now = Date.now()): { big: string; sub: 
   }
   if (t.past) return { big: 'Demo time', sub: `Demo was at ${clock(t.deadline)}. Wrapping up.`, cls: 'warn' };
   if (t.frozen) return { big: durClock(t.deadline - now), sub: `Feature freeze · demo at ${clock(t.deadline)}`, cls: 'bad' };
-  return { big: durClock(t.deadline - now), sub: `until the demo (${clock(t.deadline)})${t.freezeAt && t.freezeAt < t.deadline ? ` · freeze at ${clock(t.freezeAt)}` : ''}`, cls: t.freezeAt && t.freezeAt - now < 30 * 60e3 ? 'warn' : '' };
+  return { big: durClock(t.deadline - now), sub: `until the demo (${clock(t.deadline)})${t.freezeAt && t.freezeAt < t.deadline ? ` · freeze ${clock(t.freezeAt)}` : ''}`, cls: t.freezeAt && t.freezeAt - now < 30 * 60e3 ? 'warn' : '' };
 }

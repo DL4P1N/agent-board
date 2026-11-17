@@ -42,7 +42,7 @@ try {
   check('goal shown large, as text (no HTML injected)', await page.$eval('h1.goal', (h) => h.textContent.includes('<b>live</b>') && !h.querySelector('b')));
   check('progress: 1 of 3 done, with a progress bar', /1 of 3 done/.test(txt) && await page.$eval('[role=progressbar]', (b) => b.getAttribute('aria-valuenow') === '1' && b.getAttribute('aria-valuemax') === '3'), txt.slice(0, 200));
   check('column counts', /In progress\s*1/.test(txt) && /Open\s*1/.test(txt) && /Done\s*1/.test(txt));
-  check('countdown to the demo with the freeze time', /2h 0\dm|2h 05m|2h 04m/.test(await page.$eval('#clock', (c) => c.textContent)) && /feature freeze at/.test(txt), await page.$eval('#clock', (c) => c.textContent));
+  check('countdown to the demo with the freeze time', /2h 0\dm|2h 05m|2h 04m/.test(await page.$eval('#clock', (c) => c.textContent)) && /· freeze \d/.test(txt), await page.$eval('#clock', (c) => c.textContent));
   check('now working on: ana with her task', /ana/.test(await page.$eval('#h-now', (h) => h.parentElement.innerText)) && /Leaderboard page/.test(txt));
   check('just merged lists #1', /#\s*1/.test(await page.$eval('#h-merged', (h) => h.parentElement.innerText)) && /Vote API/.test(await page.$eval('#h-merged', (h) => h.parentElement.innerText)));
   check('token removed from the address bar', !/token=/.test(page.url()), page.url());
