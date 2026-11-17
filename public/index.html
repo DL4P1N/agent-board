@@ -1303,12 +1303,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   button.tochat { display: none; } /* phones only (below) */
   /* ---------- small screens ---------- */
   @media (max-width: 600px) {
-    /* One row: the logo, Live, then theme, bell, you and help. The need-you badge (only while What to do now is
-       scrolled away) gets a row of its own; badges wrap instead of scrolling, so none is cut off at the edge. */
+    /* One row: the logo, Live, then theme, bell, you and help. The header scrolls with the page here, so the need-you
+       badge (shown only once What to do now is scrolled away) could never be seen: no badge on phones. */
     header { padding: var(--s4) var(--s6); position: static; gap: var(--s4) var(--s3); }
-    header .needs { order: 10; flex: 1 1 100%; flex-wrap: wrap; }
-    header .needs:empty { display: none; }
-    header .needs button { flex: 0 1 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+    header .needs { display: none; }
     .hacts { margin-left: auto; gap: var(--s2); }
     .hpair { gap: var(--s2); }
     .theme-pop { top: auto; left: 0; right: 0; bottom: 0; z-index: 45; max-width: none; max-height: 78vh; border-width: 2px 0 0; padding-bottom: calc(var(--s4) + env(safe-area-inset-bottom, 0px)); }
