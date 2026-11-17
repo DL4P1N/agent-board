@@ -2824,11 +2824,13 @@ function agentNames(extra = []) {
   const assignees = state.tasks.map((t) => t.assignee && agentRoot(t.assignee));
   return [...new Set([...agentNames, ...assignees, ...extra].filter((n) => n && n !== ANYONE))].sort();
 }
-function plannerBox(pre = '') {
+// The planner's choice: label, select, the extra tasks it may take, one hint. In its own popover (labelledBy: the
+// popover's heading) there is no label: the heading names the select.
+function plannerBox(pre = '', labelledBy = '') {
   const S = state.settings; const names = agentNames([S.planner]);
   const ex = Math.max(0, Math.min(5, Number(S.planner_extra ?? 2) || 0));
-  return `<div class="inl"><label for="${pre}plan-sel" class="m0">Planner</label>
-      <select id="${pre}plan-sel" data-fk="${pre}plan-sel" class="w-auto"><option value="">The first agent that starts</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.planner ? 'selected' : ''}>${esc(n)}${root(n) === root(me) ? ' (yours)' : ''}</option>`).join('')}</select></div>
+  return `<div class="inl">${labelledBy ? '' : `<label for="${pre}plan-sel" class="m0">Planner</label>`}
+      <select id="${pre}plan-sel" data-fk="${pre}plan-sel" class="w-auto"${labelledBy ? ` aria-labelledby="${labelledBy}"` : ''}><option value="">The first agent that starts</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.planner ? 'selected' : ''}>${esc(n)}${root(n) === root(me) ? ' (yours)' : ''}</option>`).join('')}</select></div>
     <div class="inl"><label for="${pre}pex-sel" class="m0 fw-normal">When nobody else is free, the planner may take up to</label>
       <select id="${pre}pex-sel" data-fk="${pre}pex" class="w-auto">${[0, 1, 2, 3, 4, 5].map((i) => `<option value="${i}" ${i === ex ? 'selected' : ''}>${i}</option>`).join('')}</select>
       <span class="muted t-meta">extra small/medium tasks with subagents</span></div>
@@ -2843,14 +2845,16 @@ function stepBacklog() {
   if (S.planner) { const c = clientOf(S.planner); return `<p>${nameTag(S.planner)}'s agent${c ? ` (${esc(c)})` : ''} is the <b>planner</b> and is writing the task list now<span class="dots"></span> Cards appear on the board below as it goes.</p>${add}`; }
   return `<p>The first agent that starts on the board (step 3) becomes the <b>planner</b> and writes the task list from the goal automatically.</p>${add}`;
 }
-function stepIntegrator(_si, sel = 'integ-sel') {
+// Who merges to main, in the same order as the planner's: label, select (with main's CI), one hint. Setup's step 5,
+// the Roles popover, and the Merges popover (no label there: its heading names the select).
+function stepIntegrator(_si, sel = 'integ-sel', labelledBy = '') {
   const S = state.settings;
   const review = state.tasks.filter((t) => t.status === 'review').length;
   const names = agentNames([S.integrator]);
-  return `<p>Finished branches are merged into <code>main</code> by one agent at a time, which runs the tests first, so changes don't collide. Pick one agent to always do it, or let <b>whoever is free</b> take the next task in Review (never its own work).${S.integrator ? '' : ' If nobody is picked, the first agent with finished work takes the job.'}</p>
-    ${review && !S.integrator ? `<p class="note">${plural(review, 'finished task is', 'finished tasks are')} waiting to be merged.</p>` : ''}
-    <div class="inl"><label for="${sel}" class="m0">Merges to main</label>
-      <select id="${sel}" data-fk="${sel.replace(/-sel$/, '')}"><option value="">Let the first agent with finished work do it</option><option value="${ANYONE}" ${S.integrator === ANYONE ? 'selected' : ''}>Whoever is free (any agent with room merges)</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.integrator ? 'selected' : ''}>${esc(n)}${youTag(n)}</option>`).join('')}</select>${ciPill()}</div>`;
+  return `<div class="inl">${labelledBy ? '' : `<label for="${sel}" class="m0">Merges to main</label>`}
+      <select id="${sel}" data-fk="${sel.replace(/-sel$/, '')}"${labelledBy ? ` aria-labelledby="${labelledBy}"` : ''}><option value="">Let the first agent with finished work do it</option><option value="${ANYONE}" ${S.integrator === ANYONE ? 'selected' : ''}>Whoever is free (any agent with room merges)</option>${names.map((n) => `<option value="${esc(n)}" ${n === S.integrator ? 'selected' : ''}>${esc(n)}${youTag(n)}</option>`).join('')}</select>${ciPill()}</div>
+    <p class="hint">One agent merges at a time and runs the tests first; whoever is free never merges its own work.</p>
+    ${review && !S.integrator ? `<p class="note">${plural(review, 'finished task is', 'finished tasks are')} waiting to be merged.</p>` : ''}`;
 }
 function renderBoardEmpty(si) {
   const el = $('board-empty'); const S = state.settings;
@@ -4751,8 +4755,8 @@ function renderDocks(qOpen = openQuestions(), si = setupInfo()) {
         <div class="xacts"><span class="sp"></span>${goal ? '<button type="button" class="ghost sm" data-act="o-goal-cancel" data-fk="o-goal-cancel">Cancel</button>' : ''}<button type="submit" class="sm" data-fk="o-goal-save">Save goal</button></div></form>`
     : `<p>${esc(goal)}</p><div class="xacts"><button type="button" class="ghost sm" data-act="o-goal-edit" data-fk="o-goal-edit">Edit the goal</button></div>`);
   if (ui.oDl) patch($('o-dl-b'), oDlForm());
-  if (ui.oMerge) patch($('o-merge-b'), stepIntegrator(null, 'o-integ-sel'));
-  if (ui.oPlan) patch($('o-plan-b'), plannerBox('o-'));
+  if (ui.oMerge) patch($('o-merge-b'), stepIntegrator(null, 'o-integ-sel', 'o-merge-h'));
+  if (ui.oPlan) patch($('o-plan-b'), plannerBox('o-', 'o-plan-h'));
   if (ui.oRoles) patch($('o-roles-b'), `<div class="rl-sec">${plannerBox('r-')}</div><div class="rl-sec">${stepIntegrator(null, 'r-integ-sel')}</div>`);
   oApply();
 }
