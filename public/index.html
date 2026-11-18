@@ -1191,16 +1191,11 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .office-scene .ab-more { border-top-color: var(--border); }
   .office-scene .ab-bub { background: var(--panel); color: var(--ink); border-color: var(--ink); }
   .office-scene .ab-bub:after { border-top-color: var(--ink); }
-  /* Switching views (viewFade): the panels both views share stay still; only the centre changes, in about 250ms. The
-     board fades in; the room fades in and the Tasks window settles from a taller box at the foot, like the board
-     shrinking into it. The room's picture itself fades in once its first frame is drawn (it loads on the first
-     switch). Reduced motion: none of it (the rule at the end of this sheet). */
-  @keyframes vt-in { from { opacity: 0; } }
-  @keyframes vt-board { from { opacity: 0; transform: scale(.985); } }
-  @keyframes vt-tasks { from { opacity: 0; transform: scale(1.04, 1.6); } }
-  main.vt-board #boardwrap { animation: vt-board 220ms var(--ease) both; transform-origin: 50% 0; }
-  main.vt-office #office-view { animation: vt-in 260ms var(--ease) both; }
-  main.vt-office .o-tasks { animation: vt-tasks 260ms var(--ease) both; transform-origin: 50% 100%; }
+  /* Switching views (viewAnim): the panels both views share stay still; only the centre moves. Board → 3D: a copy of
+     the board (.vt-ghost) covers the centre until the room has drawn a fresh frame (no blank or stale frame shows),
+     then drops down into the Tasks window at the foot, showing the room behind it. 3D → Board: the board rises back
+     up from there. Reduced motion: an instant switch. */
+  .vt-ghost { position: fixed; z-index: 2; margin: 0; pointer-events: none; overflow: hidden; background: var(--bg); will-change: transform, opacity; }
   .office-scene { transition: opacity 300ms var(--ease); }
   .office-view.loading .office-scene { opacity: 0; transition: none; }
   .office-load { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; margin: 0; color: var(--muted); font: var(--fs-sm) var(--mono); }
@@ -4575,6 +4570,8 @@ function setBoardView(v, { save = true, quiet = false } = {}) {
   if (v === 'office' && !officeAllowed()) v = 'board';
   if (v === 'office' && !office.mod && !webglWorks()) return noOffice("This browser can't show the 3D office (WebGL is off or not supported). Staying on the board.");
   const changed = v !== boardView;
+  // Measured before the DOM changes: what the animation starts from (a second press mid-way just ends it).
+  const from = changed && !quiet && state.loaded ? viewAnimStart(v) : null;
   if (changed) ui.oSetup = false;
   boardView = v;
   document.documentElement.dataset.boardView = v;
@@ -4586,17 +4583,83 @@ function setBoardView(v, { save = true, quiet = false } = {}) {
   if (v === 'office') showOffice();
   else office.mod?.setActive(false);
   if (changed && !quiet) announce(v === 'office' ? 'Showing the 3D office' : 'Showing the board');
-  if (changed && !quiet && state.loaded) viewFade(v);
+  if (from) viewAnim(v, from);
 }
-// The switch's short fade (CSS: main.vt-board / main.vt-office). A second switch while one runs goes straight to its
-// end state; reduced motion switches at once. Nothing waits on it: the DOM is already in the new view.
-let vtTimer = 0;
-function viewFade(v) {
-  const m = $('main'); const busy = m.classList.contains('vt-board') || m.classList.contains('vt-office');
-  m.classList.remove('vt-board', 'vt-office'); clearTimeout(vtTimer);
-  if (busy || reduceMotion()) return;
-  void m.offsetWidth; // restart the animation
-  m.classList.add('vt-' + v); vtTimer = setTimeout(() => { m.classList.remove('vt-' + v); oFrame(); }, 300); // the room's framing measures the settled Tasks window
+// The switch's animation. Board → 3D: the board drops down into the Tasks window, showing the room. 3D → Board: the
+// board rises back up from there. Nothing waits on it: the DOM is already in the new view, the moving part is either
+// an inert copy (the ghost) or a transform on the real board. A second switch while one runs goes straight to the
+// end; reduced motion switches at once.
+let vtRun = null;
+function viewAnimEnd() {
+  if (!vtRun) return false;
+  vtRun.cancelled = true; vtRun.ghost?.remove(); for (const a of vtRun.anims) a.cancel();
+  vtRun = null; return true;
+}
+// Before the swap: Board → 3D copies the board as it looks now; 3D → Board notes where the Tasks window is.
+function viewAnimStart(v) {
+  if (viewAnimEnd() || reduceMotion()) return null;
+  if (v === 'office') {
+    const src = $('boardwrap'); const r = src.getBoundingClientRect(); if (!r.width || !r.height) return null;
+    const g = src.cloneNode(true);
+    g.removeAttribute('id'); for (const e of g.querySelectorAll('[id]')) e.removeAttribute('id');
+    for (const e of g.querySelectorAll('[data-fk]')) e.removeAttribute('data-fk');
+    g.classList.add('vt-ghost'); g.setAttribute('aria-hidden', 'true'); g.inert = true;
+    Object.assign(g.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    return { ghost: g, top: r.top };
+  }
+  const t = $('o-tasks')?.getBoundingClientRect();
+  const room = $('office-view').getBoundingClientRect();
+  return { tasksTop: t?.height ? t.top : innerHeight, room: room.width ? room : null };
+}
+function viewAnim(v, from) {
+  const run = vtRun = { anims: [], ghost: from.ghost || null, cancelled: false };
+  const fall = 'cubic-bezier(.55, 0, .85, .35)', land = 'cubic-bezier(.2, .7, .3, 1)';
+  if (v === 'office') {
+    $('main').append(run.ghost);
+    // The room's picture stays hidden (at once, no fade out) until it has drawn a fresh frame: a reactivated or resized
+    // canvas can show a stale or blank frame for a moment, around the ghost's edges too. Then it fades in.
+    const sc = $('office-scene'); sc.style.transition = 'none'; sc.style.opacity = '0';
+    const showScene = () => { sc.style.transition = ''; sc.style.opacity = ''; };
+    run.anims.push({ cancel: showScene });
+    // Wait for the room: its first load, then two frames so the canvas shows a fresh picture under the ghost.
+    Promise.resolve(office.loading).then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))).then(() => {
+      showScene();
+      if (run.cancelled) return;
+      if (boardView !== 'office') return viewAnimEnd();
+      const t = $('o-tasks').getBoundingClientRect();
+      const dy = Math.max(40, (t.height ? t.top : innerHeight) - from.top);
+      const drop = run.ghost.animate([{ transform: 'none', opacity: 1 }, { transform: `translateY(${dy * 0.85}px)`, opacity: 1, offset: 0.8 }, { transform: `translateY(${dy}px)`, opacity: 0 }], { duration: 420, easing: fall, fill: 'forwards' });
+      run.anims.push(drop);
+      drop.finished.then(() => {
+        if (run.cancelled) return;
+        run.ghost.remove();
+        // The Tasks window takes the landing: a small settle.
+        const tw = $('o-tasks'); if (tw && !reduceMotion()) run.anims.push(tw.animate([{ transform: 'translateY(6px)' }, { transform: 'none' }], { duration: 180, easing: land }));
+        vtRun = null; oFrame();
+      }).catch(() => {});
+    });
+    return;
+  }
+  // 3D → Board: the real board rises from where the Tasks window was, over the room, which stays where it was (behind
+  // the page, still drawing) and fades out at the end. The board is opaque all the way: no empty frame between views.
+  const ov = $('office-view'); const keepRoom = !!(from.room && office.mod);
+  const dropRoom = () => { ov.removeAttribute('style'); ov.removeAttribute('aria-hidden'); if (boardView !== 'office') office.mod?.setActive(false); };
+  if (keepRoom) {
+    Object.assign(ov.style, { display: 'block', position: 'fixed', left: `${from.room.left}px`, top: `${from.room.top}px`, width: `${from.room.width}px`, height: `${from.room.height}px`, zIndex: '-1', pointerEvents: 'none' });
+    ov.setAttribute('aria-hidden', 'true');
+    office.mod.setActive(true);
+    run.anims.push({ cancel: dropRoom });
+    run.anims.push(ov.animate([{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: 420, fill: 'forwards' }));
+  }
+  const b = $('boardwrap'); const r = b.getBoundingClientRect();
+  const dy = Math.max(40, from.tasksTop - r.top);
+  const rise = b.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 420, easing: land });
+  run.anims.push(rise);
+  rise.finished.then(() => {
+    if (run.cancelled) return;
+    if (keepRoom) { for (const a of run.anims) if (a !== rise && a.effect) a.cancel(); dropRoom(); }
+    vtRun = null;
+  }).catch(() => {});
 }
 // Anything that leads to a part of the board the office view hides (the task columns).
 function needBoard() { if (boardView === 'office') setBoardView('board'); }
