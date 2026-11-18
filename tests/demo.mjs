@@ -4,18 +4,19 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { ROOT } from './helpers.mjs';
+import { ROOT, killTree } from './helpers.mjs';
 
 const child = spawn(process.execPath, [path.join(ROOT, 'scripts', 'demo.mjs'), '--static'], { stdio: ['pipe', 'pipe', 'inherit'] });
 let out = '';
 child.stdout.on('data', (d) => { out += d; });
 const exited = new Promise((r) => child.once('exit', r));
-process.once('exit', () => child.kill());
+process.once('exit', () => killTree(child));
+const folder = () => out.match(/Data folder:\s+(.+)/)?.[1]?.trim();
 
 try {
   for (let i = 0; i < 300 && !/Data folder:/.test(out); i++) await new Promise((r) => setTimeout(r, 100));
   const url = out.match(/Board \(as "you"\):\s+(\S+)/)?.[1];
-  const dir = out.match(/Data folder:\s+(.+)/)?.[1]?.trim();
+  const dir = folder();
   assert.ok(url && dir, `demo did not print its links:\n${out}`);
   const u = new URL(url);
   assert.equal(u.searchParams.get('name'), 'you');
@@ -53,6 +54,13 @@ try {
   process.exit(0);
 } catch (e) {
   console.log(`FAIL ${e.message}`);
-  child.kill();
+  // Stopped the way a person stops it (it deletes its own data folder then); if it doesn't stop, it's ended and its
+  // folder deleted here.
+  try { child.stdin.write('stop\n'); } catch {}
+  await Promise.race([exited, new Promise((r) => setTimeout(r, 10000))]);
+  killTree(child);
+  await Promise.race([exited, new Promise((r) => setTimeout(r, 3000))]);
+  const dir = folder();
+  if (dir && path.resolve(dir) !== path.join(ROOT, 'data')) try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); } catch {}
   process.exit(1);
 }

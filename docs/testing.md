@@ -1,11 +1,12 @@
 # Testing
 
 ```
-npm test                 # everything (about 2 minutes)
+npm test                 # everything (about 10 minutes on a laptop, 7-8 on CI)
 npm test -- journey      # only suites whose file name contains "journey"
 ```
 
-- Each suite starts its own throwaway board on a free port with an empty data folder, so nothing needs to be running and your real board is never touched.
+- Each suite starts its own throwaway board on a free port with an empty data folder, so nothing needs to be running and your real board is never touched. A board counts as started only when its `/health` answers with its own process id, so two test runs at once don't mix up their boards.
+- Each suite runs in its own temp folder. A suite fails if it leaves anything there (a data folder, a browser profile, a hook's cursor file), or if it runs longer than `SUITE_TIMEOUT_MS` (8 minutes by default; then it is stopped with everything it started). A suite that crashes still stops its boards and browsers and deletes its temp folders, and is reported as `CRASH`.
 - `GH_POLL_MS` makes the board poll `gh` faster and `BOARD_BACKUP_SECONDS` backs up every few seconds. The tests use them.
 
 ## Browser suites
@@ -15,6 +16,8 @@ The browser suites drive a real **Chrome or Edge** in the background through `pu
 - If your browser is somewhere unusual, set `BROWSER_PATH=/path/to/chrome`.
 - Chrome is preferred.
 - If the tests fall back to Edge on Windows, its background pages show up in Alt+Tab as "Agent Board" entries while the tests run. That's harmless; to hide them, go to Settings → System → Multitasking and stop showing app tabs in Alt+Tab.
+- The browser always has a mouse, as on CI (`(pointer: fine)` and `(hover: hover)`), also on a laptop with a touch screen, so the size checks bite the same everywhere. `launchBrowser` makes sure of that (Chrome would otherwise report the machine's own pointer after any `setViewport`). A suite tests touch with `setViewport({ …, hasTouch: true })`: `tests/ui/a11y.mjs` does, on a phone and on a desktop-sized touch screen.
+- Wait for what the page shows (`page.waitForFunction`, an `until` helper) rather than a fixed sleep: a busy machine or CI runner is slower than yours.
 
 Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at them after changing the page: they show layout problems the checks can't.
 
@@ -36,7 +39,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | `tests/rehearsal.mjs` | A whole day of work in a few seconds, modelled on the Kubecon board: planning, proposals, reviews that bounce, agents going offline or out of usage, role handovers, the freeze and the deadline, with invariants checked after every phase. |
 | `tests/gh.mjs` | The `gh`-backed parts, with a fake `gh`: PR checks and reviewer feedback to the author, main's CI going red and green, the retro report, QR codes. |
 | `tests/ops.mjs` | Webhook notifications (Slack, Discord, ntfy, generic), backups and `npm run restore`, token rotation. |
-| `tests/limits.mjs` | Rate and concurrency limits: an agent or an address calling in a loop gets 429 with `Retry-After` and a message it can act on (REST and MCP), while other agents and humans stay served; open waits capped per agent and in total, and freed when they close. |
+| `tests/limits.mjs` | Rate and concurrency limits: the token bucket on a fake clock (refill, `Retry-After`, the cap, 0 for off), and over the network: an agent or an address calling in a loop gets 429 with `Retry-After` and a message it can act on (REST and MCP), while other agents and humans stay served; open waits capped per agent and in total, and freed when they close. |
 | `tests/webhook.mjs` | Webhook safety without a board: private addresses (also IPv4-mapped, NAT64 and 6to4 forms), each name resolved once and checked, the request pinned to the checked address when DNS answers differently later, redirects not followed. |
 | `tests/retro.mjs` | Retro, summary and the freeze webhook: still-blocked time, review credit, plurals, readable statuses, the freeze announced when its time changes. |
 | `tests/token-deadline.mjs` | Token rotation errors (MCP and REST say why), the demo time (no past times; passing it wakes waiting agents), the startup banner and the host-join prompt. |
@@ -58,7 +61,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | File | What it covers |
 |---|---|
 | `tests/ui/journey.mjs` | A newcomer's whole path on an empty board: joining the page, the setup guide, the planner, building, finishing. |
-| `tests/ui/flows.mjs` | Everyday use on a realistic board. Answering questions, mentions, chat, tasks, Done opening (the other cards glide), drag and drop, locks, filters, typing that survives live updates, escaping of user text. |
+| `tests/ui/flows.mjs` | Everyday use on a realistic board. Answering questions, mentions, chat, tasks, Done opening (the other cards glide), drag and drop and Move… (also in the 3D Tasks window), locks, filters, typing that survives live updates, escaping of user text. |
 | `tests/ui/multi-tool.mjs` | Claude Code, Codex and Copilot on one board, with one person's several tools grouped together. |
 | `tests/ui/verdict.mjs` | The deadline verdict in the top bar's Demo chip and the extra *Needs attention* signals (P3 tasks that won't make it, review backlog, sent back twice). |
 | `tests/ui/tasks-view.mjs` | Task search and the Columns / Table view. |
@@ -74,7 +77,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | `tests/ui/palette-theme.mjs` | The themes and the theme chooser (keyboard grid, Auto by the OS, old saved values, a new theme in one frame, the chooser's fade), a contrast scan of every visible text in every theme, and the Ctrl+K command palette. |
 | `tests/ui/usability.mjs` | The usability-review fixes. Guidance states, the invite message, the busy-board layout at 1366×768, contrast, keyboard Tab stops, accessibility. |
 | `tests/ui/hostile.mjs` | Hostile text: HTML, script tags, attribute breakouts and `javascript:` links in every field an agent controls (titles, descriptions, notes, branch, PR link, chat and channel, questions, activity, tool and model, subagent names, locks, limits, the goal). Nothing runs or renders as HTML in the plain board, the 3D office, the classic and the 3D presenter. The security headers (CSP). |
-| `tests/ui/a11y.mjs` | Accessibility and phone checks: live announcements, one Tab stop per column, 12px minimum text, no header badge row on a phone, the header's Chat button on a phone, 32px touch targets. |
+| `tests/ui/a11y.mjs` | Accessibility and phone checks: live announcements, one Tab stop per column, 12px minimum text, no header badge row on a phone, the header's Chat button on a phone, 32px touch targets on a phone and on a desktop-sized touch screen (the touch pass: every other suite has a mouse). |
 | `tests/ui/boards.mjs` | The Boards page and a board served under `/b/<board>/` in a real browser. |
 
 ### Presenter and 3D office (browser)
@@ -83,7 +86,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 |---|---|
 | `tests/ui/present.mjs` | The classic (2D) presenter view. |
 | `tests/ui/office-present.mjs` | The 3D presenter view: live overlay and adapted office state, live updates, themes, reduced motion, the WebGL fallback. |
-| `tests/ui/office-toggle.mjs` | The live 3D office behind the board and the header's 3D switch: on by default with the task board docked (also when the switch turns it on), the top bar at the top between the side columns, the switch moving nothing (one Tasks panel, its columns in the same place in both views, one `--edge` and one `--gutter`, both side columns ending at the same height, Setup with the panels' title bar), the top bar's popovers as glass and Tab through them, focus rings inside scrolling lists, `/` with Activity folded, Columns and Table both Tab stops, the slide down to expanded and back (one board, no copy), folded title bars (every panel folding and opening as one motion, the others in its column in step, no snap at the end, a click on the title opens it, instant with reduced motion), the switch's one-frame change and fade, frame rates, live state in the scene, answering from it, the agent card, 3D off (nothing loaded), the saved choice and `?view=`, reduced motion, phones and windows under 1280px wide (the plain board in two columns, the saved choice kept), no WebGL, the header staying one row. Other suites open pages with 3D off (the test helper's default; `launchBrowser({ office: true })` keeps it on). |
+| `tests/ui/office-toggle.mjs` | The live 3D office behind the board and the header's 3D switch: on by default with the task board docked (also when the switch turns it on), the top bar at the top between the side columns, the switch moving nothing (one Tasks panel, its columns in the same place in both views, one `--edge` and one `--gutter` in both views, both side columns ending at the same height, Setup with the panels' title bar), the top bar's popovers as glass, Tab through them, Shift+Tab back to the chip and closing when focus leaves them (and at once with reduced motion), focus rings inside scrolling lists, `/` with Activity folded, Columns and Table both Tab stops, the slide down to expanded and back (one board, no copy; Ctrl+K's expand and dock; expanded remembered across a reload), File locks taking its room from Activity, not Agents, in both views (on a board with a full team), Setup staying open across the switch, folded title bars (every panel folding and opening as one motion, the others in its column in step, no snap at the end, a click on the title opens it, instant with reduced motion), the switch's one-frame change (no fade), frame rates, no drawing while the tab is hidden, live state in the scene, answering from it, the agent card, 3D off (nothing loaded), the saved choice and `?view=`, reduced motion, phones and windows under 1280px wide (the plain board in two columns, the saved choice kept), no WebGL (on CI, where Chrome has SwiftShader, missing WebGL fails the suite instead of skipping the 3D checks), the header staying one row. Other suites open pages with 3D off (the test helper's default; `launchBrowser({ office: true })` keeps it on). |
 
 ## Writing tests
 

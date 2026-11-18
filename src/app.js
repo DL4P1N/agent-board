@@ -22,8 +22,9 @@ export function createApp({ registry, live, adminToken }) {
   app.use(express.json({ limit: '2mb' }));
 
   // app stays 'claude-board' (the name before the rename to Agent Board): older join/doctor/start scripts and
-  // people's monitoring check it. name is the display name.
-  app.get('/health', (_req, res) => res.json({ ok: true, app: 'claude-board', name: 'Agent Board', version: VERSION, boards: runtimes.size }));
+  // people's monitoring check it. name is the display name. pid tells a script which server answered (the tests'
+  // board vs another one that took the port first).
+  app.get('/health', (_req, res) => res.json({ ok: true, app: 'claude-board', name: 'Agent Board', version: VERSION, boards: runtimes.size, pid: process.pid }));
 
   app.use('/api/admin', createAdminRouter({ registry, live, adminToken }));
 
