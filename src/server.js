@@ -26,6 +26,9 @@ import { writePid, dropPid } from './pidfile.js';
 import { hiddenSettings } from './board-settings.js';
 import { startGithubPolling } from './github.js';
 import { setupNotifications } from './notify.js';
+import { startBackups } from './backup.js';
+import { startAnnouncements } from './announce.js';
+import { createTimers } from './timers.js';
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 writePid();
@@ -89,8 +92,6 @@ function clientLabel(info) {
 }
 
 
-const BACKUP_MS = process.env.BOARD_BACKUP_SECONDS ? Number(process.env.BOARD_BACKUP_SECONDS) * 1000 : (process.env.BOARD_BACKUP_MINUTES !== undefined ? Number(process.env.BOARD_BACKUP_MINUTES) : 10) * 60e3;
-
 // ---------- one board ----------
 // Everything that belongs to one board: its data, tokens, people, timers and routes. close() stops it.
 function createBoardRuntime(slug, dir) {
@@ -109,14 +110,8 @@ function createBoardRuntime(slug, dir) {
   let AGENT_TOKEN = agentTokenFor(TOKEN);
   // A third, read-only key for the presenter view: GET /api/state (nothing secret) and the live stream only.
   let VIEW_TOKEN = viewerTokenFor(TOKEN);
-  const timers = [];
-  const every = (fn, ms) => { const t = setInterval(fn, ms); t.unref?.(); timers.push(t); return t; };
-  // A fired timeout leaves the list, so it doesn't grow with every one-off timer.
-  const later = (fn, ms) => {
-    const t = setTimeout(() => { forget(t); fn(); }, ms);
-    t.unref?.(); timers.push(t); return t;
-  };
-  const forget = (t) => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); };
+  const { every, later, forget, clearAll } = createTimers();
+  const { rawSetting, putSetting, announced } = hiddenSettings(board);
   const presence = () => board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
   // Tokens retired by a rotation (hashed, kept in the board's folder), so an old link or agent config
   // gets "the token was changed" instead of a bare "bad token". reason: 'token_rotated' is for the web page.
@@ -365,58 +360,7 @@ function createBoardRuntime(slug, dir) {
   }));
   api.get('/cursor', h(() => ({ cursor: board.latestEventId() })));
 
-  // Announce the feature freeze (30 min warning, then the freeze itself) so waiting agents wake up.
-  // Remembered in the board's data, so a restart (or `--watch` reload) doesn't announce twice;
-  // a different freeze time (to the nearest 5 min) is announced again.
-  const flagKey = (k, t) => `_announced_${k}_${Math.round(t.freezeAt / 300e3)}`;
-  const { rawSetting, putSetting, announced } = hiddenSettings(board);
-  const announceTime = () => {
-    if (board.closed) return;
-    const t = timeInfo(board.getSettings());
-    if (!t.deadline) return;
-    const key = (k) => flagKey(k, t);
-    const now = Date.now();
-    if (!t.frozen && t.freezeAt - now <= 30 * 60e3 && !announced.has(key('warn'))) {
-      announced.add(key('warn'));
-      board.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all Feature freeze in 30 minutes (${t.freezeLabel}); demo at ${t.deadlineLabel}. Don't start big tasks now. Aim to get what you have merged.` });
-    }
-    // A freeze "0 min before" starts at the deadline itself: still announce it (within a few minutes).
-    if (t.frozen && (now < t.deadline || now - t.freezeAt < 5 * 60e3) && !announced.has(key('freeze'))) {
-      announced.add(key('freeze'));
-      board.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all FEATURE FREEZE. Demo at ${t.deadlineLabel}. Don't claim new tasks. Finish, push and merge what you have; release anything that can't land in time.` });
-    }
-    // The demo time itself: wake waiting agents so they wrap up (not when the board starts long after it).
-    const demoKey = `_announced_demo_${Math.round(t.deadline / 300e3)}`;
-    if (t.past && now - t.deadline < 5 * 60e3 && !announced.has(demoKey)) {
-      announced.add(demoKey);
-      board.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all Demo time (${t.deadlineLabel}). Wrap up: push and merge what's finished, release what isn't with a note, and post a short status in general.` });
-    }
-  };
-  every(announceTime, 20e3);
-  // Also check right at the warning, the freeze and the demo time, so nobody waits for the next tick.
-  // Rescheduled only when the deadline or freeze time actually changes (other settings edits leave them
-  // alone), with one set of handles: the old checks are cleared before new ones are scheduled.
-  let announceTimers = [];
-  let scheduledFor = null;
-  const clearAnnounceTimers = () => {
-    for (const t of announceTimers) { clearTimeout(t); forget(t); }
-    announceTimers = [];
-  };
-  board.bus.on('event', (e) => {
-    if (e?.kind !== 'settings') return;
-    const t = timeInfo(board.getSettings());
-    const key = t.deadline ? `${t.deadline}|${t.freezeAt}` : '';
-    if (key === scheduledFor) return;
-    scheduledFor = key;
-    clearAnnounceTimers();
-    // A new deadline or freeze time is checked at once: a short freeze could pass between two ticks.
-    setImmediate(announceTime);
-    if (!t.deadline) return;
-    for (const at of [t.freezeAt - 30 * 60e3, t.freezeAt, t.deadline]) {
-      const ms = at - Date.now() + 50;
-      if (ms > 0 && ms < 2 ** 31 - 1) announceTimers.push(later(announceTime, ms));
-    }
-  });
+  const announcements = startAnnouncements({ board, announced, every, later, forget });
 
   // Humans only, even for reading: the URL is a secret that lets anyone post to your channel.
   const humanToken = (req, res, next) => (req.role === 'human' ? next() : res.status(403).json({ error: 'This needs the board token (humans on the web board), not an agent token.' }));
@@ -438,40 +382,7 @@ function createBoardRuntime(slug, dir) {
     return { token: t, setup: { ...setupInfo(), viewer_token: VIEW_TOKEN } };
   }));
 
-  // ---------- automatic backups (the host laptop can crash or sleep) ----------
-  // `VACUUM INTO` a consistent copy every 10 minutes (BOARD_BACKUP_MINUTES; 0 = off), keep the newest 24,
-  // skip when nothing happened since the last one. Restore with `npm run restore`.
-  const BACKUP_DIR = path.join(dir, 'backups');
-  // What the board holds (events, tasks, settings), without presence, which changes all the time. Kept
-  // in backups/.last, so a restart doesn't make a new backup when nothing changed.
-  function boardFingerprint() {
-    const t = board.db.prepare('SELECT COUNT(*) AS n, COALESCE(MAX(updated_at), 0) AS u FROM tasks').get();
-    const settings = board.db.prepare('SELECT key, value FROM settings ORDER BY key').all().map((r) => `${r.key}=${r.value}`).join('\n');
-    const q = board.db.prepare('SELECT COUNT(*) AS n, COALESCE(MAX(answered_at), 0) AS a FROM questions').get();
-    return crypto.createHash('sha256').update(`${board.latestEventId()}|${t.n}|${t.u}|${q.n}|${q.a}|${settings}`).digest('hex').slice(0, 32);
-  }
-  function backup() {
-    const fp = boardFingerprint();
-    const lastFile = path.join(BACKUP_DIR, '.last');
-    let last = ''; try { last = fs.readFileSync(lastFile, 'utf8').trim(); } catch {}
-    if (fp === last) return null;
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
-    // UTC time in the name (same board-YYYYMMDD-HHMMSS shape restore expects): sorting stays right
-    // across daylight-saving changes.
-    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '').replace('T', '-'); // 20261110-153000
-    const file = path.join(BACKUP_DIR, `board-${stamp}.db`);
-    if (fs.existsSync(file)) return null;
-    board.db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
-    fs.writeFileSync(lastFile, fp);
-    const all = fs.readdirSync(BACKUP_DIR).filter((f) => /^board-\d{8}-\d{6}\.db$/.test(f)).sort();
-    for (const f of all.slice(0, Math.max(0, all.length - 24))) { try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch {} }
-    return file;
-  }
-  if (BACKUP_MS > 0 && Number.isFinite(BACKUP_MS)) {
-    const run = () => { try { backup(); } catch (e) { console.error(`backup failed (${slug}): ${e.message}`); } };
-    later(run, Math.min(30e3, BACKUP_MS));
-    every(run, Math.max(1000, BACKUP_MS));
-  }
+  startBackups({ board, dir, slug, every, later });
 
   startGithubPolling({ board, announced, rawSetting, putSetting, isClosed: () => closed, presence, every, later });
   // Proposals waiting on a planner who went offline become open tasks.
@@ -551,8 +462,8 @@ function createBoardRuntime(slug, dir) {
   function close() {
     if (closed) return;
     closed = true;
-    for (const t of timers) { clearInterval(t); clearTimeout(t); }
-    clearAnnounceTimers();
+    clearAll();
+    announcements.clear();
     closeStreams();
     // Settles pending long-polls before the file closes (a timer touching a closed DB would crash the server).
     board.close();
