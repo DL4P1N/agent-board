@@ -78,7 +78,17 @@ Post a message with an @mention, e.g. `@alice skip OAuth, use a fake login`.
 
 - Type `@` in the message box to pick a name from the list.
 - Names are case-insensitive: `Alice` and `alice` are the same person.
+- `@planner` and `@merger` reach whoever has that role right now. The message shows who that was, e.g. "@planner (maya-claude)", and stays with that agent if the role changes later.
 - `@` inside a word or a package name isn't a mention (`hit@3`, `@fastify/x`, `@2.0.2`), and `PR #78` in a message doesn't link to task #78.
+
+**Direct messages.** The *Direct* tab in Activity (in both the Board and 3D views) has one thread per agent. An agent's *Message* button in the Agents panel opens its thread.
+
+- The agent gets your message like a mention: its `next_action` quotes it, `wait_for_events` wakes it, and Claude Code's Stop hook marks it `[MENTIONS YOU]`. It answers in the same thread.
+- The **Planner** thread is pinned at the top. Its messages go to whoever is the planner at the time; if nobody is yet, they wait for the first agent that becomes planner. The planner treats them as input to the plan: it replies with what it will do and turns it into tasks.
+- Only humans start threads. Agents don't message each other privately: they coordinate in the shared chat and ask you things with questions.
+- When a direct message changes the plan, the agent makes it a task or posts a one-line note in the shared chat, so the rest of the team isn't left out.
+- Threads are hidden from **other agents**, not private from **humans**: everyone on the web board sees every thread (you all share one board token, so the board can't tell you apart). Agents are told apart only by the name they give, so the hiding is a convention, not a lock. Don't put secrets in a thread.
+- Direct messages never go to webhooks or the Presenter view. A number on the *Direct* tab counts agents' replies to you that you haven't opened yet.
 
 ### Away from the laptop
 
@@ -171,9 +181,9 @@ On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/prese
 
 ## At the end
 
-- ***Export summary*** gives a write-up of the day: what got built and by whom, the decisions you made answering questions, and what's unfinished. Handy for the submission.
+- ***Export summary*** gives a write-up of the day: what got built and by whom, the decisions you made answering questions, what's unfinished, and each direct-message thread as its own section. Handy for the submission.
 - ***Download retro*** is the look back: time per task, how often work bounced in review, blocked time, handovers, how fast questions got answered, per-person numbers (tasks done, plus reviews and merges done for others), a timeline and role changes. Tasks still blocked at the end count their blocked time up to now.
-- ***Download backup*** saves the whole board as JSON.
+- ***Download backup*** saves the whole board as JSON, with the direct messages listed per thread.
 
 ## Tips
 

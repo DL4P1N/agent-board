@@ -29,6 +29,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | `tests/capacity.mjs` | Agent-side rules: plan capacity, fair sharing, reservations, sizes, stale takeover, freeze exceptions, ownership, input checks, lock coverage, agent-token limits. |
 | `tests/guidance.mjs` | `next_action` and refusal texts: the planner brief, blocked tasks and slots, reviews, the planner's slot count, a self-reported usage limit, sizes, claim refusals. |
 | `tests/helpers-subagents.mjs` | Subagents (passing `as`): recorded on their first call, own model, `subagent_done`, the idle window, `presence[].helpers` in `/api/state`. |
+| `tests/direct.mjs` | Direct messages: hidden from other agents (`read_events`, `wait_for_events`, `/api/events`, the stream, the presenter), replies with `post(to)`, `next_action` and the Stop hook, the planner thread before and after there is a planner, `@planner` / `@merger`, summary, export, never to webhooks. |
 | `tests/agents.mjs` | Usage limits reported by agents (tool, REST, and the Stop hook reading a transcript), planning stats. |
 | `tests/name-clash.mjs` | One agent name on two laptops, and join's name check and reservation. |
 | `tests/rehearsal.mjs` | A whole day of work in a few seconds, modelled on the Kubecon board: planning, proposals, reviews that bounce, agents going offline or out of usage, role handovers, the freeze and the deadline, with invariants checked after every phase. |
@@ -62,6 +63,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | `tests/ui/delete.mjs` | Deleting a task from the task dialog, and what happens to tasks that depended on it. |
 | `tests/ui/capacity-ui.mjs` | Capacity on the web board: plans and slots, team capacity, task size, reservations, stale tasks, server errors shown inline. |
 | `tests/ui/deadline.mjs` | Demo time and feature freeze, plan approval, desktop notifications, the write-up and backup export. |
+| `tests/ui/direct.mjs` | The *Direct* tab in both views: the thread list, an agent's *Message* button, sending, unread replies, drafts kept apart from the chat, the planner thread, contrast in every theme. |
 | `tests/ui/feed.mjs` | The feed and composer: board actions as status lines, *Load earlier activity*, long posts clamped, mentions, "someone saved over you", the webhook field, the invite and QR code. |
 | `tests/ui/header.mjs` | The header, connection state, *Needs attention*, *Setup* and the online count. |
 | `tests/ui/people.mjs` | The Agents panel: stable person colours, one row per agent by its own name, its state in words, *Belongs to*, availability in the Reserve-for and Assign-to lists. |
