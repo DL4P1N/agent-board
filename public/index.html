@@ -1139,7 +1139,11 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-rcol > .o-right { flex: 0 0 auto; min-height: 120px; max-height: 45%; } /* its rows up to 45%; Activity takes the rest, its feed scrolling */
   .o-rcol > .o-act { flex: 0 1 auto; min-height: 0; }
   .o-rcol > #o-right-pill:not([hidden]) + .o-act:not(.folded) { flex: 1 1 auto; } /* Agents folded: Activity takes the column */
-  .o-rcol > .o-locks { flex: 0 1 auto; min-height: 0; max-height: 40%; }
+  /* File locks open: Agents gives up room too (to 30%), File locks keeps its height up to 30% and Activity keeps enough for its tabs, a few events and the chat box. */
+  .o-rcol:has(> .o-locks:not(.folded)) > .o-right { max-height: 30%; }
+  .o-rcol > .o-locks:not(.folded) { flex-shrink: 0; }
+  .o-rcol > .o-act:not(.folded) { min-height: min(250px, 40%); }
+  .o-rcol > .o-locks { flex: 0 1 auto; min-height: 0; max-height: 30%; }
   .o-rcol > .o-act.folded, .o-rcol > .o-locks.folded { flex: 0 0 auto; }
   .o-rcol > .o-act.folded { margin-top: auto; }
   .o-rcol > #o-right-pill { align-self: flex-end; flex: 0 0 auto; }
@@ -4600,17 +4604,28 @@ function viewAnimStart(v) {
   if (viewAnimEnd() || reduceMotion()) return null;
   if (v === 'office') {
     const src = $('boardwrap'); const r = src.getBoundingClientRect(); if (!r.width || !r.height) return null;
-    if (!oTasksOff()) return { top: r.top }; // the Tasks window itself makes the drop (no copy)
     const g = src.cloneNode(true);
     g.removeAttribute('id'); for (const e of g.querySelectorAll('[id]')) e.removeAttribute('id');
     for (const e of g.querySelectorAll('[data-fk]')) e.removeAttribute('data-fk');
     g.classList.add('vt-ghost'); g.setAttribute('aria-hidden', 'true'); g.inert = true;
     Object.assign(g.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
-    return { ghost: g, top: r.top };
+    return { ghost: g, top: r.top, bar: $('taskbar').getBoundingClientRect().top - r.top, open: !oTasksOff() };
   }
-  const t = $('o-tasks')?.getBoundingClientRect();
+  const tw = $('o-tasks'), t = tw?.getBoundingClientRect();
   const room = $('office-view').getBoundingClientRect();
-  return { tasksTop: t?.height ? t.top : innerHeight, room: room.width ? room : null };
+  const out = { tasksTop: t?.height ? t.top : innerHeight, room: room.width ? room : null };
+  // The Tasks window open: copy it as it looks now (its glass, border and shadow written in, since those rules belong
+  // to the 3D view), to hand over to the board as it rises.
+  if (t?.height && !tw.classList.contains('folded') && $('taskbar')) {
+    const g = tw.cloneNode(true); const cs = getComputedStyle(tw);
+    g.removeAttribute('id'); for (const e of g.querySelectorAll('[id]')) e.removeAttribute('id');
+    for (const e of g.querySelectorAll('[data-fk]')) e.removeAttribute('data-fk');
+    g.classList.add('vt-ghost'); g.classList.remove('max'); g.setAttribute('aria-hidden', 'true'); g.inert = true;
+    for (const p of ['background-color', 'box-shadow', 'border', 'border-radius', 'backdrop-filter', '-webkit-backdrop-filter']) g.style.setProperty(p, cs.getPropertyValue(p));
+    Object.assign(g.style, { left: `${t.left}px`, width: `${t.width}px`, top: `${t.top}px`, bottom: `${innerHeight - t.bottom}px`, right: 'auto', height: 'auto', translate: 'none' });
+    Object.assign(out, { ghost: g, wTop: t.top, wBar: $('taskbar').getBoundingClientRect().top - t.top });
+  }
+  return out;
 }
 function viewAnim(v, from) {
   const run = vtRun = { anims: [], ghost: from.ghost || null, cancelled: false };
@@ -4623,19 +4638,25 @@ function viewAnim(v, from) {
     run.anims.push({ cancel: showScene });
     const tw = $('o-tasks'), ov = $('office-view');
     const ready = Promise.resolve(office.loading).then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-    if (!run.ghost) {
-      // The Tasks window open: it is the board already (the same bar and columns, moved in). It starts over the board's
-      // area, then its top edge slides down to where the window sits, uncovering the room: one surface, nothing swaps.
+    if (from.open) {
+      // The Tasks window open. A copy of the board (the ghost: exactly the board, so the first frame is the board) and
+      // the real window move together, their top edges locked: from the board's top down to where the window sits,
+      // uncovering the room. On the way the window (its border, its compact cards) fades in over the copy and the copy
+      // fades out, so the board turns into the window while it moves; nothing pops in or shifts in place.
       // The camera is framed for where the window ends up (oFrame reads run.tasksTop meanwhile).
+      $('main').append(run.ghost);
       const end = tw.getBoundingClientRect(), o = ov.getBoundingClientRect();
       run.tasksTop = end.top; oFrame();
-      const t0 = `${Math.round(from.top - o.top)}px`, t1 = `${Math.round(end.top - o.top)}px`;
-      Object.assign(tw.style, { top: t0, height: 'auto' });
+      // Locked on the task bar (the same element in both): the window starts where its bar sits on the board's bar.
+      const dBar = $('taskbar').getBoundingClientRect().top - end.top - from.bar;
+      const t0 = `${Math.round(from.top - dBar - o.top)}px`, t1 = `${Math.round(end.top - o.top)}px`;
+      const gy = end.top - (from.top - dBar);
+      Object.assign(tw.style, { top: t0, height: 'auto', opacity: '0' });
       // Whole columns while it moves, like the board it starts as (cut to whole cards plus "Show N more" once landed).
       for (const ul of $('o-cols')?.querySelectorAll('.o-col ul') || []) ul.style.maxHeight = '';
       for (const m of $('o-cols')?.querySelectorAll('.o-more') || []) m.hidden = true;
       const reset = () => {
-        tw.style.top = ''; tw.style.height = ''; run.tasksTop = null; oMore();
+        tw.style.top = ''; tw.style.height = ''; tw.style.opacity = ''; run.tasksTop = null; oMore();
         for (const m of $('o-cols')?.querySelectorAll('.o-more:not([hidden])') || []) m.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160 });
       };
       run.anims.push({ cancel: reset });
@@ -4643,10 +4664,20 @@ function viewAnim(v, from) {
         showScene();
         if (run.cancelled) return;
         if (boardView !== 'office') return viewAnimEnd();
-        tw.style.top = t1;
-        const drop = tw.animate([{ top: t0 }, { top: t1 }], { duration: 480, easing: 'cubic-bezier(.4, 0, .2, 1)' });
-        run.anims.push(drop);
-        drop.finished.then(() => { if (run.cancelled) return; reset(); vtRun = null; oFrame(); }).catch(() => {});
+        tw.style.top = t1; tw.style.opacity = '';
+        const D = 520, ease = 'cubic-bezier(.4, 0, .2, 1)';
+        // The two lay their cards out differently, so they never show text at once: the copy's cards fade out first (its
+        // background stays, so the room doesn't flash through), then the window fades in over it; then the copy goes.
+        // Both move by `top` (not a transform, which the compositor would run ahead of the window's layout): same frames.
+        const drop = tw.animate([{ top: t0 }, { top: t1 }], { duration: D, easing: ease });
+        const copy = run.ghost.animate([{ top: `${from.top}px` }, { top: `${from.top + gy}px` }], { duration: D, easing: ease, fill: 'forwards' });
+        run.anims.push(drop, copy);
+        // The fades (plain time, early while the motion is still slow): the window in over the copy, which stays whole
+        // underneath (fading its cards first left a dark, empty block for a few frames: a flash), then the copy goes.
+        const fade = (el, a, b, delay, duration) => run.anims.push(el.animate([{ opacity: a }, { opacity: b }], { delay, duration, fill: 'both' }));
+        fade(tw, 0, 1, 0, 180);
+        fade(run.ghost, 1, 0, 180, 120);
+        drop.finished.then(() => { if (run.cancelled) return; run.ghost.remove(); for (const a of run.anims) a.effect?.target === tw && a.cancel(); reset(); vtRun = null; oFrame(); }).catch(() => {});
       });
       return;
     }
@@ -4679,9 +4710,34 @@ function viewAnim(v, from) {
     ov.setAttribute('aria-hidden', 'true'); if (otw) otw.style.visibility = 'hidden';
     office.mod.setActive(true);
     run.anims.push({ cancel: dropRoom });
-    run.anims.push(ov.animate([{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: 420, fill: 'forwards' }));
   }
   const b = $('boardwrap'); const r = b.getBoundingClientRect();
+  if (run.ghost) {
+    // The Tasks window open: the mirror of Board → 3D. The window's copy and the real board move up together, their
+    // task bars locked, from the window's place to the board's; the window's cards fade out, the board fades in over
+    // the window's still-solid glass, then the glass goes. Both move by `top` so they share frames.
+    // The copy goes under the page's content (the board's column has its own stacking), over the room (later in main).
+    const g = run.ghost; g.style.zIndex = '-1'; $('main').append(g);
+    const y0 = from.wTop + from.wBar - ($('taskbar').getBoundingClientRect().top - r.top) - r.top; // board's start offset
+    const D = 520, ease = 'cubic-bezier(.4, 0, .2, 1)';
+    b.style.position = 'relative';
+    const unBoard = () => { b.style.position = ''; b.style.top = ''; };
+    run.anims.push({ cancel: unBoard });
+    const rise = b.animate([{ top: `${y0}px` }, { top: '0px' }], { duration: D, easing: ease });
+    run.anims.push(rise, g.animate([{ top: `${from.wTop}px` }, { top: `${from.wTop - y0}px` }], { duration: D, easing: ease, fill: 'forwards' }));
+    const fade = (el, a, c, delay, duration) => run.anims.push(el.animate([{ opacity: a }, { opacity: c }], { delay, duration, fill: 'both' }));
+    for (const c of g.children) fade(c, 1, 0, 0, 140);
+    fade(b, 0, 1, 90, 170);
+    fade(g, 1, 0, 260, 120);
+    if (keepRoom) run.anims.push(ov.animate([{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: D, fill: 'forwards' }));
+    rise.finished.then(() => {
+      if (run.cancelled) return;
+      g.remove(); for (const a of run.anims) if (a !== rise && a.effect) a.cancel();
+      unBoard(); if (keepRoom) dropRoom(); vtRun = null;
+    }).catch(() => {});
+    return;
+  }
+  if (keepRoom) run.anims.push(ov.animate([{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: 420, fill: 'forwards' }));
   const dy = Math.max(40, from.tasksTop - r.top);
   const rise = b.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 420, easing: land });
   run.anims.push(rise);
