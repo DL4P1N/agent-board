@@ -26,6 +26,8 @@ const watch = (page) => {
 const scheme = (page, s) => page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: s }]);
 const txt = (page, sel) => page.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ')).catch(() => '');
 const reload = (page) => page.evaluate(() => load());
+// Waits (up to 5s) for what a live update brings, instead of a fixed sleep.
+const until = (page, fn, arg, timeout = 5000) => page.waitForFunction(fn, { timeout, polling: 100 }, arg).then(() => true).catch(() => false);
 const openStep = async (page, key) => { await page.evaluate((k) => { const b = document.querySelector('[data-step="' + k + '"]'); if (b && b.getAttribute('aria-expanded') !== 'true') b.click(); }, key); await sleep(200); };
 
 // Contrast helpers (run in the page)
@@ -111,16 +113,18 @@ try {
   check('A integrator empty option wording', (await page.$eval('#integ-sel option', (o) => o.textContent)) === 'Let the first agent with finished work do it');
 
   // erin really starts
-  await erin('board_status'); await sleep(500);
+  await erin('board_status');
+  await until(page, () => /1 agent started/.test(document.getElementById('step-start')?.innerText || ''));
   check('A step 3 ticks once an agent started', await page.$eval('#step-start', (e) => e.classList.contains('done') && /1 agent started/.test(e.innerText)));
   check('A low-priority offer: Connect your laptop\'s agent', /Connect your laptop's agent/.test(await txt(page, '#now .na2')) && /Nothing to do yet/.test(await txt(page, '#now .na')), await txt(page, '#now'));
 
   // Mentions: only direct ones count; they clear once seen in the feed
-  await erin('post', { text: '@all standup in 5' }); await erin('post', { text: '@everyone ship it' }); await sleep(500);
+  await erin('post', { text: '@all standup in 5' }); await erin('post', { text: '@everyone ship it' });
+  await until(page, () => /ship it/.test(document.getElementById('feed').innerText));
   check('A @all/@everyone not counted', (await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label'))) === '@me' && !/mention/.test(await page.$eval('#needs', (e) => e.querySelector('button')?.getAttribute('aria-label') || '')));
-  await erin('post', { text: '@dana can you check the goal?' }); await sleep(500);
-  check('A direct @dana counted; @me accessible name', (await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label'))) === '@me, 1 unread');
-  await sleep(2600);
+  await erin('post', { text: '@dana can you check the goal?' });
+  check('A direct @dana counted; @me accessible name', await until(page, () => document.querySelector('[data-tab="me"]').getAttribute('aria-label') === '@me, 1 unread'), await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label')));
+  await until(page, () => document.querySelector('[data-tab="me"]').getAttribute('aria-label') === '@me', undefined, 6000);
   check('A mention cleared after being visible in the feed', (await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label'))) === '@me' && !/mention/.test(await page.$eval('#needs', (e) => e.querySelector('button')?.getAttribute('aria-label') || '')));
 
   // Tasks + my own agent → setup collapses, calm state suggests picking a merger
@@ -141,7 +145,8 @@ try {
   // Every task done ranks above an unread mention
   await page.$eval('#feed', (f) => { f.scrollTop = 0; });
   for (const t of [t1, t1b]) await rest('dana', `/tasks/${t.id}`, 'PATCH', { status: 'done' });
-  await erin('post', { text: '@dana all merged!' }); await sleep(500);
+  await erin('post', { text: '@dana all merged!' });
+  await until(page, () => /Every task is done/.test(document.querySelector('#now .na')?.innerText || '') && !!document.querySelector('#now .also [data-go="mentions"]'));
   check('A all-done outranks mentions (the mention follows under Also)', /Every task is done/.test(await txt(page, '#now .na')) && !!(await page.$('#now .also [data-go="mentions"]')), await txt(page, '#now'));
   await page.close();
 
@@ -274,7 +279,8 @@ try {
   await p.click('#' + q1); await p.type('#' + q1, 'Use the shared one'); await p.keyboard.press('Enter');
   await p.waitForFunction((id) => !document.getElementById(id), { timeout: 5000 }, q1); await sleep(200);
   check('B after answering, focus moves to the next question', await p.evaluate(() => document.activeElement?.matches('.qcard textarea')));
-  await A.bob('ask_human', { question: 'Is a 10 votes per person cap fine?' }); await sleep(900);
+  await A.bob('ask_human', { question: 'Is a 10 votes per person cap fine?' });
+  await until(p, () => /New question from bob/.test(document.getElementById('announcer').textContent));
   check('B live region announces the new question once', /New question from bob/.test(await p.$eval('#announcer', (a) => a.textContent)));
   check('B #conn is not re-announced (no change → no DOM write)', await p.evaluate(() => { const c = $('conn'); let n = 0; new MutationObserver(() => n++).observe(c, { childList: true, characterData: true, subtree: true }); setConn('live'); setConn('live'); return new Promise((r) => setTimeout(() => r(n === 0), 50)); }));
 
@@ -282,11 +288,14 @@ try {
   const dId = ids[28];
   await p.click(`.card[data-id="${dId}"] .ct`); await p.waitForSelector('#task-dlg[open]');
   await p.click('#td-desc'); await p.keyboard.type(' Also link it from the footer.');
-  await A.alice('update_task', { id: dId, note: 'looking at this next' }); await sleep(700);
+  await A.alice('update_task', { id: dId, note: 'looking at this next' });
+  await until(p, () => state.events.some((e) => /looking at this next/.test(e.text))); await sleep(200);
   check('B dialog: agent note does not trigger a conflict warning', await p.$eval('#td-conflict', (e) => e.hidden));
-  await rest('bob', `/tasks/${dId}`, 'PATCH', { title: 'Privacy policy + terms page' }); await sleep(700);
+  await rest('bob', `/tasks/${dId}`, 'PATCH', { title: 'Privacy policy + terms page' });
+  await until(p, () => document.getElementById('td-name').value === 'Privacy policy + terms page');
   check('B dialog: untouched field follows the server silently', (await p.$eval('#td-name', (e) => e.value)) === 'Privacy policy + terms page' && await p.$eval('#td-conflict', (e) => e.hidden));
-  await rest('bob', `/tasks/${dId}`, 'PATCH', { description: 'Server-side description' }); await sleep(700);
+  await rest('bob', `/tasks/${dId}`, 'PATCH', { description: 'Server-side description' });
+  await until(p, () => !document.getElementById('td-conflict').hidden);
   const cf = await p.$eval('#td-conflict', (e) => (e.hidden ? '' : e.textContent));
   check('B dialog: warns when a field I edited changed on the server', /description/.test(cf), cf);
   check('B dialog: history scrolled to newest', await p.$eval('#td-history', (h) => h.scrollHeight - h.scrollTop - h.clientHeight < 4));

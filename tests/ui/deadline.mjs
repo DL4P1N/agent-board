@@ -159,14 +159,14 @@ try {
   await np.goto(BASE + '/');
   await np.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 5000 });
   check('bell is off by default (aria-pressed=false, labelled)', await np.$eval('#notify-btn', (b) => b.getAttribute('aria-pressed') === 'false' && b.getAttribute('aria-label') === 'Desktop notifications'));
-  await np.$eval('#notify-btn', (b) => b.click()); await sleep(200);
-  check('bell on after permission granted; preference stored', await np.evaluate(() => $('notify-btn').getAttribute('aria-pressed') === 'true' && localStorage.getItem('board-notify') === 'on'));
+  await np.$eval('#notify-btn', (b) => b.click());
+  check('bell on after permission granted; preference stored', await until(np, () => $('notify-btn').getAttribute('aria-pressed') === 'true' && localStorage.getItem('board-notify') === 'on'));
   const hide = (h) => np.evaluate((v) => { window.__hidden = v; document.dispatchEvent(new Event('visibilitychange')); }, h);
   const notes = () => np.evaluate(() => window.__notes.map((n) => n.title));
 
   // Visible tab: nothing.
   await bob('post', { text: '@dana quick look at the vote API?' });
-  await sleep(800);
+  await until(np, () => /quick look at the vote API/.test(document.getElementById('feed').innerText)); await sleep(200);
   check('visible tab: no notification', (await notes()).length === 0, JSON.stringify(await notes()));
 
   await hide(true);
@@ -181,9 +181,10 @@ try {
   const before = (await notes()).length;
   await np.evaluate(() => { $('msg').value = '@dana @all note to self'; $('composer').requestSubmit(); });
   const t4 = await alice('create_task', { title: 'Docs' });
-  await sleep(300);
+  await until(np, (id) => !!taskById(id), t4.id);
   await np.evaluate((id) => moveTask(taskById(id), 'blocked'), t4.id);
-  await sleep(1200);
+  // Both have come back from the server and been drawn (then a moment for anything that would notify).
+  await until(np, (id) => taskById(id)?.status === 'blocked' && state.events.some((e) => /note to self/.test(e.text)), t4.id); await sleep(300);
   check('own actions (my message, my move to Blocked) do not notify', (await notes()).length === before, JSON.stringify((await notes()).slice(before)));
 
   // Clicking a notification jumps to the item.

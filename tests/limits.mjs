@@ -4,6 +4,7 @@
 // the defaults are far higher. Run all suites with: npm test
 import { startBoard, finish, agent } from './helpers.mjs';
 import { agentTokenFor } from '../src/tokens.js';
+import { RateLimiter } from '../src/limits.js';
 
 const board = await startBoard({ env: { BOARD_RATE_AGENT: '30', BOARD_RATE_IP: '100', BOARD_WAITS_AGENT: '2', BOARD_WAITS_TOTAL: '5' } });
 const AG = agentTokenFor(board.token);
@@ -19,10 +20,35 @@ const mcpRaw = (name, method, params, id = 1, ip) => fetch(`${board.base}/mcp?ag
   body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
 });
 
+// The bucket refills while a loop runs (perMinute / 60 calls a second): how many calls a loop over the network gets
+// served depends on how long it took. At most the limit, plus what refilled meanwhile, plus one for rounding.
+const servedAtMost = (limit, ms) => limit + Math.floor((ms * limit) / 60e3) + 1;
+
 try {
+  // ---- the token bucket itself, on a fake clock ----
+  {
+    const t = 1_000_000;
+    const rl = new RateLimiter(60);
+    let n = 0;
+    while (n < 100 && rl.take('a', t).ok) n++;
+    const no = rl.take('a', t);
+    check('RateLimiter: a full minute\'s calls at once, then refused with Retry-After 1s', n === 60 && !no.ok && no.retryAfter === 1, JSON.stringify({ n, no }));
+    check('RateLimiter: one more call a second later (perMinute / 60 a second), then refused again', rl.take('a', t + 1000).ok && !rl.take('a', t + 1000).ok);
+    const r6 = new RateLimiter(6);
+    for (let i = 0; i < 6; i++) r6.take('x', t);
+    check('RateLimiter: Retry-After is the whole seconds until the next call (6 a minute: 10s)', r6.take('x', t).retryAfter === 10 && r6.take('x', t + 5000).retryAfter === 5 && r6.take('x', t + 10e3).ok);
+    check('RateLimiter: each key has its own bucket', rl.take('b', t).ok);
+    let k = 0;
+    while (k < 200 && rl.take('a', t + 3600e3).ok) k++;
+    check('RateLimiter: a quiet key refills to the limit, not past it', k === 60, String(k));
+    const off = new RateLimiter(0);
+    check('RateLimiter: 0 turns the limit off', Array.from({ length: 1000 }, () => off.take('a', t).ok).every(Boolean));
+  }
+
   // ---- one agent in a loop (REST, like a broken Stop hook) ----
   const statuses = [];
   let first429 = null;
+  const t0 = Date.now();
   for (let i = 0; i < 45; i++) {
     const r = await get('/next', { who: 'loop-claude', ip: '198.51.100.1' });
     statuses.push(r.status);
@@ -30,7 +56,8 @@ try {
     else await r.body?.cancel();
   }
   const ok = statuses.filter((s) => s === 200).length;
-  check('a looping agent is served up to its limit, then gets 429', ok >= 30 && ok <= 32 && statuses.at(-1) === 429, statuses.join(','));
+  const loopMs = Date.now() - t0;
+  check('a looping agent is served up to its limit, then gets 429', ok >= 30 && ok <= servedAtMost(30, loopMs) && statuses.at(-1) === 429, `${loopMs}ms: ${statuses.join(',')}`);
   check('the 429 says when to come back (Retry-After) and what to do instead', !!first429 && Number(first429.retry) >= 1 && first429.body.reason === 'rate_limited' && first429.body.retry_after === Number(first429.retry)
     && /loop-claude/.test(first429.body.error) && /wait_for_events/.test(first429.body.error) && /30 a minute/.test(first429.body.error), JSON.stringify(first429));
   check('another agent on the same address is still served', (await get('/next', { who: 'calm-codex', ip: '198.51.100.1' })).status === 200);
@@ -59,13 +86,15 @@ try {
   // ---- one address in a loop (many agent names, so only the address limit applies) ----
   const ipStatuses = [];
   let ip429 = null;
+  const t1 = Date.now();
   for (let i = 0; i < 115; i++) {
     const r = await get('/next', { who: `bot${i % 10}`, ip: '203.0.113.7' });
     ipStatuses.push(r.status);
     if (r.status === 429 && !ip429) ip429 = await r.json(); else await r.body?.cancel();
   }
   const ipOk = ipStatuses.filter((s) => s === 200).length;
-  check('one address calling in a loop gets 429 past its limit', ipOk >= 95 && ipOk <= 102 && ipStatuses.at(-1) === 429 && /203\.0\.113\.7/.test(ip429?.error || ''), `${ipOk} ok; ${JSON.stringify(ip429)}`);
+  const ipMs = Date.now() - t1;
+  check('one address calling in a loop gets 429 past its limit', ipOk >= 95 && ipOk <= servedAtMost(100, ipMs) && ipStatuses.at(-1) === 429 && /203\.0\.113\.7/.test(ip429?.error || ''), `${ipOk} ok in ${ipMs}ms; ${JSON.stringify(ip429)}`);
   check('other addresses are still served', (await get('/next', { who: 'bot1', ip: '203.0.113.8' })).status === 200 && (await get('/state', { token: board.token, who: 'dana', ip: '203.0.113.9' })).status === 200);
 
   // ---- open waits: per agent and in total ----

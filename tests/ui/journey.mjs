@@ -19,6 +19,9 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push('console: ' + m.text()));
 page.on('dialog', (d) => { errors.push('native dialog: ' + d.message()); d.dismiss(); });
 const now = () => page.$eval('#now', (e) => e.innerText.replace(/\s+/g, ' '));
+// Waits (up to 5s) until the page shows what a live update brings, instead of a fixed sleep.
+const until = (fn, arg) => page.waitForFunction(fn, { timeout: 5000, polling: 100 }, arg).then(() => true).catch(() => false);
+const nowSays = (re) => until((src) => new RegExp(src).test(document.getElementById('now').innerText.replace(/\s+/g, ' ')), re.source);
 const reload = () => page.evaluate(() => load());
 async function shots(name, { light = true, mobile = false } = {}) {
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
@@ -68,7 +71,8 @@ try {
 
   await page.type('#goal-in', 'A voting app for hackathon projects. Demo: submit, vote, live leaderboard.');
   // SSE mid-typing must not wipe it
-  await alice('post', { text: 'hello from alice' }); await sleep(500);
+  await alice('post', { text: 'hello from alice' });
+  await until(() => /hello from alice/.test(document.getElementById('feed').innerText));
   check('goal typing survives SSE', await page.evaluate(() => document.getElementById('goal-in')?.value.startsWith('A voting app') && document.activeElement?.id === 'goal-in'));
   await shots('2-goal-typing', { light: false });
   await page.keyboard.press('Enter');
@@ -77,7 +81,7 @@ try {
 
   // planner claims
   await alice('claim_role', { role: 'planner' });
-  await sleep(500);
+  await nowSays(/alice's agent \(Claude Code\) is writing/);
   check('board banner names planner', /alice's agent \(Claude Code\), the planner/.test(await page.$eval('#board-empty', (e) => e.innerText)));
   check('do-now: nothing to do, alice writing', /alice's agent \(Claude Code\) is writing/.test(await now()), await now());
   await shots('3-planning', { mobile: true });
@@ -87,7 +91,7 @@ try {
   const t2 = await alice('create_task', { title: 'Voting API', depends_on: [t1.id] });
   const t3 = await alice('create_task', { title: 'Leaderboard page' });
   const t4 = await alice('create_task', { title: 'Submission form' });
-  await sleep(500);
+  await until((id) => !!document.querySelector(`.card[data-id="${id}"]`) && document.getElementById('setup').hidden, t4.id);
   check('setup collapsed: the guide hides, the top bar stays', await page.evaluate(() => $('setup').hidden && /Goal/i.test($('goal-btn')?.innerText) && !!$('topbar').querySelector('[data-act="setup-open"]')));
   check('phase Build', await page.$eval('.phases .cur', (e) => e.textContent) === 'Build');
   check('column descriptions', await page.$eval('#col-review .cd', (e) => /merged into main/.test(e.textContent)));
@@ -99,7 +103,7 @@ try {
   await bob('claim_task', { id: t3.id, as: 'ui-worker' }); await bob('update_task', { id: t3.id, status: 'blocked', note: 'need design decision: dark theme?', as: 'ui-worker' });
   await bob('claim_task', { id: t4.id }); await bob('update_task', { id: t4.id, status: 'in_progress' });
   await bob('ask_human', { question: 'Should votes be anonymous?', task_id: t3.id, as: 'ui-worker' });
-  await sleep(600);
+  await nowSays(/Answer 1 question/);
   // Ranked by how many agents each blocks (WB-3): picking who merges leads, the question follows under "Also".
   check('do-now: pick integrator leads, answer question under Also', /^Pick who merges/.test(await page.$eval('#now .na', (e) => e.textContent)) && /Answer 1 question/.test(await page.$eval('#now .also', (e) => e.textContent)), await now());
   await shots('5-building', { mobile: true });
@@ -116,7 +120,7 @@ try {
   await page.waitForFunction(() => !/Pick who merges/.test(document.getElementById('now').innerText), { timeout: 5000 });
   check('integrator saved; do-now shows blocked', /blocked/.test(await page.$eval('#now .na', (e) => e.textContent)), await now());
   check('the planner and who merges are tags on their agent rows', await page.evaluate(() => { const t = [...document.querySelectorAll('#people .o-agent .o-rl')].map((e) => e.textContent); return t.includes('planner') && t.includes('merges'); }));
-  await bob('update_task', { id: t3.id, status: 'in_progress', as: 'ui-worker' }); await sleep(500);
+  await bob('update_task', { id: t3.id, status: 'in_progress', as: 'ui-worker' }); await nowSays(/All good/);
   check('all good message', /All good/.test(await now()), await now());
   // help dialog via ?
   await page.evaluate(() => document.activeElement.blur());
@@ -134,7 +138,7 @@ try {
 
   // all done
   for (const t of [t1, t2, t3, t4]) await fetch(`${BASE}/api/tasks/${t.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer testtok', 'X-Agent': 'alice' }, body: JSON.stringify({ status: 'done' }) });
-  await sleep(600);
+  await nowSays(/Every task is done/);
   check('phase Done', await page.$eval('.phases .cur', (e) => e.textContent) === 'Done', await page.$eval('.phases .cur', (e) => e.textContent));
   check('do-now: every task done', /Every task is done/.test(await now()), await now());
   await shots('8-done', { light: true });

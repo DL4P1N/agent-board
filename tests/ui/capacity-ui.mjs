@@ -49,6 +49,7 @@ await cy('claim_task', { id: T[2].id });
 const browser = await launchBrowser({ defaultViewport: { width: 1440, height: 1000 } });
 const errors = [];
 let page;
+const until = (fn, arg, timeout = 5000) => page.waitForFunction(fn, { timeout, polling: 100 }, arg).then(() => true).catch(() => false);
 const txt = (sel) => page.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ')).catch(() => '');
 const cardTxt = (id) => txt(`.card[data-id="${id}"]`);
 async function openCard(id) {
@@ -193,7 +194,7 @@ try {
   const qid = await page.$eval('#questions form', (f) => f.dataset.qform);
   await page.type(`#qa-${qid}`, '   ');
   await page.click(`[data-fk="qb-${qid}"]`);
-  await sleep(200);
+  await until((id) => /Type an answer first/.test(document.getElementById(`qe-${id}`)?.innerText || ''), qid);
   check('empty answer: inline error under the question', /Type an answer first/.test(await txt(`#qe-${qid}`)) && await page.$eval(`#qa-${qid}`, (e) => e.getAttribute('aria-invalid') === 'true'));
   check('empty answer not sent', !(await human('/state')).questions.find((q) => q.id === Number(qid)).answer);
   await page.type(`#qa-${qid}`, 'Yes');
@@ -202,7 +203,7 @@ try {
   // ---- screenshots: desktop dark + light, 390px; expanded rows show capacity per agent ----
   await human('/settings', 'PUT', { deadline: '' });
   await page.click('#people [data-o-agent="cy"]');
-  await sleep(400);
+  await until(() => /1 of 1 at once/.test(document.getElementById('o-det')?.innerText || ''));
   check('selected agent: tool, plan and "x of y at once"', /Codex · ChatGPT Edu · 1 of 1 at once/.test(await txt('#o-det')), await txt('#people'));
   await page.screenshot({ path: `${out}/desktop-dark.png`, fullPage: true });
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);

@@ -11,15 +11,15 @@ const human = (p, method = 'GET', body) => rest(board, 'dana', p, method, body);
 const parent = async (name = 'ana') => (await human('/state')).presence.find((p) => p.kind === 'agent' && p.name === name);
 const helper = async (h, name = 'ana') => (await parent(name))?.helpers.find((x) => x.name === h);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const until = async (fn, ms = 3000) => { for (const t0 = Date.now(); Date.now() - t0 < ms; await sleep(50)) if (await fn()) return true; return !!(await fn()); };
 
-// Count presence events on the live stream, so we know the web board is told to reload.
+// Count presence events on the live stream, so we know the web board is told to reload. The stream counts once its
+// headers are in (the server subscribes it before it sends them).
 let presenceEvents = 0;
 const ac = new AbortController();
-fetch(`${board.base}/api/stream`, { headers: { Authorization: `Bearer ${board.token}` }, signal: ac.signal }).then(async (r) => {
-  const dec = new TextDecoder();
-  for await (const chunk of r.body) presenceEvents += (dec.decode(chunk).match(/"kind":"presence"/g) || []).length;
+await fetch(`${board.base}/api/stream`, { headers: { Authorization: `Bearer ${board.token}` }, signal: ac.signal }).then((r) => {
+  (async () => { const dec = new TextDecoder(); for await (const chunk of r.body) presenceEvents += (dec.decode(chunk).match(/"kind":"presence"/g) || []).length; })().catch(() => {});
 }).catch(() => {});
-await sleep(300);
 
 await human('/settings', 'PUT', { goal: 'A small app to test helpers.' });
 const ana = await agent(board, 'ana');
@@ -34,8 +34,7 @@ const h1 = await helper('auth-worker');
 check('helper appears on its first call with `as` (name cleaned, lowercase)', !!h1, JSON.stringify((await parent()).helpers));
 check('new helper: active, model unknown (never guessed), not done, has times', h1?.active === true && h1.model === null && h1.done_at === null && h1.started_at > 0 && h1.last_seen >= h1.started_at, JSON.stringify(h1));
 check('current task is derived from what the helper claimed', h1?.task_id === t1.id, JSON.stringify(h1));
-await sleep(200);
-check('a new helper sends a presence event', presenceEvents > before, `${before} -> ${presenceEvents}`);
+check('a new helper sends a presence event', await until(() => presenceEvents > before), `${before} -> ${presenceEvents}`);
 check('claims are attributed <agent>/<as>', (await human('/state')).tasks.find((t) => t.id === t1.id)?.assignee === 'ana/auth-worker');
 
 // ---- model ----
@@ -44,8 +43,7 @@ await ana('board_status', { as: 'auth-worker', model: '  Claude Haiku 4.5\u0007\
 const m1 = (await helper('auth-worker'))?.model;
 check('board_status with as + model sets the helper model, sanitized (no control chars, max 60, trimmed)', typeof m1 === 'string' && m1.startsWith('Claude Haiku 4.5 x') && m1.length <= 60 && !/[\u0000-\u001f]/.test(m1), m1);
 check("the parent's own model is unaffected", (await parent()).model === 'Claude Opus 4.7', (await parent()).model);
-await sleep(200);
-check('a model change sends a presence event', presenceEvents > ev1, `${ev1} -> ${presenceEvents}`);
+check('a model change sends a presence event', await until(() => presenceEvents > ev1), `${ev1} -> ${presenceEvents}`);
 await ana('board_status', { as: 'auth-worker', model: ' \n ' });
 check('a blank model keeps the earlier one', (await helper('auth-worker')).model === m1);
 await ana('board_status', { as: 'auth-worker' });
@@ -71,8 +69,7 @@ const d = await ana('subagent_done', { as: 'auth-worker' });
 const hd = await helper('auth-worker');
 check('subagent_done marks the helper inactive with done_at', d.done === true && hd.active === false && hd.done_at > 0, JSON.stringify(hd));
 check('the other helper stays active', (await helper('ui-worker')).active === true);
-await sleep(200);
-check('finishing sends a presence event', presenceEvents > ev2, `${ev2} -> ${presenceEvents}`);
+check('finishing sends a presence event', await until(() => presenceEvents > ev2), `${ev2} -> ${presenceEvents}`);
 const noAs = await ana('subagent_done').catch((e) => String(e));
 check('subagent_done without as is refused', typeof noAs === 'string' || noAs.done !== true, JSON.stringify(noAs));
 await ana('board_status', { as: 'auth-worker' });

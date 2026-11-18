@@ -87,22 +87,25 @@ check('the web feed\'s "load earlier" page has none either', !(await human(`/eve
 
 // The live stream: humans get it; the presenter and other agents don't.
 {
+  // The stream has no replay: a listener counts once its response headers are in (the server subscribes it before it
+  // sends them). Absence is checked after a public marker posted later has reached every stream (events arrive in order).
   const listen = (token, as) => {
     const ctl = new AbortController(); const seen = [];
-    fetch(`${board.base}/api/stream?token=${token}`, { headers: { 'X-Agent': as }, signal: ctl.signal }).then(async (r) => {
-      const rd = r.body.getReader(); const dec = new TextDecoder();
-      for (;;) { const { value, done } = await rd.read(); if (done) break; seen.push(dec.decode(value)); }
-    }).catch(() => {});
-    return { text: () => seen.join(''), stop: () => ctl.abort() };
+    const ready = fetch(`${board.base}/api/stream?token=${token}`, { headers: { 'X-Agent': as }, signal: ctl.signal }).then((r) => {
+      (async () => { const rd = r.body.getReader(); const dec = new TextDecoder(); for (;;) { const { value, done } = await rd.read(); if (done) break; seen.push(dec.decode(value)); } })().catch(() => {});
+      return r.ok;
+    }).catch(() => false);
+    return { ready, text: () => seen.join(''), stop: () => ctl.abort() };
   };
-  const hs = listen(board.token, 'dana'); const vs = listen(VIEW, 'x'); const as = listen(AGENT, 'emil-codex'); const ms = listen(AGENT, 'maya-claude');
-  await sleep(400);
+  const streams = [listen(board.token, 'dana'), listen(VIEW, 'x'), listen(AGENT, 'emil-codex'), listen(AGENT, 'maya-claude')];
+  const [hs, vs, as, ms] = streams;
+  check('four live streams open (a human, the presenter, two agents)', (await Promise.all(streams.map((s) => s.ready))).every(Boolean));
   await dm('maya-claude', 'stream-secret-123');
-  await until(() => hs.text().includes('stream-secret-123'), 2000);
-  await sleep(300);
+  await call('/messages', { method: 'POST', body: { text: 'stream-marker-456' } });
+  const marked = await until(() => streams.every((s) => s.text().includes('stream-marker-456')), 5000);
   check('the live stream sends a direct message to humans', hs.text().includes('stream-secret-123'));
   check('…and to the recipient agent', ms.text().includes('stream-secret-123'));
-  check('…but not to the presenter or another agent', !vs.text().includes('stream-secret-123') && !as.text().includes('stream-secret-123'));
+  check('…but not to the presenter or another agent (a later public message reached them)', !!marked && !vs.text().includes('stream-secret-123') && !as.text().includes('stream-secret-123'));
   for (const s of [hs, vs, as, ms]) s.stop();
 }
 
