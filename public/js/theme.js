@@ -2,6 +2,7 @@
 
 import './task-dialog.js';
 import { $, ui } from './state.js';
+import { instantly } from './helpers.js';
 import { office, scenePalette } from './office.js';
 import { renderDocks } from './panels.js';
 
@@ -30,11 +31,14 @@ function syncThemeButtons() {
   const sw = $('theme-sw'); sw.className = 'sw sw-' + l[0]; sw.dataset.tp = l[0];
   $('theme-btn').setAttribute('aria-label', `Theme: ${l[1]}. Change it`); $('theme-btn').title = `Theme: ${l[1]}`;
 }
+// The whole page changes colour in one frame (no transitions while the new theme applies).
 function setTheme(t) {
-  themePref = window.applyTheme(t);
-  try { localStorage.setItem('board-theme', themePref); } catch {}
-  syncThemeButtons();
-  office.mod?.setTheme(scenePalette());
+  instantly(() => {
+    themePref = window.applyTheme(t);
+    try { localStorage.setItem('board-theme', themePref); } catch {}
+    syncThemeButtons();
+    office.mod?.setTheme(scenePalette());
+  });
 }
 // Under the theme button, kept inside the window, no taller than the room below the header (it scrolls inside itself
 // when that is short). Phones: a sheet from the bottom (CSS).

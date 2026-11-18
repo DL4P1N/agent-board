@@ -175,7 +175,7 @@ function card(t) {
 function doneOpen() {
   if (ui.doneOpen === 'open') return true;
   if (ui.doneOpen === 'closed') return false;
-  return ($('board').clientWidth || window.innerWidth) >= 5 * 170 + 50; // auto: only when all five columns fit
+  return innerWidth >= 1600; // auto: open on windows wide enough for all five columns beside the side columns, with 3D on or off
 }
 // Search box + Columns/Table toggle. The box is static HTML (never re-rendered), so typed text survives.
 const tv = { view: store.get('board-view') === 'table' ? 'table' : 'columns', q: '', sort: 'status', dir: 1 };
@@ -231,8 +231,6 @@ function renderBoard() {
   if (table) { if (state.tasks.length && !noMatch) renderTable(visible); return; }
   const dOpen = doneOpen();
   const tm = timeNow(); const frozen = tm.frozen && !tm.past;
-  $('board').classList.toggle('none', !state.tasks.length);
-  $('board').classList.toggle('done-closed', !dOpen);
   const html = COLS.map((s) => {
     // Proposed tasks sit at the top of Open until someone approves them; claimed ones in In progress.
     let items = colSort(visible.filter((t) => colOf(t) === s), s);
@@ -259,7 +257,10 @@ function renderBoard() {
       ${items.length ? `<ul class="cards">${items.map((t) => `<li>${card(t)}</li>`).join('')}</ul>` : empty ? `<div class="empty-note">${empty}</div>` : ''}${more}</div>`;
   }).join('');
   const el = $('board');
+  // Where the cards were, measured before anything changes (Done folding or opening moves every column).
   const before = boardDrawn && el._html !== html && canMove() ? cardRects() : null;
+  el.classList.toggle('none', !state.tasks.length);
+  el.classList.toggle('done-closed', !dOpen);
   // Roving tabindex only when the board was redrawn (focus moves between cards are handled by roveTo).
   if (patch(el, html)) roveCards();
   boardDrawn = true;

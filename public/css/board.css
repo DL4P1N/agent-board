@@ -29,7 +29,7 @@ label { font-size: var(--fs-meta); font-weight: 700; color: var(--muted); displa
 /* One button pair, the demo's .btn: filled (the main action) and ghost (everything else). Square, 2px border, bevel;
    pressing nudges it 1px like a key. .sm is the compact size, .danger the destructive fill. */
 button { background: var(--accent); color: var(--accent-ink); border: 2px solid var(--outline); border-radius: var(--r-sm); box-shadow: var(--bevel); padding: 0 var(--s5); min-height: var(--ctl); font-size: var(--fs-ctl); font-weight: 600; line-height: 1.2; cursor: pointer; white-space: nowrap;
-  transition: background-color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+  transition: background-color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease); }
 button:hover { background: var(--accent-hover); }
 button:active { transform: translate(1px, 1px); box-shadow: inset 2px 2px 0 var(--lo); }
 button:disabled { opacity: .55; cursor: default; transform: none; }
@@ -241,7 +241,7 @@ button.bell.blocked .slash { display: inline; }
 .nyou:has(> #q-panel:not([hidden])) > .now { padding-bottom: var(--s3); }
 .attn > h2 { color: var(--warn); font-size: var(--fs-sm); line-height: var(--lh-tight); margin-bottom: var(--s3); text-transform: none; letter-spacing: 0; }
 .attn > h2 .muted { font-weight: 400; font-size: var(--fs-meta); margin-left: var(--s2); }
-.qs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: var(--s4); }
+.qs { position: relative; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: var(--s4); }
 .qcard { background: var(--raised); border-radius: var(--r-md); padding: var(--s3) var(--s5) var(--s4); min-width: 0; }
 .qcard .qh { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); align-items: baseline; font-size: var(--fs-meta); }
 .qcard .qt { white-space: pre-wrap; overflow-wrap: anywhere; margin: var(--s2) 0 var(--s3); font-size: var(--fs-body); }
@@ -543,10 +543,10 @@ html[data-board-view="office"] .pagefoot { display: none; }
 /* ---------- dialogs ---------- */
 dialog { --dp: var(--s6); border: 2px solid var(--border); border-radius: var(--r-lg); background: var(--panel); color: var(--ink); width: min(680px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: var(--dp); box-shadow: var(--e3);
   opacity: 0; transform: translateY(8px) scale(.98);
-  transition: opacity 120ms ease-in, transform 120ms ease-in, overlay 120ms allow-discrete, display 120ms allow-discrete; }
+  transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease), overlay var(--t-fast) allow-discrete, display var(--t-fast) allow-discrete; }
 dialog[open] { opacity: 1; transform: none; transition: opacity var(--t-base) var(--ease), transform var(--t-slow) var(--ease), overlay var(--t-slow) allow-discrete, display var(--t-slow) allow-discrete; }
 @starting-style { dialog[open] { opacity: 0; transform: translateY(8px) scale(.98); } }
-dialog::backdrop { background: transparent; transition: background-color 120ms ease-in, overlay 120ms allow-discrete, display 120ms allow-discrete; }
+dialog::backdrop { background: transparent; transition: background-color var(--t-fast) var(--ease), overlay var(--t-fast) allow-discrete, display var(--t-fast) allow-discrete; }
 dialog[open]::backdrop { background: var(--scrim); transition: background-color var(--t-slow) var(--ease), overlay var(--t-slow) allow-discrete, display var(--t-slow) allow-discrete; }
 @starting-style { dialog[open]::backdrop { background: transparent; } }
 dialog:not([open]), dialog:not([open])::backdrop { pointer-events: none; }
@@ -709,6 +709,10 @@ button.tbc:active { transform: translate(1px, 1px); }
 @media (max-width: 600px) { .topbar .tb-goal { flex-basis: 100%; } }
 /* Popovers: the goal (under the top bar) and the demo time and who merges (under their top bar chips), each edited in place. */
 .o-pop { position: absolute; z-index: 8; max-height: min(70vh, 560px); }
+/* Every popover (these, the theme chooser, Setup) opens the same way: a short fade and 4px of travel from the chip it
+   opens under (a phone's theme sheet rises from the bottom). */
+.o-pop, .theme-pop, #setup { transition: opacity var(--t-base) var(--ease), translate var(--t-base) var(--ease); }
+@starting-style { .o-pop, .theme-pop, #setup { opacity: 0; translate: 0 -4px; } }
 .o-goal { top: calc(100% + var(--s4)); left: 0; width: min(560px, 100%); }
 .centre > .o-goal { top: 50px; }
 .o-dl, .o-merge, .o-plan, .o-roles { position: fixed; top: calc(var(--hdr, 54px) + var(--s2)); width: min(400px, calc(100vw - 24px)); z-index: 30; }
@@ -897,7 +901,7 @@ html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top)
 .toast { background: var(--toast); color: var(--toast-ink); border: 2px solid var(--border); padding: var(--s4) var(--s5); border-radius: var(--r-md); font-size: var(--fs-sm); max-width: 420px; box-shadow: var(--e2); pointer-events: none; overflow-wrap: anywhere; display: flex; align-items: center; gap: var(--s4);
   transition: opacity var(--t-base) var(--ease), transform var(--t-slow) var(--ease); }
 @starting-style { .toast { opacity: 0; transform: translateY(8px); } }
-.toast.out { opacity: 0; transform: translateY(4px); transition-duration: 120ms; }
+.toast.out { opacity: 0; transform: translateY(4px); transition-duration: var(--t-fast); }
 .toast.bad { background: var(--bad); color: var(--on-fill); border-color: var(--outline); }
 .toast button { pointer-events: auto; background: transparent; color: inherit; border: 2px solid currentColor; box-shadow: none; font-size: var(--fs-meta); padding: 0 var(--s4); min-height: var(--ctl-xs); }
 .toast button:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
@@ -913,6 +917,7 @@ button.tochat { display: none; } /* phones only (below) */
   .hpair { gap: var(--s2); }
   .theme-pop { top: auto; left: 0; right: 0; bottom: 0; z-index: 45; max-width: none; max-height: 78vh; border-width: 2px 0 0; padding-bottom: calc(var(--s4) + env(safe-area-inset-bottom, 0px)); }
   .tp-grid { grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); }
+  @starting-style { .theme-pop { translate: 0 4px; } } /* the sheet rises from the bottom */
   .conn { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; }
   #me-btn { max-width: 26vw; overflow: hidden; text-overflow: ellipsis; padding: 0 var(--s4); }
   main { padding: var(--s4) 14px 72px; gap: var(--gap); } /* 16px to the panels (their 2px margin); room under the last item for the Chat button */
@@ -948,11 +953,13 @@ button.tochat { display: none; } /* phones only (below) */
   #now .also .link { padding: var(--s2) 0; }
 }
 
-/* ---------- reduced motion: everything rests ---------- */
 /* Narrow phones: the logo stands for the wordmark (still read out), so the header stays one row. */
 @media (max-width: 420px) { header h1 .wm { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
+/* A theme or the 3D switch applies in one frame: no transitions for the two frames it takes (instantly(), helpers.js). */
+html.no-tx *, html.no-tx *::before, html.no-tx *::after, html.no-tx ::backdrop { transition: none !important; }
+/* ---------- reduced motion: everything rests ---------- */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  *, *::before, *::after, ::backdrop { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   .card:hover, button:active { transform: none; }
 }
 .dots::after { content: "…"; }

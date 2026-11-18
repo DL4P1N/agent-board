@@ -28,8 +28,10 @@
    Controls  Three heights: 32 (--ctl), 26 (--ctl-sm), 24 (--ctl-xs, inside cards and tabs); larger on touch.
              A press nudges a button 1px, like a key.
    Elevation e1 bevel only (buttons), e2 panel chrome, e3 dialog, e-glass the 3D view's glass panels.
-   Motion    fast 100ms (press, hover), base 160ms (state), slow 240ms (enter, move),
-             one ease-out curve. Nothing loops. Reduced motion turns all of it off.
+   Motion    Three durations and one ease-out curve, read by the scripts too: fast 100ms (press, hover, anything
+             leaving), base 160ms (state, a popover opening, a new line arriving), slow 240ms (panels folding and
+             opening, the board sliding, cards moving, the 3D switch). Nothing loops. A theme or the 3D switch
+             changes colours in one frame. Reduced motion turns all of it off.
    ========================================================================== */
 :root {
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif;

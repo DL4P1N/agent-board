@@ -2,7 +2,7 @@
 // chat composer with @ autocomplete, and the live announcements of activity for screen readers.
 
 import './tasks.js';
-import { $, ANYONE, me, seenMention, setSeenMention, state, store, ui } from './state.js';
+import { $, ANYONE, me, seenMention, setSeenMention, smooth, state, store, ui } from './state.js';
 import { agentRoot, ago, canMove, esc, fmt, hs, isMe, mentionsLite, mentionsMe, patch, plural, reveal, short,
   taskById, timeEl, toast, who } from './helpers.js';
 import { act, api, scheduleReload } from './data.js';
@@ -240,7 +240,8 @@ document.addEventListener('click', (ev) => {
 $('feed').addEventListener('scroll', () => { const f = $('feed'); if (f.scrollHeight - f.scrollTop - f.clientHeight < 40) $('jump').hidden = true; fadeFeed(); });
 // Older items above the top edge: fade it, so a cut-off line reads as "more above", not as a fragment.
 function fadeFeed() { const f = $('feed'); f.classList.toggle('more-above', f.scrollTop > 2); }
-$('jump').onclick = () => { $('feed').scrollTop = $('feed').scrollHeight; $('jump').hidden = true; };
+// New activity: the feed scrolls down to its latest line, like every other go-to link.
+$('jump').onclick = () => { $('feed').scrollTo({ top: $('feed').scrollHeight, behavior: smooth() }); $('jump').hidden = true; };
 
 // A mention counts as read once it has been visible in the feed for a moment.
 let mentionIO = null; const mentionTimers = new Map();

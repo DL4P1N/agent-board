@@ -111,53 +111,124 @@ function patch(el, html) {
   return true;
 }
 
-// ---------- motion: short, one-shot, and off under reduced motion ----------
-// Durations and the curve match --t-base / --t-slow / --ease in the stylesheet.
-const EASE = 'cubic-bezier(.2, .7, .2, 1)';
+/// ---------- motion: short, one-shot, and off under reduced motion ----------
+// Durations and the curve are the stylesheet's tokens (--t-fast, --t-base, --t-slow, --ease in tokens.css), read once.
+let tokens = null;
+function motion() {
+  if (tokens) return tokens;
+  const cs = getComputedStyle(document.documentElement);
+  const ms = (n, d) => { const v = cs.getPropertyValue(n).trim(), x = parseFloat(v); return Number.isFinite(x) ? (/ms$/.test(v) ? x : x * 1000) : d; };
+  const t = { fast: ms('--t-fast', 100), base: ms('--t-base', 160), slow: ms('--t-slow', 240), ease: cs.getPropertyValue('--ease').trim() || 'ease-out' };
+  if (cs.getPropertyValue('--t-slow').trim()) tokens = t; // the stylesheet is in: keep them
+  return t;
+}
 const canMove = () => !reduceMotion() && !document.hidden && typeof Element.prototype.animate === 'function';
 // Something new arrives: a short fade and a few pixels of travel.
-function reveal(n, dy = -4) { if (n && canMove()) n.animate([{ opacity: 0, transform: `translateY(${dy}px)` }, { opacity: 1, transform: 'none' }], { duration: 180, easing: EASE }); }
+function reveal(n, dy = -4) { if (n && canMove()) n.animate([{ opacity: 0, transform: `translateY(${dy}px)` }, { opacity: 1, transform: 'none' }], { duration: motion().base, easing: motion().ease }); }
+// Something leaves a list: the removed element (no longer in the page) fades out where it was, out of the flow, so
+// what stays can glide into its place. r: where it was; host: a positioned box it was inside.
+function leave(n, r, host) {
+  if (!n || !r?.width || !host || !canMove()) return;
+  const h = host.getBoundingClientRect();
+  for (const a of ['id', 'data-id', 'data-fk']) n.removeAttribute(a);
+  n.classList.add('leaving'); n.setAttribute('aria-hidden', 'true'); n.inert = true;
+  Object.assign(n.style, { position: 'absolute', margin: '0', left: `${r.left - h.left + host.scrollLeft - host.clientLeft}px`, top: `${r.top - h.top + host.scrollTop - host.clientTop}px`,
+    width: `${r.width}px`, height: `${r.height}px`, pointerEvents: 'none', zIndex: '1' });
+  host.append(n);
+  n.animate([{ opacity: 1 }, { opacity: 0 }], { duration: motion().fast, easing: motion().ease, fill: 'forwards' }).finished.then(() => n.remove(), () => n.remove());
+}
 // Where every card is on screen right now (mid-animation included, so a second move starts from where the card is).
 function cardRects() {
   const m = new Map();
-  for (const c of $('board').querySelectorAll('.card')) m.set(c.dataset.id, { r: c.getBoundingClientRect(), col: c.closest('.col')?.dataset.status });
+  for (const c of $('board').querySelectorAll('.card:not(.leaving)')) m.set(c.dataset.id, { r: c.getBoundingClientRect(), col: c.closest('.col')?.dataset.status, el: c });
   return m;
 }
-// After the board re-rendered: cards glide from where they were to where they are now; one that changed
-// column gets a ring that fades, a new one fades in. A big reshuffle (filter, resize) just snaps.
+// After the board re-rendered: cards glide from where they were to where they are now; one that changed column gets
+// a ring that fades, a new one fades in, one that went (rejected, cancelled) fades out where it was; Done folding or
+// opening glides the other columns' cards. A big reshuffle just snaps.
 function moveCards(before) {
-  const jobs = [];
-  for (const c of $('board').querySelectorAll('.card')) {
+  const jobs = [], now = new Set();
+  for (const c of $('board').querySelectorAll('.card:not(.leaving)')) {
+    now.add(c.dataset.id);
     const b = before.get(c.dataset.id);
     if (!b) { jobs.push([c, null]); continue; }
     const r = c.getBoundingClientRect(); const dx = b.r.left - r.left; const dy = b.r.top - r.top;
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) jobs.push([c, { dx, dy, col: b.col !== c.closest('.col')?.dataset.status }]);
   }
-  if (!jobs.length || jobs.length > 24) return;
+  const gone = [...before.entries()].filter(([id, b]) => !now.has(id) && !b.el.isConnected && !taskById(Number(id))); // off the board, not filtered out
+  if (jobs.length > 48) return;
+  const { slow, ease } = motion();
   const ring = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  if (gone.length <= 2) for (const [, b] of gone) leave(b.el, b.r, $('board'));
   for (const [c, j] of jobs) {
     if (!j) { reveal(c, 6); continue; }
-    c.animate([{ transform: `translate(${j.dx}px, ${j.dy}px)` }, { transform: 'none' }], { duration: j.col ? 260 : 200, easing: EASE });
-    if (j.col) c.animate([{ outline: `2px solid ${ring}`, outlineOffset: '1px' }, { outline: '2px solid transparent', outlineOffset: '1px' }], { duration: 900, easing: 'ease-out' });
+    c.animate([{ transform: `translate(${j.dx}px, ${j.dy}px)` }, { transform: 'none' }], { duration: slow, easing: ease });
+    if (j.col) c.animate([{ outline: `2px solid ${ring}`, outlineOffset: '1px' }, { outline: '2px solid transparent', outlineOffset: '1px' }], { duration: slow * 4, easing: ease });
   }
 }
+// Panels folding and opening, the Tasks window sliding, Setup opening: apply() makes the change, and the boxes it
+// resizes or pushes move from where they were to where they are now, in step, at --t-slow; their neighbours follow
+// through the layout, so nothing jumps and nothing snaps at the end.
+//   size: boxes whose height may change (every panel of a column: one folds, the others give or take its room)
+//   pin:  [panel, body] for the panel that folds or opens: its body keeps its open height (clipped, not squeezed) and
+//         stays shown (.o-moving) until the panel has landed
+//   move: boxes that are only pushed (they slide from their old place)
+//   open: a box that appears above the pushed ones: it is uncovered from the top down as they slide away
+// A second change mid-way starts from where things are. With reduced motion it's instant. The promise resolves when
+// everything has landed (false if a newer change took over).
+function glide(apply, { size = [], pin = null, move = [], open = null } = {}) {
+  size = size.filter(Boolean); move = move.filter(Boolean);
+  const [pp, pb] = pin || [];
+  const all = [...size, ...move, pb].filter(Boolean);
+  // Stop what is moving here (a panel interrupted mid-fold lands at once; its height animates on from where it was).
+  const stop = () => { for (const e of all) { for (const a of e.getAnimations({ subtree: true })) if (a.id === 'glide') a.cancel(); e.classList.remove('o-moving'); } };
+  if (!canMove()) { stop(); apply(); return Promise.resolve(true); }
+  const h0 = size.map((e) => e.getBoundingClientRect().height), y0 = move.map((e) => e.getBoundingClientRect().top), o0 = open?.offsetHeight;
+  const bh0 = pb ? pb.getBoundingClientRect().height : 0;
+  stop();
+  apply();
+  const h1 = size.map((e) => e.getBoundingClientRect().height), y1 = move.map((e) => e.getBoundingClientRect().top);
+  const { slow: duration, ease: easing } = motion(), o = { duration, easing, id: 'glide' };
+  const box = (h) => ({ height: `${h}px`, minHeight: '0px', maxHeight: 'none', flexGrow: 0, flexShrink: 0, flexBasis: 'auto', overflow: 'hidden' });
+  const anims = [];
+  size.forEach((e, i) => { if (Math.abs(h0[i] - h1[i]) > 1) anims.push(e.animate([box(h0[i]), box(h1[i])], o)); });
+  move.forEach((e, i) => { if (Math.abs(y0[i] - y1[i]) > 1) anims.push(e.animate([{ transform: `translateY(${y0[i] - y1[i]}px)` }, { transform: 'none' }], o)); });
+  if (open && !o0 && open.offsetHeight && anims.length) anims.push(open.animate([{ clipPath: 'inset(0 -8px 100% -8px)' }, { clipPath: 'inset(0 -8px -8px -8px)' }], o)); // its shadow included
+  if (!anims.length) return Promise.resolve(true);
+  const tok = {};
+  if (pp) {
+    const keep = { height: `${Math.max(bh0, pb.getBoundingClientRect().height)}px`, flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }; // folding: as it was; opening: as it will be
+    pp.classList.add('o-moving'); pp._glide = tok;
+    anims.push(pb.animate([keep, keep], o));
+  }
+  return Promise.all(anims.map((a) => a.finished)).then(() => { if (pp?._glide === tok) pp.classList.remove('o-moving'); return true; }, () => false);
+}
+// The whole page changes look at once (a theme, the 3D switch): no colour or border transitions while it applies.
+function instantly(fn) {
+  const h = document.documentElement; h.classList.add('no-tx');
+  try { fn(); } finally { requestAnimationFrame(() => requestAnimationFrame(() => h.classList.remove('no-tx'))); }
+}
 
-// action: { label, run } adds a button (e.g. Undo); such toasts stay a little longer.
+// action: { label, run } adds a button (e.g. Undo); such toasts stay a little longer. Every toast leaves the same way
+// (.out: a short fade), whether its time is up, its button was pressed or newer ones pushed it out.
+function toastOut(d) {
+  if (!d.isConnected || d.classList.contains('out')) return;
+  if (reduceMotion()) return d.remove();
+  d.classList.add('out'); setTimeout(() => d.remove(), motion().fast + 20);
+}
 function toast(msg, bad = false, action = null) {
   const d = document.createElement('div');
   d.className = 'toast' + (bad ? ' bad' : '');
   const s = document.createElement('span'); s.textContent = msg; d.append(s);
   if (action) {
     const b = document.createElement('button'); b.type = 'button'; b.textContent = action.label;
-    b.onclick = () => { d.remove(); action.run(); }; d.append(b);
+    b.onclick = () => { toastOut(d); action.run(); }; d.append(b);
   }
   if (bad) d.setAttribute('role', 'alert');
   $('toasts').append(d);
-  while ($('toasts').children.length > 3) $('toasts').firstChild.remove();
-  setTimeout(() => {
-    if (!d.isConnected || reduceMotion()) return d.remove();
-    d.classList.add('out'); setTimeout(() => d.remove(), 140);
-  }, bad ? 7000 : action ? 8000 : 3500);
+  const shown = [...$('toasts').children].filter((t) => !t.classList.contains('out'));
+  shown.slice(0, Math.max(0, shown.length - 3)).forEach(toastOut);
+  setTimeout(() => toastOut(d), bad ? 7000 : action ? 8000 : 3500);
 }
 function announce(msg) { const a = $('announcer'); a.textContent = ''; setTimeout(() => { a.textContent = msg; }, 60); }
 
@@ -167,6 +238,6 @@ const nameTag = (n) => `<b class="pc" ${hs(n)}>${esc(n)}</b>`;
 // " (you)" after my own name, unless my name already says it.
 const youTag = (n) => (n === me && String(n).toLowerCase() !== 'you' ? ' (you)' : '');
 
-export { agentRoot, ago, announce, canMove, cardRects, clock, cmdBox, esc, fmt, fullTime, FUNNEL, hs, hue, isHttps,
-  isMe, isStale, isWebUrl, knownPeople, mentionsLite, mentionsMe, moveCards, nameHash, nameTag, ownerOffline, patch,
-  plural, reveal, root, short, taskById, timeEl, toast, when, who, youTag };
+export { agentRoot, ago, announce, canMove, cardRects, clock, cmdBox, esc, fmt, fullTime, FUNNEL, glide, hs, hue,
+  instantly, isHttps, isMe, isStale, isWebUrl, knownPeople, leave, mentionsLite, mentionsMe, motion, moveCards, nameHash,
+  nameTag, ownerOffline, patch, plural, reveal, root, short, taskById, timeEl, toast, when, who, youTag };

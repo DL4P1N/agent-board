@@ -62,6 +62,20 @@ try {
   check('a click on Dusk applies it (data-theme=dusk, its tokens, even with an OS in light) and closes the chooser, focus back on the button', (await attr()) === 'dusk' && (await bg()) === 'rgb(27, 21, 48)' && await page.evaluate(() => $('theme-pop').hidden && document.activeElement === $('theme-btn')), `${await attr()} ${await bg()}`);
   check('Dusk is checked, the others are not; the button shows its swatch and name', await page.evaluate(() => [...document.querySelectorAll('#theme-pop [data-theme-set]')].filter((b) => b.getAttribute('aria-checked') === 'true').map((b) => b.dataset.themeSet).join() === 'dusk' && $('theme-sw').dataset.tp === 'dusk' && /Theme: Dusk/.test($('theme-btn').getAttribute('aria-label'))));
 
+  // A new theme changes every colour in one frame (no colour transitions), and the chooser opens with a short fade.
+  const oneFrame = await page.evaluate(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    const els = ['.col', '#send', '.o-panel', '.tbc', '#theme-btn'].map((q) => document.querySelector(q)).filter(Boolean);
+    const css = () => els.map((e) => { const c = getComputedStyle(e); return [c.backgroundColor, c.borderTopColor, c.color].join(); }).join(' | ');
+    const a = css(); setTheme('day'); await frame(); const b = css(); await new Promise((r) => setTimeout(r, 400)); const c = css();
+    const tx = document.getAnimations().filter((x) => x instanceof CSSTransition).length;
+    await frame(); await frame(); await frame();
+    $('theme-btn').click(); await frame();
+    const fade = $('theme-pop').getAnimations().map((x) => x.transitionProperty).sort().join();
+    $('theme-btn').click(); setTheme('dusk');
+    return { changed: a !== b, same: b === c, n: els.length, tx, fade };
+  });
+  check('a new theme changes every colour in one frame (no transitions while it applies); the chooser opens with a short fade and 4px of travel', oneFrame.changed && oneFrame.same && oneFrame.n === 5 && oneFrame.tx === 0 && oneFrame.fade === 'opacity,translate', JSON.stringify(oneFrame));
   // Keyboard: a 2-D grid. Left/right walk the tiles (wrapping), up/down move a row (staying put at the edges), Home/End;
   // each move applies the theme and keeps the chooser open; one Tab stop.
   await page.click('#theme-btn');

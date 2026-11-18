@@ -3,7 +3,7 @@
 
 import './activity.js';
 import { $, ANYONE, LABEL, seenMention, setSeenMention, smooth, state, store, ui } from './state.js';
-import { agentRoot, ago, announce, clock, esc, mentionsMe, plural, reveal, taskById, toast, when } from './helpers.js';
+import { agentRoot, ago, announce, clock, esc, glide, mentionsMe, plural, reveal, taskById, toast, when } from './helpers.js';
 import { act, api, load, scheduleReload } from './data.js';
 import { agentInfoNow, bouncedTasks, cutTasks, dlSkipped, filterRoot, openQuestions, setupInfo, setupOpen, stepOpen,
   teamCapacity } from './derived.js';
@@ -14,7 +14,7 @@ import { askAgents, doneOpen, moveTask, pingedAt, renderBoard, tv } from './task
 import { closeAc, growMsg, openDm } from './activity.js';
 import { openTask } from './task-dialog.js';
 import { boardView, needBoard } from './office.js';
-import { oAct, oDl, oGoal, oMerge, oPlan, oRoles, oSetup, oShow, pickAgent, renderDocks, renderOffice } from './panels.js';
+import { oAct, oDl, oGoal, oMerge, oPlan, oRoles, oSetup, oShow, pickAgent, renderDocks, renderOffice, setupFocus } from './panels.js';
 import { togglePalette } from './palette.js';
 
 let keysOn = store.get('board-keys') !== 'off';
@@ -402,7 +402,13 @@ function doAct(a, el) {
       $('dl-in')?.focus();
     }).catch((e) => toast(e.message, true));
   }
-  if (a === 'setup-open' || a === 'setup-close') return oSetup(a === 'setup-open');
+  if (a === 'setup-open' || a === 'setup-close') {
+    const open = a === 'setup-open';
+    if (boardView === 'office') return oSetup(open);
+    // With 3D off Setup opens over the board, which slides down to make room (and back up when it closes).
+    glide(() => oSetup(open, false), { move: [$('boardwrap')], open: $('setup') });
+    return setupFocus(open);
+  }
   if (a === 'invite') return goStep('invite');
   if (a === 'copy-invite') return copyText(inviteText(), document.querySelector('[data-act="copy-invite"]'), 'Invite copied. Paste it in your team chat.');
   if (a === 'addrs') { ui.addrs = !ui.addrs; return render(); }

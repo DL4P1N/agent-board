@@ -144,8 +144,14 @@ await page.keyboard.press('Escape');
 await sleep(150);
 check('Escape closes dialog', await page.evaluate(() => !document.getElementById('task-dlg').open));
 
-// drag & drop (synthetic HTML5 DnD). Done starts collapsed when six columns don't fit: open it to see the card.
-if (await page.$('[data-fk="done-tog"]')) await page.click('[data-fk="done-tog"]');
+// drag & drop (synthetic HTML5 DnD). Done starts collapsed below 1600px wide (3D on or off): open it to see the card.
+// Opening it moves the other columns: their cards glide to their new places (measured before the change).
+const dGlide = await page.evaluate(() => {
+  const b = document.querySelector('[data-fk="done-tog"]'); if (!b) return { open: true };
+  b.click();
+  return { moving: [...document.querySelectorAll('#board .col:not(.s-done) .card')].filter((c) => c.getAnimations().some((a) => /translate/.test(JSON.stringify(a.effect.getKeyframes())))).length };
+});
+check('Done starts folded at 1440px; opening it glides the other columns\' cards to their places', dGlide.moving > 0, JSON.stringify(dGlide));
 await page.evaluate((id) => {
   const card = document.querySelector(`.card[data-id="${id}"]`); const col = document.getElementById('col-done');
   const dt = new DataTransfer();

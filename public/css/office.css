@@ -34,7 +34,7 @@ html[data-board-view="office"] .office-view { display: block; position: absolute
 .office-scene .ab-more { border-top-color: var(--border); }
 .office-scene .ab-bub { background: var(--panel); color: var(--ink); border-color: var(--ink); }
 .office-scene .ab-bub:after { border-top-color: var(--ink); }
-.office-scene { transition: opacity 300ms var(--ease); }
+.office-scene { transition: opacity var(--t-slow) var(--ease); }
 .office-view.loading .office-scene { opacity: 0; transition: none; }
 .office-load { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; margin: 0; color: var(--muted); font: var(--fs-sm) var(--mono); }
 .office-view.loading .office-load { display: flex; }

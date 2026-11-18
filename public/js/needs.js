@@ -3,7 +3,7 @@
 
 import './render.js';
 import { $, ALL_PHASES, ANYONE, me, oUi, state, ui } from './state.js';
-import { ago, esc, fmt, fullTime, patch, plural, root, short, taskById, who } from './helpers.js';
+import { ago, canMove, esc, fmt, fullTime, leave, motion, patch, plural, reveal, root, short, taskById, who } from './helpers.js';
 import { agentInfoNow, agentOf, approvalWait, blockedSplit, bouncedTasks, cutTasks, dlSkipped, setupShown,
   teamCapacity, timeNow } from './derived.js';
 
@@ -20,8 +20,8 @@ function renderNeeds(qOpen, unread) {
   patch($('needs'), n ? `<button type="button" data-go="now" data-fk="n-all" title="${esc(list.join(' · '))}" aria-label="${esc(`${n} ${n === 1 ? 'thing needs' : 'things need'} attention: ${list.join(', ')}. Go to Needs attention`)}">${n} need${n === 1 ? 's' : ''} attention <span aria-hidden="true">↑</span></button>` : '');
   syncNeeds();
 }
-// Hidden while What to do now is on screen (below the sticky header), and while Needs attention is folded to its chip (the
-// chip has the count).
+// Hidden while What to do now is on screen (below the sticky header), and while Needs attention is folded (its title bar
+// has the count).
 let nowSeen = true;
 function setNowSeen(v) { nowSeen = v; } // tests set it (through window, see boot.js)
 function syncNeeds() { $('needs').hidden = nowSeen || !!oUi.left; }
@@ -129,10 +129,15 @@ function renderNow(qOpen, unread, si) {
 }
 
 function renderQuestions(qOpen) {
-  $('q-panel').hidden = !qOpen.length;
+  // A new question fades in, an answered one fades out where it was, and the others glide to their places.
+  const box = $('questions');
+  const was = box._html !== undefined && canMove() ? new Map([...box.children].map((c) => [c.id, { el: c, r: c.getBoundingClientRect() }])) : null;
+  const gone = was && !qOpen.length && was.size;
+  $('q-panel').hidden = !qOpen.length && !gone;
+  if (gone) setTimeout(() => { if (!box.children.length || [...box.children].every((c) => c.classList.contains('leaving'))) $('q-panel').hidden = true; }, motion().fast + 20);
   // Screen readers only: the cards say it.
   patch($('q-h'), qOpen.length ? `${qOpen.length === 1 ? 'An agent is' : `${qOpen.length} agents are`} waiting for a human answer` : '');
-  patch($('questions'), qOpen.map((q) => {
+  const changed = patch(box, qOpen.map((q) => {
     const t = q.task_id && taskById(q.task_id);
     const old = Date.now() - q.created_at > 30 * 60e3; // muted text; amber only once it has waited half an hour
     return `<article class="qcard" id="q-${q.id}" aria-label="Question from ${esc(q.asker)}">
@@ -145,6 +150,14 @@ function renderQuestions(qOpen) {
         <button type="submit" data-fk="qb-${q.id}">Answer</button>
       </form><div class="err" id="qe-${q.id}" role="alert">${esc(ui.qErr?.[q.id] || '')}</div></article>`;
   }).join(''));
+  if (changed && was) {
+    for (const c of box.children) {
+      const b = was.get(c.id); if (!b) { reveal(c); continue; }
+      const dy = b.r.top - c.getBoundingClientRect().top;
+      if (Math.abs(dy) > 1) c.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: motion().slow, easing: motion().ease });
+    }
+    for (const b of was.values()) if (!b.el.isConnected) leave(b.el, b.r, box);
+  }
   // Under the cards, muted: what answering them unblocks (each card's task says "question waiting").
   const nb = blockedSplit(qOpen).asked.length;
   $('q-sum').hidden = !nb;
