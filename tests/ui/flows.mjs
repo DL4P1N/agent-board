@@ -274,26 +274,26 @@ await page.screenshot({ path: `${out}/v2-desktop-light.png` });
 
 // The 3D Tasks window: the Board view's drag & drop (the same handlers and rules) between its columns.
 {
-  const dragT = await rest('dana', '/tasks', 'POST', { title: '3D drag test' });
+  const dragT = await rest('dana', '/tasks', 'POST', { title: '3D drag test', priority: 1 }); // P1: at the top of Open (a long column shows its first cards)
   await page.waitForFunction((id) => !!taskById(id), { timeout: 5000 }, dragT.id);
   await page.click('#vseg [data-vset="office"]');
   const in3d = await page.waitForFunction(() => document.documentElement.dataset.boardView === 'office', { timeout: 8000 }).then(() => true, () => false);
   if (!in3d) check('3D drag skipped: no WebGL in this browser', true);
   else {
     await page.evaluate(() => { if ($('o-tasks').classList.contains('folded')) $('o-tasks-fold').click(); });
-    await page.waitForSelector(`#o-cols .o-col[data-s="open"] .o-card[data-open-task="${dragT.id}"]`, { timeout: 5000 });
-    check('3D: Tasks window cards are draggable', await page.$eval(`.o-card[data-open-task="${dragT.id}"]`, (c) => c.draggable));
+    await page.waitForSelector(`#o-tasks-b .col[data-status="open"] .card[data-id="${dragT.id}"]`, { timeout: 5000 });
+    check('3D: the Tasks window shows the board itself (one board), its cards draggable', await page.$eval(`#o-tasks-b .card[data-id="${dragT.id}"]`, (c) => c.draggable));
     await page.evaluate((id) => {
-      const card = document.querySelector(`#o-cols .o-card[data-open-task="${id}"]`); const col = document.querySelector('#o-cols .o-col[data-s="review"]');
+      const card = document.querySelector(`#o-tasks-b .card[data-id="${id}"]`); const col = document.querySelector('#o-tasks-b .col[data-status="review"]');
       const dt = new DataTransfer();
       card.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
       col.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
       col.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
       card.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }));
     }, dragT.id);
-    await page.waitForFunction((id) => document.querySelector(`#o-cols .o-col[data-s="review"] .o-card[data-open-task="${id}"]`), { timeout: 5000 }, dragT.id).catch(() => {});
+    await page.waitForFunction((id) => document.querySelector(`#o-tasks-b .col[data-status="review"] .card[data-id="${id}"]`), { timeout: 5000 }, dragT.id).catch(() => {});
     const dr = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === dragT.id);
-    check('3D: dragging a card from Open to Review moves it (the server has it in Review, its card in that column)', dr.status === 'review' && !!(await page.$(`#o-cols .o-col[data-s="review"] .o-card[data-open-task="${dragT.id}"]`)), dr.status);
+    check('3D: dragging a card from Open to Review moves it (the server has it in Review, its card in that column)', dr.status === 'review' && !!(await page.$(`#o-tasks-b .col[data-status="review"] .card[data-id="${dragT.id}"]`)), dr.status);
     await page.click('#vseg [data-vset="board"]');
     await page.waitForFunction(() => document.documentElement.dataset.boardView === 'board', { timeout: 5000 });
   }

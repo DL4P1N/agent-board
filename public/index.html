@@ -674,7 +674,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   @media (max-width: 760px) { .board, .board.done-closed { grid-template-columns: minmax(0, 1fr); overflow: visible; } .board.none { display: none; } }
   /* Columns: the demo's .tv-col, a sunken box whose heading is a title bar. */
   .col { background: var(--sunken); border-radius: var(--r-lg); padding: 0 var(--s3) var(--s3); min-height: 90px; border: 2px solid var(--line); min-width: 0; transition: background-color var(--t-base) var(--ease), border-color var(--t-base) var(--ease); }
-  .col.drop, .o-col.drop { border-color: var(--accent); background: var(--accent-soft); }
+  .col.drop { border-color: var(--accent); background: var(--accent-soft); }
   .col .cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s3); }
   /* Column heading: status dot, name, count. The dot is the status colour used everywhere. */
   .col h3 { font-size: var(--fs-meta); font-weight: 700; line-height: var(--lh-tight); color: var(--ink); margin: 0 calc(-1 * var(--s3)) var(--s2); padding: var(--s2) var(--s4); min-height: 28px; border-bottom: 2px solid var(--line); display: flex; align-items: center; gap: var(--s3); }
@@ -719,7 +719,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .card.has-owner { border-left-color: hsl(var(--h) 60% var(--dl)); }
   .card:hover { box-shadow: inset 0 0 0 2px var(--line-strong); }
   .card:active { transform: translate(1px, 1px); }
-  .card.dragging, .o-card.dragging { opacity: .4; }
+  .card.dragging { opacity: .4; }
 
   .card.stale { background: var(--stale); }
   .card.proposed { box-shadow: inset 0 0 0 2px var(--line); }
@@ -1194,10 +1194,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .office-scene .ab-more { border-top-color: var(--border); }
   .office-scene .ab-bub { background: var(--panel); color: var(--ink); border-color: var(--ink); }
   .office-scene .ab-bub:after { border-top-color: var(--ink); }
-  /* Switching views (viewAnim): the panels both views share stay still; only the centre moves. Board → 3D: a copy of
-     the board (.vt-ghost) covers the centre until the room has drawn a fresh frame (no blank or stale frame shows),
-     then drops down into the Tasks window at the foot, showing the room behind it. 3D → Board: the board rises back
-     up from there. Reduced motion: an instant switch. */
+  /* Switching views (viewAnim): the panels both views share stay still; only the tasks move, the one board: from the
+     Board view's centre down into the Tasks window at the foot (showing the room behind it, once drawn), and back up.
+     With the window folded, a copy of the board (.vt-ghost) drops off the bottom instead. Reduced motion: instant. */
   .vt-ghost { position: fixed; z-index: 2; margin: 0; pointer-events: none; overflow: hidden; background: var(--bg); will-change: transform, opacity; }
   .office-scene { transition: opacity 300ms var(--ease); }
   .office-view.loading .office-scene { opacity: 0; transition: none; }
@@ -1223,8 +1222,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-tasks.max { left: var(--o-x); right: var(--o-x); top: calc(var(--o-y) + var(--o-gap) + var(--tb-h, 48px)); height: auto; z-index: 6; } /* under the top bar, which stays */
   .o-tasks > .o-head { padding-left: var(--s4); }
   .o-tasks .taskbar { flex: 1 1 auto; min-width: 0; margin: 0; flex-wrap: nowrap; gap: var(--s4); }
-  .o-tasks .taskbar .tsearch { flex: 0 1 240px; }
-  .o-tasks .taskbar .filter select { max-width: 150px; }
   .o-tasks .taskbar .tabs { margin-left: auto; flex: none; flex-wrap: nowrap; }
   .o-tasks .taskbar .tabs button { white-space: nowrap; }
   /* Open, the window is at least about two cards tall, so a short screen still shows whole cards. */
@@ -1236,54 +1233,14 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-tasks.folded { left: 50%; right: auto; translate: -50% 0; width: max-content; height: auto; max-width: calc(100% - var(--o-cl) - var(--o-cr)); }
   .o-tasks.folded > .o-head { gap: var(--s5); }
   .o-tasks.folded #o-tasks-max { display: none; }
-  .o-cols { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s3); height: 100%; min-height: 0; }
   .o-tasks .o-body { padding: var(--s3) var(--s4) var(--s4); overflow: hidden; }
   .o-tasks .ttable { height: 100%; margin: 0; overflow: auto; box-shadow: none; background: transparent; }
-  .o-col { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: color-mix(in srgb, var(--sunken) 70%, transparent); border: 2px solid var(--line); }
-  .o-col h3 { display: flex; align-items: center; gap: var(--s3); margin: 0; padding: 2px var(--s3); min-height: 26px; border-bottom: 2px solid var(--line); font: 700 var(--fs-meta)/1.2 var(--mono); color: var(--ink); white-space: nowrap; overflow: hidden; }
-  .o-col h3 .dclose { background: none; border: 0; box-shadow: none; padding: 0 var(--s2); min-height: var(--ctl-xs); color: var(--muted); font-size: var(--fs-meta); }
-  .o-col h3 .dclose:hover { background: none; color: var(--ink); }
-  .o-cols.done-closed { grid-template-columns: repeat(4, minmax(0, 1fr)) 40px; }
-  .o-col.collapsed h3 { border: 0; padding: 0; height: 100%; align-items: stretch; }
-  .o-col.collapsed h3::before { display: none; } /* folded, the ✓ is its mark */
-  .o-col.collapsed .dtog { min-height: 0; height: 100%; padding: var(--s3) 0; justify-content: flex-start; }
-  .o-col.collapsed .dtog .o-c { margin: 0; }
-  .o-col h3 > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .o-col h3::before { content: ""; width: 8px; height: 8px; flex: 0 0 auto; box-shadow: inset 0 0 0 2px var(--field-line); }
-  .o-col.s-in_progress h3::before { background: var(--info); box-shadow: 0 0 0 1px var(--outline); }
-  .o-col.s-blocked h3::before { background: var(--bad); box-shadow: 0 0 0 1px var(--outline); }
-  .o-col.s-review h3::before { background: var(--review); box-shadow: 0 0 0 1px var(--outline); }
-  .o-col.s-done h3::before { background: var(--ok); box-shadow: 0 0 0 1px var(--outline); }
-  .o-col h3 .o-c { margin-left: auto; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
-  .o-col.s-blocked.has h3 .o-c { color: var(--bad); font-weight: 700; }
-  .o-col ul { list-style: none; margin: 0; padding: var(--s2); display: flex; flex-direction: column; gap: var(--s2); overflow-y: auto; min-height: 0; flex: 1 1 auto; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
-  .o-col .o-none { color: var(--muted); font-size: var(--fs-meta); padding: var(--s2); }
-  .o-col ul { scroll-snap-type: y proximity; } .o-col li { scroll-snap-align: start; }
-  /* "Show N more" right under the last whole card (the list is cut there, so no card shows half); a click scrolls to them. */
-  .o-col .o-more { flex: none; display: block; width: 100%; min-height: 0; margin: 0; padding: 1px var(--s3) 2px; background: var(--sunken); border: 0; border-top: 1px solid var(--line); box-shadow: none; border-radius: 0; color: var(--muted); font: var(--fs-micro)/1.4 var(--mono); text-align: center; }
-  .o-col .o-more:hover { background: var(--sunken); color: var(--ink); }
-  .o-col .o-more[hidden] { display: none; }
-  .o-card { display: block; width: 100%; min-height: 0; padding: var(--s2) var(--s3); text-align: left; white-space: normal; font-size: var(--fs-sm); font-weight: 400; line-height: 1.3;
-    background: color-mix(in srgb, var(--raised) 88%, transparent); color: var(--ink); border: 0; border-left: 4px solid var(--line-strong); box-shadow: none; }
-  .o-card:hover { background: var(--raised); box-shadow: inset 0 0 0 2px var(--line-strong); }
-  .o-card:active { transform: translate(1px, 1px); box-shadow: none; }
-  .o-card.has-owner { border-left-color: hsl(var(--h) 60% var(--dl)); }
-  .o-card .o-ct { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
-  .o-tasks.max .o-card .o-ct { -webkit-line-clamp: 3; line-clamp: 3; }
-  .o-card .id { color: var(--muted); font-variant-numeric: tabular-nums; }
-  .o-card .o-cw { display: block; color: var(--muted); font-size: var(--fs-meta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .o-card .o-cw.bad { color: var(--bad); white-space: normal; }
-  .o-card .o-cm { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); align-items: center; margin-top: var(--s2); font-size: var(--fs-meta); color: var(--muted); }
-  .o-card .o-cm .pill { line-height: 18px; }
-  .o-card.proposed { box-shadow: inset 0 0 0 2px var(--line); }
-  .o-card.stale { background: color-mix(in srgb, var(--stale) 88%, transparent); }
-  .o-col li { display: flex; flex-direction: column; gap: 2px; }
-  .o-ca { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
-  .o-ca button { font-size: var(--fs-meta); padding: 0 var(--s4); min-height: var(--ctl-xs); }
-  .o-ca .qb { background: none; color: var(--accent); font-weight: 700; border: 0; box-shadow: none; padding: 0 var(--s1); text-decoration: underline; text-underline-offset: 2px; }
-  .o-ca .qb:hover { background: none; text-decoration-thickness: 2px; }
-  .o-ca .rj { display: flex; gap: var(--s2); width: 100%; }
-  .o-ca .rj input { padding: 2px var(--s3); min-height: var(--ctl-xs); font-size: var(--fs-meta); }
+  /* The board itself in the Tasks window: its columns as tall as their cards (as on the Board view) up to the window's
+     height, each list scrolling inside itself. */
+  .o-tasks .board { height: 100%; grid-template-rows: minmax(0, 1fr); overflow-y: hidden; }
+  .o-tasks .col { display: flex; flex-direction: column; min-height: 0; max-height: 100%; }
+  .o-tasks .col .cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  .o-tasks .col > .more { flex: none; }
   .o-bar, .mbar { display: inline-block; width: 48px; height: 8px; background: var(--field); box-shadow: 0 0 0 1px var(--line-strong); }
   .o-bar i, .mbar i { display: block; height: 100%; background: var(--ok); }
 
@@ -1501,11 +1458,11 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <section id="office-view" class="office-view" aria-label="3D office">
       <div id="office-scene" class="office-scene" role="img" aria-label="The team's agents in a 3D office, one character per online agent. The Agents panel lists the same agents"></div>
       <p class="office-load" aria-hidden="true">Loading the 3D office…</p>
-      <!-- Tasks: the Board view's columns in a window at the foot of the room. Its title bar is the Board view's task bar
-           (Tasks, search, Show), moved in here while the 3D view is on. -->
+      <!-- Tasks: the Board view's tasks in a window at the foot of the room, moved in here while the 3D view is on (officeMount):
+           its task bar (Tasks, search, Show) is the title bar, its columns (or table) the body. -->
       <section class="o-panel o-tasks" id="o-tasks" aria-labelledby="b-h">
         <div class="o-head" id="o-tasks-head"><button type="button" class="o-ib" id="o-tasks-max" data-o-max aria-pressed="false" aria-label="Maximise the tasks" title="Maximise"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><button type="button" class="o-ib" id="o-tasks-fold" data-o-fold="tasks" aria-expanded="true" aria-controls="o-tasks-b" aria-label="Fold the tasks to their title bar" title="Fold"><span class="chev" aria-hidden="true">▾</span></button></div>
-        <div class="o-body" id="o-tasks-b"><div class="o-cols" id="o-cols"></div></div>
+        <div class="o-body" id="o-tasks-b"></div>
       </section>
     </section>
 
@@ -3229,7 +3186,7 @@ function card(t) {
 function doneOpen() {
   if (ui.doneOpen === 'open') return true;
   if (ui.doneOpen === 'closed') return false;
-  return ($('board').clientWidth || $('o-cols').clientWidth || window.innerWidth) >= 5 * 170 + 50; // auto: only when all five columns fit
+  return ($('board').clientWidth || window.innerWidth) >= 5 * 170 + 50; // auto: only when all five columns fit
 }
 // Search box + Columns/Table toggle. The box is static HTML (never re-rendered), so typed text survives.
 const tv = { view: store.get('board-view') === 'table' ? 'table' : 'columns', q: '', sort: 'status', dir: 1 };
@@ -3537,7 +3494,7 @@ function moveAskHtml(t, pre = '') {
 const focusMoveAsk = () => [...document.querySelectorAll('.mvask button')].find((b) => b.offsetParent)?.focus({ preventScroll: true });
 // A task's card in the view on screen (the Board's card or the 3D Tasks window's).
 function focusTask(id) {
-  const c = boardView === 'office' ? document.querySelector(`.o-card[data-open-task="${id}"]`) : document.querySelector(`.card[data-id="${id}"]`);
+  const c = document.querySelector(`.card[data-id="${id}"]`);
   if (c?.offsetParent) { c.focus({ preventScroll: true }); c.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
 }
 function focusNow() { const b = $('now').hidden ? $('questions').querySelector('textarea') : $('now').querySelector('button'); if (b) b.focus({ preventScroll: true }); else { $('now').tabIndex = -1; $('now').focus({ preventScroll: true }); } }
@@ -3606,8 +3563,8 @@ document.addEventListener('click', (ev) => {
   if (d.askCancel) { const id = Number(d.askCancel); ui.moveAsk = null; render(); return focusTask(id); }
   if (d.release) { const t = taskById(Number(d.release)); if (t) { moveTask(t, 'open'); render(); } return; }
   if (d.approve) { const id = Number(d.approve); act(api(`/tasks/${id}/decide`, { method: 'POST', body: JSON.stringify({ approve: true }) }), `Approved #${id}: agents can claim it now`).then(() => focusCard(id)).catch(() => {}); return; }
-  if (d.reject) { ui.rejecting = Number(d.reject); render(); return $((boardView === 'office' ? 'orj-' : 'rj-') + d.reject)?.focus(); }
-  if (d.rejectNo) { const id = Number(d.rejectNo); ui.rejecting = null; render(); return document.querySelector(`[data-fk="${boardView === 'office' ? 'o' : ''}rj-b-${id}"]`)?.focus(); }
+  if (d.reject) { ui.rejecting = Number(d.reject); render(); return $('rj-' + d.reject)?.focus(); }
+  if (d.rejectNo) { const id = Number(d.rejectNo); ui.rejecting = null; render(); return document.querySelector(`[data-fk="rj-b-${id}"]`)?.focus(); }
   if (d.limit) { ui.limitForm = d.limit; render(); return $('lu-' + d.limit)?.focus(); }
   if (d.limcancel) { const n = d.limcancel; ui.limitForm = null; render(); return document.querySelector(`[data-fk="lm-${CSS.escape(n)}"]`)?.focus(); }
   if (d.unlimit) { const n = d.unlimit; act(api(`/agents/${encodeURIComponent(n)}`, { method: 'PATCH', body: JSON.stringify({ limited: false }) }), `${n} counts as available again`).catch(() => {}); return; }
@@ -3920,7 +3877,7 @@ function doAct(a, el) {
   if (a === 'repo-cancel') { ui.editRepo = false; ui.repoErr = ''; render(); return document.querySelector('[data-fk="repo-edit"]')?.focus(); }
   if (a === 'done-toggle') {
     const open = !doneOpen(); ui.doneOpen = open ? 'open' : 'closed'; store.set('board-done', ui.doneOpen); render();
-    return document.querySelector(`[data-fk="${boardView === 'office' ? 'o-' : ''}${open ? 'done-close' : 'done-tog'}"]`)?.focus({ preventScroll: true });
+    return document.querySelector(`[data-fk="${open ? 'done-close' : 'done-tog'}"]`)?.focus({ preventScroll: true });
   }
   if (a === 'new-task') return openTask(null);
   if (a === 'clear-search') { tv.q = ''; $('tsearch').value = ''; renderBoard(); renderOffice(); return $('tsearch').focus(); }
@@ -3972,19 +3929,19 @@ function mention(name) {
   m.focus(); m.setSelectionRange(m.value.length, m.value.length); growMsg(); closeAc();
 }
 
-// Drag & drop between columns: the Board view's and the 3D Tasks window's (its cards and columns are .o-card / .o-col,
-// their status in data-s). The same rules either way (moveTask). Neither view re-renders its columns mid-drag. The
+// Drag & drop between columns (the one board, in either view: the 3D Tasks window shows the same columns). The same
+// rules either way (moveTask). The board doesn't re-render its columns mid-drag. The
 // room's camera only listens on its canvas, which a drag over the window never reaches.
-const DRAG_CARD = '.card, .o-card', DROP_COL = '.col, .o-col';
+const DRAG_CARD = '.card', DROP_COL = '.col';
 document.addEventListener('dragstart', (ev) => {
   const c = ev.target.closest?.(DRAG_CARD); if (!c) return;
   ui.dragging = true; c.classList.add('dragging');
-  ev.dataTransfer.setData('text/plain', c.dataset.id || c.dataset.openTask); ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', c.dataset.id); ev.dataTransfer.effectAllowed = 'move';
 });
 document.addEventListener('dragend', (ev) => {
   ui.dragging = false; ev.target.closest?.(DRAG_CARD)?.classList.remove('dragging');
   document.querySelectorAll('.drop').forEach((c) => c.classList.remove('drop'));
-  $('board')._html = undefined; $('o-cols')._html = undefined; render();
+  $('board')._html = undefined; render();
 });
 document.addEventListener('dragover', (ev) => {
   const col = ev.target.closest?.(DROP_COL); if (!col || !ui.dragging) return;
@@ -3995,7 +3952,7 @@ document.addEventListener('dragover', (ev) => {
 document.addEventListener('drop', (ev) => {
   const col = ev.target.closest?.(DROP_COL); if (!col) return;
   ev.preventDefault();
-  const id = Number(ev.dataTransfer.getData('text/plain')); const t = taskById(id); const to = col.dataset.status || col.dataset.s;
+  const id = Number(ev.dataTransfer.getData('text/plain')); const t = taskById(id); const to = col.dataset.status;
   ui.dragging = false; // dropped: the columns may render again (the owner question shows on the card)
   if (t && colOf(t) !== to) moveTask(t, to);
 });
@@ -4588,95 +4545,95 @@ function setBoardView(v, { save = true, quiet = false } = {}) {
   if (changed && !quiet) announce(v === 'office' ? 'Showing the 3D office' : 'Showing the board');
   if (from) viewAnim(v, from);
 }
-// The switch's animation. Board → 3D: the board drops down into the Tasks window, showing the room. 3D → Board: the
-// board rises back up from there. Nothing waits on it: the DOM is already in the new view, the moving part is the
-// real Tasks window (its top edge), an inert copy (the ghost, when the window is folded) or a transform on the board. A second switch while one runs goes straight to the
-// end; reduced motion switches at once.
+// The switch's animation. There is one task board: the Board view's columns (or table), which officeMount moves into
+// the 3D Tasks window and back. Board → 3D: the window starts exactly over the board (the columns where they were, the
+// window's border, glass and shadow not there yet) and its top edge slides down to its place, uncovering the room,
+// while its chrome comes in. 3D → Board: the mirror, the board rising from the window's place as the chrome goes.
+// One element moves; nothing is copied or cross-faded. With the window folded to its title bar, a copy of the board
+// falls off the bottom (and the board rises back from the title bar). Nothing waits on it: the DOM is already in the
+// new view. A second switch while one runs goes straight to the end; reduced motion switches at once.
 let vtRun = null;
+const VT_D = 480, VT_EASE = 'cubic-bezier(.4, 0, .2, 1)';
 function viewAnimEnd() {
   if (!vtRun) return false;
   vtRun.cancelled = true; vtRun.ghost?.remove(); for (const a of vtRun.anims) a.cancel();
   vtRun = null; return true;
 }
-// Before the swap: Board → 3D copies the board as it looks now; 3D → Board notes where the Tasks window is.
+// The part of the tasks that shows: the columns, the table, or the "no tasks match" line.
+const taskPane = () => TASK_PARTS.map($).find((e) => e && !e.hidden && e.offsetHeight) || $('board');
+const rectOf = (e) => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
+// Before the swap: where the tasks are now.
 function viewAnimStart(v) {
   if (viewAnimEnd() || reduceMotion()) return null;
   if (v === 'office') {
     const src = $('boardwrap'); const r = src.getBoundingClientRect(); if (!r.width || !r.height) return null;
+    if (!oTasksOff()) return { pane: rectOf(taskPane()) };
     const g = src.cloneNode(true);
     g.removeAttribute('id'); for (const e of g.querySelectorAll('[id]')) e.removeAttribute('id');
     for (const e of g.querySelectorAll('[data-fk]')) e.removeAttribute('data-fk');
     g.classList.add('vt-ghost'); g.setAttribute('aria-hidden', 'true'); g.inert = true;
     Object.assign(g.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
-    return { ghost: g, top: r.top, bar: $('taskbar').getBoundingClientRect().top - r.top, open: !oTasksOff() };
+    return { ghost: g, top: r.top };
   }
   const tw = $('o-tasks'), t = tw?.getBoundingClientRect();
   const room = $('office-view').getBoundingClientRect();
   const out = { tasksTop: t?.height ? t.top : innerHeight, room: room.width ? room : null };
-  // The Tasks window open: copy it as it looks now (its glass, border and shadow written in, since those rules belong
-  // to the 3D view), to hand over to the board as it rises.
-  if (t?.height && !tw.classList.contains('folded') && $('taskbar')) {
-    const g = tw.cloneNode(true); const cs = getComputedStyle(tw);
-    g.removeAttribute('id'); for (const e of g.querySelectorAll('[id]')) e.removeAttribute('id');
-    for (const e of g.querySelectorAll('[data-fk]')) e.removeAttribute('data-fk');
-    g.classList.add('vt-ghost'); g.classList.remove('max'); g.setAttribute('aria-hidden', 'true'); g.inert = true;
-    for (const p of ['background-color', 'box-shadow', 'border', 'border-radius', 'backdrop-filter', '-webkit-backdrop-filter']) g.style.setProperty(p, cs.getPropertyValue(p));
-    Object.assign(g.style, { left: `${t.left}px`, width: `${t.width}px`, top: `${t.top}px`, bottom: `${innerHeight - t.bottom}px`, right: 'auto', height: 'auto', translate: 'none' });
-    Object.assign(out, { ghost: g, wTop: t.top, wBar: $('taskbar').getBoundingClientRect().top - t.top });
+  if (t?.height && !tw.classList.contains('folded')) {
+    const cs = getComputedStyle(tw);
+    Object.assign(out, { pane: rectOf(taskPane()), win: rectOf(tw), glass: cs.backgroundColor, line: cs.borderTopColor, barEnd: $('taskbar').getBoundingClientRect().right });
   }
   return out;
 }
 function viewAnim(v, from) {
   const run = vtRun = { anims: [], ghost: from.ghost || null, cancelled: false };
   const land = 'cubic-bezier(.2, .7, .3, 1)';
+  const keep = (a) => { run.anims.push(a); return a; };
   if (v === 'office') {
     // The room's picture stays hidden (at once, no fade out) until it has drawn a fresh frame: a reactivated or resized
     // canvas can show a stale or blank frame for a moment. Then it fades in.
     const sc = $('office-scene'); sc.style.transition = 'none'; sc.style.opacity = '0';
     const showScene = () => { sc.style.transition = ''; sc.style.opacity = ''; };
-    run.anims.push({ cancel: showScene });
-    const tw = $('o-tasks'), ov = $('office-view');
+    keep({ cancel: showScene });
+    const tw = $('o-tasks'), ov = $('office-view'), head = $('o-tasks-head');
     const ready = Promise.resolve(office.loading).then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-    if (from.open) {
-      // The Tasks window open. A copy of the board (the ghost: exactly the board, so the first frame is the board) and
-      // the real window move together, their top edges locked: from the board's top down to where the window sits,
-      // uncovering the room. On the way the window (its border, its compact cards) fades in over the copy and the copy
-      // fades out, so the board turns into the window while it moves; nothing pops in or shifts in place.
-      // The camera is framed for where the window ends up (oFrame reads run.tasksTop meanwhile).
-      $('main').append(run.ghost);
-      const end = tw.getBoundingClientRect(), o = ov.getBoundingClientRect();
+    if (!run.ghost) {
+      // Where the window ends up (the camera is framed for it meanwhile: oFrame reads run.tasksTop), and where it starts:
+      // moved and widened so the tasks inside sit exactly where they were on the board.
+      const end = tw.getBoundingClientRect(), o = ov.getBoundingClientRect(), p = taskPane().getBoundingClientRect();
       run.tasksTop = end.top; oFrame();
-      // Locked on the task bar (the same element in both): the window starts where its bar sits on the board's bar.
-      const dBar = $('taskbar').getBoundingClientRect().top - end.top - from.bar;
-      const t0 = `${Math.round(from.top - dBar - o.top)}px`, t1 = `${Math.round(end.top - o.top)}px`;
-      const gy = end.top - (from.top - dBar);
-      Object.assign(tw.style, { top: t0, height: 'auto', opacity: '0' });
-      // Whole columns while it moves, like the board it starts as (cut to whole cards plus "Show N more" once landed).
-      for (const ul of $('o-cols')?.querySelectorAll('.o-col ul') || []) ul.style.maxHeight = '';
-      for (const m of $('o-cols')?.querySelectorAll('.o-more') || []) m.hidden = true;
+      const cs = getComputedStyle(tw), hcs = getComputedStyle(head);
+      const at = { left: end.left - o.left, right: o.right - end.right, top: end.top - o.top };
+      const px = (n) => `${Math.round(n)}px`;
+      const k0 = { left: px(at.left + from.pane.left - p.left), right: px(at.right - (from.pane.right - p.right)), top: px(at.top + from.pane.top - p.top) };
+      const k1 = { left: px(at.left), right: px(at.right), top: px(at.top) };
+      // Its chrome: none at first (the page's own background, as behind the board), the window's at the end.
+      const bg = getComputedStyle($('main')).backgroundColor;
+      const c0 = { backgroundColor: bg, borderColor: 'transparent', boxShadow: 'none' }, c1 = { backgroundColor: cs.backgroundColor, borderColor: cs.borderTopColor, boxShadow: cs.boxShadow };
+      const h0 = { borderBottomColor: 'transparent' }, h1 = { borderBottomColor: hcs.borderBottomColor };
+      // The window's own buttons (maximise, fold) open up from nothing at the bar's end, so the task bar keeps the
+      // board's width at first and gives them room gradually (no jump of its controls).
+      const btns = [$('o-tasks-max'), $('o-tasks-fold')];
+      const gap = parseFloat(hcs.columnGap) || 0;
+      const b1 = btns.map((b) => ({ width: `${b.offsetWidth}px`, minWidth: '0px', marginLeft: '0px', opacity: 1 }));
+      const b0 = { width: '0px', minWidth: '0px', marginLeft: `${-gap}px`, opacity: 0 };
+      Object.assign(tw.style, { ...k0, ...c0, height: 'auto' }); Object.assign(head.style, h0);
+      for (const b of btns) Object.assign(b.style, { ...b0, opacity: '0', overflow: 'hidden' });
       const reset = () => {
-        tw.style.top = ''; tw.style.height = ''; tw.style.opacity = ''; run.tasksTop = null; oMore();
-        for (const m of $('o-cols')?.querySelectorAll('.o-more:not([hidden])') || []) m.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160 });
+        for (const k of ['left', 'right', 'top', 'height', 'backgroundColor', 'borderColor', 'boxShadow']) tw.style[k] = '';
+        head.style.borderBottomColor = ''; for (const b of btns) for (const k of ['width', 'minWidth', 'marginLeft', 'opacity', 'overflow']) b.style[k] = '';
+        run.tasksTop = null;
       };
-      run.anims.push({ cancel: reset });
+      keep({ cancel: reset });
       ready.then(() => {
         showScene();
         if (run.cancelled) return;
         if (boardView !== 'office') return viewAnimEnd();
-        tw.style.top = t1; tw.style.opacity = '';
-        const D = 520, ease = 'cubic-bezier(.4, 0, .2, 1)';
-        // The two lay their cards out differently, so they never show text at once: the copy's cards fade out first (its
-        // background stays, so the room doesn't flash through), then the window fades in over it; then the copy goes.
-        // Both move by `top` (not a transform, which the compositor would run ahead of the window's layout): same frames.
-        const drop = tw.animate([{ top: t0 }, { top: t1 }], { duration: D, easing: ease });
-        const copy = run.ghost.animate([{ top: `${from.top}px` }, { top: `${from.top + gy}px` }], { duration: D, easing: ease, fill: 'forwards' });
-        run.anims.push(drop, copy);
-        // The fades (plain time, early while the motion is still slow): the window in over the copy, which stays whole
-        // underneath (fading its cards first left a dark, empty block for a few frames: a flash), then the copy goes.
-        const fade = (el, a, b, delay, duration) => run.anims.push(el.animate([{ opacity: a }, { opacity: b }], { delay, duration, fill: 'both' }));
-        fade(tw, 0, 1, 0, 180);
-        fade(run.ghost, 1, 0, 180, 120);
-        drop.finished.then(() => { if (run.cancelled) return; run.ghost.remove(); for (const a of run.anims) a.effect?.target === tw && a.cancel(); reset(); vtRun = null; oFrame(); }).catch(() => {});
+        reset(); run.tasksTop = end.top;
+        const move = keep(tw.animate([{ ...k0, height: 'auto' }, { ...k1, height: 'auto' }], { duration: VT_D, easing: VT_EASE }));
+        keep(tw.animate([c0, c1], { duration: VT_D, easing: VT_EASE }));
+        keep(head.animate([h0, h1], { duration: VT_D, easing: VT_EASE }));
+        btns.forEach((b, i) => { b.style.overflow = 'hidden'; keep({ cancel: () => { b.style.overflow = ''; } }); keep(b.animate([b0, b1[i]], { duration: VT_D, easing: VT_EASE })); });
+        move.finished.then(() => { if (run.cancelled) return; for (const b of btns) b.style.overflow = ''; run.tasksTop = null; vtRun = null; oFrame(); }).catch(() => {});
       });
       return;
     }
@@ -4685,22 +4642,21 @@ function viewAnim(v, from) {
     $('main').append(run.ghost);
     tw.style.visibility = 'hidden';
     const showTasks = () => { tw.style.visibility = ''; };
-    run.anims.push({ cancel: showTasks });
+    keep({ cancel: showTasks });
     ready.then(() => {
       showScene();
       if (run.cancelled) return;
       if (boardView !== 'office') return viewAnimEnd();
       const D = 420;
-      const drop = run.ghost.animate([{ transform: 'none' }, { transform: `translateY(${Math.max(40, innerHeight - from.top)}px)` }], { duration: D, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' });
-      run.anims.push(drop);
+      const drop = keep(run.ghost.animate([{ transform: 'none' }, { transform: `translateY(${Math.max(40, innerHeight - from.top)}px)` }], { duration: D, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' }));
       showTasks();
-      run.anims.push(tw.animate([{ opacity: 0 }, { opacity: 0, offset: 0.7 }, { opacity: 1 }], { duration: D + 120 }));
+      keep(tw.animate([{ opacity: 0 }, { opacity: 0, offset: 0.7 }, { opacity: 1 }], { duration: D + 120 }));
       drop.finished.then(() => { if (run.cancelled) return; run.ghost.remove(); vtRun = null; oFrame(); }).catch(() => {});
     });
     return;
   }
-  // 3D → Board: the real board rises from where the Tasks window was, over the room, which stays where it was (behind
-  // the page, still drawing) and fades out at the end. The board is opaque all the way: no empty frame between views.
+  // 3D → Board. The room stays where it was (behind the page, still drawing, its Tasks window empty and hidden) and
+  // fades out at the end.
   const ov = $('office-view'); const keepRoom = !!(from.room && office.mod);
   const otw = $('o-tasks');
   const dropRoom = () => { ov.removeAttribute('style'); ov.removeAttribute('aria-hidden'); if (otw) otw.style.visibility = ''; if (boardView !== 'office') office.mod?.setActive(false); };
@@ -4708,38 +4664,40 @@ function viewAnim(v, from) {
     Object.assign(ov.style, { display: 'block', position: 'fixed', left: `${from.room.left}px`, top: `${from.room.top}px`, width: `${from.room.width}px`, height: `${from.room.height}px`, zIndex: '-1', pointerEvents: 'none' });
     ov.setAttribute('aria-hidden', 'true'); if (otw) otw.style.visibility = 'hidden';
     office.mod.setActive(true);
-    run.anims.push({ cancel: dropRoom });
+    keep({ cancel: dropRoom });
   }
   const b = $('boardwrap'); const r = b.getBoundingClientRect();
-  if (run.ghost) {
-    // The Tasks window open: the mirror of Board → 3D. The window's copy and the real board move up together, their
-    // task bars locked, from the window's place to the board's; the window's cards fade out, the board fades in over
-    // the window's still-solid glass, then the glass goes. Both move by `top` so they share frames.
-    // The copy goes under the page's content (the board's column has its own stacking), over the room (later in main).
-    const g = run.ghost; g.style.zIndex = '-1'; $('main').append(g);
-    const y0 = from.wTop + from.wBar - ($('taskbar').getBoundingClientRect().top - r.top) - r.top; // board's start offset
-    const D = 520, ease = 'cubic-bezier(.4, 0, .2, 1)';
+  const fadeRoom = (D) => keepRoom && keep(ov.animate([{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: D, fill: 'forwards' }));
+  if (from.pane) {
+    // The window was open: the board starts where the tasks were in it (moved, and narrowed by margins) and rises to its
+    // place, the window's border, glass and shadow drawn around it at first and fading out.
+    const p = taskPane().getBoundingClientRect();
+    const pad = Math.max(2, from.pane.left - from.win.left);
+    const m0 = { top: `${Math.round(from.pane.top - p.top)}px`, marginLeft: `${Math.round(from.pane.left - p.left)}px`, marginRight: `${Math.round(p.right - from.pane.right)}px` };
+    const m1 = { top: '0px', marginLeft: '0px', marginRight: '0px' };
+    const ring = (g, l, s) => `0 0 0 ${pad - 2}px ${g}, 0 0 0 ${pad}px ${l}, ${pad + 4}px ${pad + 4}px 0 ${pad - 2}px ${s}`;
+    const c0 = { backgroundColor: from.glass, boxShadow: ring(from.glass, from.line, 'rgba(0, 0, 0, 0.28)') };
+    const c1 = { backgroundColor: 'rgba(0, 0, 0, 0)', boxShadow: ring('rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)') };
     b.style.position = 'relative';
-    const unBoard = () => { b.style.position = ''; b.style.top = ''; };
-    run.anims.push({ cancel: unBoard });
-    const rise = b.animate([{ top: `${y0}px` }, { top: '0px' }], { duration: D, easing: ease });
-    run.anims.push(rise, g.animate([{ top: `${from.wTop}px` }, { top: `${from.wTop - y0}px` }], { duration: D, easing: ease, fill: 'forwards' }));
-    const fade = (el, a, c, delay, duration) => run.anims.push(el.animate([{ opacity: a }, { opacity: c }], { delay, duration, fill: 'both' }));
-    for (const c of g.children) fade(c, 1, 0, 0, 140);
-    fade(b, 0, 1, 90, 170);
-    fade(g, 1, 0, 260, 120);
-    if (keepRoom) run.anims.push(ov.animate([{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: D, fill: 'forwards' }));
+    keep({ cancel: () => { b.style.position = ''; } });
+    const rise = keep(b.animate([m0, m1], { duration: VT_D, easing: VT_EASE }));
+    keep(b.animate([c0, c1], { duration: VT_D, easing: VT_EASE }));
+    // The task bar ended before the window's own buttons (maximise, fold): it gives that room back gradually.
+    const bar = $('taskbar'), bm = parseFloat(getComputedStyle(bar).marginRight) || 0, room = Math.max(0, from.pane.right - from.barEnd);
+    keep(bar.animate([{ marginRight: `${bm + room}px` }, { marginRight: `${bm}px` }], { duration: VT_D, easing: VT_EASE }));
+    // The page's foot (the board's hint) comes in with the board.
+    if (!$('cols-hint').hidden) keep($('cols-hint').animate([{ opacity: 0 }, { opacity: 0, offset: 0.5 }, { opacity: 1 }], { duration: VT_D }));
+    fadeRoom(VT_D);
     rise.finished.then(() => {
       if (run.cancelled) return;
-      g.remove(); for (const a of run.anims) if (a !== rise && a.effect) a.cancel();
-      unBoard(); if (keepRoom) dropRoom(); vtRun = null;
+      for (const a of run.anims) a.cancel?.();
+      vtRun = null;
     }).catch(() => {});
     return;
   }
-  if (keepRoom) run.anims.push(ov.animate([{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: 420, fill: 'forwards' }));
+  fadeRoom(420);
   const dy = Math.max(40, from.tasksTop - r.top);
-  const rise = b.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 420, easing: land });
-  run.anims.push(rise);
+  const rise = keep(b.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 420, easing: land }));
   rise.finished.then(() => {
     if (run.cancelled) return;
     if (keepRoom) { for (const a of run.anims) if (a !== rise && a.effect) a.cancel(); dropRoom(); }
@@ -4791,15 +4749,18 @@ document.addEventListener('click', (ev) => {
 // clock. One fold state for both views (oUi), one way to open each panel again: a dock folds to its chip, Activity
 // and File locks (and the 3D Tasks window) to their title bars.
 const oHome = {};
-// The Board view's task bar (Tasks, search, Show, Columns / Table) and its table move into the 3D Tasks window while
-// the 3D view is on, and back: the same elements, so the search text, the filter and the saved view carry over.
+// The Board view's tasks move into the 3D Tasks window while the 3D view is on, and back: its task bar (Tasks,
+// search, Show, Columns / Table) becomes the window's title bar, its columns (or table) the window's body. One task
+// board in both views, the same elements: the search text, the filter, scroll and focus carry over, and the view
+// switch moves this one board (viewAnim) instead of handing over between two.
+const TASK_PARTS = ['board-empty', 'board', 'tasktable'];
 function officeMount(on) {
-  const tb = $('taskbar'), tt = $('tasktable');
+  const tb = $('taskbar'), parts = TASK_PARTS.map($);
   if (on) {
-    if (!oHome.tb) { oHome.tb = document.createComment('taskbar'); tb.before(oHome.tb); oHome.tt = document.createComment('tasktable'); tt.before(oHome.tt); }
+    if (!oHome.tb) { oHome.tb = document.createComment('taskbar'); tb.before(oHome.tb); oHome.body = document.createComment('tasks'); parts[0].before(oHome.body); }
     if (!$('o-tasks-head').contains(tb)) $('o-tasks-head').prepend(tb);
-    if (!$('o-tasks-b').contains(tt)) $('o-tasks-b').append(tt);
-  } else if (oHome.tb) { if (oHome.tb.nextSibling !== tb) oHome.tb.after(tb); if (oHome.tt.nextSibling !== tt) oHome.tt.after(tt); }
+    if (!$('o-tasks-b').contains(parts[0])) $('o-tasks-b').append(...parts);
+  } else if (oHome.tb) { if (oHome.tb.nextSibling !== tb) oHome.tb.after(tb); if (oHome.body.nextSibling !== parts[0]) oHome.body.after(...parts); }
 }
 // The Tasks window folds to its title bar by default on screens up to 900px tall (the room needs the height) and is
 // open above that; File locks start folded. Folding or unfolding one yourself is remembered.
@@ -4866,7 +4827,6 @@ function oFold(which, folded = !oOff(which)) {
   // Focus stays on the control you used (Tasks, Activity and File locks fold to their title bars, which keep the
   // button); if that just went away, it moves to its counterpart (a dock's fold button <-> its chip).
   if (from && from !== document.body && !from.offsetParent) (folded ? $('o-' + which + '-pill') : $('o-' + which)?.querySelector('[data-o-fold]'))?.focus({ preventScroll: true });
-  if (which === 'tasks' && !folded) oMore();
   if (which === 'act' && !folded) { const f = $('feed'); f.scrollTop = f.scrollHeight; }
 }
 // Open a folded panel (a link led to it).
@@ -4975,111 +4935,15 @@ function renderDocks(qOpen = openQuestions(), si = setupInfo()) {
   oApply();
 }
 // ---------- 3D view: the room and the Tasks window ----------
-// The Tasks window's columns: the board's five (proposals in Open, claimed in In progress), with the board's names, and the board's search and
-// Show filter applied, so the counts match the Board view's columns. Columns / Table is the board's saved choice.
-const O_COLS = COLS.map((s) => [s, LABEL[s]]);
-const oRoveAt = {};
+// The Tasks window shows the board itself (officeMount moved its columns and table in): nothing of its own to draw.
+// A search that matches nothing: one line, and the window shrinks to it (as on the Board view).
 function renderOffice() {
   if (boardView !== 'office') return;
-  const table = tv.view === 'table' && state.tasks.length;
-  $('o-cols').hidden = !!table;
-  const tasks = state.tasks.filter(taskShown);
-  // A search that matches nothing: one line, and the window shrinks to it (as on the Board view).
-  const none = !!(state.tasks.length && tv.q.trim() && !tasks.length); $('o-tasks').classList.toggle('nomatch', none);
-  if (none) { patch($('o-cols'), `<p class="o-nomatch">${noMatchHtml('o-clear-search')}</p>`); return oFrame(); }
-  // Done folds the same way as on the Board view (one setting, the same auto rule).
-  const dOpen = doneOpen(); $('o-cols').classList.toggle('done-closed', !dOpen);
-  if (patch($('o-cols'), O_COLS.map(([k, label]) => {
-    const list = colSort(tasks.filter((t) => colOf(t) === k), k);
-
-    if (k === 'done' && !dOpen) return `<section class="o-col s-done collapsed" data-s="done" aria-label="Done, ${plural(list.length, 'task')}"><h3><button type="button" class="dtog" data-act="done-toggle" data-fk="o-done-tog" aria-expanded="false" aria-label="Done, ${plural(list.length, 'task')}: show the column" title="Show the Done column (tasks merged into main)"><i class="ok-mk" aria-hidden="true">✓</i><span>${label}</span> <span class="o-c">${list.length}</span> ${CHEV}</button></h3></section>`;
-    return `<section class="o-col s-${k}${list.length ? ' has' : ''}" data-s="${k}" aria-label="${label}, ${plural(list.length, 'task')}"><h3 title="${COL_DESC[k]}"><span>${label}</span><span class="o-c">${list.length}</span>${k === 'done' ? `<button type="button" class="dclose" data-act="done-toggle" data-fk="o-done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse">${CHEV}</button>` : ''}</h3>${list.length ? `<ul>${list.map(oCard).join('')}</ul><button type="button" class="o-more" tabindex="-1" aria-hidden="true" data-o-more hidden></button>` : `<p class="o-none">${filterRoot() ? `None for ${esc(filterRoot())}` : 'None'}</p>`}</section>`;
-  }).join(''))) oRove();
-  requestAnimationFrame(oMore);
+  $('o-tasks').classList.toggle('nomatch', !!(state.tasks.length && tv.q.trim() && !state.tasks.some(taskShown)));
   oFrame();
 }
 const CHEV = '<span class="chev" aria-hidden="true">▾</span>';
-// A card in the Tasks window: the Board view's card, compact. The same title, the same facts (P1 / P3, S / L, who holds
-// it, proposed by, waits on, stale), the same blocked note, and the same buttons for what needs attention (Approve / Reject…,
-// question waiting) under it; Move… and the rest are in its dialog.
-function oCard(t) {
-  const who = t.assignee ? agentRoot(t.assignee) : '';
-  const note = blockedNote(t); const prop = t.status === 'proposed';
-  const q = openQuestions().find((x) => x.task_id === t.id);
-  const waiting = t.status === 'done' ? [] : t.depends_on.filter((d) => taskById(d)?.status !== 'done');
-  const facts = [
-    t.priority === 1 ? '<span class="pill bad">P1</span>' : t.priority >= 3 ? '<span class="pill">P3</span>' : '',
-    ['S', 'L'].includes(t.size) ? `<span class="pill size ${t.size}"><span class="vh">size </span>${t.size}</span>` : '',
-    t.status === 'review' && t.reviewer ? `<span class="pill role">merging: ${esc(t.reviewer)}</span>` : '',
-    t.assignee ? `<span class="pc" ${hs(t.assignee)}>${esc(t.assignee)}</span>` : '',
-    t.status === 'claimed' ? '<span>claimed, not started</span>' : '',
-    waiting.length ? `<span class="pill flag">waits on ${waiting.map((d) => '#' + d).join(' ')}</span>` : '',
-    isStale(t) ? '<span class="pill flag">stale</span>' : '',
-  ].filter(Boolean).join('');
-  const rej = ui.rejecting === t.id;
-  const acts = prop ? (rej
-    ? `<form class="rj" data-rjform="${t.id}"><label class="vh" for="orj-${t.id}">Why reject #${t.id}? (optional)</label><input id="orj-${t.id}" data-keep="orj-${t.id}" placeholder="Why? (optional)" maxlength="300"><button type="submit" class="danger" data-fk="orjy-${t.id}">Reject</button><button type="button" class="ghost" data-reject-no="${t.id}" data-fk="orjn-${t.id}">Cancel</button></form>`
-    : `<button type="button" data-approve="${t.id}" data-fk="oap-${t.id}" title="Make it a normal open task agents can claim">Approve</button><button type="button" class="ghost" data-reject="${t.id}" data-fk="orj-b-${t.id}" title="Remove it; ${esc(t.created_by)} is told why">Reject…</button>`) : '';
-  const ca = acts || q ? `<div class="o-ca">${acts}${q ? `<button type="button" class="qb" data-go-q="${q.id}" data-fk="ocq-${t.id}" title="${esc(short(q.question, 120))}">question waiting</button>` : ''}</div>` : '';
-  return `<li><button type="button" class="o-card${who ? ' has-owner' : ''}${prop ? ' proposed' : ''}${isStale(t) ? ' stale' : ''}" ${who ? hs(who) : ''} data-open-task="${t.id}" data-fk="oc-${t.id}" draggable="true"><span class="o-ct"><span class="id">#${t.id}</span> ${esc(t.title)}</span>${note ? `<span class="o-cw bad">“${esc(short(note, 80))}”</span>` : ''}${facts ? `<span class="o-cm">${facts}</span>` : ''}</button>${ca}${moveAskHtml(t, 'o')}</li>`;
-}
-// Tasks: one Tab stop per column, arrow keys between cards (Left / Right: the next column), as on the Board view.
-function oRove() {
-  const act = document.activeElement?.closest?.('.o-card');
-  for (const col of $('o-cols').querySelectorAll('.o-col')) {
-    const cards = [...col.querySelectorAll('.o-card')]; if (!cards.length) continue;
-    const cur = cards.find((c) => c === act) || cards.find((c) => c.dataset.fk === oRoveAt[col.dataset.s]) || cards[0];
-    for (const c of cards) c.tabIndex = c === cur ? 0 : -1;
-  }
-}
-$('o-cols').addEventListener('focusin', (ev) => {
-  const c = ev.target.closest('.o-card'); if (!c) return;
-  const col = c.closest('.o-col'); oRoveAt[col.dataset.s] = c.dataset.fk;
-  for (const x of col.querySelectorAll('.o-card')) x.tabIndex = x === c ? 0 : -1;
-});
-$('o-cols').addEventListener('keydown', (ev) => {
-  const c = ev.target.closest?.('.o-card'); if (!c || ev.ctrlKey || ev.metaKey || ev.altKey) return;
-  const col = c.closest('.o-col'); const cards = [...col.querySelectorAll('.o-card')]; const i = cards.indexOf(c);
-  let n = null;
-  if (ev.key === 'ArrowDown') n = cards[i + 1];
-  else if (ev.key === 'ArrowUp') n = cards[i - 1];
-  else if (ev.key === 'Home') n = cards[0];
-  else if (ev.key === 'End') n = cards[cards.length - 1];
-  else if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') {
-    const cols = [...$('o-cols').querySelectorAll('.o-col')].filter((x) => x.querySelector('.o-card'));
-    const nc = cols[cols.indexOf(col) + (ev.key === 'ArrowRight' ? 1 : -1)];
-    n = nc && (nc.querySelector('.o-card[tabindex="0"]') || nc.querySelector('.o-card'));
-  } else return;
-  ev.preventDefault();
-  if (n) { n.focus(); n.scrollIntoView({ block: 'nearest' }); }
-});
-// A column with more cards than fit: "Show N more" at its foot (as on the Board view), so 3 visible cards never read as
-// 3 tasks. The list is cut under its last whole card, and N counts every card below that, the half-visible one too.
-function oMore() {
-  if (boardView !== 'office' || $('o-tasks').hidden || $('o-tasks').classList.contains('folded')) return;
-  if (vtRun?.tasksTop != null) return; // the window is mid-drop; it runs once it has landed
-  for (const col of $('o-cols').querySelectorAll('.o-col')) {
-    const ul = col.querySelector('ul'); const m = col.querySelector('.o-more'); if (!ul || !m) continue;
-    ul.style.maxHeight = ''; m.hidden = true;
-    const items = [...ul.children]; const bottom = () => ul.getBoundingClientRect().bottom - parseFloat(getComputedStyle(ul).paddingBottom);
-    if (!items.some((li) => li.getBoundingClientRect().bottom > bottom() + 1)) continue;
-    m.hidden = false; // the strip takes its room from the list, then the list ends on its last whole card
-    const b = bottom(), top = ul.getBoundingClientRect().top;
-    const whole = items.filter((li) => { const r = li.getBoundingClientRect(); return r.bottom <= b + 1 && r.top >= top - 1; });
-    const last = whole[whole.length - 1];
-    if (last) ul.style.maxHeight = `${Math.ceil(last.getBoundingClientRect().bottom - top + parseFloat(getComputedStyle(ul).paddingBottom))}px`;
-    const cut = last ? last.getBoundingClientRect().bottom : top;
-    const n = items.filter((li) => li.getBoundingClientRect().bottom > cut + 1).length;
-    m.hidden = !n; m.textContent = n ? `Show ${n} more` : ''; m._next = items.find((li) => li.getBoundingClientRect().bottom > cut + 1);
-  }
-}
-$('o-cols').addEventListener('click', (ev) => {
-  const m = ev.target.closest('[data-o-more]'); if (!m) return;
-  const ul = m.previousElementSibling; const li = m._next;
-  if (ul && li) ul.scrollTo({ top: ul.scrollTop + li.getBoundingClientRect().top - ul.getBoundingClientRect().top - parseFloat(getComputedStyle(ul).paddingTop) });
-});
-$('o-cols').addEventListener('scroll', () => requestAnimationFrame(oMore), true);
-addEventListener('resize', () => { oApply(); if (boardView === 'office') requestAnimationFrame(oMore); });
+addEventListener('resize', () => oApply());
 // Select an agent (its row, or its character in the room); again: unselect. The selection is the same in both views.
 function pickAgent(id, fromRow = false) {
   ui.picked = id || null; office.mod?.select(ui.picked); render();
@@ -5096,7 +4960,7 @@ $('app').addEventListener('click', (ev) => {
   const t = ev.target.closest('button'); if (!t) return;
   const d = t.dataset;
   if (d.oFold) return oFold(d.oFold);
-  if ('oMax' in d) { oUi.max = !oUi.max; oSave(); oApply(); requestAnimationFrame(oMore); return office.mod?.resize(); }
+  if ('oMax' in d) { oUi.max = !oUi.max; oSave(); oApply(); return office.mod?.resize(); }
   if (d.oClose === 'goal') return oGoal(false);
   if (d.oClose === 'dl') return oDl(false);
   if (d.oClose === 'merge') return oMerge(false);

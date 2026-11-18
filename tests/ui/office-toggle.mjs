@@ -133,7 +133,7 @@ try {
     check('the switch is announced politely', await until(page, () => /Showing the 3D office/.test(document.getElementById('announcer').textContent)));
     check('first switch loads the office chunk and draws a canvas', await until(page, () => !!document.querySelector('#office-scene canvas'), null, 20000) && officeReqs(reqs).some((u) => /embed\.js/.test(u)) && officeReqs(reqs).some((u) => /OfficeScene-/.test(u)), officeReqs(reqs).map((u) => u.split('/').pop()).join(' '));
     check('loading note gone once it is ready', await until(page, () => !document.getElementById('office-view').classList.contains('loading')));
-    check('the Tasks window starts folded to its title bar (Tasks) on a 900px-tall screen (the room needs the height)', await page.evaluate(() => $('o-tasks').classList.contains('folded') && !$('o-cols').offsetHeight && $('o-tasks-fold').getAttribute('aria-expanded') === 'false' && $('o-tasks-head').contains($('b-h')) && !!$('b-h').offsetWidth));
+    check('the Tasks window starts folded to its title bar (Tasks) on a 900px-tall screen (the room needs the height)', await page.evaluate(() => $('o-tasks').classList.contains('folded') && !$('board').offsetHeight && $('o-tasks-fold').getAttribute('aria-expanded') === 'false' && $('o-tasks-head').contains($('b-h')) && !!$('b-h').offsetWidth));
     const share = await page.evaluate(() => {
       const v = $('office-view').getBoundingClientRect(); let n = 0, hit = 0;
       for (let x = 0.02; x < 1; x += 0.04) for (let y = 0.02; y < 1; y += 0.04) { n++; if (document.elementFromPoint(v.left + v.width * x, v.top + v.height * y)?.closest('#office-scene')) hit++; }
@@ -143,8 +143,8 @@ try {
     check('no Progress toggle: no bottom chips at all', await page.evaluate(() => !document.querySelector('.o-bot, #o-prog-chip, #o-act-chip, #o-chat-chip')));
     check('the board copy falls alone: the Tasks window shows only once it has landed (never two boards at once)', await until(page, () => !document.querySelector('.vt-ghost') && getComputedStyle($('o-tasks')).visibility === 'visible'));
     await page.click('#o-tasks-fold');
-    check('the button in the Tasks title bar opens the window', await page.evaluate(() => !$('o-tasks').classList.contains('folded') && $('o-cols').offsetHeight > 50 && $('o-tasks-fold').getAttribute('aria-expanded') === 'true'));
-    check('the room fills the window under the header; the task columns are hidden; no scrolling', await page.evaluate(() => { const r = $('office-view').getBoundingClientRect(); const h = document.querySelector('#app > header').getBoundingClientRect(); return Math.abs(r.top - h.bottom) < 3 && Math.abs(r.bottom - innerHeight) < 2 && r.width === innerWidth && !$('board').offsetWidth && document.documentElement.scrollHeight <= innerHeight + 1; }));
+    check('the button in the Tasks title bar opens the window', await page.evaluate(() => !$('o-tasks').classList.contains('folded') && $('o-tasks-b').contains($('board')) && $('board').offsetHeight > 50 && $('o-tasks-fold').getAttribute('aria-expanded') === 'true'));
+    check('the room fills the window under the header; the Board view centre is hidden (its tasks are in the Tasks window); no scrolling', await page.evaluate(() => { const r = $('office-view').getBoundingClientRect(); const h = document.querySelector('#app > header').getBoundingClientRect(); return Math.abs(r.top - h.bottom) < 3 && Math.abs(r.bottom - innerHeight) < 2 && r.width === innerWidth && !$('boardwrap').offsetWidth && $('o-tasks-b').contains($('board')) && document.documentElement.scrollHeight <= innerHeight + 1; }));
     const lay = await page.evaluate(() => {
       const R = (id) => { const e = document.getElementById(id); return e && !e.hidden && e.offsetWidth ? e.getBoundingClientRect() : null; };
       const hit = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
@@ -166,12 +166,12 @@ try {
     check('an agent waiting on an answer: "Question" badge in its row, the same word as its bubble in the room', st.word === 'Question' && st.boxed && st.bubble === 'Question', JSON.stringify(st));
     check('only Question / Blocked / Out of usage get a badge', st.badges.every((w) => ['Question', 'Blocked', 'Out of usage'].includes(w)), JSON.stringify(st.badges));
     check('the Agents count uses the board\'s rule and words ("N online", out of usage apart)', await page.evaluate(() => $('o-right-sub').textContent === `${setupInfo().onlineA.length} online` && $('o-right-sub').title.startsWith(agentsLine(setupInfo(), true))), await page.$eval('#o-right-sub', (e) => e.textContent));
-    check('Tasks window: the board\'s six columns, names and counts', await page.evaluate(() => {
-      const c = [...document.querySelectorAll('#o-cols .o-col')];
-      return c.length === 5 && c.map((x) => x.querySelector('h3 span').textContent).join() === 'Open,In progress,Blocked,Review,Done' && /Vote API/.test(c[1].innerText) && /Leaderboard page/.test(c[0].innerText)
-        && c.every((x) => x.querySelector('.o-c').textContent === (document.getElementById('col-' + x.dataset.s)?.getAttribute('aria-label') || '').match(/(\d+) tasks?$/)?.[1]);
-    }), await page.evaluate(() => [...document.querySelectorAll('#o-cols .o-col')].map((x) => `${x.querySelector('h3 span').textContent}=${x.querySelector('.o-c')?.textContent}/${document.getElementById('col-' + x.dataset.s)?.getAttribute('aria-label')}`).join(' ')));
-    check('Tasks: one Tab stop per column (the board\'s model)', await page.evaluate(() => [...document.querySelectorAll('#o-cols .o-col')].every((c) => { const k = [...c.querySelectorAll('.o-card')]; return !k.length || k.filter((x) => x.tabIndex === 0).length === 1; })));
+    check('Tasks window: the board itself (one board, moved in), its five columns and their cards', await page.evaluate(() => {
+      const c = [...document.querySelectorAll('#o-tasks-b #board > .col')];
+      return !!$('o-tasks-b').querySelector('#board') && !document.getElementById('o-cols') && c.length === 5 && c.map((x) => x.dataset.status).join() === 'open,in_progress,blocked,review,done' && /Vote API/.test(c[1].innerText) && /Leaderboard page/.test(c[0].innerText);
+    }), await page.evaluate(() => [...document.querySelectorAll('#o-tasks-b .col')].map((x) => x.dataset.status).join(' ')));
+    check('Tasks: one Tab stop per column (the board\'s model)', await page.evaluate(() => [...document.querySelectorAll('#o-tasks-b .col')].every((c) => { const k = [...c.querySelectorAll('.card')]; return !k.length || k.filter((x) => x.tabIndex === 0).length === 1; })));
+    check('Tasks: a long column scrolls inside the window (the window keeps its size)', await page.evaluate(() => { const w = $('o-tasks').getBoundingClientRect(); return [...document.querySelectorAll('#o-tasks-b .col')].every((c) => c.getBoundingClientRect().bottom <= w.bottom + 1); }));
     const tb = await page.evaluate(() => ({ t: $('topbar').innerText.replace(/\s+/g, ' '), roles: !!$('topbar').querySelector('.tb-roles')?.offsetWidth, inv: !$('topbar').querySelector('[data-act="invite"]'), setup: !!$('topbar').querySelector('[data-fk="s-open"]')?.offsetWidth, actChips: [...$('topbar').querySelectorAll('.acts button')].every((b) => b.classList.contains('tbc') && b.offsetHeight === $('goal-btn').offsetHeight), clock: !!$('clock').offsetWidth && $('topbar').contains($('clock')) && /Demo in/.test($('clock').textContent), rows: $('topbar').offsetHeight < 56,
       chips: [...$('topbar').querySelectorAll('.tbc:not(.tb-act)')].filter((c) => c.offsetWidth).map((c) => getComputedStyle(c.querySelector('.tbl')).color === getComputedStyle(document.documentElement).getPropertyValue('--muted').trim().replace(/^#(..)(..)(..)$/, (m, r, g, b) => `rgb(${[r, g, b].map((x) => parseInt(x, 16)).join(', ')})`) ? c.querySelector('.tbl').textContent : '!').join() }));
     check('the top bar is the Board view\'s: chips GOAL, DEMO, DONE, ROLES at 1440px (labels muted), then Setup as a chip (one row)', /GOAL A voting app/.test(tb.t) && /DONE 0 of 2/.test(tb.t) && /ROLES/.test(tb.t) && !/PLANNER|MERGES/.test(tb.t) && tb.chips === 'Goal,Demo,Done,Roles' && tb.roles && tb.inv && tb.setup && tb.actChips && tb.clock && tb.rows, JSON.stringify(tb));
@@ -220,7 +220,7 @@ try {
     await page.click('#l-tog');
     const small = await page.evaluate(() => {
       const out = [];
-      for (const b of $('main').querySelectorAll('button, textarea, select')) { const r = b.getBoundingClientRect(); if (r.width && r.height && (r.height < 24 || r.width < 24) && !b.matches('.link, .o-card')) out.push(`${b.id || b.dataset.fk || b.className || b.textContent} ${Math.round(r.width)}x${Math.round(r.height)}`); }
+      for (const b of $('main').querySelectorAll('button, textarea, select')) { const r = b.getBoundingClientRect(); if (r.width && r.height && (r.height < 24 || r.width < 24) && !b.matches('.link')) out.push(`${b.id || b.dataset.fk || b.className || b.textContent} ${Math.round(r.width)}x${Math.round(r.height)}`); }
       const walk = document.createTreeWalker($('main'), NodeFilter.SHOW_TEXT);
       for (let n; (n = walk.nextNode());) { const e = n.parentElement; if (!n.textContent.trim() || !e.offsetWidth || e.closest('#office-scene')) continue; const f = parseFloat(getComputedStyle(e).fontSize); if (f < 12) out.push(`font ${f}px: ${n.textContent.trim().slice(0, 20)}`); }
       return out;
@@ -259,7 +259,7 @@ try {
     check('Esc unselects the agent', await page.evaluate(() => office.mod.selected === null));
 
     // A task card opens the board's task dialog.
-    await page.click(`#o-cols [data-open-task="${t2.id}"]`);
+    await page.click(`#o-tasks-b .card[data-id="${t2.id}"] .ct`);
     check('a task card opens the task dialog', await until(page, () => document.getElementById('task-dlg').open && document.getElementById('td-name').value === 'Leaderboard page'));
     await page.keyboard.press('Escape'); await until(page, () => !document.getElementById('task-dlg').open);
     check('closing the dialog leaves the office as it was', await view(page) === 'office');
@@ -298,7 +298,7 @@ try {
     check('maximised Tasks: help opens above it', await until(page, () => document.getElementById('help-dlg').open) && await above('#help-dlg'));
     await page.keyboard.press('Escape');
     check('maximised Tasks: the header stays above it', await above('#app > header h1'));
-    await page.click(`#o-cols [data-open-task="${t1.id}"]`);
+    await page.click(`#o-tasks-b .card[data-id="${t1.id}"] .ct`);
     check('maximised Tasks: the task dialog opens above it', await until(page, () => document.getElementById('task-dlg').open) && await above('#task-dlg'));
     await page.keyboard.press('Escape'); await until(page, () => !document.getElementById('task-dlg').open);
     await page.focus('#o-tasks-max');
@@ -309,13 +309,13 @@ try {
     // the board; Columns / Table is the board's saved choice, with the table in the window.
     check('3D Tasks title bar: the Board view\'s search, Show filter and Columns / Table', await page.evaluate(() => ['tsearch', 'filter', 'viewtog'].every((id) => $('o-tasks-head').contains($(id)) && !!$(id).offsetWidth)));
     await page.type('#tsearch', 'leaderboard');
-    check('3D: search filters the Tasks window (and the board, the same box)', await until(page, () => { const t = $('o-cols').innerText; return /Leaderboard page/.test(t) && !/Vote API/.test(t) && document.querySelectorAll('#o-cols .o-card').length === 1 && document.querySelectorAll('#board .card').length === 1; }));
+    check('3D: search filters the Tasks window (and the board, the same box)', await until(page, () => { const t = $('board').innerText; return $('o-tasks-b').contains($('board')) && /Leaderboard page/.test(t) && !/Vote API/.test(t) && document.querySelectorAll('#o-tasks-b .card').length === 1; }));
     await page.$eval('#tsearch', (e) => { e.value = ''; e.dispatchEvent(new Event('input', { bubbles: true })); });
     await page.select('#filter', 'ana');
-    check('3D: Show filters the Tasks window by person', await until(page, () => document.querySelectorAll('#o-cols .o-card').length >= 1 && [...document.querySelectorAll('#o-cols .o-card')].every((c) => /ana/.test(c.innerText) || /Leaderboard/.test(c.innerText))) && await page.evaluate(() => [...document.querySelectorAll('#o-cols .o-card')].length < state.tasks.length || state.tasks.every((t) => !t.assignee || /ana/.test(t.assignee))));
+    check('3D: Show filters the Tasks window by person', await until(page, () => document.querySelectorAll('#o-tasks-b .card').length >= 1 && [...document.querySelectorAll('#o-tasks-b .card')].every((c) => /ana/.test(c.innerText) || /Leaderboard/.test(c.innerText))) && await page.evaluate(() => [...document.querySelectorAll('#o-tasks-b .card')].length < state.tasks.length || state.tasks.every((t) => !t.assignee || /ana/.test(t.assignee))));
     await page.select('#filter', '');
     await page.click('#viewtog [data-view="table"]');
-    check('3D: Table shows the board\'s table inside the Tasks window (columns hidden), saved as the board\'s choice', await until(page, () => $('o-tasks-b').contains($('tasktable')) && !$('tasktable').hidden && $('tasktable').offsetHeight > 40 && !$('o-cols').offsetHeight && localStorage.getItem('board-view') === 'table' && /Leaderboard page/.test($('tasktable').innerText)));
+    check('3D: Table shows the board\'s table inside the Tasks window (columns hidden), saved as the board\'s choice', await until(page, () => $('o-tasks-b').contains($('tasktable')) && !$('tasktable').hidden && $('tasktable').offsetHeight > 40 && !$('board').offsetHeight && localStorage.getItem('board-view') === 'table' && /Leaderboard page/.test($('tasktable').innerText)));
     await page.click('#o-tasks-max');
     check('3D: the table is usable maximised (rows open the task)', await page.evaluate(() => $('tasktable').offsetHeight > 200));
     await page.click(`#tasktable [data-fk="tt-${t2.id}"]`);
@@ -323,7 +323,7 @@ try {
     await page.keyboard.press('Escape'); await until(page, () => !document.getElementById('task-dlg').open);
     await page.click('#o-tasks-max');
     await page.click('#viewtog [data-view="columns"]');
-    check('3D: back to Columns', await until(page, () => $('tasktable').hidden && $('o-cols').offsetHeight > 40 && localStorage.getItem('board-view') === 'columns'));
+    check('3D: back to Columns', await until(page, () => $('tasktable').hidden && $('board').offsetHeight > 40 && localStorage.getItem('board-view') === 'columns'));
 
     // Activity: the board's own feed (with its filters) and chat, in the right column under Agents.
     check('Activity, under Agents, has the feed with its filters', await page.evaluate(() => $('o-rcol').contains($('o-act')) && $('o-act').contains($('feed')) && $('o-act').contains($('tabs')) && $('feed').offsetHeight > 150 && /vote API is up/.test($('feed').innerText)), await page.evaluate(() => $('feed').offsetHeight));
@@ -448,7 +448,7 @@ try {
     const carol = await agent(board, 'carol'); await carol('board_status');
     await v2.page.setViewport({ width: 1366, height: 768 });
     await v2.page.evaluate(() => { if (document.getElementById('o-tasks').classList.contains('folded')) document.getElementById('o-tasks-fold').click(); });
-    check('an overflowing Tasks column says "Show N more" (N = the cards out of view)', await until(v2.page, () => { const c = document.querySelector('#o-cols .o-col[data-s="open"]'); const m = c?.querySelector('.o-more'); if (!m || m.hidden) return false; const ul = c.querySelector('ul').getBoundingClientRect(); const out = [...c.querySelectorAll('.o-card')].filter((x) => x.getBoundingClientRect().bottom > ul.bottom + 1).length; return out > 0 && m.textContent === `Show ${out} more`; }), await v2.page.evaluate(() => document.querySelector('#o-cols .o-col[data-s="open"] .o-more')?.textContent));
+    check('an overflowing Tasks column scrolls inside the window (its cards list scrolls, the window keeps its size)', await until(v2.page, () => { const c = document.querySelector('#o-tasks-b .col[data-status="open"]'); const ul = c?.querySelector('.cards'); if (!ul) return false; const w = document.getElementById('o-tasks').getBoundingClientRect(); return ul.scrollHeight > ul.clientHeight + 4 && getComputedStyle(ul).overflowY === 'auto' && c.getBoundingClientRect().bottom <= w.bottom + 1; }), await v2.page.evaluate(() => { const ul = document.querySelector('#o-tasks-b .col[data-status="open"] .cards'); return ul ? `${ul.scrollHeight}/${ul.clientHeight}` : 'no list'; }));
     check('a helper shows under its agent, with its own state and task', await until(v2.page, () => { const h = document.querySelector('[data-o-agent="ana-claude"]')?.closest('li')?.querySelector('.o-helpers'); return !!h && /ui-worker/.test(h.innerText) && /working/.test(h.innerText) && /Helper task/.test(h.innerText); }));
     check('a person whose one agent has their name: their line, then that agent\'s row (as on the Board view)', await until(v2.page, () => !!document.querySelector('[data-person-row="carol"] [data-o-agent="carol"]') && !!document.querySelector('[data-person-row="carol"] .o-pn')));
     for (const [w, h, theme] of [[1440, 900, 'dusk'], [1440, 900, 'light'], [1440, 900, 'sticky'], [1366, 768, 'dark']]) {

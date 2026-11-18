@@ -124,12 +124,12 @@ The header's **Board | 3D office** switch swaps the main area in place. The offi
 - *Needs attention* on the left: what to do now, the agents' questions with Answer, what's blocked.
 - The top bar: goal, demo time, progress, the planner, who merges to main, and *Setup* (it opens as a popover over the room).
 - *Agents*, *Activity* and *File locks* on the right.
-- *Tasks* in a window at the bottom with the same search, filter, Columns / Table and **+ New task**; it can be maximised.
+- *Tasks* in a window at the bottom: the board itself, moved in (the same columns and cards, search, filter, Columns / Table and **+ New task**). A long column scrolls inside the window. It can be maximised or folded to its title bar.
 
 Clicking a character selects its agent in *Agents*; its name tag shows the same status as its row. Panels fold the same way in both views.
 
 - Board is the default; the office code (three.js) downloads only on the first switch.
-- Switching to the 3D office drops the board down into the Tasks window, showing the room behind it, once the room has drawn its first frame. Switching back, the board rises up from there. The panels stay where they are. With reduced motion it switches at once.
+- Switching to the 3D office moves the board itself: it starts where it was and its top edge slides down to the Tasks window, showing the room behind it (once the room has drawn its first frame), while the window's border and glass come in. Switching back, the board rises up from there. With the Tasks window folded, the board drops off the bottom instead. The panels stay where they are. With reduced motion it switches at once.
 - The choice is remembered per board in this browser. `?view=office` / `?view=board` overrides it, and it's also in the command palette (Ctrl+K).
 - Not on phones, and without WebGL the board stays, with a note.
 
