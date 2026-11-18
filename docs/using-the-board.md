@@ -137,7 +137,7 @@ With 3D on (the default), the office is live behind the board: the same characte
 
 The task board has three states, and its own buttons switch between them:
 
-- **Expanded** (the default): it covers the room up to the top bar, as glass. The room keeps moving behind it at a few frames a second.
+- **Expanded** (the default): it covers the room up to the top bar, as glass. The room keeps moving behind it.
 - **Docked**: a window at the foot, with the room in view above it. Its top edge slides down to get there (**Show the office**, or Esc inside the board), and back up again (**Expand the board**). With reduced motion it switches at once.
 - **Folded**: just its title bar. Folded panels form a row of title bars along the bottom edge.
 

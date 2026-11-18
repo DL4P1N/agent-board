@@ -71,7 +71,7 @@ Tools without hooks keep calling `wait_for_events`, which returns as soon as som
 
 - three.js draws the room at low resolution, scales it up with nearest-neighbour sampling, then applies Bayer dithering, palette quantisation and depth-based outlines.
 - The camera snaps to the pixel grid so nothing shimmers.
-- Behind the expanded task board the room draws at a few frames a second, at 30 when it's in view, and not at all in a hidden tab. Switched off, no 3D code loads.
+- The room draws at up to 30 frames a second, holds still while the task board slides, and stops in a hidden tab. Switched off, no 3D code loads.
 - The build is deterministic, and CI fails if the committed bundle is out of date.
 
 **A small footprint.**
