@@ -131,15 +131,15 @@ Set the demo time in *Setup*. The board counts down.
 
 With 3D on (the default), the office is live behind the board: the same characters as the Presenter view, drawn from the state the board already loads. The panels float over it as glass:
 
-- The top bar across the top: goal, demo time, progress, the planner, who merges to main, and *Setup* (it opens as a popover over the room).
-- *Needs attention* on the left (what to do now, the agents' questions with Answer, what's blocked), and *Agents*, *Activity* and *File locks* on the right. Both columns hang from the bottom of the screen.
+- The top bar across the foot of the screen: goal, demo time, progress, the planner, who merges to main, and *Setup* (its popovers open upward, over the room).
+- *Needs attention* on the left (what to do now, the agents' questions with Answer, what's blocked), and *Agents*, *Activity* and *File locks* on the right. Both columns hang from the top of the screen.
 - The task board between them: the same columns and cards, search, filter, Columns / Table and **+ New task**. A long column scrolls inside it.
 
 The task board has three states, and its own buttons switch between them:
 
-- **Expanded** (the default): it covers the room up to the top bar, as glass. The room keeps moving behind it.
-- **Docked**: a window at the foot, with the room in view above it. Its top edge slides down to get there (**Show the office**, or Esc inside the board), and back up again (**Expand the board**). With reduced motion it switches at once.
-- **Folded**: just its title bar. Folded panels form a row of title bars along the bottom edge.
+- **Expanded** (the default): it covers the room down to the top bar, as glass. The room keeps moving behind it.
+- **Docked**: a window at the top, with the room in view below it. Its bottom edge slides up to get there (**Show the office**, or Esc inside the board), and back down again (**Expand the board**). With reduced motion it switches at once.
+- **Folded**: just its title bar. Folded panels form a row of title bars along the top edge, under the header.
 
 Clicking a character selects its agent in *Agents*; its name tag shows the same status as its row. A link in *What to do now* that leads to the tasks brings the board up over the room.
 

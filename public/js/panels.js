@@ -35,9 +35,9 @@ function officeMount(on) {
 // docking one yourself is remembered. ?view=office docks it for that visit.
 const oTasksOff = () => (typeof oUi.tasks === 'boolean' ? oUi.tasks : false);
 const oMax = () => (office.dockOnce ? false : typeof oUi.max === 'boolean' ? oUi.max : true);
-// Expanded <-> docked: the board's top edge slides between the top bar and the window's place at the foot (its glass
-// covering the room above it as it goes, or uncovering it); one element, the columns inside it the same. Instant with
-// reduced motion or when it's folded.
+// Expanded <-> docked: the board's bottom edge slides between the top bar at the foot and the window's place at the
+// top (its glass covering the room below it as it goes, or uncovering it); one element, the columns inside it the same.
+// Instant with reduced motion or when it's folded.
 let oSlide = null;
 function oExpand(on) {
   const tw = $('o-tasks'), r0 = tw.getBoundingClientRect(), shown = boardView === 'office' && !oTasksOff() && !!tw.offsetHeight;
@@ -45,8 +45,8 @@ function oExpand(on) {
   oSlide?.cancel(); oSlide = null;
   if (!shown || reduceMotion()) return;
   const r1 = tw.getBoundingClientRect(), o = $('office-view').getBoundingClientRect();
-  if (Math.abs(r0.top - r1.top) < 2) return;
-  oSlide = tw.animate([{ top: `${r0.top - o.top}px`, height: 'auto' }, { top: `${r1.top - o.top}px`, height: 'auto' }], { duration: 420, easing: 'cubic-bezier(.4, 0, .2, 1)' });
+  if (Math.abs(r0.bottom - r1.bottom) < 2) return;
+  oSlide = tw.animate([{ bottom: `${o.bottom - r0.bottom}px`, height: 'auto' }, { bottom: `${o.bottom - r1.bottom}px`, height: 'auto' }], { duration: 420, easing: 'cubic-bezier(.4, 0, .2, 1)' });
   oRate(); // the room holds still while the board slides (its camera eases once it has landed), so the slide stays smooth
   oSlide.finished.then(() => { oSlide = null; oRate(); oFrame(); }).catch(() => {});
 }
@@ -54,12 +54,14 @@ const oLocksOff = () => (typeof oUi.locks === 'boolean' ? oUi.locks : store.get(
 const oOff = (w) => (w === 'tasks' ? oTasksOff() : w === 'locks' ? oLocksOff() : w === 'act' ? !!oUi.actOff : !!oUi[w]);
 // The Tasks window's maximise / restore icons (corners out, corners in).
 const O_MAX = '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>', O_RESTORE = '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M10 2v4h4M14 10h-4v4M2 10h4v4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
-// A top bar popover sits under its chip, inside the window: on a phone, where the top bar can be low on the screen, it
-// moves up until it fits.
+// A top bar popover sits under its chip, inside the window; where there isn't room under it (the top bar at the foot,
+// with 3D on, or low on a phone's screen), it opens over the chip instead.
 function placePop(id, chipId, wDef = 460) {
   const p = $(id); const c = $(chipId); const r = c?.offsetWidth ? c.getBoundingClientRect() : null; const w = p.offsetWidth || wDef;
   p.style.left = `${Math.max(8, Math.min((r ? r.left : 8), innerWidth - w - 8))}px`;
-  if (r) p.style.top = `${Math.round(Math.max(8, Math.min(r.bottom + 8, innerHeight - p.offsetHeight - 8)))}px`;
+  if (!r) return;
+  const h = p.offsetHeight; const below = r.bottom + 8 + h <= innerHeight - 8;
+  p.style.top = `${Math.round(Math.max(8, below ? r.bottom + 8 : Math.min(r.top - 8 - h, innerHeight - h - 8)))}px`;
 }
 function oApply() {
   const m = $('main');
@@ -69,7 +71,7 @@ function oApply() {
   }
   const tOff = oTasksOff(), max = oMax();
   $('o-tasks').classList.toggle('max', max && !tOff);
-  $('o-tasks-max').setAttribute('aria-pressed', String(max)); $('o-tasks-max').setAttribute('aria-label', max ? 'Slide the board down to show the office' : 'Expand the board over the office'); $('o-tasks-max').title = max ? 'Show the office (Esc)' : 'Expand the board';
+  $('o-tasks-max').setAttribute('aria-pressed', String(max)); $('o-tasks-max').setAttribute('aria-label', max ? 'Slide the board up to show the office' : 'Expand the board over the office'); $('o-tasks-max').title = max ? 'Show the office (Esc)' : 'Expand the board';
   $('o-tasks-max').innerHTML = max ? O_RESTORE : O_MAX;
   oRate();
   for (const [box, b, off, what] of [[$('o-tasks'), $('o-tasks-fold'), tOff, 'the tasks'], [$('o-act'), $('o-act-fold'), !!oUi.actOff, 'Activity'], [$('o-locks'), $('l-tog'), oLocksOff(), 'the file locks']]) {
@@ -90,22 +92,22 @@ function oApply() {
   if (boardView === 'office') $('main').style.setProperty('--tb-h', $('topbar').offsetHeight + 'px');
   oFrame();
 }
-// The room is framed in the part of the view no dock, the top bar or the Tasks window (or its title bar) covers (the
-// camera is told the insets).
+// The room is framed in the part of the view no dock, the top bar (at the foot) or the Tasks window (or its title bar,
+// at the top) covers (the camera is told the insets).
 function oFrame() {
   if (!office.mod?.setInsets || boardView !== 'office') return;
   const v = $('office-view').getBoundingClientRect(); if (!v.width || !v.height) return;
   const R = (id) => { const e = $(id); return e && !e.hidden && e.offsetWidth ? e.getBoundingClientRect() : null; };
   const l = R('o-left'), r = R('o-right') || R('o-act'), t = R('o-tasks'), top = $('topbar').getBoundingClientRect();
-  // Expanded (or sliding), the board covers the room: it's framed as if docked (the window's CSS height at the foot),
-  // so sliding the board down or up doesn't move the camera.
-  const dockTop = () => v.bottom - 18 - Math.max(Math.min(Math.max(176, 0.27 * v.height), 270), Math.min(innerHeight * 0.5, 360));
+  // Expanded (or sliding), the board covers the room: it's framed as if docked (the window's CSS height at the top),
+  // so sliding the board up or down doesn't move the camera.
+  const dockBottom = () => v.top + 10 + Math.max(Math.min(Math.max(176, 0.27 * v.height), 270), Math.min(innerHeight * 0.5, 360));
   const covered = t && ($('o-tasks').classList.contains('max') || !!oSlide);
   office.mod.setInsets({
     left: l ? (l.right - v.left) / v.width : 0,
     right: r ? (v.right - r.left) / v.width : 0,
-    top: Math.max(0, (top.bottom - v.top) / v.height),
-    bottom: t ? (v.bottom - (covered ? dockTop() : t.top)) / v.height : 0,
+    top: t ? Math.max(0, ((covered ? dockBottom() : t.bottom) - v.top) / v.height) : 0,
+    bottom: Math.max(0, (v.bottom - top.top) / v.height),
   });
 }
 function oFold(which, folded = !oOff(which)) {
