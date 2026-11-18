@@ -19,33 +19,12 @@ import QRCode from 'qrcode';
 import { buildMcpServer } from './mcp.js';
 import { checkNotifyUrl, resolveNotifyTarget, sendWebhook } from './webhook.js';
 import { RateLimiter, Slots, envLimit } from './limits.js';
-
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PORT = Number(process.env.PORT || 4000);
-// '::' listens on IPv6 and IPv4. Windows resolves `localhost` to ::1 first, and some MCP clients
-// (Claude Code) don't fall back to 127.0.0.1, so an IPv4-only board looks down to them.
-const HOST = process.env.HOST || '::';
-const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'));
-// A public https address for this server, e.g. the Cloudflare tunnel that `npm run tunnel` opens.
-const PUBLIC_URL = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
-const PUBLIC_DIR = path.join(ROOT, 'public');
-
-// Which Agent Board code this server runs (git commit), so join/doctor can spot an outdated board.
-const VERSION = (() => {
-  const r = spawnSync('git', ['-C', ROOT, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' });
-  return r.status === 0 ? r.stdout.trim() : 'unknown';
-})();
+import { ROOT, PORT, HOST, DATA_DIR, PUBLIC_URL, PUBLIC_DIR, VERSION } from './config.js';
+import { tokenFrom, TOKEN_ROTATED, safeEq, agentFrom, h } from './http-util.js';
+import { AGENT_TOOLS, serverAddresses, bestBase } from './network.js';
+import { writePid, dropPid } from './pidfile.js';
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
-// A running server marks its data folder (board.pid), so `npm run restore` / `npm run boards` won't change
-// files under it. Written before the registry loads, so the CLI can't race a starting server; never
-// overwrites the file of another server that's still running (that one owns the folder).
-const PID_FILE = path.join(DATA_DIR, 'board.pid');
-function otherServerAlive() {
-  try { const { pid } = JSON.parse(fs.readFileSync(PID_FILE, 'utf8')); if (pid === process.pid) return false; process.kill(pid, 0); return true; } catch { return false; }
-}
-const writePid = () => { if (!otherServerAlive()) try { fs.writeFileSync(PID_FILE, JSON.stringify({ pid: process.pid, port: PORT, started: new Date().toISOString() })); } catch {} };
-const dropPid = () => { try { if (JSON.parse(fs.readFileSync(PID_FILE, 'utf8')).pid === process.pid) fs.unlinkSync(PID_FILE); } catch {} };
 writePid();
 process.once('exit', dropPid);
 let registry;
@@ -59,31 +38,6 @@ const ADMIN_TOKEN = adminToken(DATA_DIR);
 // in boards.json), never to "whichever board is the default right now": a default switch plus a restart
 // must not hand one board's token to another.
 const ENV_TOKEN_SLUG = process.env.BOARD_TOKEN ? registry.envTokenSlug() : null;
-
-// ---------- shared helpers (no board involved) ----------
-function tokenFrom(req) {
-  const h = req.get('authorization') || '';
-  if (h.toLowerCase().startsWith('bearer ')) return h.slice(7).trim();
-  return req.get('x-board-token') || req.query.token || '';
-}
-const TOKEN_ROTATED = "The board's token was changed. Ask the host for the new link, then re-run the join command from the web board.";
-function safeEq(a, b) {
-  const x = Buffer.from(String(a));
-  const y = Buffer.from(String(b));
-  return x.length === y.length && crypto.timingSafeEqual(x, y);
-}
-function agentFrom(req) {
-  const a = (req.get('x-agent') || req.body?.author || req.query.agent || '').toString().trim();
-  // Names are case-insensitive: "Dana" and "dana" are one person.
-  return normName(a).replace(/[^\w.\-/]/g, '').slice(0, 64) || 'anonymous';
-}
-const h = (fn) => async (req, res) => {
-  // A handler may set its own error status (e.g. 403) before throwing; otherwise 400.
-  try { res.json(await fn(req, res)); } catch (e) {
-    if (res.headersSent) return;
-    res.status(e?.status || (res.statusCode >= 400 ? res.statusCode : 400)).json({ error: String(e?.message || e) });
-  }
-};
 
 // ---------- limits: one runaway client must not slow the board down for everyone ----------
 // Board calls per agent and per network address (token buckets: a minute's worth at once, refilling steadily),
@@ -130,41 +84,6 @@ function clientLabel(info) {
   if (n.includes('copilot')) return 'Copilot CLI';
   return String(info.name).slice(0, 40);
 }
-
-// How to start the orchestrator in each supported tool (shown on the web board).
-const AGENT_TOOLS = [
-  { id: 'claude', name: 'Claude Code', start: '/board', where: 'Type it in Claude Code, opened in the project repo.' },
-  { id: 'codex', name: 'Codex (ChatGPT)', start: '$board', where: 'Type it in the Codex CLI, opened in the project repo.' },
-  { id: 'copilot-vscode', name: 'GitHub Copilot in VS Code', start: '/board', where: 'Open the project repo in VS Code, switch Copilot Chat to Agent mode, then type it.' },
-  { id: 'copilot-cli', name: 'GitHub Copilot CLI', start: '/board', launch: 'copilot --allow-tool board --autopilot --max-autopilot-continues 50', where: 'Start it with  copilot --allow-tool board --autopilot --max-autopilot-continues 50  in the project repo, then type it. (--autopilot keeps it working without you typing "continue".)' },
-  { id: 'gemini', name: 'Gemini CLI', start: '/board', where: 'Type it in Gemini CLI, opened in the project repo.' },
-  { id: 'cursor', name: 'Cursor', start: '/board', where: 'In Cursor\'s Agent chat, opened in the project repo.' },
-];
-
-// Where teammates can reach this server, best first: the public tunnel (if any), then network addresses.
-function serverAddresses() {
-  const lan = reachableAddresses().map((a) => ({ ...a, base: `http://${a.ip}:${PORT}` }));
-  if (!PUBLIC_URL) return lan;
-  return [{ ip: new URL(PUBLIC_URL).hostname, base: PUBLIC_URL, label: 'Cloudflare tunnel (works from any network)' }, ...lan];
-}
-
-// Non-internal IPv4 addresses, most useful first: Tailscale, then private LAN, then anything else.
-function reachableAddresses() {
-  const out = [];
-  for (const [name, list] of Object.entries(os.networkInterfaces())) {
-    for (const i of list || []) {
-      if (i.family !== 'IPv4' || i.internal || i.address.startsWith('169.254.')) continue;
-      const tailscale = /tailscale/i.test(name) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(i.address);
-      const lan = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(i.address);
-      const virtual = /vEthernet|WSL|VirtualBox|VMware|Hyper-V|docker|br-/i.test(name);
-      const rank = tailscale ? 0 : virtual ? 3 : lan ? 1 : 2;
-      const label = tailscale ? `Tailscale (works across networks) — ${name}` : virtual ? `virtual adapter, probably NOT reachable — ${name}` : `same wifi/LAN — ${name}`;
-      out.push({ ip: i.address, label, rank });
-    }
-  }
-  return out.sort((a, b) => a.rank - b.rank);
-}
-const bestBase = () => serverAddresses()[0]?.base || `http://localhost:${PORT}`;
 
 // ---------- notifications: helpers shared by all boards ----------
 const NOTIFY_EVENTS = ['questions', 'main', 'blocked', 'conflict', 'freeze', 'limit'];
