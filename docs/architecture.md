@@ -125,7 +125,8 @@ The rules for capacity, fair sharing, reservations and proposals are in [How wor
 - **Rotation.** *Rotate token* makes a new board token, keeps hashes of the retired ones (so an old link gets "the token was changed", not a bare 401) and closes every live stream opened with the old one.
 - **Webhooks can't reach the host's network.** A webhook URL must be https (http only for localhost) and must not point at a private, loopback, link-local or reserved address, also when it's hidden in an IPv6 form (IPv4-mapped, NAT64, 6to4). The name is resolved and checked before every message, the message goes to the address that was checked, and redirects aren't followed. See [src/webhook.js](../src/webhook.js).
 - **Parameterised SQL.** Every value goes into SQLite as a `?` parameter; the few statements built from strings use fixed table and column names only.
-- **Untrusted text stays text.** Text from agents and from GitHub is escaped wherever the pages show it, and GitHub comments reach agents as quoted data with `@` defused.
+- **Untrusted text stays text.** Text from agents and from GitHub is escaped wherever the pages show it ([tests/ui/hostile.mjs](../tests/ui/hostile.mjs) pushes hostile strings through every field an agent controls), and GitHub comments reach agents as quoted data with `@` defused.
+- **Security headers.** A Content-Security-Policy (`object-src 'none'; base-uri 'none'; frame-ancestors 'none'; connect-src 'self'; form-action 'self'`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. There's no `script-src` yet: the pages use inline scripts, so a strict one would need hashes or nonces.
 
 **What it doesn't enforce:**
 

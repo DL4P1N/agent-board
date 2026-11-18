@@ -919,6 +919,15 @@ function boardLinks(slug) {
 }
 
 const app = express();
+// Security headers on every answer. The CSP blocks plugins, <base> tricks, framing (clickjacking), form posts
+// and connections to anywhere but this server. No script-src: the pages use inline scripts (a strict one would
+// need hashes or nonces); the escaping of untrusted text is what keeps scripts out (tests/ui/hostile.mjs).
+const CSP = "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; connect-src 'self'; form-action 'self'";
+app.disable('x-powered-by');
+app.use((_req, res, next) => {
+  res.set({ 'Content-Security-Policy': CSP, 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer' });
+  next();
+});
 app.use(express.json({ limit: '2mb' }));
 
 // app stays 'claude-board' (the name before the rename to Agent Board): older join/doctor/start scripts and
