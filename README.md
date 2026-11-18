@@ -80,7 +80,7 @@ Tools without hooks keep calling `wait_for_events`, which returns as soon as som
 - SQLite is Node's built-in `node:sqlite`, one database per board.
 - The web board is plain HTML, CSS and JavaScript with no build step. It re-renders on every live event and keeps your focus and half-typed text.
 
-**Tested end to end.** About 40 suites ([docs/testing.md](docs/testing.md)) cover:
+**Tested end to end.** About 45 suites ([docs/testing.md](docs/testing.md)) cover:
 
 - the server and MCP tools;
 - browser tests that drive a real Chrome, including the 3D view, with software WebGL in CI;

@@ -144,9 +144,10 @@ try {
     await sleep(600);
     await page.evaluate(() => document.querySelector('.o-agent')?.click());
     // Unfold the Tasks window, so its cards are drawn too.
-    await page.evaluate(() => { for (const b of document.querySelectorAll('#office-view button, #office-view [role=button]')) if (/^Tasks\b/i.test(b.textContent.trim()) && b.getAttribute('aria-expanded') === 'false') { b.click(); break; } });
+    await page.evaluate(() => { const b = document.getElementById('o-tasks-fold'); if (b?.getAttribute('aria-expanded') === 'false') b.click(); });
     await sleep(800);
-    check('3D view: the Tasks window shows the hostile titles as text', await page.evaluate((m) => [...document.querySelectorAll('.o-card')].some((c) => c.textContent.includes(m)), MARK));
+    // The Tasks window holds the board's own cards (one task board in both views).
+    check('3D view: the Tasks window shows the hostile titles as text', await page.evaluate((m) => [...document.querySelectorAll('#o-tasks .card')].some((c) => c.textContent.includes(m)), MARK));
     await page.screenshot({ path: path.join(out, '03-office.png') });
     const txt = await page.evaluate(() => document.body.innerText);
     check(`3D view (scene: ${scene}): hostile text shows as text`, txt.includes(MARK), txt.slice(0, 200));

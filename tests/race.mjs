@@ -15,7 +15,8 @@ const human = (p, method = 'GET', body) => rest(board, 'dana', p, method, body);
 
 // An MCP client per agent, each on its own connection. call() returns {ok, body}; refusals are expected here.
 async function connect(name) {
-  const c = new Client({ name: 'claude-code', version: '1.0.0' });
+  // A plain MCP client, so each racer may hold 1 task (Claude Code without a plan may hold 2: it runs helpers).
+  const c = new Client({ name: 'race-client', version: '1.0.0' });
   await c.connect(new StreamableHTTPClientTransport(new URL(`${board.base}/mcp?agent=${name}&token=${AG}&laptop=lap-${name}`)));
   return async (tool, args = {}) => {
     const r = await c.callTool({ name: tool, arguments: args });

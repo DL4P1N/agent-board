@@ -1125,7 +1125,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-act .jump { position: static; translate: none; align-self: center; margin-top: var(--s2); }
   .o-act .jump:active { translate: 1px 1px; }
   /* All six fit a 256px panel (on touch screens they scroll, with the fade at the right edge). */
-  .o-act .tabs button { padding: 0 var(--s1); min-width: 0; }
+  /* Six tabs in a 224px panel: a size smaller, spread across the row (they all fit, evenly spaced). */
+  .o-act .tabs { justify-content: space-between; }
+  .o-act .tabs button { padding: 0 var(--s1); min-width: 0; font-size: var(--fs-meta); }
   @media (hover: none) and (pointer: coarse) { .o-act .tabs button { min-width: var(--ctl-xs); } }
   .o-act .feedwrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   @media (max-height: 760px) { .o-rcol > .o-right { max-height: 34%; } } /* short screens: Activity keeps room for a few events */
@@ -4685,24 +4687,37 @@ function viewAnimEnd() {
 const taskPane = () => TASK_PARTS.map($).find((e) => e && !e.hidden && e.offsetHeight) || $('board');
 const rectOf = (e) => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
 // Before the swap: where the tasks are now.
+// A still copy of a small piece of the view being left (the page-foot hint, the window's buttons), placed where it is, so
+// it can fade out instead of vanishing with the swap.
+function vtCopy(e) {
+  if (!e || e.hidden || !e.offsetHeight) return null;
+  const r = e.getBoundingClientRect(), cs = getComputedStyle(e), g = e.cloneNode(true);
+  g.removeAttribute('id'); for (const x of g.querySelectorAll('[id]')) x.removeAttribute('id');
+  g.setAttribute('aria-hidden', 'true'); g.inert = true;
+  for (const p of ['color', 'background-color', 'border', 'border-radius', 'font-family', 'font-size', 'font-weight', 'padding', 'line-height', 'text-align', 'display', 'align-items', 'justify-content', 'box-shadow']) g.style.setProperty(p, cs.getPropertyValue(p));
+  Object.assign(g.style, { position: 'fixed', zIndex: '8', margin: '0', pointerEvents: 'none', boxSizing: 'border-box', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+  return { el: g, top: r.top };
+}
 function viewAnimStart(v) {
   if (viewAnimEnd() || reduceMotion()) return null;
   if (v === 'office') {
     const src = $('boardwrap'); const r = src.getBoundingClientRect(); if (!r.width || !r.height) return null;
-    if (!oTasksOff()) return { pane: rectOf(taskPane()) };
+    const hint = vtCopy($('cols-hint'));
+    if (!oTasksOff()) return { pane: rectOf(taskPane()), hint };
     const g = src.cloneNode(true);
     g.removeAttribute('id'); for (const e of g.querySelectorAll('[id]')) e.removeAttribute('id');
     for (const e of g.querySelectorAll('[data-fk]')) e.removeAttribute('data-fk');
     g.classList.add('vt-ghost'); g.setAttribute('aria-hidden', 'true'); g.inert = true;
     Object.assign(g.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
-    return { ghost: g, top: r.top };
+    return { ghost: g, top: r.top, hint };
   }
   const tw = $('o-tasks'), t = tw?.getBoundingClientRect();
   const room = $('office-view').getBoundingClientRect();
   const out = { tasksTop: t?.height ? t.top : innerHeight, room: room.width ? room : null };
   if (t?.height && !tw.classList.contains('folded')) {
     const cs = getComputedStyle(tw);
-    Object.assign(out, { pane: rectOf(taskPane()), win: rectOf(tw), glass: cs.backgroundColor, line: cs.borderTopColor, barEnd: $('taskbar').getBoundingClientRect().right });
+    Object.assign(out, { pane: rectOf(taskPane()), win: rectOf(tw), glass: cs.backgroundColor, line: cs.borderTopColor, barEnd: $('taskbar').getBoundingClientRect().right,
+      btns: [$('o-tasks-max'), $('o-tasks-fold')].map(vtCopy).filter(Boolean) });
   }
   return out;
 }
@@ -4710,7 +4725,14 @@ function viewAnim(v, from) {
   const run = vtRun = { anims: [], ghost: from.ghost || null, cancelled: false };
   const land = 'cubic-bezier(.2, .7, .3, 1)';
   const keep = (a) => { run.anims.push(a); return a; };
+  // A copied piece of the view being left fades out (moving `dy` with what it belonged to), then goes.
+  const fadeCopy = (c, dy, D) => {
+    if (!c) return; $('main').append(c.el); keep({ cancel: () => c.el.remove() });
+    const a = keep(c.el.animate([{ top: `${c.top}px`, opacity: 1 }, { top: `${c.top + dy}px`, opacity: 0 }], { duration: D, easing: VT_EASE, fill: 'forwards' }));
+    a.finished.then(() => c.el.remove()).catch(() => {});
+  };
   if (v === 'office') {
+    fadeCopy(from.hint, 16, 240); // the page-foot hint (the 3D view has none) goes down with the board, fading
     // The room's picture stays hidden (at once, no fade out) until it has drawn a fresh frame: a reactivated or resized
     // canvas can show a stale or blank frame for a moment. Then it fades in.
     const sc = $('office-scene'); sc.style.transition = 'none'; sc.style.opacity = '0';
@@ -4803,6 +4825,15 @@ function viewAnim(v, from) {
     b.style.position = 'relative';
     keep({ cancel: () => { b.style.position = ''; } });
     const rise = keep(b.animate([m0, m1], { duration: VT_D, easing: VT_EASE }));
+    // It opens from the window's height to its full length as it rises: a long column's cards below the window's
+    // bottom edge come in with that edge (the window's frame, drawn around the board, follows it down).
+    const h0 = Math.max(0, from.pane.bottom - (r.top + (from.pane.top - p.top)));
+    if (h0 < r.height - 1) {
+      b.style.overflow = 'clip'; keep({ cancel: () => { b.style.overflow = ''; } });
+      keep(b.animate([{ maxHeight: `${h0}px` }, { maxHeight: `${r.height}px` }], { duration: VT_D, easing: VT_EASE }));
+    }
+    // The window's own buttons (maximise, fold), left in the 3D view: they rise with the board and fade.
+    for (const c of from.btns || []) fadeCopy(c, -(from.pane.top - p.top), VT_D * 0.6);
     keep(b.animate([c0, c1], { duration: VT_D, easing: VT_EASE }));
     // The task bar ended before the window's own buttons (maximise, fold): it gives that room back gradually.
     const bar = $('taskbar'), bm = parseFloat(getComputedStyle(bar).marginRight) || 0, room = Math.max(0, from.pane.right - from.barEnd);
