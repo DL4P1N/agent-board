@@ -78,7 +78,7 @@ Tools without hooks keep calling `wait_for_events`, which returns as soon as som
 
 - Four runtime dependencies: the MCP SDK, Express, Zod and qrcode.
 - SQLite is Node's built-in `node:sqlite`, one database per board.
-- The web board is plain HTML, CSS and JavaScript with no build step. It re-renders on every live event and keeps your focus and half-typed text.
+- The web board is plain HTML, CSS and JavaScript modules with no build step. It re-renders on every live event and keeps your focus and half-typed text.
 
 **Tested end to end.** About 45 suites ([docs/testing.md](docs/testing.md)) cover:
 

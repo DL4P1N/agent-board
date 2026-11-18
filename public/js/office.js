@@ -84,9 +84,9 @@ function showOffice() {
     toast("The 3D office didn't load (offline?). Showing the plain board.");
   }).finally(() => { office.loading = null; view.classList.remove('loading'); view.removeAttribute('aria-busy'); });
 }
-// While the board is expanded over it, the room keeps moving behind the glass at a few frames a second; docked or
-// folded, at its full (calm) rate. A hidden tab draws nothing (the browser stops the frames).
-function oRate() { office.fps = !office.mod ? 0 : oSlide ? 1 : oMax() && !oTasksOff() ? 4 : 30; office.mod?.setFps?.(office.fps); }
+// The room moves at its full (calm) rate behind the board, expanded or not (a few frames a second behind the glass
+// looked broken); it holds still while the board slides. A hidden tab draws nothing (the browser stops the frames).
+function oRate() { office.fps = !office.mod ? 0 : oSlide ? 1 : 30; office.mod?.setFps?.(office.fps); }
 // A copy of what the office draws, for tests and the console (null until it has loaded).
 Object.defineProperty(window, '__officeState', { get: () => office.mod?.snapshot() ?? null, configurable: true });
 // Another tab (the board, the presenter, the Boards page) changed the theme, or the OS switched light / dark.
