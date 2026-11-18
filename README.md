@@ -85,6 +85,7 @@ Tools without hooks keep calling `wait_for_events`, which returns as soon as som
 - the server and MCP tools;
 - browser tests that drive a real Chrome, including the 3D view, with software WebGL in CI;
 - a rehearsal that replays a whole working day in seconds while checking that the rules hold;
+- races where 24 agents grab one task, a pool of tasks, the planner role and a file lock at the same moment (exactly one winner each time), hostile HTML in every field an agent writes, and the rate limits;
 - contrast in all 15 themes;
 - the 3D demo's simulation rules.
 

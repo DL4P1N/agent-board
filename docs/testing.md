@@ -32,6 +32,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | `tests/direct.mjs` | Direct messages: hidden from other agents (`read_events`, `wait_for_events`, `/api/events`, the stream, the presenter), replies with `post(to)`, `next_action` and the Stop hook, the planner thread before and after there is a planner, `@planner` / `@merger`, summary, export, never to webhooks. |
 | `tests/agents.mjs` | Usage limits reported by agents (tool, REST, and the Stop hook reading a transcript), planning stats. |
 | `tests/name-clash.mjs` | One agent name on two laptops, and join's name check and reservation. |
+| `tests/race.mjs` | Concurrency: 24 agents on their own MCP connections claim one task at the same moment (8 rounds: exactly one winner, the board agrees, the others are told who has it), race for a pool of 10 tasks (no task with two holders, nobody over its limit), the planner role and one file lock. `tests/smoke.mjs` has the two-agent version. |
 | `tests/rehearsal.mjs` | A whole day of work in a few seconds, modelled on the Kubecon board: planning, proposals, reviews that bounce, agents going offline or out of usage, role handovers, the freeze and the deadline, with invariants checked after every phase. |
 | `tests/gh.mjs` | The `gh`-backed parts, with a fake `gh`: PR checks and reviewer feedback to the author, main's CI going red and green, the retro report, QR codes. |
 | `tests/ops.mjs` | Webhook notifications (Slack, Discord, ntfy, generic), backups and `npm run restore`, token rotation. |
