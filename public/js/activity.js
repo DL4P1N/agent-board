@@ -257,11 +257,41 @@ function patchKeyed(el, items) {
 }
 // The feed starts with the last 200 events; "Load earlier activity" pages back 200 at a time. Once a page is loaded,
 // live reloads keep what's already here (see load()) until the feed is back at its newest line. It pages back to about
-// FEED_MAX events; live events past that push the oldest out (data.js keepOlder).
+// FEED_MAX events; live events past that push the oldest out (keepOlder).
 const older = { more: null, loading: false, keep: false, quiet: false };
 const FEED_MAX = 1200;
 // Back at the newest line: the earlier pages go, the feed is the last 200 again.
 function dropOlder() { if (older.keep && !older.loading && feedPlace().atBottom) { older.keep = false; older.more = null; } }
+// The board's state has arrived (data.js onState): earlier pages kept stay in front of its events.
+async function feedOnState(s) {
+  dropOlder();
+  if (older.keep && s.events?.length) s.events = await keepOlder(s.events);
+}
+// A chat message came in from the live stream (data.js onEvent): without earlier pages the feed stays the last 200.
+function feedOnEvent() { if (!older.keep && state.events.length > 200) state.events = state.events.slice(-200); }
+// Earlier pages are loaded (older.keep): put them in front of the latest events. If more events arrived
+// since the last reload than the latest page holds, the events in between are fetched first; if that
+// gap is too long (or can't be fetched), the earlier pages are dropped instead, so the feed never skips.
+async function keepOlder(latest) {
+  const first = latest[0].id; const lastHave = state.events.at(-1)?.id ?? 0;
+  let gap = [];
+  if (lastHave < first - 1) {
+    let before = first; let closed = false;
+    try {
+      for (let i = 0; i < 5 && !closed; i++) {
+        const got = (await api(`/events?before=${before}`))?.events || [];
+        gap = [...got.filter((e) => e.id > lastHave), ...gap];
+        closed = got.length < 200 || got[0].id <= lastHave + 1;
+        if (got.length) before = got[0].id;
+      }
+    } catch { closed = false; }
+    if (!closed) { older.keep = false; older.more = null; return latest; }
+  }
+  const all = [...state.events.filter((e) => e.id < (gap[0]?.id ?? first)), ...gap, ...latest];
+  // Live events past the cap push the oldest out (Load earlier brings them back).
+  if (all.length > FEED_MAX) { older.more = true; return all.slice(-FEED_MAX); }
+  return all;
+}
 // The page fetched goes right in front of the feed's first line. A load of the board on its way could replace the feed
 // (the last 200 again, when no earlier page is kept yet), so Load earlier waits for it first, and keeps the feed as it is
 // for loads meanwhile (older.keep). If the feed's first line still changed by the time the page is back (the earlier
@@ -435,5 +465,5 @@ $('msg').addEventListener('keydown', (ev) => {
 // mousedown, not click: the textarea keeps focus.
 $('msg-ac').addEventListener('mousedown', (ev) => { const li = ev.target.closest('[data-ac]'); if (!li) return; ev.preventDefault(); pickAc(Number(li.dataset.ac)); });
 
-export { ac, ACT_GAP, announceActivity, closeAc, dmUnreadCount, dropOlder, evHtml, FEED_MAX, feedPlace, growMsg, markDmSeen, older, openDm,
+export { ac, ACT_GAP, announceActivity, closeAc, dmUnreadCount, evHtml, feedOnEvent, feedOnState, feedPlace, growMsg, markDmSeen, openDm,
   renderFeed, renderLocks, setActGap, settingsText, statusWords };

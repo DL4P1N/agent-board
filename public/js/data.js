@@ -1,14 +1,22 @@
 // Talking to the server: api() and act(), the sign-in gate, an unavailable board (archived, moved, token rotated),
 // load() for /api/state, and the live stream (/api/stream): a chat message is added to the feed as it comes, anything
 // else fetches the board's state again.
+// It draws nothing itself and imports no UI module: what the page does with the data is registered here (boot.js wires
+// the UI modules' handlers), so the modules that show the board import this one and not the other way round.
 
 import './helpers.js';
 import { $, BASE, DEFAULT_SETTINGS, me, setMe, setState, setToken, SLUG, state, store, token } from './state.js';
 import { esc, knownPeople, toast } from './helpers.js';
-import { render, renderQuiet } from './render.js';
-import { noteSelfMove } from './topbar.js';
-import { dropOlder, FEED_MAX, older } from './activity.js';
-import { checkOverwrites } from './task-dialog.js';
+
+const hooks = { request: [], state: [], event: [], paint: [] };
+// fn(path, opts): a request is about to be sent (opts.body is the JSON text).
+const onRequest = (fn) => { hooks.request.push(fn); };
+// async fn(s): the board's state has arrived and is about to replace `state`; fn may change s (the feed keeps earlier pages).
+const onState = (fn) => { hooks.state.push(fn); };
+// fn(ev): a chat message from the live stream was just added to state.events or state.direct.
+const onEvent = (fn) => { hooks.event.push(fn); };
+// fn(quiet): draw the page from state; quiet in a tab in the background (title, notifications, announcements only).
+const onPaint = (fn) => { hooks.paint.push(fn); };
 
 // A page that held a working token gets a 401: the host rotated the token or started a fresh board.
 const TOKEN_CHANGED = 'The board\'s link changed. Ask the host for the new link.';
@@ -19,7 +27,7 @@ let savingN = 0;
 function savingCount(d) { savingN = Math.max(0, savingN + d); $('conn').toggleAttribute('data-saving', savingN > 0); }
 async function api(path, opts = {}) {
   let r;
-  if (opts.method === 'PATCH' && /^\/tasks\/\d+$/.test(path)) { try { const b = JSON.parse(opts.body); if (b.status) noteSelfMove(Number(path.split('/')[2]), b.status); } catch {} }
+  for (const fn of hooks.request) fn(path, opts);
   // A slow save (bad wifi): the header says "Saving…" until the server answers.
   let slowOn = false; const slow = opts.method && opts.method !== 'GET' ? setTimeout(() => { slowOn = true; savingCount(1); }, 700) : 0;
   try {
@@ -148,10 +156,8 @@ async function loadOnce() {
     s = await api('/state');
     s.settings = { ...DEFAULT_SETTINGS, ...(s.settings || {}) };
     s.presence = s.presence || []; s.phase = s.phase || (s.tasks.length ? 'building' : 'needs_goal');
-    dropOlder();
-    if (older.keep && s.events?.length) s.events = await keepOlder(s.events);
   } catch (e) { if (e.message !== 'Token rejected') setConn('down', e.message); return false; }
-  checkOverwrites(s);
+  for (const fn of hooks.state) await fn(s);
   setState(s); state.loaded = true; setConn(esOpen ? 'live' : 'connecting');
   paint();
   return true;
@@ -162,35 +168,13 @@ function setLoad(f) { load = f; } // tests stub load out (through window, see bo
 let behind = false;
 function paint() {
   try {
-    if (document.hidden) { behind = true; renderQuiet(); } else { behind = false; render(); }
+    behind = document.hidden;
+    for (const fn of hooks.paint) fn(behind);
   } catch (e) { console.error('The board could not draw itself:', e); }
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && behind && state.loaded && !$('app').hidden) paint(); });
 let paintT = 0;
 const schedulePaint = () => { if (!paintT) paintT = setTimeout(() => { paintT = 0; paint(); }, 40); };
-// Earlier pages are loaded (older.keep): put them in front of the latest events. If more events arrived
-// since the last reload than the latest page holds, the events in between are fetched first; if that
-// gap is too long (or can't be fetched), the earlier pages are dropped instead, so the feed never skips.
-async function keepOlder(latest) {
-  const first = latest[0].id; const lastHave = state.events.at(-1)?.id ?? 0;
-  let gap = [];
-  if (lastHave < first - 1) {
-    let before = first; let closed = false;
-    try {
-      for (let i = 0; i < 5 && !closed; i++) {
-        const got = (await api(`/events?before=${before}`))?.events || [];
-        gap = [...got.filter((e) => e.id > lastHave), ...gap];
-        closed = got.length < 200 || got[0].id <= lastHave + 1;
-        if (got.length) before = got[0].id;
-      }
-    } catch { closed = false; }
-    if (!closed) { older.keep = false; older.more = null; return latest; }
-  }
-  const all = [...state.events.filter((e) => e.id < (gap[0]?.id ?? first)), ...gap, ...latest];
-  // Live events past the cap push the oldest out (Load earlier brings them back).
-  if (all.length > FEED_MAX) { older.more = true; return all.slice(-FEED_MAX); }
-  return all;
-}
 // A burst of events makes one load (at most one every 150ms, and one at a time).
 let reloadTimer = 0;
 const scheduleReload = () => { if (!reloadTimer) reloadTimer = setTimeout(() => { reloadTimer = 0; load(); }, 150); };
@@ -202,7 +186,8 @@ function applyEvent(ev) {
   if (!Number.isInteger(ev.id) || ev.id !== Number(state.cursor) + 1) return false;
   state.cursor = ev.id;
   if (ev.channel === 'direct') state.direct = [...(state.direct || []), ev];
-  else { state.events = [...state.events, ev]; if (!older.keep && state.events.length > 200) state.events = state.events.slice(-200); }
+  else state.events = [...state.events, ev];
+  for (const fn of hooks.event) fn(ev);
   schedulePaint();
   return true;
 }
@@ -247,5 +232,5 @@ async function recheck() {
   if (!es || es.readyState === EventSource.CLOSED) connect();
 }
 
-export { act, api, connect, es, esOpen, load, loadSettled, onSignIn, paint, recheck, retrying, scheduleReload, setConn, setLoad,
-  showGate, tokenError, unavailable, unavailableStatus };
+export { act, api, connect, es, esOpen, load, loadSettled, onEvent, onPaint, onRequest, onSignIn, onState, paint, recheck, retrying,
+  scheduleReload, setConn, setLoad, showGate, tokenError, unavailable, unavailableStatus };

@@ -27,10 +27,11 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { parseArgs as parseArgsUtil } from 'node:util';
 import readline from 'node:readline/promises';
 import { runDoctor, CONFIG_PATH } from './doctor.mjs';
+import { onPath, runSync } from './lib/run.mjs';
 import { agentTokenFor } from '../src/tokens.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -621,27 +622,9 @@ function keepOutOfGit(file, createdByUs, dir) {
   }
 }
 
-// Runs a program with its arguments as a list: no shell, so nothing in a path, URL or token is ever interpreted.
-// On Windows, tools installed with npm are .cmd files, which only run through cmd.exe: then each argument is
-// quoted for it (paths can't hold a double quote there; one in a URL is doubled).
+// git and the tools' CLIs, without a shell (lib/run.mjs); quiet keeps their output off the screen.
 function run(bin, argv, quiet = false) {
-  const opts = { encoding: 'utf8', windowsHide: true, stdio: quiet ? 'pipe' : ['ignore', 'pipe', 'pipe'] };
-  if (process.platform === 'win32' && !/\.(exe|com)$/i.test(whereIs(bin)[0] || '')) {
-    return spawnSync([bin, ...argv].map((a) => `"${String(a).replace(/"/g, '""')}"`).join(' '), { ...opts, shell: true });
-  }
-  return spawnSync(bin, argv, opts);
-}
-// The matches on PATH, in the order the shell would pick them ([] when missing). Looked up once per program.
-function whereIs(bin) {
-  const found = (whereIs.found ??= new Map());
-  if (!found.has(bin)) {
-    const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', [bin], { encoding: 'utf8', windowsHide: true });
-    found.set(bin, r.status === 0 ? (r.stdout || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean) : []);
-  }
-  return found.get(bin);
-}
-function onPath(bin) {
-  return whereIs(bin).length > 0;
+  return runSync(bin, argv, { stdio: quiet ? 'pipe' : ['ignore', 'pipe', 'pipe'] });
 }
 // How a command looks when it's printed for a person to run by hand.
 function shown(argv) {
@@ -689,28 +672,31 @@ function closestTool(word) {
 
 // --key value or --key=value. These always take the next argument as their value, even when it starts with
 // "-" (a token can): --url --token --name --repo --tool --plan. --slots and --wait take a number (alone, --wait
-// keeps its default). The rest are on/off flags.
+// keeps its default). The rest are on/off flags (--yes=false turns one off).
 function parseArgs(argv) {
   const VALUE = ['url', 'token', 'name', 'repo', 'tool', 'plan'];
   const NUMBER = ['slots', 'wait'];
   const FLAGS = ['shared', 'no-git-allow', 'yes', 'offline', 'verbose'];
+  // Not strict: unknown options and stray words are reported and skipped below, not fatal. The numbers are
+  // declared as flags, so a missing number doesn't swallow the next option; their value is the word after them.
+  const options = Object.fromEntries([...VALUE.map((k) => [k, { type: 'string' }]), ...[...NUMBER, ...FLAGS].map((k) => [k, { type: 'boolean' }])]);
+  const { tokens } = parseArgsUtil({ args: argv, options, strict: false, allowPositionals: true, tokens: true });
   const out = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (!a.startsWith('--')) { console.error(`  • ignoring "${a}" (options start with --)`); continue; }
-    const eq = a.indexOf('=');
-    const k = eq > 0 ? a.slice(2, eq) : a.slice(2);
-    const inline = eq > 0 ? a.slice(eq + 1) : undefined;
+  let skip = -1; // the argument a number option took (it may have parsed as "-5")
+  for (const t of tokens) {
+    if (t.index === skip || t.kind === 'option-terminator') continue;
+    if (t.kind === 'positional') { console.error(`  • ignoring "${t.value}" (options start with --)`); continue; }
+    const k = t.name;
     if (VALUE.includes(k)) {
-      const v = inline ?? argv[++i];
-      if (v === undefined) { console.error(`✗ --${k} needs a value, e.g. --${k} ${k === 'url' ? 'http://HOST:4000' : k.toUpperCase()}`); process.exit(1); }
-      out[k] = v;
+      if (t.value === undefined) { console.error(`✗ --${k} needs a value, e.g. --${k} ${k === 'url' ? 'http://HOST:4000' : k.toUpperCase()}`); process.exit(1); }
+      out[k] = t.value;
     } else if (NUMBER.includes(k)) {
-      if (inline !== undefined) out[k] = inline;
-      else if (argv[i + 1] !== undefined && !argv[i + 1].startsWith('--')) out[k] = argv[++i];
+      const next = argv[t.index + 1];
+      if (t.inlineValue) out[k] = t.value;
+      else if (next !== undefined && !next.startsWith('--')) { out[k] = next; skip = t.index + 1; }
       else out[k] = true;
-    } else if (FLAGS.includes(k)) out[k] = inline === undefined ? true : !/^(0|false|no|off)$/i.test(inline);
-    else console.error(`  • ignoring unknown option --${k}`);
+    } else if (FLAGS.includes(k)) out[k] = t.inlineValue ? !/^(0|false|no|off)$/i.test(t.value) : true;
+    else console.error(t.rawName.startsWith('--') ? `  • ignoring unknown option ${t.rawName}` : `  • ignoring "${t.rawName}" (options start with --)`);
   }
   return out;
 }

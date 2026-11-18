@@ -166,9 +166,9 @@ button.tile[aria-checked="true"] { border-color: var(--ink); background: var(--c
 .mini.split > .mini .mp:last-child { display: none; }
 #me-btn b { font-weight: 700; }
 .hacts { display: flex; align-items: center; gap: var(--s3); flex-wrap: nowrap; justify-content: flex-end; }
-/* Laptop widths and up: the sticky header never wraps to a second row (a jump when a badge arrives reads as the page
-   breaking). */
-@media (min-width: 1101px) {
+/* The three-column layout (from 1280px): the sticky header never wraps to a second row (a jump when a badge arrives
+   reads as the page breaking). In two columns its few items still fit one row; phones may wrap it. */
+@media (min-width: 1280px) {
   header { flex-wrap: nowrap; }
   header > * { flex-shrink: 0; }
   header > .sp { flex-shrink: 1; }
@@ -633,8 +633,9 @@ html:not([data-board-view="office"]) #o-tasks-max, .o-tasks.folded #o-tasks-max 
    demo time), DONE (progress), PLANNER and MERGES (who plans, who merges to main and main's CI; each chosen in
    place), or below 1600px one ROLES chip for both. Setup ends the row as a chip too (same frame, no label: they are
    actions, not facts). A chip is as tall as a panel's title bar with its frame, so the rows line up across the
-   columns. One row from 1101px, never past its edge: extras go first (below), then the goal gives way down to about 20
-   characters, then the names, cut with an ellipsis (their full text is the tooltip). */
+   columns. One row in the three-column layout (from 1280px), never past its edge: extras go first (below), then the goal
+   gives way down to about 20 characters, then the names, cut with an ellipsis (their full text is the tooltip). In two
+   columns and one it wraps: the goal in full on its own row, the pace verdict in words. */
 .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s4); min-height: calc(var(--bar) + 2px); }
 .topbar > *, .tb-slot > * { min-width: 0; }
 .tb-slot { display: contents; }
@@ -677,7 +678,7 @@ button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
 .topbar .acts .tbc .o-x { max-width: 22ch; }
 @media (max-width: 1439px) { .topbar .acts .sl { display: none; } }
 .topbar .acts .tbc { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-@media (min-width: 1101px) {
+@media (min-width: 1280px) {
   .topbar { flex-wrap: nowrap; }
   .topbar .tb-goal { flex: 1 1 calc(17ch + 5.4em); min-width: auto; max-width: max-content; }
   .topbar .tb-goal .o-x { min-width: 10ch; }
@@ -687,7 +688,7 @@ button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
 @media (max-width: 2199px) { .topbar .repo-s { display: none; } }
 @media (max-width: 1879px) { .clock:has(.vd) .fz { display: none; } }
 @media (max-width: 1799px) { .topbar .stat .mbar, .topbar .tb-merge .ci-pill, .clock .fz { display: none; } } /* a failing main stays as a red dot */
-@media (min-width: 1101px) and (max-width: 1699px) { .clock .vdw { display: none; } .clock.v-ok .tm { color: var(--ok); } .clock:is(.v-tight, .v-behind) .tm { color: var(--warn); } }
+@media (min-width: 1280px) and (max-width: 1699px) { .clock .vdw { display: none; } .clock.v-ok .tm { color: var(--ok); } .clock:is(.v-tight, .v-behind) .tm { color: var(--warn); } }
 /* Below 1600px Planner and Merges are one Roles chip (phones too). */
 @media (max-width: 1599px) { .topbar :is(.tb-plan, .tb-merge) { display: none; } .topbar .tb-roles { display: inline-flex; } }
 /* The narrowest centre column (three columns at 1280-1439px): chips and gaps a step tighter. Only if the row still

@@ -20,6 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 4000);
@@ -28,8 +29,11 @@ const SAVED = path.join(DATA_DIR, 'tunnel.json');
 const START_TIMEOUT_MS = 45_000;
 const NAMED_WAIT_MS = Number(process.env.TUNNEL_NAMED_WAIT_MS || 20_000);
 
-const argv = process.argv.slice(2);
-const flag = (k) => { const i = argv.indexOf(`--${k}`); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : null; };
+const { values: opts, positionals } = parseArgs({
+  options: { setup: { type: 'boolean' }, quick: { type: 'boolean' }, name: { type: 'string' }, hostname: { type: 'string' } },
+  strict: false, allowPositionals: true,
+});
+const flag = (k) => (typeof opts[k] === 'string' && opts[k] ? opts[k] : null);
 
 // The cloudflared command: CLOUDFLARED, else PATH, else where the installers put it.
 function findCloudflared() {
@@ -63,9 +67,8 @@ function isHostname(h) {
 }
 
 // ---------- one-time setup of a named tunnel ----------
-if (argv.includes('--setup')) {
-  const i = argv.indexOf('--setup');
-  const name = argv[i + 1]; const hostname = argv[i + 2];
+if (opts.setup === true) {
+  const [name, hostname] = positionals;
   const validName = /^[\w-]{1,64}$/.test(name || '');
   const validHost = isHostname(hostname);
   if (!validName || !validHost) {
@@ -102,7 +105,7 @@ if (argv.includes('--setup')) {
 // ---------- which tunnel ----------
 let saved = null;
 try { saved = JSON.parse(fs.readFileSync(SAVED, 'utf8')); } catch {}
-const named = argv.includes('--quick') ? null : (() => {
+const named = opts.quick === true ? null : (() => {
   const name = flag('name') || process.env.TUNNEL_NAME || saved?.name;
   const hostname = String(flag('hostname') || process.env.TUNNEL_HOSTNAME || saved?.hostname || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
   if (!name || !hostname) return null;

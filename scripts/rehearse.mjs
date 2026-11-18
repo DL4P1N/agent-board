@@ -16,10 +16,17 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
+import { command } from './lib/run.mjs';
 import { agentTokenFor, newBoardToken } from '../src/tokens.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const args = parseArgs(process.argv.slice(2));
+const { values: args } = parseArgs({
+  options: { tools: { type: 'string' }, minutes: { type: 'string' }, keep: { type: 'boolean' }, 'dry-run': { type: 'boolean' } },
+  strict: false, allowPositionals: true,
+});
+// Not strict, so a value option given last without its value is `true`: that means "not given".
+for (const k of ['tools', 'minutes']) if (args[k] === true) delete args[k];
 const MINUTES = Math.max(1, Math.min(60, Number(args.minutes) || 8));
 const DRY = !!args['dry-run'];
 const KEEP = !!args.keep;
@@ -30,33 +37,7 @@ let boardLog = null;
 
 const sh = (cmd, a, opts = {}) => spawnSync(cmd, a, { encoding: 'utf8', windowsHide: true, ...opts });
 
-// How to start a tool without a shell (so arguments need no quoting): an .exe as is; an npm .cmd shim
-// on Windows through the Node script it wraps.
-function resolveTool(name) {
-  if (process.platform !== 'win32') return sh(name, ['--version']).status === 0 ? { cmd: name, pre: [] } : null;
-  const where = String(sh('where', [name]).stdout || '').split('\n').map((l) => l.trim()).filter(Boolean);
-  const exe = where.find((p) => /\.exe$/i.test(p));
-  if (exe) return { cmd: exe, pre: [] };
-  const shim = where.find((p) => /\.cmd$/i.test(p));
-  if (shim) {
-    const m = fs.readFileSync(shim, 'utf8').match(/"%dp0%\\([^"]+\.js)"/);
-    if (m) { const js = path.join(path.dirname(shim), m[1]); if (fs.existsSync(js)) return { cmd: process.execPath, pre: [js] }; }
-  }
-  return null;
-}
 const log = (...m) => console.log(...m);
-
-function parseArgs(argv) {
-  const out = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (!a.startsWith('--')) continue;
-    const k = a.slice(2);
-    if (['keep', 'dry-run'].includes(k)) out[k] = true;
-    else out[k] = argv[++i];
-  }
-  return out;
-}
 
 function cleanup() {
   for (const c of children) killTree(c);
@@ -162,7 +143,8 @@ function tidy(line) {
 
 function runAgent(name, spec, logFile) {
   return new Promise((resolve) => {
-    const c = spawn(spec.exec.cmd, [...spec.exec.pre, ...spec.args], { cwd: spec.cwd, windowsHide: true, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
+    const [file, args, extra] = command(spec.cmd, spec.args);
+    const c = spawn(file, args, { ...extra, cwd: spec.cwd, windowsHide: true, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
     children.add(c);
     const out = fs.createWriteStream(logFile);
     let buf = '';
@@ -180,8 +162,7 @@ function runAgent(name, spec, logFile) {
 
 // ---------- main ----------
 async function main() {
-  const bin = { claude: resolveTool('claude'), codex: resolveTool('codex') };
-  const installed = { claude: !!bin.claude, codex: !!bin.codex };
+  const installed = { claude: !!command('claude', []), codex: !!command('codex', []) };
   const wanted = String(args.tools || Object.keys(installed).filter((t) => installed[t]).join(',')).split(',').map((t) => t.trim()).filter(Boolean);
   const tools = wanted.filter((t) => ['claude', 'codex'].includes(t));
   for (const t of tools) if (!installed[t]) log(`! ${t} isn't installed: skipping it.`);
@@ -208,7 +189,6 @@ async function main() {
     const dir = proj.clone(name);
     const mcpUrl = `${board.base}/mcp?${new URLSearchParams({ agent: name, token: agentToken, person: 'rehearsal', laptop: `${laptop}-${tool}` })}`;
     const spec = tool === 'claude' ? claudeCommand({ mcpUrl, dir, cfgFile: path.join(tmp, `${name}.mcp.json`) }) : codexCommand({ mcpUrl, dir });
-    spec.exec = bin[tool];
     return { name, tool, spec };
   });
   const hide = (a) => (DRY ? String(a).split(agentToken).join(mask(agentToken)) : a);

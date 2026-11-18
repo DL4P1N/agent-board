@@ -98,6 +98,10 @@ function noteSelfMove(id, status) {
   for (const [k, v] of selfMoves) if (now - v.ts >= 2 * 60e3) selfMoves.delete(k);
   selfMoves.set(id, { status, ts: now });
 }
+// Every request this page sends (data.js onRequest): a task's status change is one of this page's own moves.
+function noteRequest(path, opts) {
+  if (opts.method === 'PATCH' && /^\/tasks\/\d+$/.test(path)) { try { const b = JSON.parse(opts.body); if (b.status) noteSelfMove(Number(path.split('/')[2]), b.status); } catch {} }
+}
 let notifyCursor = null;
 function noteFor(e) {
   if (e.kind === 'question') {
@@ -177,4 +181,4 @@ function tbFit() {
 if ('ResizeObserver' in window) new ResizeObserver(() => tbFit()).observe($('topbar'));
 document.fonts?.ready.then(tbFit);
 
-export { checkNotify, noteSelfMove, renderBell, renderClock, renderTopbar, selfMoves, setTimeKey, tickTime, timeKey, toggleNotify };
+export { checkNotify, noteRequest, renderBell, renderClock, renderTopbar, selfMoves, setTimeKey, tickTime, timeKey, toggleNotify };

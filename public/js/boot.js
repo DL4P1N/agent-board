@@ -6,20 +6,28 @@
 import './palette.js';
 import { $, HUES, me, nsKey, oSave, oUi, qs, SLUG, state, store, token, ui } from './state.js';
 import { ago, clock, fullTime, hue, knownPeople, nameHash, taskById, toast, when } from './helpers.js';
-import { connect, es, esOpen, load, onSignIn, paint, recheck, retrying, setConn, setLoad, showGate, unavailable,
-  unavailableStatus } from './data.js';
+import { connect, es, esOpen, load, onEvent, onPaint, onRequest, onSignIn, onState, paint, recheck, retrying, setConn, setLoad,
+  showGate, unavailable, unavailableStatus } from './data.js';
 import { agentsLine, outlook, setupInfo, teamCapacity } from './derived.js';
-import { render } from './render.js';
+import { render, renderQuiet } from './render.js';
 import { nowSeen, setNowSeen, syncNeeds } from './needs.js';
-import { setTimeKey, tickTime, timeKey } from './topbar.js';
+import { noteRequest, setTimeKey, tickTime, timeKey } from './topbar.js';
 import { defaultDeadline, fetchExport, inviteText, localInput } from './setup.js';
 import { moveTask } from './tasks.js';
-import { ACT_GAP, setActGap } from './activity.js';
+import { ACT_GAP, feedOnEvent, feedOnState, setActGap } from './activity.js';
 import { applyKeys, goStep, openHelp } from './actions.js';
-import { openTask } from './task-dialog.js';
+import { checkOverwrites, openTask } from './task-dialog.js';
 import { setTheme } from './theme.js';
 import { d3Pref, darkMq, office, officeAllowed, scenePalette, setBoardView, viewParam, webglWorks } from './office.js';
 import { oExpand, pickAgent } from './panels.js';
+
+// What the page does with the data data.js fetches (it imports no UI module). In this order: the feed keeps its earlier
+// pages before the task dialog compares the new state with what you saved.
+onRequest(noteRequest);
+onState(feedOnState);
+onState(checkOverwrites);
+onEvent(feedOnEvent);
+onPaint((quiet) => (quiet ? renderQuiet() : render()));
 
 let started = false;
 async function start() {

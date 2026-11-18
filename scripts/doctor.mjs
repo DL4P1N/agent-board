@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { onPath, runSync } from './lib/run.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // What join set up on this laptop: ~/.agent-board.json. Laptops that joined before the rename to Agent Board
@@ -27,7 +28,6 @@ export const START = {
 const LABEL = { claude: 'Claude Code', codex: 'Codex', 'copilot-vscode': 'Copilot in VS Code', 'copilot-cli': 'Copilot CLI', gemini: 'Gemini CLI', cursor: 'Cursor', other: 'Your MCP tool' };
 // Command-line tools: if the command isn't installed yet, the config is ready but the agent can't start.
 const BIN = { codex: ['codex', 'npm i -g @openai/codex'], 'copilot-cli': ['copilot', 'npm i -g @github/copilot'], gemini: ['gemini', 'npm i -g @google/gemini-cli'] };
-const onPath = (bin) => spawnSync(process.platform === 'win32' ? 'where' : 'which', [bin], { encoding: 'utf8', windowsHide: true }).status === 0;
 const geminiHome = () => process.env.GEMINI_CLI_HOME || path.join(os.homedir(), '.gemini');
 
 export async function runDoctor({ header = true } = {}) {
@@ -221,7 +221,7 @@ function mcpUrlFor(a, cfg) {
 function toolConfig({ tool, dir }) {
   const read = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
   if (tool === 'claude') {
-    const r = spawnSync('claude mcp get board', { shell: true, encoding: 'utf8' });
+    const r = runSync('claude', ['mcp', 'get', 'board']);
     if (r.error || (r.status !== 0 && /not recognized|not found/i.test(r.stderr || ''))) return null;
     return r.status === 0 ? r.stdout : '';
   }

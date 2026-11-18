@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'));
@@ -21,11 +22,9 @@ try { registry = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'boards.json'), 
 const boardsList = registry?.boards?.length ? registry.boards : [{ slug: 'main', name: 'Main board', dir: '.' }];
 const defaultSlug = registry?.default || boardsList[0].slug;
 
-const argv = process.argv.slice(2);
-const bi = argv.indexOf('--board');
-const boardArg = bi >= 0 ? String(argv[bi + 1] || '').toLowerCase() : '';
-if (bi >= 0 && !boardArg) { console.error('✗ --board needs a board name, e.g. --board kubecon-2026'); process.exit(1); }
-const positional = bi < 0 ? argv : argv.filter((_, i) => i !== bi && i !== bi + 1);
+const { values, positionals: positional } = parseArgs({ options: { board: { type: 'string' } }, strict: false, allowPositionals: true });
+const boardArg = typeof values.board === 'string' ? values.board.toLowerCase() : '';
+if (values.board !== undefined && !boardArg) { console.error('✗ --board needs a board name, e.g. --board kubecon-2026'); process.exit(1); }
 
 const backupsOf = (b) => path.join(path.resolve(DATA_DIR, b.dir || '.'), 'backups');
 const listIn = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /^board-\d{8}-\d{6}\.db$/.test(f)).sort() : []);

@@ -12,7 +12,9 @@ import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';
 import { DatabaseSync } from 'node:sqlite';
-import { startBoard, Client, StreamableHTTPClientTransport } from '../tests/helpers.mjs';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { startBoard, killTree } from './lib/board.mjs';
 import { agentTokenFor, viewerTokenFor } from '../src/tokens.js';
 
 const argv = process.argv.slice(2);
@@ -23,7 +25,10 @@ const SPEED = Math.max(0.1, Math.min(20, Number(opt('speed')) || 1));
 const TOKEN = 'demo-token';
 const REPO = 'https://github.com/demo-team/showcase-voting';
 
-const board = await startBoard({ token: TOKEN, port: Number(opt('port')) || undefined, prefix: 'agent-board-demo-', cleanup: false });
+const board = await startBoard({ token: TOKEN, port: Number(opt('port')) || undefined, prefix: 'agent-board-demo-' });
+const removeData = () => { try { fs.rmSync(board.dataDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); return true; } catch { return false; } };
+// A crash still ends the server and (without --keep) deletes the temp folder; cleanup() below is the gentle way.
+process.once('exit', () => { killTree(board.child); if (!flag('keep')) removeData(); });
 const base = board.base;
 const AGENT_TOKEN = agentTokenFor(TOKEN);
 const VIEW_TOKEN = viewerTokenFor(TOKEN);
@@ -35,7 +40,7 @@ async function cleanup(code = 0) {
   clearTimeout(simTimer); clearInterval(keepTimer);
   try { await board.stop(); } catch {}
   if (flag('keep')) console.log(`\nKept the demo data in ${board.dataDir}`);
-  else for (let i = 0; i < 20; i++) { try { fs.rmSync(board.dataDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); break; } catch { await new Promise((r) => setTimeout(r, 150)); } }
+  else for (let i = 0; i < 20 && !removeData(); i++) await new Promise((r) => setTimeout(r, 150));
   console.log('\nDemo stopped.');
   process.exit(code);
 }

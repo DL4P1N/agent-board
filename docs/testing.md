@@ -93,7 +93,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 
 ## Writing tests
 
-Helpers for new tests are in `tests/helpers.mjs`: `startBoard`, `seed`, `agent`, `rest`, `launchBrowser`, `finish`.
+Helpers for new tests are in `tests/helpers.mjs`: `startBoard`, `seed`, `agent`, `rest`, `launchBrowser`, `finish`. Its `startBoard` is `scripts/lib/board.mjs` (which `npm run demo` uses too, without the test harness) plus the suite's cleanup: its boards and temp folders go when the suite ends or crashes.
 
 A suite ends with `finish(results)`, which prints `N/N passed`: the runner fails a suite that exits without that line or with fewer passed than run, so a suite that stops early can't pass by saying nothing. A suite times out after 8 minutes (`SUITE_TIMEOUT_MS`); on Linux and macOS it runs in its own process group, so the timeout (or Ctrl+C) ends everything it started.
 

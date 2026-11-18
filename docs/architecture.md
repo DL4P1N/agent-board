@@ -148,7 +148,7 @@ The web board is `public/index.html` (the page's markup, plus a small inline scr
 | `css/board.css`, `css/office.css` | The board's styles; the panels and the Tasks window over the 3D office. |
 | `js/state.js` | The fixed vocabulary, which board this is, saved settings, `token`, `me`, `state` and `ui`. |
 | `js/helpers.js` | Escaping, people's names and colours, times, the message formatter, `patch`, motion, toasts. |
-| `js/data.js` | `api()`, the sign-in gate, an unavailable board, `load()` and the live stream. |
+| `js/data.js` | `api()`, the sign-in gate, an unavailable board, `load()` and the live stream. It imports no UI module: `boot.js` registers what the page does with the data (`onRequest`, `onState`, `onEvent`, `onPaint`). |
 | `js/derived.js` | What the page works out from the state: agents and capacity, people, the setup steps, the deadline outlook. |
 | `js/render.js` | `render()`: the one pass that redraws the page. |
 | `js/needs.js`, `js/topbar.js`, `js/setup.js` | Needs attention and What to do now; the clock, desktop notifications and the top bar; the setup guide and export. |
