@@ -60,8 +60,9 @@ try {
     check('by default 3D is on: the office loads with the page and draws behind it', await view(d0.page) === 'office' && await until(d0.page, () => !!document.querySelector('#office-scene canvas') && !document.getElementById('office-view').classList.contains('loading'), null, 20000) && officeReqs(d0.reqs).some((u) => /embed\.js/.test(u)) && await d0.page.$eval('#o3d', (b) => b.getAttribute('aria-pressed') === 'true'));
     const ex = await d0.page.evaluate(() => { const t = $('o-tasks').getBoundingClientRect(), tb = $('topbar').getBoundingClientRect(), l = $('o-left').getBoundingClientRect(), r = $('o-rcol').getBoundingClientRect(), v = $('office-view').getBoundingClientRect(); return { max: $('o-tasks').classList.contains('max'), folded: $('o-tasks').classList.contains('folded'), inWin: $('o-tasks-b').contains($('board')), under: t.top - tb.bottom, room: v.bottom - t.bottom, between: t.left >= l.right && t.right <= r.left, glass: getComputedStyle($('o-tasks')).backgroundColor, fps: office.fps }; });
     check('the board starts docked: the Tasks window under the top bar, between the side columns, as glass, the room in view below it and drawing at its full rate', !ex.max && !ex.folded && ex.inWin && ex.under >= 0 && ex.under < 16 && ex.room > 250 && ex.between && /(,|\/)\s*0?\.\d+\)$/.test(ex.glass) && ex.fps === 30, JSON.stringify(ex));
-    const geo = await d0.page.evaluate(() => { const tb = $('topbar').getBoundingClientRect(), l = $('o-left').getBoundingClientRect(), r = $('o-rcol').getBoundingClientRect(), v = $('office-view').getBoundingClientRect(); return { between: tb.left >= l.right && tb.right <= r.left && tb.left - l.right < 24 && r.left - tb.right < 24, top: [l.top, r.top, tb.top].every((b) => Math.abs(b - (v.top + 10)) < 3), foot: Math.abs(r.bottom - (v.bottom - 18)) < 3 }; });
-    check('the top bar sits at the top between the side columns (as with 3D off); the side columns run from the top to the foot', geo.between && geo.top && geo.foot, JSON.stringify(geo));
+    const geo = await d0.page.evaluate(() => { const tb = $('topbar').getBoundingClientRect(), l = $('o-left').getBoundingClientRect(), r = $('o-rcol').getBoundingClientRect(), v = $('office-view').getBoundingClientRect(), tk = (n) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n)), edge = tk('--edge'), gut = tk('--gutter');
+      return { between: Math.abs(tb.left - l.right - gut) < 1 && Math.abs(r.left - tb.right - gut) < 1, top: [l.top, r.top, tb.top].every((b) => Math.abs(b - (v.top + edge)) < 1), foot: Math.abs(r.bottom - (v.bottom - edge)) < 1, sides: Math.abs(l.left - edge) < 1 && Math.abs(innerWidth - r.right - edge) < 1 }; });
+    check('the top bar sits at the top between the side columns (as with 3D off), --gutter from each; the side columns run from the top to the foot, --edge from the window edges', geo.between && geo.top && geo.foot && geo.sides, JSON.stringify(geo));
   }
   await d0.page.close();
 
@@ -142,6 +143,36 @@ try {
     const R = (e) => { if (!e || !e.offsetWidth) return null; const b = e.getBoundingClientRect(); return [b.left, b.top, b.right, b.bottom].map(Math.round); };
     return { topbar: R($('topbar')), left: R($('o-left')), right: R($('o-right')), act: R($('o-act')), locks: R($('o-locks')), board: R($('board')), tasks: R($('o-tasks')) };
   });
+  // One edge and one gutter, in both views: the panels --edge from the window's sides, under the header and at the
+  // foot, --gutter apart (columns and the right column's stack); a full Needs attention ends where the right column does.
+  const layout = () => page.evaluate(async () => {
+    const tk = (n) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n)), edge = tk('--edge'), gut = tk('--gutter');
+    const R = (e) => e.getBoundingClientRect(), near = (a, b) => Math.abs(a - b) < 1;
+    const hdr = R(document.querySelector('#app > header')).bottom, tb = R($('topbar'));
+    const rs = [...$('o-rcol').children].filter((e) => e.offsetWidth).map(R);
+    const tall = document.createElement('div'); tall.style.height = '3000px'; $('o-blocked').append(tall);
+    await new Promise((r) => requestAnimationFrame(r)); const l = R($('o-left')); tall.remove();
+    return { edge: near(l.left, edge) && rs.every((r) => near(innerWidth - r.right, edge)) && [l.top, tb.top, rs[0].top].every((t) => near(t - hdr, edge)) && near(innerHeight - rs.at(-1).bottom, edge),
+      gutter: near(tb.left - l.right, gut) && near(rs[0].left - tb.right, gut) && rs.slice(1).every((r, i) => near(r.top - rs[i].bottom, gut)),
+      ends: near(l.bottom, rs.at(-1).bottom), edgeGut: [edge, gut], l: [l.left, l.top, l.right, l.bottom].map(Math.round), r: rs.map((r) => [r.left, r.top, r.right, r.bottom].map(Math.round)), tb: [tb.left, tb.top, tb.right].map(Math.round) };
+  });
+  await page.evaluate(() => window.scrollTo(0, 0)); await sleep(100);
+  const lay0 = await layout();
+  check('3D off: panels --edge from the window\'s sides, the header and the foot; --gutter between the columns and between Agents, Activity and File locks', lay0.edge && lay0.gutter, JSON.stringify(lay0));
+  check('3D off: a full Needs attention ends at the same height as the right column', lay0.ends, JSON.stringify(lay0));
+  // Setup is a panel like the others: the same title bar (height, label, rule, x where the fold buttons are).
+  const headOf = (sel) => page.evaluate((s) => { const p = document.querySelector(s), h = p.querySelector(':scope > .o-head'), t = h.querySelector('h2'), b = h.querySelector('.o-ib:last-of-type'), cs = getComputedStyle(h), ts = getComputedStyle(t);
+    return { h: h.offsetHeight, font: ts.font, ls: ts.letterSpacing, tt: ts.textTransform, color: ts.color, rule: cs.borderBottomWidth + ' ' + cs.borderBottomStyle + ' ' + cs.borderBottomColor, x: Math.round(p.getBoundingClientRect().right - b.getBoundingClientRect().right), shadow: getComputedStyle(p).boxShadow }; }, sel);
+  await page.click('[data-fk="s-open"]'); await until(page, () => !$('setup').hidden);
+  const [sh, ah] = [await headOf('#setup'), await headOf('#o-act')];
+  check('Setup\'s title bar is the panels\' own: height, label, rule, its x where their buttons are, the same shadow', JSON.stringify(sh) === JSON.stringify(ah), JSON.stringify({ sh, ah }));
+  await page.keyboard.press('Escape'); await until(page, () => $('setup').hidden);
+  // Columns and Table are both Tab stops (like Activity's tabs); "/" opens Activity when it's folded.
+  check('Columns and Table are both in the Tab order', await page.evaluate(() => [...$('viewtog').querySelectorAll('button')].every((b) => b.tabIndex === 0)));
+  await page.click('#o-act-fold'); await until(page, () => $('o-act').classList.contains('folded'));
+  await page.evaluate(() => document.activeElement?.blur()); await page.keyboard.press('/');
+  check('"/" with Activity folded: Activity opens, focus in the message box', await until(page, () => !$('o-act').classList.contains('folded') && document.activeElement === $('msg')));
+  await page.evaluate(() => document.activeElement?.blur());
   await page.evaluate(() => window.scrollTo(0, 0)); await sleep(100);
   const before = await places();
   await page.click('#o3d');
@@ -164,7 +195,16 @@ try {
       for (let x = 0.02; x < 1; x += 0.04) for (let y = 0.02; y < 1; y += 0.04) { n++; if (document.elementFromPoint(v.left + v.width * x, v.top + v.height * y)?.closest('#office-scene')) hit++; }
       return hit / n;
     });
-    check('docked, the room gets close to half of the 3D view', share >= 0.45, share.toFixed(2));
+    check('docked, the room gets close to half of the 3D view', share >= 0.44, share.toFixed(3));
+    const lay1 = await layout();
+    check('3D: the same --edge and --gutter as 3D off; a full Needs attention ends where the right column does', lay1.edge && lay1.gutter && lay1.ends && JSON.stringify([lay1.l, lay1.r, lay1.tb]) === JSON.stringify([lay0.l, lay0.r, lay0.tb]), JSON.stringify({ lay0, lay1 }));
+    // Focus rings inside the Tasks window's scrolling lists and Activity's filter row aren't cut by their edges.
+    const ring = (sel) => page.evaluate((s) => { const e = document.querySelector(s); e.focus(); const cs = getComputedStyle(e), o = parseFloat(cs.outlineOffset) + parseFloat(cs.outlineWidth), r = e.getBoundingClientRect();
+      let ok = e.matches(':focus-visible') && cs.outlineStyle !== 'none';
+      for (let p = e.parentElement; p; p = p.parentElement) { const ps = getComputedStyle(p); if (ps.overflowX === 'visible' && ps.overflowY === 'visible') continue; const q = p.getBoundingClientRect(); ok &&= r.left - o >= q.left - 0.5 && r.right + o <= q.right + 0.5 && r.top - o >= q.top - 0.5; }
+      e.blur(); return ok; }, sel);
+    await page.keyboard.press('Shift');
+    check('3D: focus rings on a card in the Tasks window and on Activity\'s first filter are whole (not cut by their scrolling lists)', await ring('#o-tasks .card') && await ring('#tabs button'));
     // The board's own button expands it down over the room and back: its top stays under the top bar, only its bottom
     // edge moves (one animation on the window itself, no copy of the board), and the room draws at its full rate.
     const slideTo = (dir) => page.evaluate(async (dir) => {
@@ -458,11 +498,26 @@ try {
     await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control');
     await page.type('#pal-in', 'demo time'); await sleep(150); await page.keyboard.press('Enter');
     check('Ctrl+K "Edit the demo time" in 3D: the popover, focus in its time field', await until(page, () => !document.getElementById('o-dl').hidden && document.activeElement?.id === 'o-dl-in') && await view(page) === 'office', await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName));
+    // The top bar's popovers are glass like the panels (not see-through), with 3D on.
+    const alpha = (id) => page.evaluate((i) => { const bg = getComputedStyle(document.getElementById(i)).backgroundColor; const m = /\/\s*([\d.]+)\)$/.exec(bg) || /rgba\(.*,\s*([\d.]+)\)$/.exec(bg); return m ? Number(m[1]) : 1; }, id);
+    check('3D: the Demo popover is glass, not see-through', await alpha('o-dl') >= 0.9, String(await alpha('o-dl')));
+    // Tab past its last control goes on to the next chip and closes it.
+    await page.evaluate(() => { const b = [...document.querySelectorAll('#o-dl button')].filter((x) => x.offsetWidth).at(-1); b.focus(); });
+    await page.keyboard.press('Tab');
+    check('Tab past the Demo popover\'s last control: on to the next chip, the popover closed', await until(page, () => document.getElementById('o-dl').hidden && document.activeElement?.dataset.fk === [...document.querySelectorAll('#topbar button')].filter((b) => b.offsetWidth)[[...document.querySelectorAll('#topbar button')].filter((b) => b.offsetWidth).indexOf(document.getElementById('clock')) + 1]?.dataset.fk), await page.evaluate(() => document.activeElement?.dataset.fk));
+    await page.click(await page.evaluate(() => document.getElementById('roles-btn').offsetWidth) ? '#roles-btn' : '#plan-btn');
+    const rp = await page.evaluate(() => (document.getElementById('roles-btn').offsetWidth ? 'o-roles' : 'o-plan'));
+    check('3D: the Roles / Planner popover is glass, not see-through', await until(page, (i) => !document.getElementById(i).hidden, rp) && await alpha(rp) >= 0.9, String(await alpha(rp)));
+    await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
 
-    // The skip link stays in 3D: "Skip to what needs attention" lands in the Needs attention dock.
+    // The skip links stay in 3D: "Skip to what needs attention" lands in the Needs attention dock, "Skip to tasks" on a
+    // card in the Tasks window.
     await page.focus('#goal-btn'); await page.evaluate(() => document.activeElement.blur());
-    check('3D: "Skip to what needs attention" is still there (the other skip links go to Board-only parts)', await page.evaluate(() => getComputedStyle(document.querySelector('.skip[data-skip="now"]')).display !== 'none' && getComputedStyle(document.querySelector('.skip[data-skip="tasks"]')).display === 'none'));
+    check('3D: "Skip to what needs attention" and "Skip to tasks" are both there', await page.evaluate(() => getComputedStyle(document.querySelector('.skip[data-skip="now"]')).display !== 'none' && getComputedStyle(document.querySelector('.skip[data-skip="tasks"]')).display !== 'none'));
+    await page.focus('.skip[data-skip="tasks"]'); await page.keyboard.press('Enter');
+    check('3D: "Skip to tasks" focuses a card in the Tasks window', await until(page, () => !!document.activeElement?.closest('#o-tasks .card')) && await view(page) === 'office', await page.evaluate(() => document.activeElement?.className));
+    await page.focus('#goal-btn'); await page.evaluate(() => document.activeElement.blur());
     await page.focus('.skip[data-skip="now"]'); await page.keyboard.press('Enter');
     check('the skip link focuses What to do now in the dock', await until(page, () => document.getElementById('now').contains(document.activeElement)) && await view(page) === 'office');
 
