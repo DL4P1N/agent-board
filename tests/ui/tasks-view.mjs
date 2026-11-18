@@ -92,15 +92,12 @@ try {
   }
   await page.setViewport({ width: 1440, height: 1000 });
 
-  // Feed tabs.
-  const texts = async (tab) => { await page.click(`[data-tab="${tab}"]`); await sleep(200); return page.$$eval('#feed .ev', (l) => l.map((x) => x.innerText)); };
-  const pr = await texts('problems');
-  check('Problems: blocked, sent back, usage limit', pr.some((t) => /blocked/.test(t)) && pr.some((t) => /review → in_progress/.test(t)) && pr.some((t) => /usage limit/.test(t)), JSON.stringify(pr));
-  check('Problems: nothing else', pr.every((t) => /blocked|in_progress|usage limit/.test(t)), JSON.stringify(pr));
-  const mr = await texts('merges');
-  check('Merges and reviews: review and done only', mr.length >= 2 && mr.some((t) => /review/.test(t)) && mr.some((t) => /done/.test(t)) && !mr.some((t) => /usage limit|blocked/.test(t)), JSON.stringify(mr));
-  check('tab aria-pressed', (await page.$eval('[data-tab="merges"]', (x) => x.getAttribute('aria-pressed'))) === 'true');
-  await page.click('[data-tab="all"]');
+  // Activity's filters: All, Chat, @me and Direct (what's blocked and what's merged are Needs attention's and the
+  // columns'); a tab saved from before (Problems) shows All.
+  check('Activity has All, Chat, @me and Direct only', (await page.$$eval('#tabs button', (l) => l.map((b) => b.dataset.tab))).join() === 'all,chat,me,direct');
+  await page.evaluate(() => { localStorage.setItem('board-tab', 'problems'); });
+  await page.reload(); await page.waitForSelector('#app:not([hidden])'); await sleep(500);
+  check('a saved Problems tab opens All', await page.evaluate(() => ui.tab === 'all' && document.querySelector('[data-tab="all"]').getAttribute('aria-pressed') === 'true' && document.querySelectorAll('#feed .ev').length > 0));
 } catch (e) { results.push('CRASH ' + e.stack); }
 check('no page/console errors', errors.length === 0, errors.join(' | '));
 await finish(results, { browser, board });

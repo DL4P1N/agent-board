@@ -190,9 +190,9 @@ try {
   await p.goto(BASE + '/');
   await p.waitForFunction(() => document.getElementById('conn').classList.contains('live') && document.querySelectorAll('.card').length > 20, { timeout: 8000 });
   await sleep(400);
-  const lay = await p.evaluate(() => ({ board: $('board').getBoundingClientRect().top + scrollY, card: document.querySelector('#board .card').getBoundingClientRect().top + scrollY, colW: $('col-open').offsetWidth, people: $('o-right').offsetHeight, persons: document.querySelectorAll('#people .person').length, rows: [...document.querySelectorAll('#people .o-agent')].map((e) => e.offsetHeight), beside: $('o-right').getBoundingClientRect().left > $('board').getBoundingClientRect().right - 2 }));
-  // Agents: a line per person and a compact row per agent (2 lines), in the right column beside the board.
-  check('B busy: 5 people, a compact row per agent, beside the board', lay.persons === 5 && lay.rows.length && lay.rows.every((h) => h <= 56) && lay.beside, JSON.stringify(lay));
+  const lay = await p.evaluate(() => ({ board: $('board').getBoundingClientRect().top + scrollY, card: document.querySelector('#board .card').getBoundingClientRect().top + scrollY, colW: $('col-open').offsetWidth, people: $('o-right').offsetHeight, persons: new Set([...document.querySelectorAll('#people [data-person-row]')].map((e) => e.dataset.personRow)).size, rows: [...document.querySelectorAll('#people .o-agent')].map((e) => e.offsetHeight), beside: $('o-right').getBoundingClientRect().left > $('board').getBoundingClientRect().right - 2 }));
+  // Agents: one line per agent (people told apart by their colour), in the right column beside the board.
+  check('B busy: 5 people, one line per agent, beside the board', lay.persons === 5 && lay.rows.length && lay.rows.every((h) => h <= 40) && lay.beside, JSON.stringify(lay));
   check('B 1366×768: kanban starts in the first viewport', lay.board < 768 && lay.card < 768 - 40, JSON.stringify(lay));
   check('B columns at least 120px wide (between the rails)', lay.colW >= 120, lay.colW + 'px');
   const doneTxt = await p.$eval('#col-done', (e) => e.textContent.trim());
@@ -207,8 +207,11 @@ try {
   const bcard = await txt(p, `.card[data-id="${ids[15]}"]`);
   check('B blocked card shows its latest blocked note', /need the Grafana API key/.test(bcard), bcard);
   check('B blocked card aria-label has note + waits/priority wording', await p.$eval(`.card[data-id="${ids[15]}"]`, (c) => /blocked: need the Grafana/.test(c.getAttribute('aria-label')) && /priority/.test(c.getAttribute('aria-label'))));
+  // The card's "question waiting" link shows only while Needs attention (which lists the question) is folded.
+  check('B "question waiting" is not on the card while Needs attention is open', await p.$eval(`.card[data-id="${ids[15]}"] .qb`, (b) => !b.offsetParent));
+  await p.click('[data-o-fold="left"]'); await sleep(500);
   await p.click(`.card[data-id="${ids[15]}"] .qb`); await sleep(500);
-  check('B "question waiting" badge jumps to that question', await p.evaluate((q) => document.activeElement?.id === 'qa-' + q, blockedQ.question_id));
+  check('B with Needs attention folded, "question waiting" opens it at that question', await p.evaluate((q) => document.activeElement?.id === 'qa-' + q, blockedQ.question_id));
 
   // Kanban semantics
   // Named "<heading>, N tasks" (an aria-label, so no stray space before the comma); cards in lists.
@@ -320,7 +323,7 @@ try {
       // person names on panel, chip and stale-card backgrounds, every hue
       const hues = HUES; // the page's own palette
       let worst = 99;
-      for (const bgSel of ['.panel', '.chip', '.card.stale']) {
+      for (const bgSel of ['.o-panel', '.chip', '.card.stale']) {
         const host = document.createElement('div'); host.className = bgSel.slice(1).replace('.', ' '); document.querySelector('main').append(host);
         for (const h of hues) { const sp = document.createElement('span'); sp.className = 'pc'; sp.style.setProperty('--h', h); host.append(sp); worst = Math.min(worst, __cr(cs(sp).color, cs(host).backgroundColor)); }
         host.remove();

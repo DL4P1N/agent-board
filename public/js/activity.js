@@ -1,4 +1,4 @@
-// Activity: the feed (event lines, Problems and Merges tabs, Load earlier), direct messages, mentions, file locks, the
+// Activity: the feed (event lines, All, Chat and @me tabs, Load earlier), direct messages, mentions, file locks, the
 // chat composer with @ autocomplete, and the live announcements of activity for screen readers.
 
 import './tasks.js';
@@ -86,11 +86,6 @@ function settingsText(e) {
     return self ? 'will merge finished work into main' : `picked ${v} to merge finished work into main`;
   }).join('; ');
 }
-// Feed filters, derived from kind + data (task_updated carries data.status; the rest is read from the text).
-const isProblem = (e) => (e.kind === 'task_updated' && (e.data?.status === 'blocked' || /review → in_progress/.test(e.text)))
-  || (e.kind === 'task_deleted' && /^rejected proposal/.test(e.text))
-  || (e.kind === 'message' && (e.data?.notice === 'limit' || (e.author === 'board' && /is being used from \d+ laptops/.test(e.text))));
-const isMergeReview = (e) => e.kind === 'task_updated' && (e.data?.status === 'review' || e.data?.status === 'done') && /→ (review|done)\b/.test(e.text);
 // ---------- direct messages (the Activity panel's Direct tab, both views) ----------
 // One thread per agent (its name), plus the planner's thread ("planner"): whoever is the planner reads it, and while
 // nobody is, its messages wait for the first one. Every human sees every thread; other agents don't. Unread: replies
@@ -171,9 +166,12 @@ function openDm(name, focus = true) {
   $('feed')._html = undefined; render();
   if (focus) { const m = $('msg'); m.focus({ preventScroll: true }); m.setSelectionRange(m.value.length, m.value.length); }
 }
-const TAB_EMPTY = { me: 'No mentions of you yet.', problems: 'No problems so far: nothing blocked, sent back or out of usage.', merges: 'No reviews or merges yet.' };
+const TAB_EMPTY = { me: 'No mentions of you yet.' };
 function renderFeed(unreadCount) {
-  const tabs = { all: () => true, chat: isChat, me: (e) => mentionsMe(e), problems: isProblem, merges: isMergeReview };
+  // All, Chat, @me and Direct (what's blocked and what's merged are Needs attention's and the columns'). A tab saved
+  // from before (Problems, Merges) shows All.
+  const tabs = { all: () => true, chat: isChat, me: (e) => mentionsMe(e) };
+  if (!tabs[ui.tab] && ui.tab !== 'direct') ui.tab = 'all';
   const dmUnread = dmUnreadCount();
   $('tabs').querySelectorAll('button').forEach((b) => {
     b.setAttribute('aria-pressed', String(b.dataset.tab === ui.tab));

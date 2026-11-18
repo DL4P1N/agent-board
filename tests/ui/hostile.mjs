@@ -126,7 +126,7 @@ try {
     // The table view and the feed's other tabs render the same text differently.
     await page.evaluate(() => { for (const b of document.querySelectorAll('button')) if (/^Table$/.test(b.textContent.trim())) { b.click(); break; } });
     await sleep(200);
-    for (const tab of ['Problems', 'Merges']) {
+    for (const tab of ['Chat', '@me']) {
       await page.evaluate((t) => { for (const b of document.querySelectorAll('button, [role=tab]')) if (b.textContent.trim().startsWith(t)) { b.click(); break; } }, tab);
       await sleep(150);
     }

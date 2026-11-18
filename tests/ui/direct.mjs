@@ -33,7 +33,7 @@ try {
 
   // ---- the tab and the thread list ----
   const tabs = await page.$$eval('#tabs button', (l) => l.map((b) => b.dataset.tab));
-  check('Activity has a Direct tab after the others', tabs.join() === 'all,chat,me,problems,merges,direct', tabs.join());
+  check('Activity has a Direct tab after the others', tabs.join() === 'all,chat,me,direct', tabs.join());
   // A draft in the shared chat stays there.
   await page.click('#msg'); await page.type('#msg', 'chat draft');
   await page.click('[data-tab="direct"]');

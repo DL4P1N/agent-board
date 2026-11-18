@@ -115,7 +115,7 @@ try {
   await page.select('#integ-sel', 'alice');
   await page.waitForFunction(() => !/Pick who merges/.test(document.getElementById('now').innerText), { timeout: 5000 });
   check('integrator saved; do-now shows blocked', /blocked/.test(await page.$eval('#now .na', (e) => e.textContent)), await now());
-  check('person card has role pills', await page.evaluate(() => /merges to main/.test(document.getElementById('people').innerText) && /planner/.test(document.getElementById('people').innerText)));
+  check('the planner and who merges are tags on their agent rows', await page.evaluate(() => { const t = [...document.querySelectorAll('#people .o-agent .o-rl')].map((e) => e.textContent); return t.includes('planner') && t.includes('merges'); }));
   await bob('update_task', { id: t3.id, status: 'in_progress', as: 'ui-worker' }); await sleep(500);
   check('all good message', /All good/.test(await now()), await now());
   // help dialog via ?

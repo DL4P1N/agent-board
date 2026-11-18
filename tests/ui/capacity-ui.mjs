@@ -9,6 +9,7 @@ const out = shotsDir('capacity-ui');
 const results = [];
 const check = (n, ok, x = '') => results.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const until = (fn, timeout = 5000) => page.waitForFunction(fn, { timeout, polling: 100 }).then(() => true).catch(() => false);
 const human = (p, method = 'GET', body) => rest(board, 'dana', p, method, body);
 
 // An agent connecting the way join configures it: plan + slots in the MCP URL. board_status marks it started.
@@ -74,21 +75,22 @@ try {
   await sleep(400);
 
   // ---- 1. plan + x/slots per agent ----
-  // Agents: one row per agent (its tool's dot, name, state; what it does, tool and model). Its tool, plan and x/slots are
-  // in its screen-reader text and tooltip, and spelled out when it is selected (checked below).
+  // Agents: one line per agent (its tool's dot, name, role, task, state). Its tool, plan and x/slots are in its
+  // screen-reader text and tooltip, and spelled out when it is selected (checked below).
   const people = await txt('#people');
-  const arow = (n) => page.$eval(`#people [data-o-agent="${n}"]`, (e) => ({ sr: e.querySelector('.vh')?.textContent || '', title: e.title, vis: e.querySelector('.o-r2')?.innerText || '' })).catch(() => ({}));
+  const arow = (n) => page.$eval(`#people [data-o-agent="${n}"]`, (e) => ({ sr: e.querySelector('.vh')?.textContent || '', title: e.title, vis: e.querySelector('.o-tk')?.innerText || '' })).catch(() => ({}));
   const pAna = await arow('ana'), pCy = await arow('cy');
   check('ana: plan and 2/3 (screen reader and tooltip)', /Claude Max 20x: 2\/3/.test(pAna.sr) && /Claude Max 20x/.test(pAna.title), JSON.stringify(pAna));
   check('one-slot Codex agent: plan and 1/1', /ChatGPT Edu: 1\/1/.test(pCy.sr) && /ChatGPT Edu/.test(pCy.title), JSON.stringify(pCy));
   check('no plan: tool name + 0/2 (Claude Code default)', /Claude Code: 0\/2/.test(people), people);
   check('no plan: Copilot default 0/1', /Copilot \(VS Code\): 0\/1/.test(people), people);
-  check('rows stay compact: no plan names on screen in the rows', !/Claude Max 20x|ChatGPT Edu/.test(await page.evaluate(() => [...document.querySelectorAll('#people .o-agent .o-r2, #people .o-agent .o-st')].map((e) => e.innerText).join(' '))), people);
+  check('rows stay compact: no plan names on screen in the rows', !/Claude Max 20x|ChatGPT Edu/.test(await page.evaluate(() => [...document.querySelectorAll('#people .o-agent .o-tk, #people .o-agent .o-st')].map((e) => e.innerText).join(' '))), people);
   check('an agent row explains its capacity in its tooltip', /allows \d at once/.test(pAna.title), pAna.title);
 
-  // ---- 5. team capacity, above the people rows ----
-  const sum = await txt('#p-sum');
-  check('people panel: team capacity and running', /Team can run 7 tasks at once · 3 running/.test(sum), sum);
+  // ---- 5. team capacity: the Agents title bar ("3 of 7 running"), in full in its tooltip ----
+  const capSub = () => page.$eval('#o-right-sub', (e) => ({ t: e.textContent, tip: e.title, low: e.classList.contains('low') }));
+  const sum = await capSub();
+  check('Agents title bar: team capacity and running', sum.t === '3 of 7 running' && /^Team can run 7 tasks at once · 3 running/.test(sum.tip), JSON.stringify(sum));
 
   // ---- 2. size: dialog select saves, card badge shows ----
   await openCard(T[3].id);
@@ -114,7 +116,7 @@ try {
   check("the reserved agent's claim works", ok.status === 'claimed' && ok.assignee === 'eve', JSON.stringify(ok).slice(0, 160));
   await page.waitForFunction((id) => document.querySelector(`#col-in_progress .card[data-id="${id}"]`), { timeout: 5000 }, T[4].id);
   check('reserved badge hidden once the reserved agent holds it', !/reserved for/.test(await cardTxt(T[4].id)));
-  check('team capacity updates: 4 running', /Team can run 7 tasks at once · 4 running/.test(await txt('#p-sum')), await txt('#p-sum'));
+  check('team capacity updates: 4 running', await until(() => document.getElementById('o-right-sub').textContent === '4 of 7 running'), JSON.stringify(await capSub()));
 
   // ---- create with size + reservation ----
   await page.click('#new-task-btn');
@@ -154,7 +156,7 @@ try {
   await page.waitForFunction(() => /idle/.test(document.getElementById('now').innerText), { timeout: 5000 }).catch(() => {});
   const now = await txt('#now');
   check('What to do now: agents idle, add tasks or ask the planner', /1 agent is idle: add tasks or ask the planner for more/.test(now), now);
-  check('team capacity flags the idle agent', /1 agent idle, 0 ready to claim/.test(await txt('#p-sum')), await txt('#p-sum'));
+  check('team capacity flags the idle agent (amber, said in its tooltip)', await until(() => /1 agent idle, 0 ready to claim/.test(document.getElementById('o-right-sub').title) && document.getElementById('o-right-sub').classList.contains('low')), JSON.stringify(await capSub()));
   await page.click('#now [data-go="idle"]');
   const draft = await page.$eval('#msg', (e) => e.value);
   check('suggestion drafts a message to the planner (not sent)', /^@ana .*idle.*add more tasks/.test(draft) && !(await human('/state')).events.some((e) => /add more tasks/.test(e.text)), draft);

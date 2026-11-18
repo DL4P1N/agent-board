@@ -40,14 +40,15 @@ function setTheme(t) {
     office.mod?.setTheme(scenePalette());
   });
 }
-// Under the theme button, kept inside the window, no taller than the room below the header (it scrolls inside itself
-// when that is short). Phones: a sheet from the bottom (CSS).
+// --gutter under the header (the theme button is in it), under the button, kept inside the window, no taller than the
+// room below the header (it scrolls inside itself when that is short). Phones: a sheet from the bottom (CSS).
 function placeThemePop() {
   const p = $('theme-pop');
-  if (matchMedia('(max-width: 760px)').matches) { p.style.removeProperty('--tp-top'); p.style.removeProperty('--tp-right'); p.style.removeProperty('--tp-max'); return; }
-  const r = $('theme-btn').getBoundingClientRect();
-  p.style.setProperty('--tp-top', Math.round(r.bottom + 8) + 'px');
-  p.style.setProperty('--tp-max', Math.max(160, Math.round(innerHeight - r.bottom - 16)) + 'px');
+  if (matchMedia('(max-width: 600px)').matches) { p.style.removeProperty('--tp-top'); p.style.removeProperty('--tp-right'); p.style.removeProperty('--tp-max'); return; }
+  const r = $('theme-btn').getBoundingClientRect(), hb = document.querySelector('#app > header')?.getBoundingClientRect().bottom || r.bottom;
+  const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gutter')) || 12, top = Math.round(Math.max(r.bottom, hb) + gap);
+  p.style.setProperty('--tp-top', top + 'px');
+  p.style.setProperty('--tp-max', Math.max(160, Math.round(innerHeight - top - 8)) + 'px');
   p.style.setProperty('--tp-right', Math.round(Math.max(8, Math.min(innerWidth - r.right, innerWidth - p.offsetWidth - 8))) + 'px');
 }
 // One theme control for both views: the header's swatch button opens the chooser. A click (or Enter, Space) picks a
@@ -63,6 +64,7 @@ function themePop(open, focus = true) {
 document.addEventListener('click', (ev) => {
   const b = ev.target.closest?.('[data-theme-set]');
   if (b) { setTheme(b.dataset.themeSet); if (b.closest('#theme-pop')) themePop(false); return; }
+  if (ev.target.closest?.('[data-tp-close]')) return themePop(false);
   if (ev.target.closest?.('#theme-btn')) return themePop(!ui.themeOpen);
   if (ui.themeOpen && !ev.target.closest?.('#theme-pop')) themePop(false, false);
 });

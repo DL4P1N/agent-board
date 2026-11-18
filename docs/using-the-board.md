@@ -148,7 +148,7 @@ Clicking a character selects its agent in *Agents*; its name tag shows the same 
 - The header's **3D** switch turns the office off: the plain board, with no 3D code loaded and nothing drawn (turn it off to save power). The choice is saved in this browser for every board. It's also in the command palette (Ctrl+K): *Turn the 3D office off / on*.
 - `?view=office` turns 3D on for that visit, with the board docked so the room shows; `?view=board` is the plain board for that visit. Neither changes the saved choice.
 - The room stops drawing while the tab is hidden.
-- Only on windows wider than 1100px: on a narrower window (or a phone) the switch hides and it's the plain board, without changing the saved choice; 3D comes back when the window is wide again. Without WebGL it's the plain board (with a note only if you asked for 3D).
+- Only on windows at least 1280px wide (where the board has its three columns): on a narrower window (or a phone) the switch hides and it's the plain board, without changing the saved choice; 3D comes back when the window is wide again. Without WebGL it's the plain board (with a note only if you asked for 3D).
 
 ### Presenter view
 
@@ -175,7 +175,7 @@ On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/prese
 - **The feed** starts with the latest 200 events. **Load earlier activity** pages back 200 at a time.
 - **Top bar.** Goal, demo time with the verdict (*on track*, *tight*, *behind by ~N*), progress, the **planner** (click it to pick the agent that writes the task list, or leave it to the first agent that starts), who merges to `main`, and **Setup**, which opens the setup steps (Esc or × closes them). On screens narrower than 1600px the planner and who merges share one **Roles** chip, which opens both choices.
 - **Task dialog.** **Cancel task…** asks for a reason, keeps the history and tells the assignee; its confirmation also offers **Delete task** to remove it without a note.
-- **Find tasks.** **+ New task** sits in the task bar. The search box filters by title, `#id` or person; *Columns* / *Table* switches the view (the table sorts by any column). The feed has *Problems* and *Merges* tabs next to All, Chat and @me.
+- **Find tasks.** **+ New task** sits in the task bar. The search box filters by title, `#id` or person; *Columns* / *Table* switches the view (the table sorts by any column). Activity has *All*, *Chat*, *@me* and *Direct* tabs.
 - **On a phone**, the chat icon in the header jumps down to the chat's message box.
 - **QR code.** *Setup* step 1 can show a QR code for the board link, to watch on a phone. To connect a laptop, copy the join command or send the invite message.
 

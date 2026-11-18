@@ -101,17 +101,18 @@ export const lum = (h) => { const c = hex(h).map((v) => v / 255).map((v) => (v <
 export const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
 
 // ---- the derivation table: every board token from the 11 base colours ----
-// Surfaces step bg < sunken < panel < raised (dark: toward the text colour; light: toward white). Soft fills are the
+// Surfaces step bg < sunken < panel < raised (dark: toward the text colour; light: toward white). A white panel can't
+// step toward white: there rows and cards sit a step darker than the panel, and the task columns a step under the page. Soft fills are the
 // panel tinted with their colour; lines are the panel mixed toward the border. Review sits between In progress (info)
 // and Done (ok). On a filled red button the text is the page colour (dark) or the panel (light).
 export function derive(b) {
-  const L = !!b.light;
+  const L = !!b.light, white = L && lum(b.panel) > 0.97;
   const t = {
     ...(L ? TOOLS_LIGHT : TOOLS_DARK),
     bg: b.bg,
-    sunken: mix(b.bg, b.panel, L ? 0.25 : 0.45),
+    sunken: white ? mix(b.bg, b.border, 0.12) : mix(b.bg, b.panel, L ? 0.25 : 0.45),
     panel: b.panel,
-    raised: L ? mix(b.panel, '#ffffff', 0.5) : mix(b.panel, b.text, 0.05),
+    raised: white ? mix(b.panel, b.bg, 0.7) : L ? mix(b.panel, '#ffffff', 0.5) : mix(b.panel, b.text, 0.05),
     chip: L ? mix(b.panel, b.border, 0.14) : mix(b.panel, b.text, 0.1),
     field: L ? mix(b.panel, '#ffffff', 0.6) : mix(b.bg, '#000000', 0.35),
     ink: b.text, muted: b.muted,

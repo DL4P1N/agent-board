@@ -5,7 +5,7 @@
 // at the top between them, and the task board under the top bar. The task board is docked as a window with the room
 // below it (the default, and how turning 3D on opens), expanded down to the foot over the room (its bottom edge
 // sliding between the two), or folded to its title bar. The 3D switch moves nothing. 3D off is the plain board (no
-// office code), also on windows up to 1100px wide. The header (clock, theme) stays above every panel. The room is
+// office code), also on windows under 1280px wide. The header (clock, theme) stays above every panel. The room is
 // framed in the space the panels leave free. Works with or without WebGL:
 // Chrome runs with SwiftShader so CI runners without a GPU still get it; without WebGL it's the plain board, with a note.
 // Pages here open with 3D off (the test helper's default) unless a check says otherwise.
@@ -206,6 +206,7 @@ try {
   check('"/" with Activity folded: Activity opens, focus in the message box', await until(page, () => !$('o-act').classList.contains('folded') && document.activeElement === $('msg')));
   await page.evaluate(() => document.activeElement?.blur());
   await page.evaluate(() => window.scrollTo(0, 0)); await sleep(100);
+  await until(page, () => !document.getAnimations().some((a) => a.playState === 'running' && a.effect?.getComputedTiming().endTime !== Infinity));
   const before = await places();
   await page.click('#o3d');
   if (!webgl) {
@@ -215,18 +216,19 @@ try {
     check('the switch is announced politely', await until(page, () => /3D office on/.test(document.getElementById('announcer').textContent)));
     check('turning it on loads the office chunk and draws a canvas', await until(page, () => !!document.querySelector('#office-scene canvas'), null, 20000) && officeReqs(reqs).some((u) => /embed\.js/.test(u)) && officeReqs(reqs).some((u) => /OfficeScene-/.test(u)), officeReqs(reqs).map((u) => u.split('/').pop()).join(' '));
     check('loading note gone once it is ready', await until(page, () => !document.getElementById('office-view').classList.contains('loading')));
-    check('turning 3D on opens with the board docked (the room in view), its task bar as the window\'s title bar', await page.evaluate(() => !$('o-tasks').classList.contains('max') && !$('o-tasks').classList.contains('folded') && $('board').offsetHeight > 150 && $('o-tasks-max').getAttribute('aria-pressed') === 'false' && $('o-tasks-head').contains($('b-h')) && !!$('b-h').offsetWidth && office.fps === 30));
-    // The switch moves nothing: the top bar and the side panels exactly where they were; the task board's window where
-    // its columns were (its frame, title bar and padding hold the columns a few pixels in).
+    check('turning 3D on opens with the board docked (the room in view), its task bar as the window\'s title bar', await page.evaluate(() => !$('o-tasks').classList.contains('max') && !$('o-tasks').classList.contains('folded') && $('board').offsetHeight > 100 && [...document.querySelectorAll('#board .cards')].every((u) => u.scrollHeight <= u.clientHeight + 1) && $('o-tasks-max').getAttribute('aria-pressed') === 'false' && $('o-tasks-head').contains($('b-h')) && !!$('b-h').offsetWidth && office.fps === 30));
+    // The switch moves nothing: the top bar, the side panels, the Tasks panel and its columns exactly where they were
+    // (one Tasks panel, moved between the views).
+    await until(page, () => !document.getAnimations().some((a) => a.playState === 'running' && a.effect?.getComputedTiming().endTime !== Infinity && !a.effect?.target?.closest?.('#office-scene')));
     const after = await places();
     const near = (a, b, d = 2) => !!a && !!b && a.every((x, i) => Math.abs(x - b[i]) <= d);
     // Activity is as tall as its feed (a near-empty one stays short), and the test board's feed can gain a line while 3D
     // turns on: so Activity is compared by its top and sides, File locks by its sides, height and the gap above it.
     const same = (a, b, idx) => !!a && !!b && idx.every((i) => Math.abs(a[i] - b[i]) <= 2);
-    check('the 3D switch moves nothing: the top bar, Needs attention, Agents, Activity and File locks in the same places; the Tasks window where the board was', near(after.topbar, before.topbar) && near(after.left, before.left) && near(after.right, before.right)
+    check('the 3D switch moves nothing: the top bar, Needs attention, Agents, Activity, File locks, the Tasks panel and its columns in the same places', near(after.topbar, before.topbar) && near(after.left, before.left) && near(after.right, before.right)
       && same(after.act, before.act, [0, 1, 2]) && same(after.locks, before.locks, [0, 2]) && Math.abs((after.locks[3] - after.locks[1]) - (before.locks[3] - before.locks[1])) <= 2
       && Math.abs((after.locks[1] - after.act[3]) - (before.locks[1] - before.act[3])) <= 2
-      && Math.abs(after.tasks[0] - before.board[0]) <= 2 && Math.abs(after.tasks[2] - before.board[2]) <= 2 && Math.abs(after.board[1] - before.board[1]) <= 8, JSON.stringify({ before, after }));
+      && near(after.tasks.slice(0, 3), before.tasks.slice(0, 3), 1) && near(after.board.slice(0, 3), before.board.slice(0, 3), 1), JSON.stringify({ before, after }));
     const share = await page.evaluate(() => {
       const v = $('office-view').getBoundingClientRect(); let n = 0, hit = 0;
       for (let x = 0.02; x < 1; x += 0.04) for (let y = 0.02; y < 1; y += 0.04) { n++; if (document.elementFromPoint(v.left + v.width * x, v.top + v.height * y)?.closest('#office-scene')) hit++; }
@@ -284,7 +286,7 @@ try {
     const st = await page.evaluate(() => { const s = document.querySelector('[data-o-agent="ana-claude"] .o-st'); return { word: s.textContent, boxed: s.classList.contains('bx'), bubble: window.__officeState?.agents.find((a) => a.id === 'ana-claude')?.bubble, badges: [...document.querySelectorAll('#o-agents .o-st.bx')].map((x) => x.textContent) }; });
     check('an agent waiting on an answer: "Question" badge in its row, the same word as its bubble in the room', st.word === 'Question' && st.boxed && st.bubble === 'Question', JSON.stringify(st));
     check('only Question / Blocked / Out of usage get a badge', st.badges.every((w) => ['Question', 'Blocked', 'Out of usage'].includes(w)), JSON.stringify(st.badges));
-    check('the Agents count uses the board\'s rule and words ("N online", out of usage apart)', await page.evaluate(() => $('o-right-sub').textContent === `${setupInfo().onlineA.length} online` && $('o-right-sub').title.startsWith(agentsLine(setupInfo(), true))), await page.$eval('#o-right-sub', (e) => e.textContent));
+    check('the Agents title bar counts what runs of what the team can run, its tooltip in the board\'s words ("N online", out of usage apart)', await page.evaluate(() => { const c = teamCapacity(); return $('o-right-sub').textContent === `${c.running} of ${c.slots} running` && $('o-right-sub').title.includes(agentsLine(setupInfo(), true)); }), await page.$eval('#o-right-sub', (e) => e.textContent));
     check('Tasks window: the board itself (one board, moved in), its five columns and their cards', await page.evaluate(() => {
       const c = [...document.querySelectorAll('#o-tasks-b #board > .col')];
       return !!$('o-tasks-b').querySelector('#board') && !document.getElementById('o-cols') && c.length === 5 && c.map((x) => x.dataset.status).join() === 'open,in_progress,blocked,review,done' && /Vote API/.test(c[1].innerText) && /Leaderboard page/.test(c[0].innerText);
@@ -391,7 +393,7 @@ try {
     check('Needs attention folds to its title bar: it rolls up (an animation part-way), lands on its title bar, no snap at the end', fl.anims >= 1 && fl.between && !fl.snap && fl.end[0] < 60 && fl.h0[0] > 100, JSON.stringify(fl));
     check('folded, its title bar counts what needs you (amber), its button says Open Needs attention, focus stays on it', await page.evaluate(() => $('o-left').classList.contains('folded') && /^\d+$/.test($('o-left-n').textContent) && getComputedStyle($('o-left-n')).color === (() => { const t = document.createElement('i'); t.style.color = 'var(--warn)'; document.body.append(t); const c = getComputedStyle(t).color; t.remove(); return c; })() && document.activeElement === $('o-left').querySelector('[data-o-fold]') && $('o-left').querySelector('[data-o-fold]').getAttribute('aria-label') === 'Open Needs attention' && $('o-left').querySelector('[data-o-fold]').title === 'Open Needs attention'));
     const fr = await foldRun(page, '#o-right [data-o-fold]', ['o-right', 'o-act', 'o-locks']);
-    check('Agents folds the same way while Activity grows into its room in step (the column\'s total height kept every frame), no snap', fr.anims >= 2 && fr.between && !fr.snap && fr.end[0] < 60 && fr.end[1] > fr.h0[1] + 100, JSON.stringify(fr));
+    check('Agents folds the same way while Activity grows into its room in step (the column\'s total height kept every frame), no snap', fr.anims >= 2 && fr.between && !fr.snap && fr.end[0] < 60 && fr.end[1] >= fr.h0[1] + (fr.h0[0] - fr.end[0]) - 2, JSON.stringify(fr));
     const ft = await foldRun(page, '#o-tasks-fold', ['o-tasks']);
     check('the Tasks window folds the same way, to its title bar under the top bar, no snap; the room held still meanwhile, back at its full rate after', ft.anims >= 1 && ft.between && !ft.snap && ft.end[0] < 60 && await until(page, () => office.fps === 30), JSON.stringify(ft));
     check('Agents folded (Activity takes the column); the Tasks window folded, focus stays on its button', await page.evaluate(() => $('o-right').classList.contains('folded') && $('o-right-sub').textContent.length > 0 && $('o-tasks').classList.contains('folded') && document.activeElement === $('o-tasks-fold') && $('o-act').getBoundingClientRect().height > $('office-view').getBoundingClientRect().height * 0.6));
@@ -448,7 +450,7 @@ try {
     await page.click('#viewtog [data-view="table"]');
     check('3D: Table shows the board\'s table inside the Tasks window (columns hidden), saved as the board\'s choice', await until(page, () => $('o-tasks-b').contains($('tasktable')) && !$('tasktable').hidden && $('tasktable').offsetHeight > 40 && !$('board').offsetHeight && localStorage.getItem('board-view') === 'table' && /Leaderboard page/.test($('tasktable').innerText)));
     await page.click('#o-tasks-max');
-    check('3D: the table is usable maximised (rows open the task)', await page.evaluate(() => $('tasktable').offsetHeight > 200));
+    check('3D: the table is usable maximised (rows open the task)', await until(page, () => $('tasktable').offsetHeight > 200));
     await page.click(`#tasktable [data-fk="tt-${t2.id}"]`);
     check('3D: a table row opens the task dialog', await until(page, () => document.getElementById('task-dlg').open && document.getElementById('td-name').value === 'Leaderboard page'));
     await page.keyboard.press('Escape'); await until(page, () => !document.getElementById('task-dlg').open);
@@ -462,7 +464,7 @@ try {
     const corners = await page.evaluate(() => { const r = $('o-act').getBoundingClientRect(); return [[r.left + 4, r.top + 4], [r.right - 4, r.top + 4], [r.left + 4, r.bottom - 4], [r.right - 4, r.bottom - 4], [r.left + r.width / 2, r.top + r.height / 2]].filter(([x, y]) => !$('o-act').contains(document.elementFromPoint(x, y))).length; });
     check('nothing from the room covers Activity (its corners and middle are its own)', corners === 0, String(corners));
     check('the room\'s name tags sit under every panel (the scene is its own stacking layer)', await page.evaluate(() => { const s = getComputedStyle($('office-scene')); return s.zIndex === '0' && s.isolation === 'isolate'; }));
-    for (const tab of ['chat', 'me', 'problems', 'merges', 'all']) {
+    for (const tab of ['chat', 'me', 'all']) {
       const pos = await page.$eval(`#tabs [data-tab="${tab}"]`, (b) => { const r = b.getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { x: r.left + r.width / 2, y: r.top + r.height / 2, own: e === b || b.contains(e) }; });
       await page.mouse.click(pos.x, pos.y); await sleep(120);
       const r = await page.evaluate((t) => ({ pressed: document.querySelector(`#tabs [data-tab="${t}"]`).getAttribute('aria-pressed'), dlg: document.getElementById('task-dlg').open, focusOk: !document.activeElement?.matches?.('textarea[id^="tdqa"]') }), tab);
@@ -653,7 +655,7 @@ try {
     await v2.page.evaluate(() => { if (document.getElementById('o-tasks').classList.contains('folded')) document.getElementById('o-tasks-fold').click(); });
     check('an overflowing Tasks column scrolls inside the window (its cards list scrolls, the window keeps its size)', await until(v2.page, () => { const c = document.querySelector('#o-tasks-b .col[data-status="open"]'); const ul = c?.querySelector('.cards'); if (!ul) return false; const w = document.getElementById('o-tasks').getBoundingClientRect(); return ul.scrollHeight > ul.clientHeight + 4 && getComputedStyle(ul).overflowY === 'auto' && c.getBoundingClientRect().bottom <= w.bottom + 1; }), await v2.page.evaluate(() => { const ul = document.querySelector('#o-tasks-b .col[data-status="open"] .cards'); return ul ? `${ul.scrollHeight}/${ul.clientHeight}` : 'no list'; }));
     check('a helper shows under its agent, with its own state and task', await until(v2.page, () => { const h = document.querySelector('[data-o-agent="ana-claude"]')?.closest('li')?.querySelector('.o-helpers'); return !!h && /ui-worker/.test(h.innerText) && /working/.test(h.innerText) && /Helper task/.test(h.innerText); }));
-    check('a person whose one agent has their name: their line, then that agent\'s row (as on the Board view)', await until(v2.page, () => !!document.querySelector('[data-person-row="carol"] [data-o-agent="carol"]') && !!document.querySelector('[data-person-row="carol"] .o-pn')));
+    check('a person whose one agent has their name: one row, that agent\'s (no person line)', await until(v2.page, () => document.querySelectorAll('[data-person-row="carol"]').length === 1 && !!document.querySelector('[data-person-row="carol"] [data-o-agent="carol"]') && !document.querySelector('#people .o-pn')));
     for (const [w, h, theme] of [[1440, 900, 'dusk'], [1440, 900, 'light'], [1440, 900, 'sticky'], [1366, 768, 'dark']]) {
       await v2.page.evaluate((t) => setTheme(t), theme);
       await v2.page.setViewport({ width: w, height: h }); await sleep(800);
@@ -711,11 +713,11 @@ try {
   check('phone: ?view=office stays on the board, nothing 3D loaded', await view(ph.page) === 'board' && officeReqs(ph.reqs).length === 0);
   await ph.page.close();
 
-  // ---- Windows up to 1100px wide: no switch, the plain board; the saved choice is kept and 3D comes back wider ----
+  // ---- Windows under 1280px wide: no switch, the plain board; the saved choice is kept and 3D comes back at 1280 ----
   const nw = await open('/', { vp: { width: 1000, height: 800 }, setup: () => { try { localStorage.setItem('agent-board-3d', 'on'); } catch {} } });
   check('1000px wide, 3D saved on: the switch is hidden and the plain board shows, nothing 3D loaded, the saved choice kept', !(await shown(nw.page, '#o3d')) && await view(nw.page) === 'board' && await shown(nw.page, '#board') && officeReqs(nw.reqs).length === 0 && await nw.page.evaluate(() => localStorage.getItem('agent-board-3d') === 'on'));
-  await nw.page.setViewport({ width: 1100, height: 800 }); await sleep(300);
-  check('1100px: still the plain board, no switch', !(await shown(nw.page, '#o3d')) && await view(nw.page) === 'board');
+  await nw.page.setViewport({ width: 1279, height: 800 }); await sleep(300);
+  check('1279px: still the plain board, no switch', !(await shown(nw.page, '#o3d')) && await view(nw.page) === 'board');
   if (webgl) {
     await nw.page.setViewport({ width: 1280, height: 800 });
     check('wider again (1280px): 3D comes back, with the switch', await until(nw.page, () => document.documentElement.dataset.boardView === 'office' && !!document.getElementById('o3d').offsetWidth && document.getElementById('o3d').getAttribute('aria-pressed') === 'true'));

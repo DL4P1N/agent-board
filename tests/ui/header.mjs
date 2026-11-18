@@ -71,7 +71,7 @@ try {
   await ageAgent('cid', 25);
   await page.evaluate(() => { localStorage.setItem('board-setup', 'closed'); }); await reload();
   const oc = await txt('#o-right-sub'); const ocTip = await page.$eval('#o-right-sub', (e) => e.title);
-  check('WB-6 Agents title bar: "1 online", its tooltip "1 online · 1 out of usage · 1 offline"', /^1 online$/.test(oc.trim()) && ocTip.startsWith('1 online · 1 out of usage · 1 offline.'), oc + ' | ' + ocTip);
+  check('WB-6 Agents title bar: what runs of what the team can run ("1 of 2 running"), its tooltip says it in full with "1 online · 1 out of usage · 1 offline"', /^1 of \d+ running$/.test(oc.trim()) && ocTip.startsWith('Team can run ') && ocTip.includes('\n1 online · 1 out of usage · 1 offline.'), oc + ' | ' + ocTip);
   await rest('dana', '/agents/bea', 'PATCH', { limited: false });
 
   // ---- WB-3: plan approval outranks a question; the question follows under "Also" ----

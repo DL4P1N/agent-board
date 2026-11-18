@@ -1,18 +1,17 @@
-// The Agents panel, one component for both views: a row per agent with its state in words, its tool and model, its
-// subagents, and the controls under a picked agent.
+// The Agents panel, one component for both views: a line per agent with its role, its task and its state in words, its
+// subagents, and the details and controls under a picked agent.
 
 import './setup.js';
 import { $, ACTIVE, ANYONE, HOLDING, LABEL, me, state, ui } from './state.js';
-import { agentRoot, ago, esc, FUNNEL, hs, isStale, patch, root, short, taskById, youTag } from './helpers.js';
-import { agentInfo, agentsLine, agentState, capText, capTip, filterRoot, isLimited, limitText, notStartedText,
-  openQuestions, people, startCmd } from './derived.js';
-import { teamCapHtml } from './setup.js';
+import { agentRoot, ago, esc, hs, isStale, patch, plural, root, short, taskById, youTag } from './helpers.js';
+import { agentInfo, agentsLine, agentState, capText, capTip, isLimited, limitText, notStartedText, openQuestions, people,
+  startCmd, teamCapacity } from './derived.js';
 import { boardView } from './office.js';
 
 // ---------- Agents: one component for both views ----------
-// Per person a heading line (initial, name, roles, the person filter), then one row per agent: its tool's dot, its name
-// and its state (the room's word for it, see oStatus), then what it does, its tool and its model. Its subagents sit
-// under it with their own state, task and model. A row selects the agent (in the 3D view also its character in the
+// One line per agent: its tool's dot, its name, its role (planner, merges), the task it is on and its state (the room's
+// word for it, see oStatus); its tool, plan and model are the row's tooltip and in its details. Its subagents sit under
+// it with their own state, task and model. A row selects the agent (in the 3D view also its character in the
 // room); the selected agent shows its capacity, what it holds, its question, its last message and its controls.
 // Same name used from two laptops at once: almost always two people who picked the same name in join.
 const conflictText = (a) => `${a.name} is connected from ${a.conflict?.laptops || 2} laptops: two people may be using the same name. One of them should re-run join with another name.`;
@@ -23,6 +22,9 @@ function toolDot(a) {
   const k = c.includes('claude') ? 'claude' : c.includes('codex') ? 'codex' : c.includes('copilot') ? 'copilot' : c.includes('gemini') ? 'gemini' : c.includes('cursor') ? 'cursor' : 'other';
   return `<span class="tdot ${k}" data-tool="${k}" aria-hidden="true"></span>`;
 }
+// What an agent says it's doing, when it's worth showing: not a task id (the row names the task) and not the board's
+// own "working (last board call: …)" (an internal tool name).
+const doingText = (a) => (a.busy && a.doing && !/^#\d+/.test(a.doing) && !/\(last board call:/.test(a.doing) ? short(a.doing, 60) : '');
 // The model as the agent reported it, compact: "Claude Sonnet 5.5" -> "Sonnet 5.5" (the tool already says Claude).
 const modelText = (m) => String(m || '').replace(/^claude[\s-]+/i, '').trim();
 // What an agent shows follows the room's rule (lookFor() in office/src/live/adapter.ts), so its row and the bubble over
@@ -100,7 +102,7 @@ function agentDetail(a, qOpen, lastText) {
   // Its state is the row's word (oStatus): the detail only adds what the row doesn't say.
   const what = st === 'limited' ? limitText(a) : st === 'offline' ? `Offline${boardView === 'office' ? ': not in the room' : ''} (last seen ${a.last ? ago(a.last) : 'never'})` : st === 'waiting' ? notStartedText(a) : '';
   const cap = `<div class="pcap" title="${esc(capTip(a))}">${esc([a.client, a.plan].filter(Boolean).join(' · ') || 'agent')} · ${a.active} of ${a.slots} at once${a.override ? ' (set here)' : ''}${a.model ? ` · ${esc(a.model)}` : ''}${a.extra ? ` <span class="pill ok" title="Planner: nobody else is free and small/medium work is ready, so it may run ${a.extra} more with subagents">+${a.extra} extra as planner</span>` : ''}</div>`;
-  const doing = (lines.length || a.busy) && a.doing && !isLimited(a) && !/^#\d+/.test(a.doing) ? `<div class="doing" title="${esc(a.doing)}">${esc(short(a.doing, 120))}</div>` : '';
+  const doing = (lines.length || a.busy) && a.doing && !isLimited(a) && !/^#\d+/.test(a.doing) && !/\(last board call:/.test(a.doing) ? `<div class="doing" title="${esc(a.doing)}">${esc(short(a.doing, 120))}</div>` : '';
   return `<div class="o-det" id="o-det" role="group" aria-label="${esc(a.name)}">${cap}${what ? `<p class="muted">${esc(what)}</p>` : ''}${lines.length ? `<ul>${lines.join('')}</ul>` : ''}${doing}`
     + (q ? `<p><span class="pill warn">Question</span> ${esc(short(q.question, 110))}</p>` : '')
     + (lastText && !/^#\d+ updated$/.test(lastText) ? `<div class="last" title="${esc(lastText)}">${esc(short(lastText, 120))}</div>` : '') // "#12 updated" says nothing
@@ -111,57 +113,56 @@ function renderAgents(si, qOpen) {
   // You, with no agent and nothing held, aren't listed: Setup says how to connect one.
   const ps = people().filter((p) => p.name !== me || (p.r.agents || []).length || [...p.agents.values()].some((a) => a.tasks.length) || p.locks || p.asks);
   const all = ps.flatMap((p) => p.r.agents || []);
-  // The team at a glance: the count in the title bar (open or folded), what can run at once in the panel.
-  const cnt = agentsLine(si, true);
-  // The title bar says only how many are online (the rows say who is out of usage, offline or not started); the
-  // whole count is its tooltip.
-  $('o-right-sub').textContent = all.length ? `${si.onlineA.length} online` : ''; $('o-right-sub').title = all.length ? cnt + '.\nOnline = an agent someone started with /board, seen in the last 10 min and not out of usage. Not started = its tool is connected but nobody typed /board yet. Out of usage = hit its plan\'s limit. Offline = not seen for 10 min.' : '';
-  patch($('p-sum'), teamCapHtml());
+  // The title bar: what the team can run at once and how much runs now ("5 of 15 running"; amber while agents sit idle
+  // with too little ready to claim); before any agent has started, how many are online. Its tooltip says it in full,
+  // with who is online, not started, out of usage or offline.
+  const c = teamCapacity(), cnt = agentsLine(si, true), low = !!(c.agents.length && c.short && state.tasks.length && state.phase === 'building');
+  const capLine = c.agents.length ? `Team can run ${plural(c.slots, 'task')} at once · ${c.running} running${low ? ` · ${plural(c.idle.length, 'agent')} idle, ${c.forIdle} ready to claim` : ''}` : '';
+  const sub = $('o-right-sub');
+  sub.textContent = !all.length ? '' : c.agents.length ? `${c.running} of ${c.slots} running` : cnt; sub.classList.toggle('low', low);
+  sub.title = all.length ? [capLine, cnt].filter(Boolean).join('.\n') + '.\nOnline = an agent someone started with /board, seen in the last 10 min and not out of usage. Not started = its tool is connected but nobody typed /board yet. Out of usage = hit its plan\'s limit. Offline = not seen for 10 min.' : '';
   if (ui.picked && !all.some((a) => a.name === ui.picked)) ui.picked = null;
-  const r = filterRoot(); const S = state.settings;
+  // The planner and who merges to main, on their agent's row (the setting names an agent; an older one, a person:
+  // then that person's first agent).
+  const S = state.settings;
+  const roleOf = (key) => { const v = String(S[key] || '').toLowerCase(); if (!v || v === ANYONE) return null; return all.find((a) => a.name === v) || all.find((a) => root(a.name) === root(v)) || null; };
+  const planner = roleOf('planner'), merger = roleOf('integrator');
+  // One line per agent: its tool's dot, its name, its role, the task it is on (or what it waits for), its state.
   const agentRow = (a, p) => {
     const [cls, word, badge] = oStatus(a, qOpen);
     const own = state.tasks.filter((t) => String(t.assignee || '').toLowerCase() === a.name && ACTIVE.includes(t.status)).sort((x, y) => (HOLDING.includes(y.status) - HOLDING.includes(x.status)) || x.id - y.id);
-    const qSelf = qOpen.find((x) => x.asker.toLowerCase() === a.name);
+    const qSelf = qOpen.find((x) => x.asker.toLowerCase() === a.name), qTask = qSelf?.task_id && taskById(qSelf.task_id);
     const merging = state.tasks.find((t) => t.status === 'review' && t.reviewer && agentRoot(t.reviewer) === a.name);
     const subs = subagentsOf(a, qOpen);
+    const task = (t) => `#${t.id} ${t.title}`;
     const what = a.conflict ? `on ${a.conflict.laptops || 2} laptops: re-run join with another name`
       : cls === 'limited' ? limitText(a).replace(/^out of usage(?: · )?/, '') || 'until it talks to the board again'
       : word === 'not started' ? `type ${startCmd(a.client)} in it`
       : cls === 'off' ? `last seen ${a.last ? ago(a.last) : 'never'}`
-      : qSelf ? 'asked you a question' : own[0] ? `#${own[0].id} ${short(own[0].title, 60)}` : merging ? `merging #${merging.id}`
-      : a.busy && a.doing && !/^#\d+/.test(a.doing) ? short(a.doing, 60) : '';
-    const tm = [a.client, modelText(a.model)].filter(Boolean).join(' · ');
+      : qTask ? task(qTask) : own[0] ? task(own[0]) : merging ? task(merging) : doingText(a);
+    const roles = [a === planner && ['planner', 'Planner: writes the task list from the goal'], a === merger && ['merges', 'Merges finished branches into main']].filter(Boolean);
     const sel = ui.picked === a.name;
     const sr = `<span class="vh">, ${esc([a.client || 'agent', a.plan].filter(Boolean).join(' on '))}: ${capText(a)} tasks</span>`;
-    return `<li><button type="button" class="o-agent${cls === 'off' ? ' off' : ''}" ${hs(p.name)} data-o-agent="${esc(a.name)}" data-fk="oa-${esc(a.name)}" aria-pressed="${sel}" title="${esc(capTip(a))}${boardView === 'office' ? (a.online ? ' Click to show it in the room.' : ' Offline: not in the room.') : ''}">`
-      + `<span class="o-r1">${toolDot(a)}<span class="o-an">${esc(a.name)}${sr}</span><span class="o-st ${cls}${badge ? ' bx' : ''}">${word}</span></span>`
-      + `<span class="o-r2"${sel ? ' hidden' : ''}><span class="o-tk${a.conflict ? ' bad' : ''}">${esc(what || tm || 'AI tool not reported yet')}</span>${what && tm ? `<span class="o-cl" title="${esc([a.client, a.model].filter(Boolean).join(' · '))}">${esc(tm)}</span>` : ''}</span></button>`
+    const tip = `${capTip(a)}${a.model ? ` Model: ${a.model}.` : ''}${what ? `\n${what}` : ''}${boardView === 'office' ? (a.online ? '\nClick to show it in the room.' : '\nOffline: not in the room.') : ''}`;
+    return `<li data-person-row="${esc(p.name)}" ${hs(p.name)}><button type="button" class="o-agent${cls === 'off' ? ' off' : ''}" data-o-agent="${esc(a.name)}" data-fk="oa-${esc(a.name)}" aria-pressed="${sel}" title="${esc(tip)}">`
+      + `${toolDot(a)}<span class="o-an">${esc(a.name)}${sr}</span>${roles.map(([r, t]) => `<span class="o-rl" title="${t}">${r}</span>`).join('')}`
+      + `<span class="o-tk${a.conflict ? ' bad' : ''}">${esc(what)}</span><span class="o-st ${cls}${badge ? ' bx' : ''}">${word}</span></button>`
       + (subs.length ? `<ul class="o-helpers" aria-label="${esc(a.name)}'s subagents">${subs.map((h) => `<li><button type="button" class="link o-hn" data-mention="${esc(h.full)}" title="Subagent of ${esc(a.name)}: works on one task. Click to @mention ${esc(h.full)} in chat">${esc(h.name)}</button><span class="o-hs ${h.cls}">${h.word}</span><span class="o-tk">${h.t ? `#${h.t.id} ${esc(h.t.title)}` : h.doing ? esc(h.doing) : ''}</span>${h.model ? `<span class="o-hm" title="${esc(h.model)}">${esc(modelText(h.model))}</span>` : ''}</li>`).join('')}</ul>` : '')
       + `${sel ? agentDetail(a, qOpen, p.agents.get(a.name)?.lastText) : ''}</li>`;
   };
-  patch($('people'), ps.length ? ps.map((p) => {
-    const key = esc(p.name); const sel = r === p.name; const agents = p.r.agents || [];
-    const tasks = [...p.agents.values()].flatMap((a) => a.tasks);
-    const roles = (S.planner && root(S.planner) === p.name ? '<span class="pill role" title="Planner: wrote the task list from the goal">planner</span>' : '')
-      + (S.integrator && S.integrator !== ANYONE && root(S.integrator) === p.name ? '<span class="pill role" title="Merges finished branches into main">merges to main</span>' : '');
-    const filt = agents.length || tasks.length ? `<button type="button" class="o-ib pfilt" data-filter="${key}" data-fk="pf-${key}" aria-pressed="${sel}" aria-label="${sel ? 'Show everyone\'s tasks' : `Show only ${key}'s tasks`}" title="${sel ? 'Showing only their tasks: show everyone\'s' : `Show only ${key}'s tasks`}">${FUNNEL}</button>` : '';
-    const lt = [...p.agents.values()].find((a) => a.lastText && !agents.some((x) => x.name === a.id))?.lastText;
-    return `<li class="person${sel ? ' sel' : ''}" ${hs(p.name)} data-person-row="${key}"><div class="o-pn"><span class="pdot" aria-hidden="true" data-i="${esc([...p.name][0]?.toUpperCase() || '')}"></span><b class="pc" ${hs(p.name)}>${key}</b>${youTag(p.name) ? '<span class="muted">(you)</span>' : ''}${roles}${filt}</div>`
-      + (agents.length ? `<ul class="o-agents" aria-label="${key}'s agents">${agents.map((a) => agentRow(a, p)).join('')}</ul>`
-        : `<p class="o-none" title="${esc(lt || '')}">${p.r.humanOnline && p.name !== me ? 'watching · ' : ''}no AI agent</p>`)
-      + '</li>';
-  }).join('') : '<li class="empty-note">No agents yet. When a teammate\'s AI agent connects, it appears here with what it\'s working on.</li>');
-
+  const rows = ps.flatMap((p) => (p.r.agents || []).map((a) => agentRow(a, p)));
+  patch($('people'), rows.length ? rows.join('') : '<li class="empty-note">No agents yet. When a teammate\'s AI agent connects, it appears here with what it\'s working on.</li>');
 }
 
 // More rows below the Agents panel's edge: its foot fades, so a cut row reads as "more", not as a fragment.
 function fadeAgents() {
   const b = $('o-agents'); b.classList.toggle('more-below', b.scrollHeight - b.scrollTop - b.clientHeight > 2); b.classList.toggle('more-above', b.scrollTop > 2);
+  const l = $('l-body'); l.classList.toggle('more-below', l.scrollHeight - l.scrollTop - l.clientHeight > 2);
   const t = $('tabs'); t.classList.toggle('more-right', t.scrollWidth - t.scrollLeft - t.clientWidth > 2);
 }
 $('o-agents').addEventListener('scroll', fadeAgents, { passive: true });
 $('tabs').addEventListener('scroll', fadeAgents, { passive: true });
+$('l-body').addEventListener('scroll', fadeAgents, { passive: true });
 addEventListener('resize', () => requestAnimationFrame(fadeAgents));
 
 export { fadeAgents, officeState, renderAgents };

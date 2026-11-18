@@ -155,9 +155,9 @@ function card(t) {
   return `<article class="card ${t.assignee ? 'has-owner' : ''} ${stale ? 'stale' : ''} ${prop ? 'proposed' : ''} ${held ? 'held' : ''}" ${t.assignee ? hs(t.assignee) : ''} data-id="${t.id}" data-fk="card-${t.id}" tabindex="0" draggable="true" aria-label="${esc(aria)}">
     <div class="ct" title="${esc(t.title)}"><span class="id">#${t.id}</span> ${esc(t.title)}</div>
     ${note ? `<div class="bn" title="Latest note when it got blocked">“${esc(short(note, 140))}”</div>` : ''}
-    <div class="cm">${t.priority === 1 ? '<span class="pill bad" title="Priority 1: do first (often something other tasks build on)">P1</span>' : t.priority >= 3 ? '<span class="pill" title="Priority 3: low, nice to have">P3</span>' : ''}
+    <div class="cm">${t.priority === 1 ? '<span class="pill p1" title="Priority 1: do first (often something other tasks build on)">P1</span>' : t.priority >= 3 ? '<span class="pill" title="Priority 3: low, nice to have">P3</span>' : ''}
       ${size !== 'M' ? `<span class="pill size ${size}" title="${SIZE_TIP[size]}"><span class="vh">size </span>${size}</span>` : ''}
-      ${prop ? `<span class="pill flag cx" title="Proposed by ${esc(t.created_by)}: nobody can claim it until the planner or a human approves it">proposed by ${esc(t.created_by)}</span>` : ''}
+      ${prop ? `<span class="pill flag" title="Proposed by ${esc(t.created_by)}: nobody can claim it until the planner or a human approves it">proposed by ${esc(t.created_by)}</span>` : ''}
       ${rsv ? (() => { const away = ownerOffline({ assignee: t.reserved_for }) || agentLimited(t.reserved_for);
         return away ? `<span class="pill rsv" title="Reserved for ${esc(t.reserved_for)}, who isn't around (offline or out of usage), so any agent may take it">reserved for ${esc(t.reserved_for)} · away, open to anyone</span>`
           : `<span class="pill rsv" title="Reserved: only ${esc(t.reserved_for)} can claim it, and it's listed first for them">reserved for ${esc(t.reserved_for)}</span>`; })() : ''}
@@ -253,7 +253,7 @@ function renderBoard() {
     const empty = !state.tasks.length ? '' : tv.q.trim() && !total ? 'No matches' : filterRoot() && !total ? `No tasks for ${esc(filterRoot())}` : COL_EMPTY[s];
     // Feature freeze: Open says what can still start.
     const desc = s === 'open' && frozen ? FROZEN_DESC : COL_DESC[s];
-    return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}" role="region" aria-label="${LABEL[s]}, ${plural(total, 'task')}" aria-describedby="cold-${s}"><h3 title="${COL_DESC[s]}"><span id="colh-${s}">${LABEL[s]}</span><span><span id="colc-${s}">${total}</span>${s === 'done' ? '<button type="button" class="dclose" data-act="done-toggle" data-fk="done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse"><span class="chev" aria-hidden="true">▾</span></button>' : ''}</span></h3><p class="cd${desc !== COL_DESC[s] ? ' fz-note' : ''}" id="cold-${s}" title="${desc}">${desc}</p>
+    return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}" role="region" aria-label="${LABEL[s]}, ${plural(total, 'task')}" aria-describedby="cold-${s}"><h3 title="${COL_DESC[s]}"><span id="colh-${s}">${LABEL[s]}</span><span><span id="colc-${s}">${total}</span>${s === 'done' ? '<button type="button" class="dclose" data-act="done-toggle" data-fk="done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse"><span class="chev" aria-hidden="true">▾</span></button>' : ''}</span></h3><p class="cd${desc !== COL_DESC[s] ? ' fz-note' : ' vh'}" id="cold-${s}" title="${desc}">${desc}</p>
       ${items.length ? `<ul class="cards">${items.map((t) => `<li>${card(t)}</li>`).join('')}</ul>` : empty ? `<div class="empty-note">${empty}</div>` : ''}${more}</div>`;
   }).join('');
   const el = $('board');

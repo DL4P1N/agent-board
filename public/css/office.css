@@ -1,26 +1,22 @@
 /* 3D on: the same panels over the live office. Loaded last (after tokens.css and board.css). */
-/* ---------- 3D on: the same panels over the live room ---------- */
 /* The room fills the window under the header; the panels float over it as glass, where the Board view has them:
    Needs attention (left) and Agents with Activity and File locks (right) from the top to the foot, the top bar (goal,
-   demo, done, roles, setup) at the top between them, and the task board under the top bar (docked as a window with the
-   room in view below it, expanded down to the foot over the room, or folded to its title bar). The header (and every
-   popover and dialog) stays above all. */
+   demo, done, roles, setup) at the top between them, and the Tasks panel under the top bar (docked with the room in
+   view below it, expanded down to the foot over the room, or folded to its title bar). The header (and every popover
+   and dialog) stays above all. */
 /* The glass, for every panel and popover wherever it sits in the page (not only inside main). */
 html[data-board-view="office"] { --glass: color-mix(in srgb, var(--panel) 92%, transparent); }
 html[data-board-view="office"] body { overflow: hidden; }
 html[data-board-view="office"] #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 html[data-board-view="office"] main { display: block; position: relative; flex: 1 1 auto; min-height: 0; width: 100%; max-width: none; padding: 0; overflow: hidden; background: var(--bg);
   /* The Board view's geometry, so a switch moves nothing: panels --edge from the window's sides, the header and the
-     foot, docks as wide as the Board view's (its column less the margins), the top bar and the Tasks window between
-     them where the Board view's centre column is, --gutter between panels. */
-  --o-x: var(--edge); --o-y: var(--edge); --o-w: calc(var(--dock) - 4px);
-  --o-cl: calc(var(--dock-l, var(--dock)) - 4px + var(--edge) + var(--gutter)); --o-cr: calc(var(--dock-r, var(--dock)) - 4px + var(--edge) + var(--gutter));
-  --o-gap: var(--gutter); --o-bottom: var(--edge); --o-tasks-h: clamp(176px, 27%, 270px);
-  --o-top: calc(var(--o-y) + var(--tb-h, 48px) + var(--o-gap)); } /* the Tasks window's top, under the top bar */
-html[data-board-view="office"] .o-panel { background: var(--glass); box-shadow: var(--e-glass);
+     foot, side columns --dock wide, the top bar and the Tasks panel between them where the Board view's centre column
+     is, --gutter between panels. */
+  --o-c: calc(var(--dock) + var(--edge) + var(--gutter)); /* the centre column's inset from either side */
+  --o-top: calc(var(--edge) + var(--tb-h, 36px) + var(--gutter)); } /* the Tasks panel's top, under the top bar */
+html[data-board-view="office"] :is(.o-panel, .tbc) { background: var(--glass); box-shadow: var(--e-glass);
   -webkit-backdrop-filter: blur(8px) saturate(1.15); backdrop-filter: blur(8px) saturate(1.15); }
 html[data-board-view="office"] :is(.o-agent, .o-det, .qcard) { background: color-mix(in srgb, var(--raised) 85%, transparent); }
-html[data-board-view="office"] .tochat { display: none !important; }
 html[data-board-view="office"] .office-view { display: block; position: absolute; inset: 0; overflow: hidden; }
 .office-scene { position: absolute; inset: 0; z-index: 0; isolation: isolate; } /* its name tags stack among themselves, under every panel */
 /* The office draws its name tags at 9-10px: larger here (12px and up, the board's floor for labels). */
@@ -38,46 +34,35 @@ html[data-board-view="office"] .office-view { display: block; position: absolute
 .office-view.loading .office-scene { opacity: 0; transition: none; }
 .office-load { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; margin: 0; color: var(--muted); font: var(--fs-sm) var(--mono); }
 .office-view.loading .office-load { display: flex; }
-html[data-board-view="office"] #o-left { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); width: var(--o-w); max-height: calc(100% - var(--o-y) - var(--o-bottom)); } /* as tall as its content, from the top */
-html[data-board-view="office"] .o-rcol { position: absolute; z-index: 3; top: var(--o-y); bottom: var(--o-bottom); right: var(--o-x); width: calc(var(--dock-r, var(--dock)) - 4px); justify-content: flex-start; pointer-events: none; }
+html[data-board-view="office"] #o-left { position: absolute; z-index: 3; top: var(--edge); left: var(--edge); width: var(--dock); max-height: calc(100% - 2 * var(--edge)); } /* as tall as its content, from the top */
+html[data-board-view="office"] .o-rcol { position: absolute; z-index: 3; top: var(--edge); bottom: var(--edge); right: var(--edge); width: var(--dock); justify-content: flex-start; pointer-events: none; }
 html[data-board-view="office"] .o-rcol > * { pointer-events: auto; }
 /* The centre column keeps only the top bar (and the popovers under it), at the top between the side columns. */
-html[data-board-view="office"] .centre { position: absolute; top: var(--o-y); left: var(--o-cl); right: var(--o-cr); display: block; pointer-events: none; }
-html[data-board-view="office"] .centre > :not(#topbar, .o-pop, #setup) { display: none !important; }
+html[data-board-view="office"] .centre { position: absolute; top: var(--edge); left: var(--o-c); right: var(--o-c); display: block; pointer-events: none; }
+html[data-board-view="office"] .centre > :not(#topbar, .o-pop, #setup) { display: none; }
 /* Setup: a popover under the top bar, where the Board view has it (as wide as the top bar), scrolling inside itself. */
-html[data-board-view="office"] #setup { position: absolute; z-index: 7; top: calc(var(--tb-h, 48px) + var(--gutter)); left: 0; right: 0; max-height: calc(100vh - var(--hdr, 54px) - var(--tb-h, 48px) - var(--gutter) - 2 * var(--edge)); }
+html[data-board-view="office"] #setup { position: absolute; z-index: 7; top: calc(var(--tb-h, 36px) + var(--gutter)); left: 0; right: 0; max-height: calc(100vh - var(--hdr, 54px) - var(--tb-h, 36px) - var(--gutter) - 2 * var(--edge)); }
 html[data-board-view="office"] #setup > .o-body { overscroll-behavior: contain; }
 html[data-board-view="office"] .centre > * { pointer-events: auto; }
 html[data-board-view="office"] .topbar { position: relative; z-index: 4; }
-/* The task board: the board's columns (or its table) in a window under the top bar, between the side columns. Its
-   title bar is the board's task bar: Tasks, search, Show and Columns / Table. Docked (the default), it's a window with
-   the room in view below it; expanded (.max), it reaches down to the foot and covers the room as glass; folded, its
-   title bar. Between docked and expanded only its bottom edge moves. */
-.o-tasks { position: absolute; z-index: 3; left: var(--o-cl); right: var(--o-cr); top: var(--o-top); height: var(--o-tasks-h); }
-.o-tasks.max { bottom: var(--o-bottom); height: auto; }
-.o-tasks .taskbar { flex: 1 1 auto; min-width: 0; min-height: 0; margin: 0; flex-wrap: nowrap; gap: var(--s4); }
-.o-tasks .taskbar .tabs { margin-left: auto; flex: none; flex-wrap: nowrap; }
-.o-tasks .taskbar .tabs button { white-space: nowrap; }
-/* Open, the window is at least about two cards tall, so a short screen still shows whole cards. */
-.o-tasks:not(.folded, .max, .nomatch) { min-height: min(50vh, 360px); }
-.o-tasks.nomatch:not(.folded) { height: auto; }
-.o-tasks.folded .taskbar > #new-task-btn { display: none; }
-.o-tasks.folded .taskbar > :not(h2) { display: none; }
-/* Folded, the task board is just its title bar, under the top bar (like the folded side panels). */
-.o-tasks.folded { height: auto; }
-.o-tasks.folded > .o-head { gap: var(--s5); }
-.o-tasks.folded #o-tasks-max { display: none; }
-.o-tasks .o-body { overflow: hidden; }
-.o-tasks .ttable { height: 100%; margin: 0; overflow: auto; box-shadow: none; background: transparent; }
-/* The board itself in the Tasks window: its columns as tall as their cards (as on the Board view) up to the window's
-   height, each list scrolling inside itself. */
-.o-tasks .board { height: 100%; grid-template-rows: minmax(0, 1fr); overflow-y: hidden; padding: 0; }
-.o-tasks .col { display: flex; flex-direction: column; min-height: 0; max-height: 100%; }
-.o-tasks .col .cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
-.o-tasks .col > .more { flex: none; }
-/* Docked, the cards drop their secondary facts (proposed by, after #3 ✓, the time: the dialog has them), so more fit;
-   a list cut at the window's edge fades there. */
-.o-tasks:not(.max) .card .cx { display: none; }
-.o-tasks .col .cards.more-below { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
-/* Focus rings inside the scrolling lists and the table stay inside them (never cut by the edge). */
-.o-tasks :is(.card, .ttable button, .ttable tr):focus-visible { outline-offset: -2px; }
+/* The Tasks panel, moved into the room's view (officeMount): under the top bar, between the side columns, its columns
+   where the Board view has them. Docked (the default), it is as tall as its cards: each column as tall as its cards
+   (as with 3D off) up to what keeps the window within 65% of the room under the top bar, then it scrolls inside itself;
+   the room is in view below it (notes above the columns, such as Approve plan, add to that). Expanded (.max), it
+   reaches down to the foot and covers the room as glass, its columns down to its foot. Between docked and expanded
+   only its bottom edge moves. */
+html[data-board-view="office"] .o-tasks { position: absolute; z-index: 3; left: var(--o-c); right: var(--o-c); top: var(--o-top);
+  --o-col-max: calc((100dvh - var(--hdr, 54px) - var(--o-top) - var(--edge)) * .65 - var(--bar) - 2px - var(--s4) - var(--s5) - 2px); }
+html[data-board-view="office"] .o-tasks.max { bottom: var(--edge); }
+html[data-board-view="office"] .o-tasks > .o-body { overflow: hidden; }
+html[data-board-view="office"] .o-tasks .ttable { overflow: auto; max-height: var(--o-col-max); }
+html[data-board-view="office"] .o-tasks .col { display: flex; flex-direction: column; min-height: 0; max-height: var(--o-col-max); }
+html[data-board-view="office"] .o-tasks.max :is(.board, .ttable) { max-height: none; }
+html[data-board-view="office"] .o-tasks.max .board { grid-template-rows: minmax(0, 1fr); overflow-y: hidden; }
+html[data-board-view="office"] .o-tasks.max .col { max-height: 100%; }
+html[data-board-view="office"] .o-tasks .col > :is(h3, .cd, .more) { flex: none; } /* headings keep their height (200% text too) */
+html[data-board-view="office"] .o-tasks .col .cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+/* Docked, the cards drop their secondary facts (after #3 ✓, the time: the dialog has them), so more fit; a list cut
+   at the window's edge fades there. */
+html[data-board-view="office"] .o-tasks:not(.max) .card .cx { display: none; }
+.o-tasks .col .cards.more-below { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent); }

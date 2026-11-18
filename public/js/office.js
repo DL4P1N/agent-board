@@ -13,7 +13,7 @@ import { oApply, oExpand, officeMount, oFold, oFrame, oMax, oMoving, oTasksOff, 
 // ---------- the 3D office: on or off ----------
 // With 3D on (the default wherever it can run) the office is always live behind the page: the panels float over it
 // as glass, and the task board is the Tasks window under the top bar: docked (the room in view below it; how 3D opens),
-// expanded down over the room, or folded to its title bar. With 3D off (the header switch; windows up to 1100px wide;
+// expanded down over the room, or folded to its title bar. With 3D off (the header switch; windows under 1280px wide;
 // no WebGL) it's the plain board: no office code and no GPU. The office (three.js and the scene: public/office/embed.js, built from office/src/live/embed.ts by
 // `npm run build:present`) draws the same /api/state this page loads: it fetches nothing itself.
 // On / off is saved in this browser for every board ('agent-board-3d'); ?view=office (3D on, the board docked) and
@@ -24,7 +24,7 @@ let boardView = 'board'; // 'office' while 3D is on
 const viewParam = ['office', 'board'].includes(qs.get('view')) ? qs.get('view') : '';
 const D3_KEY = 'agent-board-3d';
 const d3Pref = () => { try { return localStorage.getItem(D3_KEY) !== 'off'; } catch { return true; } };
-const narrowMq = matchMedia('(max-width: 1100px)'); // the 3D switch's CSS hides it there too
+const narrowMq = matchMedia('(max-width: 1279px)'); // below 1280px: two columns, no room for 3D (the switch's CSS hides it there too)
 const officeAllowed = () => !office.failed && !narrowMq.matches && 'WebGLRenderingContext' in window;
 // Probed before the office loads, so a browser without WebGL never downloads it.
 function webglWorks() {

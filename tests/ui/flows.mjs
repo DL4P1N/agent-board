@@ -48,7 +48,7 @@ check('header: no needs badge while What to do now is on screen', await page.$ev
 await page.evaluate(() => window.scrollTo(0, 900)); await sleep(400);
 check('laptop: What to do now stays in view in its rail when the board scrolls, no badge', await page.evaluate(() => { const r = $('now').getBoundingClientRect(); return scrollY > 0 && r.top >= 0 && r.top < 120 && $('needs').hidden; }));
 // One column (narrow window): What to do now scrolls away, and the badge takes over.
-await page.setViewport({ width: 960, height: 1000 }); await page.evaluate(() => window.scrollTo(0, 1600)); await sleep(400);
+await page.setViewport({ width: 960, height: 1000 }); await page.evaluate(() => window.scrollTo(0, 1600)); await page.waitForFunction(() => !document.getElementById('needs').hidden, { timeout: 3000 }).catch(() => {});
 const needs = await page.$eval('#needs', (e) => ({ hidden: e.hidden, t: e.innerText.replace(/\s+/g, ' '), label: e.querySelector('button')?.getAttribute('aria-label') || '' }));
 check('header need-attention badge when scrolled: questions and the mention, the blocked-on-a-question task not counted twice', !needs.hidden && /^3 need attention/.test(needs.t) && /2 questions/.test(needs.label) && /1 new mention/.test(needs.label) && !/blocked/.test(needs.label), JSON.stringify(needs));
 await page.click('#needs button');
@@ -98,7 +98,7 @@ await page.keyboard.press('Escape');
 await page.evaluate(() => document.activeElement.blur());
 await page.keyboard.press('/');
 check('"/" focuses the composer', await page.evaluate(() => document.activeElement.id === 'msg'));
-await domClick('.person [data-mention="alice/db-worker"]'); // a subagent's row under its agent in Agents
+await domClick('#people [data-mention="alice/db-worker"]'); // a subagent's row under its agent in Agents
 check('click name inserts @mention', (await page.$eval('#msg', (e) => e.value)) === '@alice/db-worker ');
 await page.type('#msg', 'how close is #1?');
 await page.keyboard.press('Enter');
@@ -299,7 +299,7 @@ await page.waitForFunction((n) => document.querySelectorAll('#locks .lock').leng
 check('force-release removes lock', true);
 
 // person filter
-await domClick('.person [data-filter="bob"]'); // the filter button on bob's line in Agents
+await page.select('#filter', 'bob'); // Show tasks for bob
 await sleep(200);
 const owners = await page.$$eval('#board .card', (cs) => cs.map((c) => c.innerText));
 check('per-person filter shows only bob', owners.length > 0 && owners.every((t) => /bob/.test(t) || !/alice|chen/.test(t)), owners.length + ' cards');

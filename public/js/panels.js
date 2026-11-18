@@ -9,7 +9,7 @@ import { render } from './render.js';
 import { syncNeeds } from './needs.js';
 import { renderTopbar } from './topbar.js';
 import { defaultDeadline, localInput, plannerBox, stepIntegrator } from './setup.js';
-import { blockedNote, taskShown, tv } from './tasks.js';
+import { blockedNote } from './tasks.js';
 import { ac, settingsText } from './activity.js';
 import { themePop } from './theme.js';
 import { boardView, office, oRate } from './office.js';
@@ -18,18 +18,12 @@ import { boardView, office, oRate } from './office.js';
 // Needs attention (left), Agents, Activity and File locks (right), the top bar with the goal, the demo time under the header
 // clock. One fold state for both views (oUi), and one way to fold: every panel (the 3D Tasks window too) folds to its
 // title bar, which opens it again (its button, or a click anywhere on it). Folding moves (glide, in helpers.js).
-const oHome = {};
-// The plain board's tasks move into the Tasks window while 3D is on, and back: its task bar (Tasks, search, Show,
-// Columns / Table) becomes the window's title bar, its columns (or table) the window's body. One task board, the same
-// elements: the search text, the filter, scroll and focus carry over when 3D goes on or off.
-const TASK_PARTS = ['board-empty', 'board', 'tasktable'];
+// The Tasks panel is one element in both views: under the top bar in the centre column with 3D off, moved into the
+// room's view with 3D on (where it is docked, expanded or folded), in the same place. Its notes, search text, filter,
+// scroll and focus carry over when 3D goes on or off.
 function officeMount(on) {
-  const tb = $('taskbar'), parts = TASK_PARTS.map($);
-  if (on) {
-    if (!oHome.tb) { oHome.tb = document.createComment('taskbar'); tb.before(oHome.tb); oHome.body = document.createComment('tasks'); parts[0].before(oHome.body); }
-    if (!$('o-tasks-head').contains(tb)) $('o-tasks-head').prepend(tb);
-    if (!$('o-tasks-b').contains(parts[0])) $('o-tasks-b').append(...parts);
-  } else if (oHome.tb) { if (oHome.tb.nextSibling !== tb) oHome.tb.after(tb); if (oHome.body.nextSibling !== parts[0]) oHome.body.after(...parts); }
+  const tw = $('o-tasks'), to = on ? $('office-view') : $('boardwrap');
+  if (tw.parentElement !== to) to.append(tw);
 }
 // The task board starts open and docked (the room in view below it), and turning 3D on docks it; File locks start
 // folded. Folding, expanding or docking one yourself is remembered. ?view=office docks it for that visit.
@@ -62,14 +56,15 @@ const O_PANELS = [['left', 'Needs attention'], ['right', 'Agents'], ['act', 'Act
 const O_BOX = { left: 'o-left', right: 'o-right', act: 'o-act', locks: 'o-locks', tasks: 'o-tasks' };
 // The Tasks window's maximise / restore icons (corners out, corners in).
 const O_MAX = '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>', O_RESTORE = '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M10 2v4h4M14 10h-4v4M2 10h4v4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
-// A top bar popover sits under its chip, inside the window; where there isn't room under it (low on a phone's screen),
-// it opens over the chip instead.
+// A top bar popover sits --gutter under its chip (like every popover), inside the window; where there isn't room under
+// it (low on a phone's screen), it opens over the chip instead.
 function placePop(id, chipId, wDef = 460) {
   const p = $(id); const c = $(chipId); const r = c?.offsetWidth ? c.getBoundingClientRect() : null; const w = p.offsetWidth || wDef;
+  const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gutter')) || 12;
   p.style.left = `${Math.max(8, Math.min((r ? r.left : 8), innerWidth - w - 8))}px`;
   if (!r) return;
-  const h = p.offsetHeight; const below = r.bottom + 8 + h <= innerHeight - 8;
-  p.style.top = `${Math.round(Math.max(8, below ? r.bottom + 8 : Math.min(r.top - 8 - h, innerHeight - h - 8)))}px`;
+  const h = p.offsetHeight; const below = r.bottom + gap + h <= innerHeight - 8;
+  p.style.top = `${Math.round(Math.max(8, below ? r.bottom + gap : Math.min(r.top - gap - h, innerHeight - h - 8)))}px`;
 }
 function oApply() {
   const tOff = oTasksOff(), max = oMax();
@@ -92,21 +87,23 @@ function oApply() {
   if (ui.oMerge) placePop('o-merge', 'merge-btn');
   if (ui.oDl) placePop('o-dl', 'clock', 400);
   syncNeeds();
-  if (boardView === 'office') $('main').style.setProperty('--tb-h', $('topbar').offsetHeight + 'px');
+  $('main').style.setProperty('--tb-h', $('topbar').getBoundingClientRect().height + 'px'); // the goal popover and Setup (3D) sit under it
   oFrame();
 }
 // The room is framed in the part of the view the docks, the top bar and the Tasks window (or its title bar, under the
 // top bar) leave free: below them, between the side columns (the camera is told the insets).
+let oDockH = 0;
 function oFrame() {
   if (!office.mod?.setInsets || boardView !== 'office' || oMoving) return;
   const v = $('office-view').getBoundingClientRect(); if (!v.width || !v.height) return;
   // A side column counts while one of its panels is open (folded title bars at its top leave the room free).
   const R = (...ids) => { const e = ids.map($).find((x) => x && !x.hidden && x.offsetWidth && !x.classList.contains('folded')); return e ? e.getBoundingClientRect() : null; };
   const l = R('o-left'), r = R('o-right', 'o-act', 'o-locks'), t = $('o-tasks').offsetWidth ? $('o-tasks').getBoundingClientRect() : null, top = $('topbar').getBoundingClientRect();
-  // Expanded, the board covers the room: it's framed as if docked (the window's CSS height under the top bar), so
-  // sliding the board down or up doesn't move the camera.
-  const dockBottom = () => t.top + Math.max(Math.min(Math.max(176, 0.27 * v.height), 270), Math.min(innerHeight * 0.5, 360));
+  // Expanded, the board covers the room: it's framed as if docked (as tall as it last was docked, at most 65% of the
+  // room under the top bar), so sliding the board down or up doesn't move the camera.
   const covered = t && $('o-tasks').classList.contains('max');
+  if (t && !covered) oDockH = t.height;
+  const dockBottom = () => t.top + Math.min(oDockH || Infinity, 0.65 * (v.bottom - parseFloat(getComputedStyle($('main')).getPropertyValue('--edge')) - t.top));
   office.mod.setInsets({
     left: l ? (l.right - v.left) / v.width : 0,
     right: r ? (v.right - r.left) / v.width : 0,
@@ -255,11 +252,10 @@ function renderDocks(qOpen = openQuestions(), si = setupInfo()) {
   oApply();
 }
 // ---------- 3D view: the room and the Tasks window ----------
-// The Tasks window shows the board itself (officeMount moved its columns and table in): nothing of its own to draw.
-// A search that matches nothing: one line, and the window shrinks to it (as on the Board view).
+// The Tasks panel is the board itself (officeMount moved it into the room's view), as tall as its content (a search
+// that matches nothing: one line): nothing of its own to draw.
 function renderOffice() {
   if (boardView !== 'office') return;
-  $('o-tasks').classList.toggle('nomatch', !!(state.tasks.length && tv.q.trim() && !state.tasks.some(taskShown)));
   oFrame();
 }
 const CHEV = '<span class="chev" aria-hidden="true">▾</span>';

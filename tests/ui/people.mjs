@@ -51,7 +51,7 @@ try {
   await agent('emil-claude2');
   for (const n of ['ana', 'ben', 'cleo', 'aaron']) await agent(n);
   await rest(board, 'ghosty', '/messages', 'POST', { text: 'hello' }); // a name typed once on the page
-  await page.waitForFunction(() => document.querySelectorAll('#people .person').length >= 8, { timeout: 8000 });
+  await page.waitForFunction(() => new Set([...document.querySelectorAll('#people [data-person-row]')].map((e) => e.dataset.personRow)).size >= 8, { timeout: 8000 });
   await sleep(300);
   const after = await page.evaluate(() => String(hue('hostp')));
   check('hostp keeps its colour when 8 more people join', before !== '' && before === after, `${before} → ${after}`);
@@ -67,8 +67,8 @@ try {
   await pv.close();
 
   // ---- WB-8: a second cue besides colour ----
-  check('People dot shows the person\'s initial', (await page.$eval('#people [data-person-row="emil"] .pdot', (e) => e.dataset.i).catch(() => '')) === 'E');
-  check('the initial is not read out or part of the row text', /^emil/.test(await row('emil')), (await row('emil')).slice(0, 20));
+  check('besides its colour, each row names its agent first (Agents: one line per agent)', /^emil-claude/.test(await row('emil')), (await row('emil')).slice(0, 20));
+  check('the tool dot is not read out', await page.$eval('#people [data-person-row="emil"] .tdot', (e) => e.getAttribute('aria-hidden') === 'true').catch(() => false));
 
   // ---- WB-9: an agent grouped under someone else keeps its name in the pill ----
   await human('/agents/dave', 'PATCH', { person: 'carol' });

@@ -42,13 +42,11 @@ page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
 await page.evaluateOnNewDocument(() => { try { localStorage.setItem('board-token', 'testtok'); localStorage.setItem('board-name', 'dana'); } catch {} });
 await page.goto(BASE + '/');
-await page.waitForSelector('#people .person');
+await page.waitForSelector('#people [data-person-row]');
 await new Promise((r) => setTimeout(r, 800));
 
-// People rows are compact; expand each to see its agents and tasks.
-await page.evaluate(() => { for (const n of [...document.querySelectorAll('#people .ptog')].map((b) => b.dataset.ptoggle)) document.querySelector(`#people .ptog[data-ptoggle="${n}"]`).click(); });
-await new Promise((r) => setTimeout(r, 300));
-const cards = await page.$$eval('#people .person', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ')));
+// Agents: one row per agent; a person's rows read together as their card.
+const cards = await page.$$eval('#people [data-person-row]', (els) => { const m = new Map(); for (const e of els) m.set(e.dataset.personRow, (m.get(e.dataset.personRow) || e.dataset.personRow + ' ') + e.innerText.replace(/\s+/g, ' ') + ' '); return [...m.values()]; });
 const danaCard = cards.find((c) => c.startsWith('dana'));
 check('one card for dana (not dana-claude / dana-codex)', cards.filter((c) => /^dana/.test(c)).length === 1, JSON.stringify(cards.map((c) => c.slice(0, 30))));
 check('dana card lists both tools', /Claude Code/.test(danaCard) && /Codex/.test(danaCard), danaCard);

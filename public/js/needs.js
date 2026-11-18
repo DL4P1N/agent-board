@@ -123,7 +123,7 @@ function renderNow(qOpen, unread, si) {
   // A list, so screen readers hear "Phase: Build, step 5 of 6" and each step as a list item.
   patch($('o-dl-ph'), `<div class="phases" title="Where the team is: connect laptops → set a goal → the planner writes tasks${track !== ALL_PHASES ? ' → humans approve them' : ''} → agents build → everything merged"><span class="ph-l" aria-hidden="true">Phase</span><ol role="list" aria-label="${ci < 0 ? 'Phase' : `Phase: ${track[ci][1]}, step ${ci + 1} of ${track.length}`}">${track.map(([k, l], i) =>
     `<li>${i ? '<span class="arr" aria-hidden="true">›</span>' : ''}<span class="p ${k === curP ? 'cur' : i < ci ? 'past' : ''}" ${k === curP ? 'aria-current="step"' : ''}>${l}</span></li>`).join('')}</ol></div>`);
-  patch(el, `<h2 class="nl" id="now-h">What to do now</h2>${lead}${appr ? '<button type="button" class="appr" data-act="approve" data-fk="now-appr">Approve plan &amp; start</button>' : ''}${text2 ? `<button type="button" class="link na2" data-go="${go2}"${lv(go2)} data-fk="now-go2">${esc(text2)} <span aria-hidden="true">→</span></button>` : ''}${cutHtml}${moreHtml}`);
+  patch(el, `<h2 class="nl vh" id="now-h">What to do now</h2>${lead}${appr ? '<button type="button" class="appr" data-act="approve" data-fk="now-appr">Approve plan &amp; start</button>' : ''}${text2 ? `<button type="button" class="link na2" data-go="${go2}"${lv(go2)} data-fk="now-go2">${esc(text2)} <span aria-hidden="true">→</span></button>` : ''}${cutHtml}${moreHtml}`);
   // Nothing under the questions' own cards: no empty band above them.
   el.hidden = !!hideLead && !lead && !appr && !text2 && !cutHtml && !moreHtml;
 
