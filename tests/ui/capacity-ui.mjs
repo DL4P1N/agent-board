@@ -90,7 +90,9 @@ try {
   // ---- 5. team capacity: the Agents title bar ("3 of 7 running"), in full in its tooltip ----
   const capSub = () => page.$eval('#o-right-sub', (e) => ({ t: e.textContent, tip: e.title, low: e.classList.contains('low') }));
   const sum = await capSub();
-  check('Agents title bar: team capacity and running', sum.t === '3 of 7 running' && /^Team can run 7 tasks at once · 3 running/.test(sum.tip), JSON.stringify(sum));
+  // Counted like the rows: the agents that can work (started, online, not out of usage) and of them the ones working.
+  const working = () => page.evaluate(() => { const c = teamCapacity(); return `${c.agents.length - c.idle.length} of ${c.agents.length} working`; });
+  check('Agents title bar: how many agents are working, the team capacity and what runs in its tooltip', sum.t === await working() && / of \d+ agents working · team can run 7 tasks at once · 3 running/.test(sum.tip), JSON.stringify(sum));
 
   // ---- 2. size: dialog select saves, card badge shows ----
   await openCard(T[3].id);
@@ -116,7 +118,7 @@ try {
   check("the reserved agent's claim works", ok.status === 'claimed' && ok.assignee === 'eve', JSON.stringify(ok).slice(0, 160));
   await page.waitForFunction((id) => document.querySelector(`#col-in_progress .card[data-id="${id}"]`), { timeout: 5000 }, T[4].id);
   check('reserved badge hidden once the reserved agent holds it', !/reserved for/.test(await cardTxt(T[4].id)));
-  check('team capacity updates: 4 running', await until(() => document.getElementById('o-right-sub').textContent === '4 of 7 running'), JSON.stringify(await capSub()));
+  check('team capacity updates: 4 running (the tooltip), eve working (the title)', await until(() => / · 4 running/.test(document.getElementById('o-right-sub').title)) && (await capSub()).t === await working(), JSON.stringify(await capSub()));
 
   // ---- create with size + reservation ----
   await page.click('#new-task-btn');

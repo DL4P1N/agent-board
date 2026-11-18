@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Layout, measured on the demo board (8 agents, 20-odd tasks) with a mouse, in both views: three columns and the 3D
 // switch from 1280px wide (two columns and no switch below); one Tasks panel whose columns sit in the same place with
-// 3D on and off; docked, the Tasks panel as tall as its cards up to 65% of the room under the top bar; every agent on
+// 3D on and off; docked, the Tasks panel as tall as its cards up to 65% of the room under the top bar (320px of it left); every agent on
 // one line, all 8 in view at 1440×900; Activity's four filters, the card's "question waiting" only while Needs attention
 // is folded; the feed never under the composer; chips as tall as a folded panel; popovers --gutter from what opens
 // them; inset focus rings; high contrast in every theme; Show's note in 3D; no internal tool names in an agent's row.
@@ -84,13 +84,19 @@ try {
   }
 
   if (webgl) {
-    // ---- D-a: docked, as tall as its cards up to 65% of the room under the top bar; a search shrinks it ----
+    // ---- D-a: docked, as tall as its cards up to 65% of the room under the top bar (320px of room left); a search shrinks it ----
     await block('D-a', async () => {
       const o = await open({ w: 1440, h: 900, view: 'office' });
       const m = () => o.evaluate(() => { const t = document.getElementById('o-tasks').getBoundingClientRect(), v = document.getElementById('office-view').getBoundingClientRect(), edge = parseFloat(getComputedStyle(document.querySelector('main')).getPropertyValue('--edge')) || 12;
-        return { h: Math.round(t.height), share: +(t.height / (v.bottom - edge - t.top)).toFixed(3), scrolls: [...document.querySelectorAll('#board .cards')].filter((u) => u.scrollHeight > u.clientHeight + 4).length, max: document.getElementById('o-tasks').classList.contains('max') }; });
+        const room = v.bottom - edge - t.top;
+        return { h: Math.round(t.height), share: +(t.height / room).toFixed(3), cap: +(Math.min(0.65, (room - 320) / room)).toFixed(3), below: Math.round(v.bottom - edge - t.bottom), scrolls: [...document.querySelectorAll('#board .cards')].filter((u) => u.scrollHeight > u.clientHeight + 4).length, max: document.getElementById('o-tasks').classList.contains('max') }; });
       const a = await m();
-      check('3D docked with many cards: the Tasks panel takes up to 65% of the room under the top bar (60-66%), its longest columns scroll inside', !a.max && a.share >= 0.6 && a.share <= 0.66 && a.scrolls >= 1, JSON.stringify(a));
+      check('3D docked with many cards: the Tasks panel takes up to 65% of the room under the top bar and leaves at least 320px of the room below it, its longest columns scroll inside', !a.max && a.share >= a.cap - 0.05 && a.share <= a.cap + 0.01 && a.below >= 318 && a.scrolls >= 1, JSON.stringify(a));
+      check('3D docked: the cards keep "after #N ✓" and their time (the 3D switch changes nothing on a card)', await o.evaluate(() => { const c = [...document.querySelectorAll('#board .card .cx')]; return c.length > 0 && c.every((e) => getComputedStyle(e).display !== 'none'); }));
+      await o.setViewport({ width: 1440, height: 1200 }); await settle(o); await sleep(300);
+      const tall = await m();
+      check('a tall window: still 65% of the room (the 320px floor changes nothing there)', tall.cap === 0.65 && tall.share >= 0.6 && tall.share <= 0.66, JSON.stringify(tall));
+      await o.setViewport({ width: 1440, height: 900 }); await settle(o); await sleep(300);
       const title = await o.evaluate(() => state.tasks.find((t) => t.status === 'open').title);
       await o.type('#tsearch', title); await settle(o); await sleep(300);
       const s = await m();
@@ -105,7 +111,7 @@ try {
     });
   }
 
-  // ---- D-c: one line per agent; all 8 in view at 1440×900 with the planner and merges tags ----
+  // ---- D-c: one line per agent; all 8 in view at 1440×900 with the planner tag (below 1600px); calm rows ----
   for (const view of ['board', 'office']) {
     await block(`D-c ${view}`, async () => {
       const p = await open({ w: 1440, h: 900, view });
@@ -117,7 +123,41 @@ try {
           roles: [...document.querySelectorAll('#people .o-agent .o-rl')].filter((e) => { const r = e.getBoundingClientRect(), b = e.closest('.o-agent').getBoundingClientRect(); return r.width > 0 && r.right <= b.right + 0.5 && inView(e); }).map((e) => e.textContent) };
       });
       check(`${view} 1440×900: every agent (8) on one line (≤34px) and all of them in view in Agents`, a.n === 8 && a.inView === a.n && a.tallest <= 34, JSON.stringify(a));
-      check(`${view} 1440×900: "planner" and "merges" tags in view on their agents' rows`, a.roles.includes('planner') && a.roles.includes('merges'), JSON.stringify(a.roles));
+      check(`${view} 1440×900: the "planner" tag in view on its agent's row, no "merges" tag (the top bar's Roles chip says it)`, a.roles.includes('planner') && !a.roles.includes('merges'), JSON.stringify(a.roles));
+      // Calm rows: plain working has no word, a badge is a bold coloured word (no box), a row's task explains its badge
+      // (its question's task, its blocked task), a subagent shows no model and no "working", no doing text says just "working".
+      const r = await p.evaluate(() => {
+        const rows = [...document.querySelectorAll('#people .o-agent')];
+        const id = (b) => Number((b.querySelector('.o-tk')?.textContent.match(/^#(\d+)/) || [])[1]);
+        const qOpen = state.questions.filter((q) => !q.answer);
+        const bad = [];
+        for (const b of rows) {
+          const n = b.dataset.oAgent, st = b.querySelector('.o-st');
+          if (st?.textContent === 'working') bad.push(`${n}: says working`);
+          if (st?.classList.contains('bx') && parseFloat(getComputedStyle(st).borderTopWidth) > 0) bad.push(`${n}: boxed badge`);
+          if (/^working\b/i.test(b.querySelector('.o-tk')?.textContent || '') ) bad.push(`${n}: doing says working`);
+          const qs = qOpen.filter((q) => q.asker.split('/')[0].toLowerCase() === n && q.task_id);
+          if (st?.classList.contains('question') && qs.length && !qs.some((q) => q.task_id === id(b))) bad.push(`${n}: Question but task #${id(b)}`);
+          if (st?.classList.contains('blocked') && state.tasks.find((t) => t.id === id(b))?.status !== 'blocked') bad.push(`${n}: Blocked but task #${id(b)}`);
+        }
+        const subs = [...document.querySelectorAll('#people .o-helpers li')];
+        return { bad, q: rows.filter((b) => b.querySelector('.o-st.question')).length, bl: rows.filter((b) => b.querySelector('.o-st.blocked')).length, plain: rows.filter((b) => !b.querySelector('.o-st')).length,
+          subs: subs.length, subBad: subs.filter((li) => li.querySelector('.o-hm') || /\bworking\b/.test(li.querySelector('.o-hs')?.textContent || '')).map((li) => li.innerText) };
+      });
+      check(`${view} 1440×900: Agents rows are calm (no "working" word, unboxed badges, the badge's own task) and subagents show no model or "working"`, !r.bad.length && r.q >= 1 && r.plain >= 1 && !r.subBad.length, JSON.stringify(r));
+      if (view === 'board') {
+        await p.setViewport({ width: 1600, height: 900 }); await settle(p);
+        check('1600px: no "planner" tag on the rows (the top bar has the Planner chip)', await p.evaluate(() => !!document.querySelector('#people .o-rl') && [...document.querySelectorAll('#people .o-rl')].every((e) => !e.getClientRects().length) && !!document.querySelector('.topbar .tb-plan')?.offsetWidth));
+        // An agent's details show its last update in the board's words, not status ids.
+        const last = await p.evaluate(async () => {
+          const a = document.querySelector('#people .o-agent').dataset.oAgent;
+          state.events.push({ id: 1e9, ts: Date.now() + 1000, author: a, kind: 'task', task_id: 1, text: '#1 claimed → in_progress' });
+          document.querySelector(`[data-o-agent="${a}"]`).click();
+          await new Promise((r) => setTimeout(r, 300));
+          return document.querySelector('#o-det .last')?.textContent || '';
+        });
+        check('an agent\'s details say its last status move in words ("Claimed → In progress", not "claimed → in_progress")', /Claimed → In progress/.test(last) && !/in_progress/.test(last), last);
+      }
       await close(p);
     });
   }
@@ -126,6 +166,8 @@ try {
   await block('board 1440', async () => {
     const p = await open({ w: 1440, h: 900 });
     check('Activity\'s filters: All, Chat, @me and Direct', (await p.$$eval('#tabs [data-tab]', (bs) => bs.map((b) => b.dataset.tab))).join() === 'all,chat,me,direct');
+    const fs13 = await p.evaluate(() => ['msg', 'chan', 'send', 'tsearch'].map((id) => getComputedStyle(document.getElementById(id)).fontSize));
+    check('the composer and its channel select are the size of the Tasks title bar\'s controls (13px)', fs13.every((f) => f === '13px'), JSON.stringify(fs13));
     const qb = () => p.$$eval('#board .card .qb', (bs) => bs.map((b) => b.getClientRects().length > 0));
     const q0 = await qb();
     await p.click('#o-left [data-o-fold]'); await settle(p);

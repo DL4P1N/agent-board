@@ -7,7 +7,7 @@ import { $, COL_DESC, COL_EMPTY, COL_SHOWN, COLS, DONE_SHOWN, FROZEN_DESC, HOLDI
 import { agentRoot, ago, canMove, cardRects, esc, fmt, fullTime, hs, isHttps, isStale, isWebUrl, moveCards, nameTag,
   noteMove, ownerOffline, patch, plural, root, short, taskById, timeEl, toast, when } from './helpers.js';
 import { act, api, scheduleReload } from './data.js';
-import { agentInfo, agentLimited, approvalWait, clientOf, colOf, filterRoot, inPass, people, questionFor, taskVisible,
+import { agentInfo, agentLimited, approvalWait, clientOf, colOf, filterRoot, inPass, people, questionFor, setupShown, taskVisible,
   timeNow } from './derived.js';
 import { render } from './render.js';
 import { exportBtns } from './setup.js';
@@ -21,6 +21,7 @@ function renderBoardEmpty(si) {
   let msg;
   if (!S.goal) msg = '<b>No tasks yet.</b> Once the goal is set (Setup, step 2), the first agent on the board writes the task list. You can also add tasks yourself with <b>+ New task</b>.';
   else if (S.planner) { const c = clientOf(S.planner); msg = `${nameTag(S.planner)}${c ? ` (${esc(c)})` : ''}, the planner, is writing the task list<span class="dots"></span> Cards appear here as it creates them.`; }
+  else if (si.workingA.length && setupShown(si)) msg = '<b>No tasks yet.</b>'; // Setup's step 4 says what it waits for
   else if (si.workingA.length) msg = '<b>No tasks yet.</b> Waiting for an agent to become the planner and write the task list<span class="dots"></span>';
   else if (si.waitingA.length) msg = `<b>No tasks yet.</b> ${plural(si.waitingA.length, 'agent is', 'agents are')} connected but nobody started one: type <code>/board</code> in it (<code>$board</code> in Codex). The first one that starts writes the task list.`;
   else msg = '<b>No tasks yet.</b> The first agent that starts on the board (Setup, step 3) becomes the planner and writes the task list from the goal. Or add tasks yourself with <b>+ New task</b>.';

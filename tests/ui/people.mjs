@@ -82,7 +82,8 @@ try {
   check('emil\'s two Claude Code agents are told apart', await page.evaluate(() => [...document.querySelectorAll('#people [data-person-row="emil"] .o-agent')].map((b) => b.dataset.oAgent).join() === 'emil-claude,emil-claude2'), emilRow);
 
   // ---- WB-12: pill legend ----
-  check('every agent row says its state in words', await page.evaluate(() => [...document.querySelectorAll('#people .o-agent')].every((b) => /\w/.test(b.querySelector('.o-st')?.textContent || ''))));
+  // Plain "working" has no word (the row names its task or what it does); every other state is a word.
+  check('every agent row says its state in words, except plain working (its task or doing, no "working")', await page.evaluate(() => [...document.querySelectorAll('#people .o-agent')].every((b) => { const w = b.querySelector('.o-st')?.textContent || ''; return w ? w !== 'working' : /\w/.test(b.querySelector('.o-tk')?.textContent || ''); })), await page.evaluate(() => [...document.querySelectorAll('#people .o-agent')].map((b) => b.innerText.replace(/\s+/g, ' ')).join(' | ')));
 
   // ---- WB-11: expanded row copy and the Belongs-to list ----
   await page.click('#people [data-o-agent="dave"]');

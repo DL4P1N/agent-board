@@ -77,14 +77,14 @@ await sleep(600);
 const kept = await page.$eval(ta, (e) => [e.value, document.activeElement === e]);
 check('half-typed answer + focus survive SSE re-render', kept[0] === 'Use the hackathon org' && kept[1], JSON.stringify(kept));
 await page.type(ta, ' project, client id is in 1Password');
-// Every frame while it goes: the fading copies in the questions box, and Needs attention's height.
-await page.evaluate(() => { const q = (window.__qf = { leaving: 0, hs: [] }); const t0 = performance.now(); const loop = () => { q.leaving = Math.max(q.leaving, document.querySelectorAll('#questions > .leaving').length); q.hs.push(Math.round(document.getElementById('nyou').getBoundingClientRect().height)); if (performance.now() - t0 < 2500) requestAnimationFrame(loop); }; loop(); });
+// Every frame while it goes: the fading copies in the questions box, and the height of Needs attention's body.
+await page.evaluate(() => { const q = (window.__qf = { leaving: 0, hs: [] }); const t0 = performance.now(); const loop = () => { q.leaving = Math.max(q.leaving, document.querySelectorAll('#questions > .leaving').length); q.hs.push(Math.round(document.getElementById('o-left-b').getBoundingClientRect().height)); if (performance.now() - t0 < 2500) requestAnimationFrame(loop); }; loop(); });
 await page.keyboard.press('Enter');
 await page.waitForFunction(() => document.querySelectorAll('.qcard:not(.leaving)').length === 1, { timeout: 5000 });
 check('answer sent with Enter; question removed', true);
 await sleep(600);
-const qf = await page.evaluate(() => { const { leaving, hs } = window.__qf; const a = hs[0], b = hs.at(-1); return { leaving, a, b, between: hs.some((h) => (h - a) * (h - b) < -4), left: document.querySelectorAll('#questions > .qcard').length }; });
-check('answering: only the answered card fades out (no copies of the others over them), and Needs attention shrinks in step (a frame part-way)', qf.leaving === 1 && qf.left === 1 && qf.b < qf.a && qf.between, JSON.stringify(qf));
+const qf = await page.evaluate(() => { const { leaving, hs } = window.__qf; const a = hs[0], b = hs.at(-1); return { leaving, a, b, between: hs.some((h) => (h - a) * (h - b) < -4), up: Math.max(...hs) - a, left: document.querySelectorAll('#questions > .qcard').length }; });
+check('answering: only the answered card fades out (no copies of the others over them), and Needs attention (its whole body, the Blocked list too) shrinks in step (a frame part-way, never a frame taller first)', qf.leaving === 1 && qf.left === 1 && qf.b < qf.a && qf.between && qf.up <= 1, JSON.stringify({ ...qf, hs: undefined }));
 const toastTxt = await page.$eval('#toasts', (e) => e.innerText);
 check('feedback toast after answer', /Answer sent/.test(toastTxt), toastTxt);
 

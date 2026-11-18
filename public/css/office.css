@@ -47,12 +47,13 @@ html[data-board-view="office"] .centre > * { pointer-events: auto; }
 html[data-board-view="office"] .topbar { position: relative; z-index: 4; }
 /* The Tasks panel, moved into the room's view (officeMount): under the top bar, between the side columns, its columns
    where the Board view has them. Docked (the default), it is as tall as its cards: each column as tall as its cards
-   (as with 3D off) up to what keeps the window within 65% of the room under the top bar, then it scrolls inside itself;
-   the room is in view below it (notes above the columns, such as Approve plan, add to that). Expanded (.max), it
-   reaches down to the foot and covers the room as glass, its columns down to its foot. Between docked and expanded
-   only its bottom edge moves. */
+   (as with 3D off) up to what keeps the window within 65% of the room under the top bar and leaves at least 320px of
+   the room in view below it (panels.js oFrame has the same rule), then it scrolls inside itself (notes above the
+   columns, such as Approve plan, add to that). Expanded (.max), it reaches down to the foot and covers the room as
+   glass, its columns down to its foot. Between docked and expanded only its bottom edge moves. */
 html[data-board-view="office"] .o-tasks { position: absolute; z-index: 3; left: var(--o-c); right: var(--o-c); top: var(--o-top);
-  --o-col-max: calc((100dvh - var(--hdr, 54px) - var(--o-top) - var(--edge)) * .65 - var(--bar) - 2px - var(--s4) - var(--s5) - 2px); }
+  --o-room: calc(100dvh - var(--hdr, 54px) - var(--o-top) - var(--edge));
+  --o-col-max: calc(max(160px, min(var(--o-room) * .65, var(--o-room) - 320px)) - var(--bar) - 2px - var(--s4) - var(--s5) - 2px); }
 html[data-board-view="office"] .o-tasks.max { bottom: var(--edge); }
 html[data-board-view="office"] .o-tasks > .o-body { overflow: hidden; }
 html[data-board-view="office"] .o-tasks .ttable { overflow: auto; max-height: var(--o-col-max); }
@@ -62,7 +63,5 @@ html[data-board-view="office"] .o-tasks.max .board { grid-template-rows: minmax(
 html[data-board-view="office"] .o-tasks.max .col { max-height: 100%; }
 html[data-board-view="office"] .o-tasks .col > :is(h3, .cd, .more) { flex: none; } /* headings keep their height (200% text too) */
 html[data-board-view="office"] .o-tasks .col .cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
-/* Docked, the cards drop their secondary facts (after #3 ✓, the time: the dialog has them), so more fit; a list cut
-   at the window's edge fades there. */
-html[data-board-view="office"] .o-tasks:not(.max) .card .cx { display: none; }
+/* A list cut at the window's edge fades there. */
 .o-tasks .col .cards.more-below { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent); }

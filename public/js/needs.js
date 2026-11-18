@@ -130,7 +130,8 @@ function renderNow(qOpen, unread, si) {
   // No lead where it would repeat what's right there: the question cards under it (what they block is a muted line
   // under them), or the open Setup step it points to.
   const qLead = go === 'questions' && qOpen.length;
-  const hideLead = qLead || (kind === 'setup' && String(go).startsWith('step-') && setupShown(si));
+  // (First run: before any task, "Nothing to do yet: waiting for the planner" is Setup's step 4 too.)
+  const hideLead = qLead || ((kind === 'setup' || !T) && String(go).startsWith('step-') && setupShown(si));
   const lead = qLead ? ''
     : hideLead ? (more.length || text2 ? '' : '<p class="na-sub">Nothing needs attention yet: Setup shows what\'s next.</p>') : go
 
@@ -176,14 +177,16 @@ function questionsHtml(qOpen) {
 function snapQuestions(qOpen) {
   const box = $('questions'), ny = $('nyou');
   qHtml = questionsHtml(qOpen);
-  // Measured only when the cards change (a pass that changes nothing doesn't lay the page out).
-  qWas = box._html !== undefined && box._html !== qHtml && canMove() && ny.offsetHeight ? { h: ny.getBoundingClientRect().height,
+  // Measured only when the cards change (a pass that changes nothing doesn't lay the page out). The whole body is
+  // measured: answering can also change the Blocked list under the cards (drawn later in the pass, renderDocks).
+  qWas = box._html !== undefined && box._html !== qHtml && canMove() && ny.offsetHeight ? { h: $('o-left-b').getBoundingClientRect().height,
     cards: new Map([...box.children].filter((c) => c.id && !c.classList.contains('leaving')).map((c) => [c.id, { el: c, r: c.getBoundingClientRect() }])) } : null;
 }
+let qEase = null, qEasing = null;
 function renderQuestions(qOpen) {
-  const box = $('questions'), ny = $('nyou');
+  const box = $('questions');
   const was = qWas, html = qHtml ?? questionsHtml(qOpen); qWas = null; qHtml = null;
-  for (const a of ny.getAnimations()) if (a.id === 'glide') a.cancel(); // a second change starts from where it is
+  qEasing?.cancel(); qEasing = null; // a second change starts from where it is
   const gone = was && !qOpen.length && was.cards.size;
   $('q-panel').hidden = !qOpen.length && !gone;
   // Screen readers only: the cards say it.
@@ -203,11 +206,17 @@ function renderQuestions(qOpen) {
     // Only the cards whose question went fade out (the others are on the page again, redrawn).
     for (const [id, b] of was.cards) if (!document.getElementById(id)) leave(b.el, b.r, box);
   }
-  // The last one answered: the cards' box stays until Needs attention has shrunk to its new height (the answered card
-  // fading out in it), then goes.
-  if (gone) $('q-panel').hidden = true; // measured as it will be
-  const a = easeHeight(ny, was.h);
-  if (gone && a) { $('q-panel').hidden = false; a.finished.then(() => { if (!box.querySelector('.qcard:not(.leaving)')) $('q-panel').hidden = true; }, () => {}); }
+  qEase = { h: was.h, gone };
+}
+// After the pass has drawn the rest of Needs attention (the Blocked list, renderDocks): its body grows or shrinks
+// from its old height in one ease. The last one answered: the cards' box stays until it has shrunk to its new height
+// (the answered card fading out in it), then goes.
+function easeNeeds() {
+  const e = qEase; qEase = null; if (!e) return;
+  const box = $('questions'), body = $('o-left-b');
+  if (e.gone) $('q-panel').hidden = true; // measured as it will be
+  const a = easeHeight(body, e.h); qEasing = a;
+  if (e.gone && a) { $('q-panel').hidden = false; a.finished.then(() => { if (!box.querySelector('.qcard:not(.leaving)')) $('q-panel').hidden = true; }, () => {}); }
 }
 
-export { nowSeen, renderNeeds, renderNow, renderQuestions, setNowSeen, syncNeeds };
+export { easeNeeds, nowSeen, renderNeeds, renderNow, renderQuestions, setNowSeen, syncNeeds };

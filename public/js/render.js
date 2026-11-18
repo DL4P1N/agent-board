@@ -6,7 +6,7 @@ import './derived.js';
 import { $, BASE, me, SLUG, state, ui } from './state.js';
 import { announce, setText } from './helpers.js';
 import { inPass, openQuestions, setupInfo, unreadMentions } from './derived.js';
-import { renderNeeds, renderNow, renderQuestions } from './needs.js';
+import { easeNeeds, renderNeeds, renderNow, renderQuestions } from './needs.js';
 import { checkNotify, renderBell, renderClock, renderTopbar } from './topbar.js';
 import { renderSetup } from './setup.js';
 import { fadeAgents, officeState, renderAgents } from './agents.js';
@@ -44,7 +44,7 @@ function renderPass() {
   if (!ui.dragging) renderBoard();
   renderFeed(unread.length, feedAt);
   renderLocks();
-  renderDocks(qOpen);
+  renderDocks(qOpen); easeNeeds(); // Needs attention eases to its new height once all of it (the Blocked list too) is drawn
   if ($('task-dlg').open) renderDialogLive();
   checkNotify(); announceActivity();
   if (boardView === 'office') { office.mod?.update(officeState()); if (!ui.dragging) renderOffice(); }

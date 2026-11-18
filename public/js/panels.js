@@ -35,7 +35,7 @@ const oTasksOff = () => (typeof oUi.tasks === 'boolean' ? oUi.tasks : false);
 const oMax = () => (office.dockOnce ? false : typeof oUi.max === 'boolean' ? oUi.max : false);
 // Panels folding or the board sliding: the room holds still meanwhile (oRate) and its camera waits (oFrame), then eases
 // to the new framing once they have landed, so the panels move smoothly.
-let oMoving = 0;
+let oMoving = 0, qOutWait = null; // qOutWait: Needs attention folding (oFold)
 function oMotion(run) {
   oMoving++; oRate();
   return run().then(() => { if (--oMoving) return; oRate(); oFrame(); });
@@ -81,6 +81,8 @@ function oApply() {
     const box = $(O_BOX[w]), b = box.querySelector('[data-o-fold]'), off = oOff(w), l = `${off ? 'Open' : 'Fold'} ${name}`;
     box.classList.toggle('folded', off); b.setAttribute('aria-expanded', String(!off)); b.title = l; b.setAttribute('aria-label', l);
   }
+  // The cards' "question waiting" (CSS: #o-left.q-out): gone as Needs attention opens, back once its fold has landed.
+  if (!oOff('left')) $('o-left').classList.remove('q-out'); else if (!qOutWait) $('o-left').classList.add('q-out');
   $('o-goal').hidden = !ui.oGoal; $('goal-btn')?.setAttribute('aria-expanded', String(!!ui.oGoal));
   $('o-dl').hidden = !ui.oDl; $('clock').setAttribute('aria-expanded', String(!!ui.oDl));
   $('o-merge').hidden = !ui.oMerge; $('merge-btn')?.setAttribute('aria-expanded', String(!!ui.oMerge));
@@ -109,10 +111,11 @@ function oFrame() {
   const R = (...ids) => { const e = ids.map($).find((x) => x && !x.hidden && x.offsetWidth && !x.classList.contains('folded')); return e ? e.getBoundingClientRect() : null; };
   const l = R('o-left'), r = R('o-right', 'o-act', 'o-locks'), t = $('o-tasks').offsetWidth ? $('o-tasks').getBoundingClientRect() : null, top = $('topbar').getBoundingClientRect();
   // Expanded, the board covers the room: it's framed as if docked (as tall as it last was docked, at most 65% of the
-  // room under the top bar), so sliding the board down or up doesn't move the camera.
+  // room under the top bar and leaving 320px of it, as in office.css), so sliding the board down or up doesn't move the camera.
   const covered = t && $('o-tasks').classList.contains('max');
   if (t && !covered) oDockH = t.height;
-  const dockBottom = () => t.top + Math.min(oDockH || Infinity, 0.65 * (v.bottom - parseFloat(getComputedStyle($('main')).getPropertyValue('--edge')) - t.top));
+  const roomH = () => v.bottom - parseFloat(getComputedStyle($('main')).getPropertyValue('--edge')) - t.top;
+  const dockBottom = () => t.top + Math.min(oDockH || Infinity, Math.max(160, Math.min(0.65 * roomH(), roomH() - 320)));
   office.mod.setInsets({
     left: l ? (l.right - v.left) / v.width : 0,
     right: r ? (v.right - r.left) / v.width : 0,
@@ -126,10 +129,15 @@ function oFold(which, folded = !oOff(which)) {
   const box = $(O_BOX[which]), body = box.querySelector(':scope > .o-body'), btn = box.querySelector('[data-o-fold]');
   const col = [...box.parentElement.children].filter((e) => e.classList.contains('o-panel'));
   const from = document.activeElement;
+  // Folding Needs attention: the cards' "question waiting" comes back once it has landed (the board unchanged mid-glide).
+  const tok = which === 'left' && folded ? (qOutWait = {}) : null;
   oMotion(() => glide(() => {
     oUi[which === 'act' ? 'actOff' : which] = folded; oSave(); renderDocks();
     if (boardView === 'office') renderOffice();
-  }, { size: col, pin: [box, body] }).then((r) => { if (boardView === 'office') office.mod?.resize?.(); return r; }));
+  }, { size: col, pin: [box, body] }).then((r) => {
+    if (tok && qOutWait === tok) { qOutWait = null; if (oOff('left')) $('o-left').classList.add('q-out'); }
+    if (boardView === 'office') office.mod?.resize?.(); return r;
+  }));
   // Focus stays on the control you used; from inside a body that folds away (or from nowhere: a click on the title bar),
   // it moves to the panel's fold button.
   if (folded ? from && body.contains(from) : !from || from === document.body || box.contains(from)) btn.focus({ preventScroll: true });

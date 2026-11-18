@@ -436,4 +436,4 @@ $('msg').addEventListener('keydown', (ev) => {
 $('msg-ac').addEventListener('mousedown', (ev) => { const li = ev.target.closest('[data-ac]'); if (!li) return; ev.preventDefault(); pickAc(Number(li.dataset.ac)); });
 
 export { ac, ACT_GAP, announceActivity, closeAc, dmUnreadCount, dropOlder, evHtml, FEED_MAX, feedPlace, growMsg, markDmSeen, older, openDm,
-  renderFeed, renderLocks, setActGap, settingsText };
+  renderFeed, renderLocks, setActGap, settingsText, statusWords };

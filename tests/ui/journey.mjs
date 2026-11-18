@@ -78,12 +78,16 @@ try {
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => [...document.querySelectorAll('.phases .past')].some((e) => /Set the goal/.test(e.textContent)), { timeout: 5000 });
   check('goal saved; phase Write tasks', await page.$eval('.phases .cur', (e) => e.textContent) === 'Write tasks');
+  // First run, Setup open, no tasks: Setup's step 4 says what it waits for; Needs attention and the Tasks note don't repeat it.
+  await nowSays(/Setup shows what's next/);
+  const firstNote = await page.$eval('#board-empty', (e) => e.innerText.trim());
+  check('first run, Setup open, no planner yet: Needs attention is its one muted line, the Tasks note just "No tasks yet."', /^(What to do now )?Nothing needs attention yet: Setup shows what's next\.$/.test((await now()).trim()) && !(await page.$('#now .na')) && await page.$eval('#nyou', (e) => !e.querySelector('.also') && !e.querySelector('.na2')) && firstNote === 'No tasks yet.', `${await now()} | ${firstNote}`);
 
   // planner claims
   await alice('claim_role', { role: 'planner' });
-  await nowSays(/alice \(Claude Code\) is writing/);
+  await until(() => /alice \(Claude Code\), the planner/.test(document.getElementById('board-empty').innerText));
   check('board banner names planner (its agent name, not "alice\'s agent")', /alice \(Claude Code\), the planner/.test(await page.$eval('#board-empty', (e) => e.innerText)));
-  check('do-now: nothing to do, alice writing', /alice \(Claude Code\) is writing/.test(await now()), await now());
+  check('do-now: Setup open (its step 4 names alice writing), Needs attention keeps its one muted line', /Setup shows what's next/.test(await now()) && !/is writing/.test(await now()), await now());
   await shots('3-planning', { mobile: true });
 
   // tasks created
@@ -119,7 +123,7 @@ try {
   await page.select('#integ-sel', 'alice');
   await page.waitForFunction(() => !/Pick who merges/.test(document.getElementById('now').innerText), { timeout: 5000 });
   check('integrator saved; do-now shows blocked', /blocked/.test(await page.$eval('#now .na', (e) => e.textContent)), await now());
-  check('the planner and who merges are tags on their agent rows', await page.evaluate(() => { const t = [...document.querySelectorAll('#people .o-agent .o-rl')].map((e) => e.textContent); return t.includes('planner') && t.includes('merges'); }));
+  check('the planner is a tag on its agent row (below 1600px), who merges is not (the top bar says it)', await page.evaluate(() => { const t = [...document.querySelectorAll('#people .o-agent .o-rl')].map((e) => e.textContent); return t.includes('planner') && !t.includes('merges'); }));
   await bob('update_task', { id: t3.id, status: 'in_progress', as: 'ui-worker' }); await nowSays(/All good/);
   check('all good message', /All good/.test(await now()), await now());
   // help dialog via ?

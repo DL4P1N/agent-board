@@ -421,10 +421,11 @@ html[data-board-view="office"] .pagefoot { display: none; }
 .card .ca { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); align-items: center; }
 .card .ca button, .card .qb, .mvmenu button { font-size: var(--fs-meta); padding: 0 var(--s4); min-height: var(--ctl-xs); }
 /* The jump to the card's question: plain accent text (it needs attention; the question card itself is the loud one).
-   Only while Needs attention is folded: open, its question card is right there. */
+   Only while Needs attention is folded (.q-out: set once its fold has landed, so the cards don't change mid-glide):
+   open, its question card is right there. */
 .card .qb { background: none; color: var(--accent); font-weight: 700; border: 0; padding: 0 var(--s1); text-decoration: underline; text-underline-offset: 2px; }
 .card .qb:hover { background: none; text-decoration-thickness: 2px; }
-#o-left:not(.folded) ~ * .card :is(.qb, .ca:not(:has(> :not(.qb)))) { display: none; }
+#o-left:not(.q-out) ~ * .card :is(.qb, .ca:not(:has(> :not(.qb)))) { display: none; }
 .card .own { font-size: var(--fs-meta); color: var(--muted); width: 100%; }
 .card .own.off { color: var(--warn); }
 .card .rj { display: flex; gap: var(--s2); width: 100%; }
@@ -508,6 +509,7 @@ html[data-board-view="office"] .pagefoot { display: none; }
 .composer.dm #chan { display: none; }
 .composer { position: relative; display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s4); align-items: flex-end; }
 .composer select { width: auto; flex: 0 0 auto; }
+.composer :is(#msg, select) { font-size: var(--fs-ctl); } /* like the Tasks title bar's controls and Send */
 .composer #msg { flex: 1 0 100%; }
 .composer #send { margin-left: auto; }
 #msg { resize: none; overflow-y: hidden; line-height: var(--lh); max-height: calc(8 * var(--lh) * 1em + 14px); }
@@ -741,6 +743,7 @@ button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
 .o-agent .o-an { flex: 0 1 auto; min-width: 6ch; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
 .o-agent.off .o-an { font-weight: 400; color: var(--muted); }
 .o-agent .o-rl { flex: none; font: 700 var(--fs-micro)/1.5 var(--mono); color: var(--ink); }
+@media (min-width: 1600px) { .o-agent .o-rl { display: none; } } /* the top bar's Planner chip says it there */
 .o-agent .o-tk { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: var(--fs-meta); }
 .o-agent .o-tk.bad { color: var(--bad); }
 /* Rows cut at an edge of the Agents list, File locks (or Activity's filters) fade there, so they read as "more", not a fragment. */
@@ -749,10 +752,10 @@ button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
 #l-body.more-below { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent); }
 #tabs { --fr: #000; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), var(--fr)); mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), var(--fr)); }
 #tabs.more-right { --fr: transparent; }
-/* State: a plain muted word, except the three a human acts on, boxed like the demo's chips: Question (amber, the word
-   on the room's bubble), Blocked (red) and Out of usage. */
+/* State: a plain muted word (none for plain working), except the three a human acts on, bold and coloured like a
+   subagent's: Question (amber, the word on the room's bubble), Blocked (red) and Out of usage. */
 .o-st { flex: 0 0 auto; font: var(--fs-micro)/1.5 var(--mono); color: var(--muted); white-space: nowrap; }
-.o-st.bx { font-weight: 700; padding: 0 var(--s2); border: 2px solid currentColor; }
+.o-st.bx { font-weight: 700; }
 .o-st.question, .o-st.limited { color: var(--warn); } .o-st.blocked { color: var(--bad); }
 .o-helpers { list-style: none; margin: var(--s1) 0 var(--s1) var(--s6); padding: 0 0 0 var(--s4); border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: var(--s1); font-size: var(--fs-meta); }
 .o-helpers li { display: flex; gap: var(--s3); align-items: baseline; min-width: 0; color: var(--muted); }
@@ -760,7 +763,6 @@ button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
 .o-helpers .o-hs { flex: 0 0 auto; font-family: var(--mono); }
 .o-helpers .o-hs.question { color: var(--warn); font-weight: 700; } .o-helpers .o-hs.blocked { color: var(--bad); font-weight: 700; }
 .o-helpers .o-tk { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.o-helpers .o-hm { flex: 0 0 auto; margin-left: auto; min-width: 0; max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .o-det { margin: var(--s1) 0 var(--s2); padding: var(--s3) var(--s4) var(--s4); background: var(--raised); font-size: var(--fs-sm); border-left: 4px solid hsl(var(--h, 0) 60% var(--dl)); }
 .o-det ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
 .o-det .tk { display: flex; gap: var(--s3); align-items: baseline; min-width: 0; }
@@ -906,7 +908,9 @@ button.tochat { display: none; } /* phones only (below) */
 @media (max-width: 420px) { header h1 .wm { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
 /* A theme or the 3D switch applies in one frame: no transitions for the two frames it takes (instantly(), helpers.js). */
 html.no-tx *, html.no-tx *::before, html.no-tx *::after, html.no-tx ::backdrop { transition: none !important; }
-/* ...except a dialog closing meanwhile (Ctrl+K running a theme or the 3D switch): it still fades out. */
+/* ...except a dialog or the theme chooser closing meanwhile (Ctrl+K running a theme or the 3D switch, a theme
+   picked): it still fades out. */
+html.no-tx .theme-pop[hidden] { transition: opacity var(--t-fast) var(--ease), translate var(--t-fast) var(--ease), display var(--t-fast) allow-discrete !important; }
 html.no-tx dialog:not([open]) { transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease), overlay var(--t-fast) allow-discrete, display var(--t-fast) allow-discrete !important; }
 html.no-tx dialog:not([open])::backdrop { transition: background-color var(--t-fast) var(--ease), overlay var(--t-fast) allow-discrete, display var(--t-fast) allow-discrete !important; }
 /* ---------- reduced motion: everything rests ---------- */
