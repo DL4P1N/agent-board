@@ -12,6 +12,7 @@ import { evHtml, growMsg } from './activity.js';
 import { focusTask, mention, sendAnswer } from './actions.js';
 
 let editing = null; // snapshot of the task open in the dialog
+let shown = {}; // what each field showed when filled from the task (an input or list may hold a value differently)
 
 // ---------- task dialog ----------
 const dlg = $('task-dlg');
@@ -62,7 +63,8 @@ function showFieldError(msg) {
   n.setAttribute('aria-invalid', 'true'); n.focus();
 }
 // Fields the human has changed in the dialog (compared with the task as it was when they started editing it).
-const editedFields = () => (editing ? Object.keys(FIELDS).filter((f) => FIELDS[f]() !== editing[f]) : []);
+const editedFields = () => (editing ? Object.keys(FIELDS).filter((f) => FIELDS[f]() !== shown[f]) : []);
+const noteShown = (f) => { shown[f] = FIELDS[f](); };
 const dlgDirty = () => (editing ? editedFields().length > 0 : !!($('td-name').value.trim() || $('td-desc').value.trim() || $('td-deps').value.trim()));
 function openTask(id, { discard = false } = {}) {
   const t = id ? taskById(id) : null;
@@ -84,6 +86,7 @@ function openTask(id, { discard = false } = {}) {
   $('td-status-wrap').hidden = !t;
   $('td-deps-wrap').hidden = !!t;
   $('td-deps').value = '';
+  shown = {}; if (editing) for (const f of Object.keys(FIELDS)) noteShown(f);
   $('td-err').textContent = ''; $('td-status-hint').textContent = t ? HINT[t.status] + '.' : ''; $('td-status-hint').classList.add('vh'); $('td-status').title = t ? HINT[t.status] : '';
   for (const n of ['td-name', 'td-deps', 'td-prio', 'td-size', 'td-res']) $(n).removeAttribute('aria-invalid');
   $('td-conflict').hidden = true; $('td-discard').hidden = true;
@@ -115,9 +118,10 @@ function renderDialogLive() {
   // Fields the human didn't touch follow the server; a warning only when one they DID edit changed underneath them.
   const mine = editedFields();
   const norm = (f, v) => (f === 'size' ? v || 'M' : f === 'reserved_for' || f === 'assignee' ? v || null : v);
-  for (const f of Object.keys(FIELDS)) if (!mine.includes(f) && norm(f, t[f]) !== editing[f]) { SETF[f](norm(f, t[f])); editing[f] = norm(f, t[f]); }
+  for (const f of Object.keys(FIELDS)) if (!mine.includes(f) && norm(f, t[f]) !== editing[f]) { SETF[f](norm(f, t[f])); editing[f] = norm(f, t[f]); noteShown(f); }
   resOptions(mine.includes('reserved_for') ? undefined : editing.reserved_for); // agent list stays current
   asgOptions(mine.includes('assignee') ? undefined : editing.assignee);
+  for (const f of ['reserved_for', 'assignee']) if (!mine.includes(f)) noteShown(f);
   editing.branch = t.branch;
   const clash = mine.filter((f) => norm(f, t[f]) !== editing[f]);
   $('td-conflict').hidden = !clash.length;

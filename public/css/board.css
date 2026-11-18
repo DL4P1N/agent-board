@@ -445,7 +445,7 @@ html[data-board-view="office"] .pagefoot { display: none; }
 .taskbar .tabs button { white-space: nowrap; }
 .taskbar.none > :not(h2, #new-task-btn) { display: none; }
 .taskbar #new-task-btn { flex: 0 0 auto; }
-.tsearch { flex: 0 1 240px; margin: 0; } /* one width in both views (the 3D view's title bar also has Expand), so nothing after it moves */
+.tsearch { flex: 0 1 210px; margin: 0; } /* one width in both views (the 3D view's title bar also has Expand), so nothing after it moves */
 .tsearch input { width: 100%; min-height: var(--ctl-sm); font-size: var(--fs-ctl); }
 .ttable { overflow-x: auto; max-width: 100%; }
 .ttable table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: var(--fs-sm); }
