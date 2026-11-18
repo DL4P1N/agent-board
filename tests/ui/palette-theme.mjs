@@ -76,6 +76,15 @@ try {
     return { changed: a !== b, same: b === c, n: els.length, tx, fade };
   });
   check('a new theme changes every colour in one frame (no transitions while it applies); the chooser opens with a short fade and 4px of travel', oneFrame.changed && oneFrame.same && oneFrame.n === 5 && oneFrame.tx === 0 && oneFrame.fade === 'opacity,translate', JSON.stringify(oneFrame));
+  // ...and closes the same way back, quicker (--t-fast): still shown while it fades, then gone.
+  await sleep(300);
+  const popOut = await page.evaluate(async () => {
+    $('theme-btn').click(); const t0 = performance.now(); while ((getComputedStyle($('theme-pop')).opacity !== '1' || $('theme-pop').getAnimations().length) && performance.now() - t0 < 3000) await new Promise((r) => setTimeout(r, 50));
+    $('theme-btn').click(); const e = $('theme-pop'), cs = getComputedStyle(e);
+    const r = { hidden: e.hidden, shown: cs.display !== 'none', fade: e.getAnimations().map((a) => a.transitionProperty).sort().join(), ms: e.getAnimations().map((a) => a.effect.getTiming().duration) };
+    await new Promise((res) => setTimeout(res, 400)); r.gone = getComputedStyle(e).display === 'none'; return r;
+  });
+  check('the chooser closes with a short fade (opacity and 4px of travel, --t-fast), then is gone', popOut.hidden && popOut.shown && popOut.fade === 'display,opacity,translate' && popOut.ms.every((m) => m === 100) && popOut.gone, JSON.stringify(popOut));
   // Keyboard: a 2-D grid. Left/right walk the tiles (wrapping), up/down move a row (staying put at the edges), Home/End;
   // each move applies the theme and keeps the chooser open; one Tab stop.
   await page.click('#theme-btn');
@@ -227,6 +236,16 @@ try {
   check('"Theme: High Contrast" switches the theme', (await attr()) === 'contrast');
   await run('theme: sticky');
   check('"Theme: Sticky Note" switches the theme and saves it', (await attr()) === 'sticky' && await page.evaluate(() => localStorage.getItem('board-theme')) === 'sticky');
+  // The palette fades out even when its command changes every colour in one frame (a theme): the command runs once
+  // the palette has faded.
+  await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control'); await page.waitForSelector('#pal-dlg[open]');
+  await sleep(300); await page.keyboard.type('theme: dusk');
+  const palOut = await page.evaluate(async () => {
+    const e = $('pal-dlg'), fr = []; $('pal-in').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const t0 = performance.now(); while (performance.now() - t0 < 400) { const cs = getComputedStyle(e); fr.push({ shown: cs.display !== 'none', op: +cs.opacity, dusk: document.documentElement.dataset.theme === 'dusk' }); await new Promise((r) => requestAnimationFrame(r)); }
+    return { mid: fr.filter((x) => x.shown && x.op > 0 && x.op < 1).length, duskWhileShown: fr.some((x) => x.shown && x.dusk), end: !fr.at(-1).shown, dusk: fr.at(-1).dusk };
+  });
+  check('Ctrl+K with a theme command: the palette fades out, then the theme applies', palOut.mid >= 2 && !palOut.duskWhileShown && palOut.end && palOut.dusk, JSON.stringify(palOut));
   await run('theme: auto');
   check('"Theme: Auto" switches it back', (await attr()) === null);
 

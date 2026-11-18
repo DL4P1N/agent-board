@@ -129,23 +129,37 @@ function reveal(n, dy = -4) { if (n && canMove()) n.animate([{ opacity: 0, trans
 // what stays can glide into its place. r: where it was; host: a positioned box it was inside.
 function leave(n, r, host) {
   if (!n || !r?.width || !host || !canMove()) return;
+  pinCopy(n, r, host);
+  n.animate([{ opacity: 1 }, { opacity: 0 }], { duration: motion().fast, easing: motion().ease, fill: 'forwards' }).finished.then(() => n.remove(), () => n.remove());
+}
+// Something that has gone (or a copy of it), out of the flow at the place r it had inside host (a positioned box):
+// seen, never read out, focused or clicked.
+function pinCopy(n, r, host) {
   const h = host.getBoundingClientRect();
-  for (const a of ['id', 'data-id', 'data-fk']) n.removeAttribute(a);
+  for (const e of [n, ...n.querySelectorAll('[id], [data-id], [data-fk], [data-keep]')]) for (const a of ['id', 'data-id', 'data-fk', 'data-keep']) e.removeAttribute(a);
   n.classList.add('leaving'); n.setAttribute('aria-hidden', 'true'); n.inert = true;
   Object.assign(n.style, { position: 'absolute', margin: '0', left: `${r.left - h.left + host.scrollLeft - host.clientLeft}px`, top: `${r.top - h.top + host.scrollTop - host.clientTop}px`,
     width: `${r.width}px`, height: `${r.height}px`, pointerEvents: 'none', zIndex: '1' });
   host.append(n);
-  n.animate([{ opacity: 1 }, { opacity: 0 }], { duration: motion().fast, easing: motion().ease, fill: 'forwards' }).finished.then(() => n.remove(), () => n.remove());
 }
+// Moves made on this page (Move…, a drag, Undo): only those get the ring, so agents' moves on a live board don't flash
+// the accent every few seconds. A dragged card is already where it was dropped: it doesn't slide there again.
+const localMoves = new Map(); // task id -> { at, glide }
+function noteMove(id, { glide = true } = {}) { localMoves.set(String(id), { at: Date.now(), glide }); }
+// Opening or closing something inside the board (Done, a card's Move… menu or reject form) snaps, like switching
+// Columns / Table: what render() does inside snapCards() moves no card.
+let snapping = false;
+function snapCards(fn) { snapping = true; try { return fn(); } finally { snapping = false; } }
 // Where every card is on screen right now (mid-animation included, so a second move starts from where the card is).
 function cardRects() {
+  if (snapping) return null;
   const m = new Map();
   for (const c of $('board').querySelectorAll('.card:not(.leaving)')) m.set(c.dataset.id, { r: c.getBoundingClientRect(), col: c.closest('.col')?.dataset.status, el: c });
   return m;
 }
-// After the board re-rendered: cards glide from where they were to where they are now; one that changed column gets
-// a ring that fades, a new one fades in, one that went (rejected, cancelled) fades out where it was; Done folding or
-// opening glides the other columns' cards. A big reshuffle just snaps.
+// After the board re-rendered: cards glide from where they were to where they are now; one moved to another column on
+// this page gets a ring that fades, a new one fades in, one that went (rejected, cancelled) fades out where it was.
+// A big reshuffle just snaps.
 function moveCards(before) {
   const jobs = [], now = new Set();
   for (const c of $('board').querySelectorAll('.card:not(.leaving)')) {
@@ -159,11 +173,13 @@ function moveCards(before) {
   if (jobs.length > 48) return;
   const { slow, ease } = motion();
   const ring = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  for (const [id, m] of localMoves) if (Date.now() - m.at > 10e3) localMoves.delete(id);
   if (gone.length <= 2) for (const [, b] of gone) leave(b.el, b.r, $('board'));
   for (const [c, j] of jobs) {
     if (!j) { reveal(c, 6); continue; }
-    c.animate([{ transform: `translate(${j.dx}px, ${j.dy}px)` }, { transform: 'none' }], { duration: slow, easing: ease });
-    if (j.col) c.animate([{ outline: `2px solid ${ring}`, outlineOffset: '1px' }, { outline: '2px solid transparent', outlineOffset: '1px' }], { duration: slow * 4, easing: ease });
+    const mine = j.col && localMoves.get(c.dataset.id); if (mine) localMoves.delete(c.dataset.id);
+    if (!mine || mine.glide) c.animate([{ transform: `translate(${j.dx}px, ${j.dy}px)` }, { transform: 'none' }], { duration: slow, easing: ease });
+    if (mine) c.animate([{ outline: `2px solid ${ring}`, outlineOffset: '1px' }, { outline: '2px solid transparent', outlineOffset: '1px' }], { duration: slow * 4, easing: ease });
   }
 }
 // Panels folding and opening, the Tasks window sliding, Setup opening: apply() makes the change, and the boxes it
@@ -173,7 +189,8 @@ function moveCards(before) {
 //   pin:  [panel, body] for the panel that folds or opens: its body keeps its open height (clipped, not squeezed) and
 //         stays shown (.o-moving) until the panel has landed
 //   move: boxes that are only pushed (they slide from their old place)
-//   open: a box that appears above the pushed ones: it is uncovered from the top down as they slide away
+//   open: a box that appears above the pushed ones: it is uncovered from the top down as they slide away; or one that
+//         goes: a copy of it stays where it was and is covered from the bottom up as they slide back
 // A second change mid-way starts from where things are. With reduced motion it's instant. The promise resolves when
 // everything has landed (false if a newer change took over).
 function glide(apply, { size = [], pin = null, move = [], open = null } = {}) {
@@ -185,23 +202,40 @@ function glide(apply, { size = [], pin = null, move = [], open = null } = {}) {
   if (!canMove()) { stop(); apply(); return Promise.resolve(true); }
   const h0 = size.map((e) => e.getBoundingClientRect().height), y0 = move.map((e) => e.getBoundingClientRect().top), o0 = open?.offsetHeight;
   const bh0 = pb ? pb.getBoundingClientRect().height : 0;
+  const shut = o0 ? [open.cloneNode(true), open.getBoundingClientRect()] : null; // taken before apply() empties it
   stop();
   apply();
   const h1 = size.map((e) => e.getBoundingClientRect().height), y1 = move.map((e) => e.getBoundingClientRect().top);
+  // Opening: the body's height once open, measured now (the panel is still drawn at its folded height until it animates).
+  const bh1 = pb ? pb.getBoundingClientRect().height : 0;
   const { slow: duration, ease: easing } = motion(), o = { duration, easing, id: 'glide' };
   const box = (h) => ({ height: `${h}px`, minHeight: '0px', maxHeight: 'none', flexGrow: 0, flexShrink: 0, flexBasis: 'auto', overflow: 'hidden' });
   const anims = [];
   size.forEach((e, i) => { if (Math.abs(h0[i] - h1[i]) > 1) anims.push(e.animate([box(h0[i]), box(h1[i])], o)); });
   move.forEach((e, i) => { if (Math.abs(y0[i] - y1[i]) > 1) anims.push(e.animate([{ transform: `translateY(${y0[i] - y1[i]}px)` }, { transform: 'none' }], o)); });
   if (open && !o0 && open.offsetHeight && anims.length) anims.push(open.animate([{ clipPath: 'inset(0 -8px 100% -8px)' }, { clipPath: 'inset(0 -8px -8px -8px)' }], o)); // its shadow included
+  if (shut && !open.offsetHeight && anims.length && open.parentElement) {
+    const [copy, r] = shut; pinCopy(copy, r, open.parentElement);
+    const a = copy.animate([{ clipPath: 'inset(0 -8px -8px -8px)' }, { clipPath: 'inset(0 -8px 100% -8px)' }], { ...o, fill: 'forwards' });
+    a.finished.then(() => copy.remove(), () => copy.remove()); anims.push(a);
+  }
   if (!anims.length) return Promise.resolve(true);
   const tok = {};
   if (pp) {
-    const keep = { height: `${Math.max(bh0, pb.getBoundingClientRect().height)}px`, flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }; // folding: as it was; opening: as it will be
+    const keep = { height: `${Math.max(bh0, bh1)}px`, flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }; // folding: as it was; opening: as it will be
     pp.classList.add('o-moving'); pp._glide = tok;
     anims.push(pb.animate([keep, keep], o));
   }
   return Promise.all(anims.map((a) => a.finished)).then(() => { if (pp?._glide === tok) pp.classList.remove('o-moving'); return true; }, () => false);
+}
+// A box whose content just changed grows or shrinks from its old height h0 to its new one, its content clipped meanwhile
+// (Needs attention when a question arrives or is answered: what is under it moves in step). Returns the animation.
+function easeHeight(el, h0) {
+  const h1 = el.getBoundingClientRect().height;
+  if (!canMove() || Math.abs(h0 - h1) <= 1) return null;
+  const { slow: duration, ease: easing } = motion();
+  const box = (h) => ({ height: `${h}px`, minHeight: '0px', maxHeight: 'none', flexGrow: 0, flexShrink: 0, flexBasis: 'auto', overflow: 'hidden' });
+  return el.animate([box(h0), box(h1)], { duration, easing, id: 'glide' });
 }
 // The whole page changes look at once (a theme, the 3D switch): no colour or border transitions while it applies.
 function instantly(fn) {
@@ -214,7 +248,22 @@ function instantly(fn) {
 function toastOut(d) {
   if (!d.isConnected || d.classList.contains('out')) return;
   if (reduceMotion()) return d.remove();
-  d.classList.add('out'); setTimeout(() => d.remove(), motion().fast + 20);
+  d.classList.add('out'); setTimeout(() => toastsShift(() => d.remove()), motion().fast + 20);
+}
+// A toast arriving or going moves the others: they slide to their new places in step (translate, so a toast's own
+// fade in or out, a transform, runs on).
+function toastsShift(fn) {
+  const box = $('toasts');
+  if (!canMove()) return fn();
+  const was = [...box.children].map((t) => [t, t.getBoundingClientRect().top]);
+  fn();
+  const { slow: duration, ease: easing } = motion();
+  for (const [t, y] of was) {
+    if (!t.isConnected) continue;
+    for (const a of t.getAnimations()) if (a.id === 'push') a.cancel();
+    const dy = y - t.getBoundingClientRect().top;
+    if (Math.abs(dy) > 1) t.animate([{ translate: `0 ${dy}px` }, { translate: '0 0' }], { duration, easing, id: 'push' });
+  }
 }
 function toast(msg, bad = false, action = null) {
   const d = document.createElement('div');
@@ -225,7 +274,7 @@ function toast(msg, bad = false, action = null) {
     b.onclick = () => { toastOut(d); action.run(); }; d.append(b);
   }
   if (bad) d.setAttribute('role', 'alert');
-  $('toasts').append(d);
+  toastsShift(() => $('toasts').append(d));
   const shown = [...$('toasts').children].filter((t) => !t.classList.contains('out'));
   shown.slice(0, Math.max(0, shown.length - 3)).forEach(toastOut);
   setTimeout(() => toastOut(d), bad ? 7000 : action ? 8000 : 3500);
@@ -238,6 +287,7 @@ const nameTag = (n) => `<b class="pc" ${hs(n)}>${esc(n)}</b>`;
 // " (you)" after my own name, unless my name already says it.
 const youTag = (n) => (n === me && String(n).toLowerCase() !== 'you' ? ' (you)' : '');
 
-export { agentRoot, ago, announce, canMove, cardRects, clock, cmdBox, esc, fmt, fullTime, FUNNEL, glide, hs, hue,
-  instantly, isHttps, isMe, isStale, isWebUrl, knownPeople, leave, mentionsLite, mentionsMe, motion, moveCards, nameHash,
-  nameTag, ownerOffline, patch, plural, reveal, root, short, taskById, timeEl, toast, when, who, youTag };
+export { agentRoot, ago, announce, canMove, cardRects, clock, cmdBox, easeHeight, esc, fmt, fullTime, FUNNEL, glide, hs,
+  hue, instantly, isHttps, isMe, isStale, isWebUrl, knownPeople, leave, mentionsLite, mentionsMe, motion, moveCards,
+  nameHash, nameTag, noteMove, ownerOffline, patch, plural, reveal, root, short, snapCards, taskById, timeEl, toast, when,
+  who, youTag };

@@ -94,8 +94,8 @@ palDlg.addEventListener('close', () => {
   const run = palNext; palNext = null;
   if (palPrev?.isConnected) palPrev.focus({ preventScroll: true });
   palPrev = null;
-
-  if (run) setTimeout(run);
+  // ...and once it has faded out: a command that redraws the whole page (the 3D switch, a theme) would freeze its fade.
+  if (run) { const fade = palDlg.getAnimations(); if (fade.length) Promise.all(fade.map((a) => a.finished.catch(() => {}))).then(run); else setTimeout(run); }
 });
 palIn.addEventListener('input', () => { palSel = 0; palRender(); });
 palIn.addEventListener('keydown', (ev) => {

@@ -5,7 +5,7 @@ import './agents.js';
 import { $, COL_DESC, COL_EMPTY, COL_SHOWN, COLS, DONE_SHOWN, FROZEN_DESC, HOLDING, LABEL, me, SIZE_TIP, state,
   STATUSES, store, ui } from './state.js';
 import { agentRoot, ago, canMove, cardRects, esc, fmt, fullTime, hs, isHttps, isStale, isWebUrl, moveCards, nameTag,
-  ownerOffline, patch, plural, root, short, taskById, timeEl, toast, when } from './helpers.js';
+  noteMove, ownerOffline, patch, plural, root, short, taskById, timeEl, toast, when } from './helpers.js';
 import { act, api, scheduleReload } from './data.js';
 import { agentInfo, agentLimited, approvalWait, clientOf, colOf, filterRoot, openQuestions, people, taskVisible,
   timeNow } from './derived.js';
@@ -348,7 +348,7 @@ document.addEventListener('drop', (ev) => {
   ev.preventDefault();
   const id = Number(ev.dataTransfer.getData('text/plain')); const t = taskById(id); const to = col.dataset.status;
   ui.dragging = false; // dropped: the columns may render again (the owner question shows on the card)
-  if (t && colOf(t) !== to) moveTask(t, to);
+  if (t && colOf(t) !== to) { moveTask(t, to); if (t.status === to) noteMove(id, { glide: false }); } // already where it was dropped
 });
 // Change a task's status (drag, Move… menu, Release). The toast offers Undo.
 // Claimed / In progress need an owner (asked on the card) and finished dependencies ("Move anyway").
@@ -364,9 +364,11 @@ function moveTask(t, to, { force = false, assignee } = {}) {
     return focusMoveAsk();
   }
   t.status = to; t.updated_at = Date.now(); t.stale = false; if (to === 'open') t.assignee = null; if (assignee) t.assignee = assignee; // optimistic
+  noteMove(id);
   api(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ status: to, ...(assignee ? { assignee } : {}), ...(force ? { force: true } : {}) }) })
     .then(() => {
       toast(`#${id} moved to ${LABEL[to]}${assignee ? ` for ${assignee}` : ''}${to === 'open' && from !== 'open' && prevAssignee ? ' (unassigned)' : ''}`, false, { label: 'Undo', run: () => {
+        noteMove(id);
         act(api(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(from === 'open' ? { status: from } : { status: from, assignee: prevAssignee, force: true }) }), `#${id} is back in ${LABEL[from]}`).catch(() => {});
       } });
       scheduleReload();

@@ -3,7 +3,7 @@
 
 import './topbar.js';
 import { $, ANYONE, BASE, me, setToken, state, store, token, ui } from './state.js';
-import { agentRoot, ago, cmdBox, esc, hs, nameTag, patch, plural, root, toast, when, youTag } from './helpers.js';
+import { agentRoot, ago, canMove, cmdBox, esc, hs, motion, nameTag, patch, plural, root, toast, when, youTag } from './helpers.js';
 import { api, connect, load, showGate, tokenError, unavailableStatus } from './data.js';
 import { agentState, approvalWait, capText, clientOf, copilotLaunch, dlSkipped, notStartedText, setupShown, startCmd,
   stepOpen, teamCapacity, timeNow } from './derived.js';
@@ -41,7 +41,8 @@ const exportBtns = (k) => `<button type="button" data-act="export-md" data-fk="$
 function renderSetup(si) {
   const el = $('setup');
   el.hidden = !setupShown(si);
-  if (el.hidden) return patch(el, '');
+  // Closed, it's emptied once it has faded out (3D on: it closes like the top bar's other popovers).
+  if (el.hidden) { clearTimeout(el._empty); if (!el._html || !canMove()) return patch(el, ''); el._empty = setTimeout(() => { if (el.hidden) patch(el, ''); }, motion().fast + 20); return; }
   const body = { invite: stepInvite, goal: stepGoal, start: stepStart, backlog: stepBacklog, integrator: stepIntegrator };
   const all = si.doneCount >= si.steps.length;
   // The panels' title bar: its name, how far along it is, then x (closes it, focus back on the Setup chip). Once every

@@ -3,7 +3,7 @@
 
 import './theme.js';
 import { $, BASE, oSave, oUi, qs, reduceMotion, state, ui } from './state.js';
-import { announce, canMove, instantly, motion, toast } from './helpers.js';
+import { announce, instantly, toast } from './helpers.js';
 import { stays } from './derived.js';
 import { render } from './render.js';
 import { officeState } from './agents.js';
@@ -52,7 +52,8 @@ function setBoardView(v, { save = true, quiet = false } = {}) {
   if (v === 'office' && !office.mod && !webglWorks()) return noOffice("This browser can't show the 3D office (WebGL is off or not supported). Showing the plain board.");
   const changed = v !== boardView;
   if (changed && save && v === 'office') { office.dockOnce = false; oUi.max = false; oSave(); } // turned on: the board docked, the room in view
-  // The new look applies in one frame (no colour transitions), then the panels and the top bar fade in where they are.
+  // The new look applies in one frame (no colour transitions): the switch moves nothing, so nothing fades either (the
+  // room fades in by itself once it has drawn, see showOffice).
   instantly(() => {
     boardView = v;
     document.documentElement.dataset.boardView = v;
@@ -64,12 +65,7 @@ function setBoardView(v, { save = true, quiet = false } = {}) {
   });
   if (v === 'office') showOffice();
   else if (office.mod) { office.mod.destroy(); office.mod = null; } // off: nothing left on the GPU
-  if (changed && !quiet) {
-    announce(v === 'office' ? '3D office on' : '3D office off: the plain board');
-    if (canMove()) for (const id of ['o-left', 'topbar', 'setup', 'boardwrap', 'o-tasks', 'o-right', 'o-act', 'o-locks']) {
-      const e = $(id); if (e?.offsetWidth) e.animate([{ opacity: 0 }, { opacity: 1 }], { duration: motion().slow, easing: motion().ease, id: 'view' });
-    }
-  }
+  if (changed && !quiet) announce(v === 'office' ? '3D office on' : '3D office off: the plain board');
 }
 // Anything that leads to the task columns: with 3D on, the board comes up over the room (unfolded, expanded).
 function needBoard() { if (boardView !== 'office') return; if (oTasksOff()) oFold('tasks', false); if (!oMax()) oExpand(true); }
@@ -104,9 +100,20 @@ addEventListener('storage', (e) => { if (e.key !== 'board-theme') return; instan
 // Keep the MediaQueryList: a temporary one can be garbage-collected and take its listener with it.
 const darkMq = matchMedia('(prefers-color-scheme: dark)');
 darkMq.addEventListener?.('change', () => instantly(() => office.mod?.setTheme(scenePalette())));
-// The room reads reduced motion when it starts: a change later starts it again with the new setting.
+// The room reads reduced motion when it starts: a change later starts it again with the new setting. The new room is
+// drawn under the old one, which goes once the new one has drawn (no blank frames).
 const motionMq = matchMedia('(prefers-reduced-motion: reduce)');
-motionMq.addEventListener?.('change', () => { if (!office.mod) return; office.mod.destroy(); office.mod = null; showOffice(); });
+motionMq.addEventListener?.('change', () => {
+  const old = office.mod; if (!old || office.loading) return;
+  office.loading = import(BASE + '/office/embed.js').then((m) => {
+    if (office.mod !== old || boardView !== 'office') return;
+    const host = $('office-scene'), o = m.mount(host, { theme: scenePalette(), reducedMotion: reduceMotion(), onPick: pickAgent });
+    if (!o.usable) return o.destroy();
+    host.prepend(host.lastElementChild); // the new room's own box, under the old one
+    office.mod = o; o.update(officeState()); o.select(ui.picked || null); oRate(); oFrame();
+    setTimeout(() => old.destroy(), 250);
+  }).catch(() => {}).finally(() => { office.loading = null; });
+});
 narrowMq.addEventListener?.('change', () => {
   if (narrowMq.matches && boardView === 'office') setBoardView('board', { save: false, quiet: true });
   else if (!narrowMq.matches && boardView !== 'office' && d3Pref() && viewParam !== 'board') setBoardView('office', { save: false, quiet: true });

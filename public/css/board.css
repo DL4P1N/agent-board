@@ -704,10 +704,13 @@ button.tbc:active { transform: translate(1px, 1px); }
 @media (max-width: 600px) { .topbar .tb-goal { flex-basis: 100%; } }
 /* Popovers: the goal (under the top bar) and the demo time and who merges (under their top bar chips), each edited in place. */
 .o-pop { position: absolute; z-index: 8; max-height: min(70vh, 560px); }
-/* Every popover (these, the theme chooser, Setup) opens the same way: a short fade and 4px of travel from the chip it
-   opens under (a phone's theme sheet rises from the bottom). */
-.o-pop, .theme-pop, #setup { transition: opacity var(--t-base) var(--ease), translate var(--t-base) var(--ease); }
-@starting-style { .o-pop, .theme-pop, #setup { opacity: 0; translate: 0 -4px; } }
+/* Every popover (these, the theme chooser, Setup with 3D on) opens the same way: a short fade and 4px of travel from
+   the chip it opens under (a phone's theme sheet rises from the bottom), and closes the same way back, quicker (--t-fast,
+   as everything leaving). With 3D off Setup is uncovered by the board sliding down instead (glide, helpers.js). */
+.o-pop, .theme-pop, html[data-board-view="office"] #setup { transition: opacity var(--t-base) var(--ease), translate var(--t-base) var(--ease); }
+@starting-style { .o-pop, .theme-pop, html[data-board-view="office"] #setup { opacity: 0; translate: 0 -4px; } }
+:is(.o-pop, .theme-pop)[hidden], html[data-board-view="office"] #setup[hidden] { opacity: 0; translate: 0 -4px; pointer-events: none;
+  transition: opacity var(--t-fast) var(--ease), translate var(--t-fast) var(--ease), display var(--t-fast) allow-discrete; }
 .o-goal { top: calc(100% + var(--s4)); left: 0; width: min(560px, 100%); }
 .centre > .o-goal { top: 50px; }
 .o-dl, .o-merge, .o-plan, .o-roles { position: fixed; top: calc(var(--hdr, 54px) + var(--s2)); width: min(400px, calc(100vw - 24px)); z-index: 30; }
@@ -910,7 +913,8 @@ button.tochat { display: none; } /* phones only (below) */
   .hpair { gap: var(--s2); }
   .theme-pop { top: auto; left: 0; right: 0; bottom: 0; z-index: 45; max-width: none; max-height: 78vh; border-width: 2px 0 0; padding-bottom: calc(var(--s4) + env(safe-area-inset-bottom, 0px)); }
   .tp-grid { grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); }
-  @starting-style { .theme-pop { translate: 0 4px; } } /* the sheet rises from the bottom */
+  @starting-style { .theme-pop { translate: 0 4px; } } /* the sheet rises from the bottom, and sinks back */
+  .theme-pop[hidden] { translate: 0 4px; }
   .conn { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; }
   #me-btn { max-width: 26vw; overflow: hidden; text-overflow: ellipsis; padding: 0 var(--s4); }
   main { padding: var(--s4) 14px 72px; gap: var(--gap); } /* 16px to the panels (their 2px margin); room under the last item for the Chat button */
@@ -950,6 +954,9 @@ button.tochat { display: none; } /* phones only (below) */
 @media (max-width: 420px) { header h1 .wm { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
 /* A theme or the 3D switch applies in one frame: no transitions for the two frames it takes (instantly(), helpers.js). */
 html.no-tx *, html.no-tx *::before, html.no-tx *::after, html.no-tx ::backdrop { transition: none !important; }
+/* ...except a dialog closing meanwhile (Ctrl+K running a theme or the 3D switch): it still fades out. */
+html.no-tx dialog:not([open]) { transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease), overlay var(--t-fast) allow-discrete, display var(--t-fast) allow-discrete !important; }
+html.no-tx dialog:not([open])::backdrop { transition: background-color var(--t-fast) var(--ease), overlay var(--t-fast) allow-discrete, display var(--t-fast) allow-discrete !important; }
 /* ---------- reduced motion: everything rests ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after, ::backdrop { animation: none !important; transition: none !important; scroll-behavior: auto !important; }

@@ -3,7 +3,7 @@
 
 import './render.js';
 import { $, ALL_PHASES, ANYONE, me, oUi, state, ui } from './state.js';
-import { ago, canMove, esc, fmt, fullTime, leave, motion, patch, plural, reveal, root, short, taskById, who } from './helpers.js';
+import { ago, canMove, easeHeight, esc, fmt, fullTime, leave, motion, patch, plural, reveal, root, short, taskById, who } from './helpers.js';
 import { agentInfoNow, agentOf, approvalWait, blockedSplit, bouncedTasks, cutTasks, dlSkipped, setupShown,
   teamCapacity, timeNow } from './derived.js';
 
@@ -28,6 +28,7 @@ function syncNeeds() { $('needs').hidden = nowSeen || !!oUi.left; }
 if ('IntersectionObserver' in window) new IntersectionObserver(([e]) => { nowSeen = e.isIntersecting; syncNeeds(); }, { rootMargin: '-56px 0px 0px 0px' }).observe($('nyou'));
 // The single most important thing for this human to do right now (+ at most one low-priority extra).
 function renderNow(qOpen, unread, si) {
+  snapQuestions();
   const S = state.settings; const T = state.tasks.length;
   const review = state.tasks.filter((t) => t.status === 'review').length;
   // A blocked task with an open question is answered by answering it: counted once, with the question.
@@ -128,13 +129,21 @@ function renderNow(qOpen, unread, si) {
 
 }
 
+// A new question fades in, an answered one fades out where it was, the others glide to their places, and Needs
+// attention grows or shrinks to fit in step (what is under it moves with it). Measured before What to do now changes
+// (renderNow, just above the cards, calls this first), so the cards glide from where they were on screen.
+let qWas = null;
+function snapQuestions() {
+  const box = $('questions'), ny = $('nyou');
+  qWas = box._html !== undefined && canMove() && ny.offsetHeight ? { h: ny.getBoundingClientRect().height,
+    cards: new Map([...box.children].filter((c) => c.id && !c.classList.contains('leaving')).map((c) => [c.id, { el: c, r: c.getBoundingClientRect() }])) } : null;
+}
 function renderQuestions(qOpen) {
-  // A new question fades in, an answered one fades out where it was, and the others glide to their places.
-  const box = $('questions');
-  const was = box._html !== undefined && canMove() ? new Map([...box.children].map((c) => [c.id, { el: c, r: c.getBoundingClientRect() }])) : null;
-  const gone = was && !qOpen.length && was.size;
+  const box = $('questions'), ny = $('nyou');
+  const was = qWas; qWas = null;
+  for (const a of ny.getAnimations()) if (a.id === 'glide') a.cancel(); // a second change starts from where it is
+  const gone = was && !qOpen.length && was.cards.size;
   $('q-panel').hidden = !qOpen.length && !gone;
-  if (gone) setTimeout(() => { if (!box.children.length || [...box.children].every((c) => c.classList.contains('leaving'))) $('q-panel').hidden = true; }, motion().fast + 20);
   // Screen readers only: the cards say it.
   patch($('q-h'), qOpen.length ? `${qOpen.length === 1 ? 'An agent is' : `${qOpen.length} agents are`} waiting for a human answer` : '');
   const changed = patch(box, qOpen.map((q) => {
@@ -150,18 +159,25 @@ function renderQuestions(qOpen) {
         <button type="submit" data-fk="qb-${q.id}">Answer</button>
       </form><div class="err" id="qe-${q.id}" role="alert">${esc(ui.qErr?.[q.id] || '')}</div></article>`;
   }).join(''));
-  if (changed && was) {
-    for (const c of box.children) {
-      const b = was.get(c.id); if (!b) { reveal(c); continue; }
-      const dy = b.r.top - c.getBoundingClientRect().top;
-      if (Math.abs(dy) > 1) c.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: motion().slow, easing: motion().ease });
-    }
-    for (const b of was.values()) if (!b.el.isConnected) leave(b.el, b.r, box);
-  }
   // Under the cards, muted: what answering them unblocks (each card's task says "question waiting").
   const nb = blockedSplit(qOpen).asked.length;
   $('q-sum').hidden = !nb;
   patch($('q-sum'), nb ? `Answering ${qOpen.length > 1 ? 'these' : 'it'} unblocks ${plural(nb, 'task')}` : '');
+  if (!was) return;
+  if (changed) {
+    for (const c of box.children) {
+      const b = was.cards.get(c.id); if (!b) { reveal(c); continue; }
+      const dy = b.r.top - c.getBoundingClientRect().top;
+      if (Math.abs(dy) > 1) c.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: motion().slow, easing: motion().ease });
+    }
+    // Only the cards whose question went fade out (the others are on the page again, redrawn).
+    for (const [id, b] of was.cards) if (!document.getElementById(id)) leave(b.el, b.r, box);
+  }
+  // The last one answered: the cards' box stays until Needs attention has shrunk to its new height (the answered card
+  // fading out in it), then goes.
+  if (gone) $('q-panel').hidden = true; // measured as it will be
+  const a = easeHeight(ny, was.h);
+  if (gone && a) { $('q-panel').hidden = false; a.finished.then(() => { if (!box.querySelector('.qcard:not(.leaving)')) $('q-panel').hidden = true; }, () => {}); }
 }
 
 export { nowSeen, renderNeeds, renderNow, renderQuestions, setNowSeen, syncNeeds };

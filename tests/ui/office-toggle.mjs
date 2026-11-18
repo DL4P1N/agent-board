@@ -183,6 +183,22 @@ try {
   const [sh, ah] = [await headOf('#setup'), await headOf('#o-act')];
   check('Setup\'s title bar is the panels\' own: height, label, rule, its x where their buttons are, the same shadow', JSON.stringify(sh) === JSON.stringify(ah), JSON.stringify({ sh, ah }));
   await page.keyboard.press('Escape'); await until(page, () => $('setup').hidden);
+  // With 3D off Setup opens over the board, which slides down for it (Setup uncovered as it goes, no fade over that),
+  // and closes the same way back: Setup stays where it was, covered from the bottom up as the board and the page's foot
+  // slide back up, never a gap above the board.
+  await sleep(400);
+  const sOpen = await page.evaluate(async () => { document.querySelector('[data-fk="s-open"]').click(); const a = $('setup').getAnimations().map((x) => x.id || x.transitionProperty); await new Promise((r) => setTimeout(r, 500)); return a; });
+  const stepSnap = await page.evaluate(() => { const h = [...document.querySelectorAll('#setup .step-h')].find((b) => b.getAttribute('aria-expanded') === 'false'); if (!h) return 'no closed step'; h.click(); return document.getAnimations().filter((a) => a.constructor.name === 'Animation').length; });
+  check('3D off: a Setup step opens at once (no fade or glide inside the panel, like an agent\'s details)', stepSnap === 0, String(stepSnap));
+  const sClose = await page.evaluate(async () => {
+    const foot = document.querySelector('.pagefoot'), f0 = foot.getBoundingClientRect().top; document.querySelector('[data-fk="s-x"]').click();
+    const fr = []; const t0 = performance.now();
+    while (performance.now() - t0 < 450) { fr.push({ bw: $('boardwrap').getBoundingClientRect().top, cover: getComputedStyle($('setup')).display !== 'none' || !!document.querySelector('.centre > .setup.leaving'), foot: foot.getBoundingClientRect().top }); await new Promise((r) => requestAnimationFrame(r)); }
+    const end = fr.at(-1);
+    return { slid: fr.filter((x) => x.bw > end.bw + 20).length, gap: fr.filter((x) => x.bw > end.bw + 20 && !x.cover).length, foot: Math.abs(f0 - end.foot) < 2 || fr.some((x) => (x.foot - f0) * (x.foot - end.foot) < -4), left: document.querySelectorAll('.centre > .leaving').length };
+  });
+  check('3D off: Setup opens uncovered by the board sliding down (one motion, no fade on top of it)', sOpen.join() === 'glide', JSON.stringify(sOpen));
+  check('3D off: Setup closes the same way back: covered from the bottom up as the board and the foot slide up (no gap above the board), nothing left behind', sClose.slid > 2 && !sClose.gap && sClose.foot && !sClose.left, JSON.stringify(sClose));
   // Columns and Table are both Tab stops (like Activity's tabs); "/" opens Activity when it's folded.
   check('Columns and Table are both in the Tab order', await page.evaluate(() => [...$('viewtog').querySelectorAll('button')].every((b) => b.tabIndex === 0)));
   await page.click('#o-act-fold'); await until(page, () => $('o-act').classList.contains('folded'));
@@ -487,6 +503,25 @@ try {
     check('Board view: Agents folds while Activity takes its room in step, no snap', br.anims >= 2 && br.between && !br.snap && br.end[0] < 60 && br.end[1] > br.h0[1] + 100, JSON.stringify(br));
     const bo = await foldRun(page, '#o-right .o-head', ['o-right', 'o-act']);
     check('Board view: a click on the folded title bar opens it again, the same motion back', bo.anims >= 2 && bo.between && !bo.snap && !(await page.evaluate(() => $('o-right').classList.contains('folded'))) && Math.abs(bo.end[0] - br.h0[0]) < 3, JSON.stringify(bo));
+    // A panel opening rolls down with its content in it (its body at its open height all the way), not an empty box
+    // that fills when it lands.
+    const actOpen = await page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(r)); const idle = async () => { while (document.getAnimations().some((a) => a.id === 'glide')) await frame(); };
+      const b = $('o-act').querySelector('[data-o-fold]'); b.click(); await idle(); b.click();
+      const hs = []; const t0 = performance.now();
+      while (document.getAnimations().some((a) => a.id === 'glide') && performance.now() - t0 < 3000) { hs.push(Math.round($('o-act-b').getBoundingClientRect().height)); await frame(); }
+      return { mid: hs.slice(1, -1), end: Math.round($('o-act-b').getBoundingClientRect().height) };
+    });
+    check('Board view: Activity opens with its content in it (its body at its open height while it rolls down)', actOpen.mid.length > 2 && Math.min(...actOpen.mid) > 100 && Math.abs(Math.min(...actOpen.mid) - actOpen.end) < 2, JSON.stringify({ min: Math.min(...actOpen.mid), frames: actOpen.mid.length, end: actOpen.end }));
+    // Popovers close the way they open, quicker: a short fade (--t-fast), then gone.
+    // (Measured by what runs right after the click, not by frames: a busy CI runner may draw few of them in 100ms.)
+    const popOut = await page.evaluate(async () => {
+      $('goal-btn').click(); const t0 = performance.now(); while ((getComputedStyle($('o-goal')).opacity !== '1' || $('o-goal').getAnimations().length) && performance.now() - t0 < 3000) await new Promise((r) => setTimeout(r, 50)); $('goal-btn').click();
+      const e = $('o-goal'), fade = e.getAnimations().map((a) => a.transitionProperty).sort().join(), shown = getComputedStyle(e).display !== 'none';
+      return { hidden: e.hidden, fade, shown };
+    });
+    popOut.gone = await until(page, () => getComputedStyle($('o-goal')).display === 'none');
+    check('Board view: the goal popover closes with a short fade (opacity and 4px of travel), then is gone', popOut.hidden && popOut.shown && /display,opacity,translate/.test(popOut.fade) && popOut.gone, JSON.stringify(popOut));
     const quick = await page.evaluate(async () => {
       const idle = async () => { while (document.getAnimations().some((a) => a.id === 'glide')) await new Promise((r) => requestAnimationFrame(r)); };
       $('o-right').querySelector('[data-o-fold]').click(); $('o-act').querySelector('[data-o-fold]').click(); await idle();
@@ -495,9 +530,15 @@ try {
       return { h, open: ['o-right', 'o-act'].every((i) => !$(i).classList.contains('folded') && $(i).getBoundingClientRect().height > 100), moving: document.querySelectorAll('.o-moving').length };
     });
     check('Board view: two panels of a column folded one right after the other both land folded, and open again the same way', quick.h.every((x) => x < 60) && quick.open && !quick.moving, JSON.stringify(quick));
-    // The 3D switch: the new look in one frame (no colour transitions), then the panels fade in where they are.
-    const sw = await page.evaluate(() => { $('o3d').click(); return { noTx: document.documentElement.classList.contains('no-tx'), fades: document.getAnimations().filter((a) => a.id === 'view').map((a) => a.effect.target.id) }; });
-    check('the 3D switch applies in one frame (no transitions) and fades the panels and the top bar in (opacity only)', sw.noTx && ['o-left', 'topbar', 'o-tasks', 'o-act'].every((i) => sw.fades.includes(i)), JSON.stringify(sw));
+    // The 3D switch: the new look in one frame (no colour transitions). It moves nothing, so nothing fades: the panels
+    // and the top bar are fully shown in every frame (only the room fades in, once it has drawn).
+    const sw = await page.evaluate(async () => {
+      const ids = ['o-left', 'topbar', 'o-act', 'o-right']; const op = () => Math.min(...ids.map((i) => +getComputedStyle($(i)).opacity));
+      $('o3d').click(); const noTx = document.documentElement.classList.contains('no-tx'); let min = op(); const t0 = performance.now();
+      while (performance.now() - t0 < 500) { await new Promise((r) => requestAnimationFrame(r)); min = Math.min(min, op()); }
+      return { noTx, min, fades: document.getAnimations().filter((a) => a.id === 'view').length };
+    });
+    check('the 3D switch applies in one frame (no transitions) and fades nothing: the panels and the top bar fully shown in every frame', sw.noTx && sw.min === 1 && !sw.fades, JSON.stringify(sw));
     check('3D on: the same fold (one memory for both)', await until(page, () => document.documentElement.dataset.boardView === 'office' && $('o-left').classList.contains('folded') && !!$('o-left').offsetWidth && $('o-left').getBoundingClientRect().height < 60));
     await page.click('#o-left [data-o-fold]');
     await page.click('#o3d');
@@ -517,6 +558,16 @@ try {
     check('the palette offers "Turn the 3D office on" on the plain board', /Turn the 3D office on/.test(await page.$eval('#pal-list', (l) => l.innerText)));
     await page.keyboard.press('Enter');
     check('the office comes back without downloading its code again', await until(page, () => document.documentElement.dataset.boardView === 'office') && officeReqs(reqs).filter((u) => /embed\.js/.test(u)).length === embeds);
+    await page.evaluate(() => document.querySelector('[data-fk="s-open"]').click());
+    const sOpen3 = await until(page, () => !$('setup').hidden && getComputedStyle($('setup')).opacity === '1' && !$('setup').getAnimations().length);
+    const s3 = await page.evaluate(async (open) => {
+      const chip = () => document.querySelector('[data-fk="s-open"]'), e = $('setup');
+      chip().click();
+      const fade = e.getAnimations().map((a) => a.transitionProperty).sort().join(), shown = getComputedStyle(e).display !== 'none', full = !!e.querySelector('.o-head');
+      return { open, hidden: e.hidden, fade, shown, full };
+    }, sOpen3);
+    s3.gone = await until(page, () => getComputedStyle($('setup')).display === 'none' && !$('setup').innerHTML); s3.emptied = s3.gone;
+    check('3D on: Setup closes like the other popovers, a short fade with its content in it, then gone (and emptied)', s3.open && s3.hidden && s3.shown && s3.full && /display,opacity,translate/.test(s3.fade) && s3.gone && s3.emptied, JSON.stringify(s3));
 
     // What to do now's links: blocked tasks are listed in the dock (stay); a link to Start here opens the board view.
     await page.click('#now [data-go="blocked"]');
@@ -611,9 +662,20 @@ try {
     await v2.page.close();
 
     // Reduced motion: the board docks and expands at once.
+    // Turned on while the room is up, the room starts again with it, drawn under the old one (no blank frames).
     const rm = await open('/', { setup: () => { try { localStorage.setItem('agent-board-3d', 'on'); } catch {} } });
+    await until(rm.page, () => !!document.querySelector('#office-scene canvas') && !$('office-view').classList.contains('loading') && getComputedStyle($('office-scene')).opacity === '1', null, 20000);
+    // Every frame until the new room is the only one (and a little after): the room is shown in each.
+    await rm.page.evaluate(() => { const w = (window.__room = { blank: 0, frames: 0, two: false, done: false }); let t1 = 0; const loop = () => { w.frames++; const n = $('office-scene').children.length; if (n > 1) w.two = true; if ($('office-view').classList.contains('loading') || !document.querySelector('#office-scene canvas') || +getComputedStyle($('office-scene')).opacity < 1) w.blank++; if (w.two && n === 1 && !t1) t1 = performance.now(); if (t1 && performance.now() - t1 > 400) { w.done = true; return; } requestAnimationFrame(loop); }; loop(); });
     await rm.page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
-    await until(rm.page, () => !!document.querySelector('#office-scene canvas'), null, 20000);
+    await until(rm.page, () => window.__room.done, null, 15000);
+    const room = await rm.page.evaluate(() => ({ ...window.__room, scenes: $('office-scene').children.length }));
+    check('reduced motion turned on with 3D on: the room starts again with it without a blank frame (one room left)', room.done && !room.blank && room.scenes === 1, JSON.stringify(room));
+    check('reduced motion: popovers and Setup close at once, toasts come and go without motion', await rm.page.evaluate(() => {
+      $('goal-btn').click(); $('goal-btn').click(); const g = getComputedStyle($('o-goal')).display === 'none';
+      document.querySelector('[data-fk="s-open"]').click(); const s1 = !$('setup').hidden; document.querySelector('[data-fk="s-open"]').click(); const s2 = getComputedStyle($('setup')).display === 'none';
+      toast('one'); toast('two'); return g && s1 && s2 && !document.getAnimations().length;
+    }));
     check('reduced motion: panels fold and open at once (no animation at all)', await rm.page.evaluate(() => { const ok = []; for (const s of ['#o-right [data-o-fold]', '#o-tasks-fold', '#o-left [data-o-fold]']) { document.querySelector(s).click(); ok.push(!document.getAnimations().length); document.querySelector(s).click(); ok.push(!document.getAnimations().length); } return ok.every(Boolean) && !$('o-right').classList.contains('folded'); }));
     check('reduced motion: the board expands and docks at once (no slide)', await rm.page.evaluate(() => { $('o-tasks-max').click(); const a = !$('o-tasks').getAnimations().length && $('o-tasks').classList.contains('max'); $('o-tasks-max').click(); return a && !$('o-tasks').getAnimations().length && !$('o-tasks').classList.contains('max'); }));
     await rm.page.close();

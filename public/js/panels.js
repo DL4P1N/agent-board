@@ -51,9 +51,10 @@ const oMaxLabel = () => (oMax() ? O_DOCK : O_EXPAND);
 function oExpand(on) {
   const tw = $('o-tasks'), shown = boardView === 'office' && !oTasksOff() && !!tw.offsetHeight;
   office.dockOnce = false;
-  const go = () => { oUi.max = on; oSave(); oApply(); office.mod?.resize(); };
-  if (!shown) return go();
-  oMotion(() => glide(go, { size: [tw] }));
+  const go = () => { oUi.max = on; oSave(); oApply(); };
+  if (!shown) { go(); return office.mod?.resize(); }
+  // The room's canvas is measured again once the board has landed (not in the slide's first frame).
+  oMotion(() => glide(go, { size: [tw] }).then((r) => { office.mod?.resize(); return r; }));
 }
 const oLocksOff = () => (typeof oUi.locks === 'boolean' ? oUi.locks : store.get('board-locks') !== 'open');
 const oOff = (w) => (w === 'tasks' ? oTasksOff() : w === 'locks' ? oLocksOff() : w === 'act' ? !!oUi.actOff : !!oUi[w]);
@@ -121,8 +122,8 @@ function oFold(which, folded = !oOff(which)) {
   const from = document.activeElement;
   oMotion(() => glide(() => {
     oUi[which === 'act' ? 'actOff' : which] = folded; oSave(); renderDocks();
-    if (boardView === 'office') { renderOffice(); office.mod?.resize?.(); }
-  }, { size: col, pin: [box, body] }));
+    if (boardView === 'office') renderOffice();
+  }, { size: col, pin: [box, body] }).then((r) => { if (boardView === 'office') office.mod?.resize?.(); return r; }));
   // Focus stays on the control you used; from inside a body that folds away, it moves to the panel's fold button.
   if (folded && from && body.contains(from)) btn.focus({ preventScroll: true });
   if (which === 'act' && !folded) { const f = $('feed'); f.scrollTop = f.scrollHeight; }
@@ -145,7 +146,8 @@ function oGoal(open, { edit = false } = {}) {
 }
 function oDl(open) {
   ui.oDl = open; ui.dlErr = ''; if (open) { ui.oGoal = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; setupAway(); if (ui.themeOpen) themePop(false, false); }
-  $('o-dl-b').innerHTML = ''; $('o-dl-b')._html = undefined; renderDocks();
+  if (open) { $('o-dl-b').innerHTML = ''; $('o-dl-b')._html = undefined; } // a fresh form (closing, it fades out as it was)
+  renderDocks();
   if (open) $('o-dl-in')?.focus(); else $('clock').focus({ preventScroll: true });
 }
 function oSetup(open, focus = true) {
@@ -300,7 +302,7 @@ document.addEventListener('keydown', (ev) => {
   if (ui.oPlan) return oPlan(false);
   if (ui.oRoles) return oRoles(false);
   if (setupShown() && boardView === 'office') return oSetup(false);
-  if (boardView !== 'office' && setupShown() && ev.target.closest?.('#setup, [data-fk="s-open"]')) { glide(() => oSetup(false, false), { move: [$('boardwrap')] }); return setupFocus(false); }
+  if (boardView !== 'office' && setupShown() && ev.target.closest?.('#setup, [data-fk="s-open"]')) { glide(() => oSetup(false, false), { move: [$('boardwrap'), document.querySelector('.pagefoot')], open: $('setup') }); return setupFocus(false); }
   if (ui.oGoal) return oGoal(false);
   if (boardView === 'office' && oMax() && !oTasksOff() && $('o-tasks').contains(ev.target)) { oExpand(false); return $('o-tasks-max').focus({ preventScroll: true }); }
   if (ui.picked && ev.target.closest?.('#o-right, #office-view')) { const n = ui.picked; pickAgent(null, true); document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }

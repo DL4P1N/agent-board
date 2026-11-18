@@ -72,9 +72,14 @@ await sleep(600);
 const kept = await page.$eval(ta, (e) => [e.value, document.activeElement === e]);
 check('half-typed answer + focus survive SSE re-render', kept[0] === 'Use the hackathon org' && kept[1], JSON.stringify(kept));
 await page.type(ta, ' project, client id is in 1Password');
+// Every frame while it goes: the fading copies in the questions box, and Needs attention's height.
+await page.evaluate(() => { const q = (window.__qf = { leaving: 0, hs: [] }); const t0 = performance.now(); const loop = () => { q.leaving = Math.max(q.leaving, document.querySelectorAll('#questions > .leaving').length); q.hs.push(Math.round(document.getElementById('nyou').getBoundingClientRect().height)); if (performance.now() - t0 < 2500) requestAnimationFrame(loop); }; loop(); });
 await page.keyboard.press('Enter');
-await page.waitForFunction(() => document.querySelectorAll('.qcard').length === 1, { timeout: 5000 });
+await page.waitForFunction(() => document.querySelectorAll('.qcard:not(.leaving)').length === 1, { timeout: 5000 });
 check('answer sent with Enter; question removed', true);
+await sleep(600);
+const qf = await page.evaluate(() => { const { leaving, hs } = window.__qf; const a = hs[0], b = hs.at(-1); return { leaving, a, b, between: hs.some((h) => (h - a) * (h - b) < -4), left: document.querySelectorAll('#questions > .qcard').length }; });
+check('answering: only the answered card fades out (no copies of the others over them), and Needs attention shrinks in step (a frame part-way)', qf.leaving === 1 && qf.left === 1 && qf.b < qf.a && qf.between, JSON.stringify(qf));
 const toastTxt = await page.$eval('#toasts', (e) => e.innerText);
 check('feedback toast after answer', /Answer sent/.test(toastTxt), toastTxt);
 
@@ -145,13 +150,13 @@ await sleep(150);
 check('Escape closes dialog', await page.evaluate(() => !document.getElementById('task-dlg').open));
 
 // drag & drop (synthetic HTML5 DnD). Done starts collapsed below 1600px wide (3D on or off): open it to see the card.
-// Opening it moves the other columns: their cards glide to their new places (measured before the change).
-const dGlide = await page.evaluate(() => {
-  const b = document.querySelector('[data-fk="done-tog"]'); if (!b) return { open: true };
+// Opening it snaps, like switching Columns / Table: no card moves.
+const dSnap = await page.evaluate(() => {
+  const b = document.querySelector('[data-fk="done-tog"]'); if (!b) return { folded: false };
   b.click();
-  return { moving: [...document.querySelectorAll('#board .col:not(.s-done) .card')].filter((c) => c.getAnimations().some((a) => /translate/.test(JSON.stringify(a.effect.getKeyframes())))).length };
+  return { folded: true, open: !!document.querySelector('[data-fk="done-close"]'), moving: document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.target?.closest?.('.card')).length };
 });
-check('Done starts folded at 1440px; opening it glides the other columns\' cards to their places', dGlide.moving > 0, JSON.stringify(dGlide));
+check('Done starts folded at 1440px; opening it snaps (no card animations)', dSnap.folded && dSnap.open && dSnap.moving === 0, JSON.stringify(dSnap));
 await page.evaluate((id) => {
   const card = document.querySelector(`.card[data-id="${id}"]`); const col = document.getElementById('col-done');
   const dt = new DataTransfer();
@@ -159,8 +164,21 @@ await page.evaluate((id) => {
   col.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
   col.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
   card.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }));
-}, newId);
+  const c = document.querySelector(`#col-done .card[data-id="${id}"]`); const kf = (re) => (c ? c.getAnimations().filter((a) => re.test(JSON.stringify(a.effect.getKeyframes()))).length : -1);
+  return { slides: kf(/translate/), rings: kf(/outline/) };
+}, newId).then((r) => check('a dropped card is already where it was dropped: it doesn\'t slide there again, it gets the ring of a move made here', r.slides === 0 && r.rings === 1, JSON.stringify(r)));
 await page.waitForFunction((id) => document.querySelector(`#col-done .card[data-id="${id}"]`), { timeout: 5000 }, newId);
+// Someone else's move (an agent, another person): the card glides to its column, without the accent ring.
+{
+  const other = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.status === 'open' && !t.depends_on.length);
+  await page.evaluate(() => { const w = (window.__mv = { rings: 0, slides: 0 }); const seen = new Set(document.getAnimations()); const loop = () => { for (const a of document.getAnimations()) { if (seen.has(a) || !a.effect?.target?.classList?.contains("card")) continue; seen.add(a); const k = JSON.stringify(a.effect.getKeyframes()); if (/outline/.test(k)) w.rings++; if (/translate/.test(k)) w.slides++; } if (!w.done) requestAnimationFrame(loop); }; loop(); });
+  await rest('chen', `/tasks/${other.id}`, 'PATCH', { status: 'blocked' });
+  await page.waitForFunction((id) => document.querySelector(`#col-blocked .card[data-id="${id}"]`), { timeout: 5000 }, other.id);
+  await sleep(300);
+  const mv = await page.evaluate(() => { window.__mv.done = true; return window.__mv; });
+  check('a move made elsewhere glides the card without the accent ring (the ring is for moves made on this page)', mv.slides >= 1 && mv.rings === 0, JSON.stringify(mv));
+  await rest('chen', `/tasks/${other.id}`, 'PATCH', { status: 'open' });
+}
 const st = await rest('dana', '/state', 'GET');
 check('drag to Done persists on server', st.tasks.find((t) => t.id === Number(newId)).status === 'done');
 
@@ -184,7 +202,14 @@ await page.click(`.card[data-id="${readmeId}"] [data-ask-to="bob"]`);
 await page.waitForFunction((id) => document.querySelector(`#col-in_progress .card[data-id="${id}"]`), { timeout: 5000 }, readmeId);
 const rd = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === readmeId);
 check('WB-13 picking an agent moves it with that owner', rd.status === 'in_progress' && rd.assignee === 'bob', `${rd.status} ${rd.assignee}`);
-await domClick(`[data-move="${apiId}"]`);
+// What opens inside a card snaps open (one rule with Done, a Setup step and an agent's details): no fade, no glide.
+const mvSnap = await page.evaluate(async (id) => {
+  const moving = () => document.getAnimations().filter((a) => a.constructor.name === 'Animation' && a.playState === 'running' && !/outline/.test(JSON.stringify(a.effect.getKeyframes())));
+  const t0 = performance.now(); while (moving().length && performance.now() - t0 < 3000) await new Promise((r) => requestAnimationFrame(r)); // what the last move started has landed
+  document.querySelector(`[data-move="${id}"]`).click();
+  return { menu: !!document.querySelector(`.card[data-id="${id}"] .mvmenu`), anims: moving().map((a) => a.effect.target.className).join() };
+}, apiId);
+check('a card\'s Move… menu snaps open (no fade, no card glides)', mvSnap.menu && mvSnap.anims === '', JSON.stringify(mvSnap));
 await domClick(`[data-move-to="in_progress"][data-move-id="${apiId}"]`);
 await page.waitForFunction(() => [...document.querySelectorAll('#toasts .toast')].some((t) => /waits on/.test(t.innerText)), { timeout: 5000 });
 const wt = await page.$$eval('#toasts .toast', (ts) => ts.map((t) => t.innerText).find((x) => /waits on/.test(x)));
@@ -238,6 +263,15 @@ check('WB-17 long title clamped to 3 lines with a tooltip', ltm.h <= ltm.lh * 3 
 await page.evaluate(() => toast('position check'));
 const tr = await page.evaluate(() => { const t = [...document.querySelectorAll('#toasts .toast')].at(-1).getBoundingClientRect(); return { l: t.left, r: t.right, w: window.innerWidth }; });
 check('WB-26 toasts are on the right, away from the Open column', tr.l > tr.w / 2, JSON.stringify(tr));
+// A new toast pushes the older ones up in step: in the first frame they are still where they were, then they slide.
+await sleep(400);
+const push = await page.evaluate(async () => {
+  const old = [...document.querySelectorAll('#toasts .toast:not(.out)')].at(-1); const y0 = old.getBoundingClientRect().top;
+  toast('second toast'); const ys = [];
+  for (let i = 0; i < 30; i++) { ys.push(Math.round(old.getBoundingClientRect().top)); await new Promise((r) => requestAnimationFrame(r)); }
+  return { y0: Math.round(y0), first: ys[0], end: ys.at(-1), between: ys.some((y) => y < y0 - 2 && y > ys.at(-1) + 2) };
+});
+check('a new toast pushes the older one up in step (from where it was, a frame part-way), not in one frame', Math.abs(push.first - push.y0) <= 1 && push.end < push.y0 - 10 && push.between, JSON.stringify(push));
 // WB-14: a long column shows 12 cards, then "Show N more"
 for (let i = 0; i < 20; i++) await rest('dana', '/tasks', 'POST', { title: `Filler task ${i}` });
 await page.waitForSelector('[data-show-col="open"]', { timeout: 5000 });

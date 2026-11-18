@@ -3,7 +3,7 @@
 
 import './activity.js';
 import { $, ANYONE, LABEL, seenMention, setSeenMention, smooth, state, store, ui } from './state.js';
-import { agentRoot, ago, announce, clock, esc, glide, mentionsMe, plural, reveal, taskById, toast, when } from './helpers.js';
+import { agentRoot, ago, announce, clock, esc, glide, mentionsMe, plural, snapCards, taskById, toast, when } from './helpers.js';
 import { act, api, load, scheduleReload } from './data.js';
 import { agentInfoNow, bouncedTasks, cutTasks, dlSkipped, filterRoot, openQuestions, setupInfo, setupOpen, stepOpen,
   teamCapacity } from './derived.js';
@@ -89,19 +89,21 @@ document.addEventListener('click', (ev) => {
   if (ev.target.closest('a[href]')) return; // links (PRs, URLs in chat) open by themselves
   if (ev.target.closest('.card input, .card label')) return; // typing a reject reason doesn't open the card
   const el = ev.target.closest('button, .card, [data-open-task]');
-  if (ui.moveMenu && !ev.target.closest('.mvmenu, [data-move]')) { ui.moveMenu = null; render(); }
-  if (ui.moveAsk && !ev.target.closest('.mvask, [data-move-to]')) { ui.moveAsk = null; render(); }
+  // What opens inside a card (its Move… menu, who it's for, the reject reason), Done and a Setup step snap open and
+  // shut, like an agent's details: only cards that change column glide.
+  if (ui.moveMenu && !ev.target.closest('.mvmenu, [data-move]')) { ui.moveMenu = null; snapCards(render); }
+  if (ui.moveAsk && !ev.target.closest('.mvask, [data-move-to]')) { ui.moveAsk = null; snapCards(render); }
   if (!el) return;
   const d = el.dataset;
   if (el.classList.contains('card')) return openTask(Number(d.id));
-  if (d.move) { const id = Number(d.move); ui.moveMenu = ui.moveMenu === id ? null : id; render(); reveal(document.querySelector(`.card[data-id="${id}"] .mvmenu`)); return (ui.moveMenu ? document.querySelector(`.card[data-id="${id}"] .mvmenu button`) : document.querySelector(`[data-fk="mv-${id}"]`))?.focus({ preventScroll: true }); }
+  if (d.move) { const id = Number(d.move); ui.moveMenu = ui.moveMenu === id ? null : id; snapCards(render); return (ui.moveMenu ? document.querySelector(`.card[data-id="${id}"] .mvmenu button`) : document.querySelector(`[data-fk="mv-${id}"]`))?.focus({ preventScroll: true }); }
   if (d.moveTo) { const id = Number(d.moveId); const t = taskById(id); ui.moveMenu = null; if (t && t.status !== d.moveTo) moveTask(t, d.moveTo); render(); return ui.moveAsk?.id === id ? document.querySelector(`.card[data-id="${id}"] .mvask button`)?.focus({ preventScroll: true }) : focusCard(id); }
   if (d.askTo) { const id = Number(d.askId); const t = taskById(id); const { to, force } = ui.moveAsk || {}; ui.moveAsk = null; if (t && to) moveTask(t, to, { force, assignee: d.askTo }); render(); return focusTask(id); }
-  if (d.askCancel) { const id = Number(d.askCancel); ui.moveAsk = null; render(); return focusTask(id); }
+  if (d.askCancel) { const id = Number(d.askCancel); ui.moveAsk = null; snapCards(render); return focusTask(id); }
   if (d.release) { const t = taskById(Number(d.release)); if (t) { moveTask(t, 'open'); render(); } return; }
   if (d.approve) { const id = Number(d.approve); act(api(`/tasks/${id}/decide`, { method: 'POST', body: JSON.stringify({ approve: true }) }), `Approved #${id}: agents can claim it now`).then(() => focusCard(id)).catch(() => {}); return; }
-  if (d.reject) { ui.rejecting = Number(d.reject); render(); return $('rj-' + d.reject)?.focus(); }
-  if (d.rejectNo) { const id = Number(d.rejectNo); ui.rejecting = null; render(); return document.querySelector(`[data-fk="rj-b-${id}"]`)?.focus(); }
+  if (d.reject) { ui.rejecting = Number(d.reject); snapCards(render); return $('rj-' + d.reject)?.focus(); }
+  if (d.rejectNo) { const id = Number(d.rejectNo); ui.rejecting = null; snapCards(render); return document.querySelector(`[data-fk="rj-b-${id}"]`)?.focus(); }
   if (d.limit) { ui.limitForm = d.limit; render(); return $('lu-' + d.limit)?.focus(); }
   if (d.limcancel) { const n = d.limcancel; ui.limitForm = null; render(); return document.querySelector(`[data-fk="lm-${CSS.escape(n)}"]`)?.focus(); }
   if (d.unlimit) { const n = d.unlimit; act(api(`/agents/${encodeURIComponent(n)}`, { method: 'PATCH', body: JSON.stringify({ limited: false }) }), `${n} counts as available again`).catch(() => {}); return; }
@@ -116,7 +118,7 @@ document.addEventListener('click', (ev) => {
   }
   if (d.goQ) return goQuestion(Number(d.goQ));
   if (d.copy) return copyText(d.copy, el);
-  if (d.step) { const si = setupInfo(); ui.steps[d.step] = !stepOpen(d.step, si.cur); render(); return reveal($('sb-' + d.step)); }
+  if (d.step) { const si = setupInfo(); ui.steps[d.step] = !stepOpen(d.step, si.cur); return render(); }
   if (d.act) return doAct(d.act, el);
   if (d.go && d.go.startsWith('step-')) return goStep(d.go.slice(5));
   if (d.go === 'compose') { oShow('act'); $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); return $('msg').focus({ preventScroll: true }); }
@@ -406,7 +408,7 @@ function doAct(a, el) {
     const open = a === 'setup-open';
     if (boardView === 'office') return oSetup(open);
     // With 3D off Setup opens over the board, which slides down to make room (and back up when it closes).
-    glide(() => oSetup(open, false), { move: [$('boardwrap')], open: $('setup') });
+    glide(() => oSetup(open, false), { move: [$('boardwrap'), document.querySelector('.pagefoot')], open: $('setup') });
     return setupFocus(open);
   }
   if (a === 'invite') return goStep('invite');
@@ -417,16 +419,20 @@ function doAct(a, el) {
   if (a === 'repo-edit') { ui.editRepo = true; render(); return $('repo-in')?.focus(); }
   if (a === 'repo-cancel') { ui.editRepo = false; ui.repoErr = ''; render(); return document.querySelector('[data-fk="repo-edit"]')?.focus(); }
   if (a === 'done-toggle') {
-    const open = !doneOpen(); ui.doneOpen = open ? 'open' : 'closed'; store.set('board-done', ui.doneOpen); render();
+    const open = !doneOpen(); ui.doneOpen = open ? 'open' : 'closed'; store.set('board-done', ui.doneOpen); snapCards(render);
     return document.querySelector(`[data-fk="${open ? 'done-close' : 'done-tog'}"]`)?.focus({ preventScroll: true });
   }
   if (a === 'new-task') return openTask(null);
   if (a === 'clear-search') { tv.q = ''; $('tsearch').value = ''; renderBoard(); renderOffice(); return $('tsearch').focus(); }
 }
 function goStep(key, focus) {
-  const si = setupInfo();
-  if (!setupOpen(si.complete)) { ui.forceSetup = true; ui.oGoal = false; ui.oDl = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; } // open for this visit only
-  ui.steps[key] = true; render();
+  const si = setupInfo(), opening = !setupOpen(si.complete);
+  const show = () => {
+    if (opening) { ui.forceSetup = true; ui.oGoal = false; ui.oDl = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; } // open for this visit only
+    ui.steps[key] = true; render();
+  };
+  // With 3D off Setup opens over the board, which slides down for it (as from the Setup chip).
+  if (opening && boardView !== 'office') glide(show, { move: [$('boardwrap'), document.querySelector('.pagefoot')], open: $('setup') }); else show();
   const li = $('step-' + key); if (!li) return;
   li.scrollIntoView({ behavior: smooth(), block: 'start' });
   if (focus === 'dl' && !ui.editDeadline) { ui.editDeadline = true; render(); }
