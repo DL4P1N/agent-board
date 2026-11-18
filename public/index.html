@@ -733,7 +733,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .card .ct .id { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
   .card .bn { font-size: var(--fs-meta); color: var(--bad); margin-top: var(--s2); white-space: pre-wrap; }
   .card .cm { color: var(--muted); font-size: var(--fs-meta); margin-top: var(--s3); display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); align-items: center; font-variant-numeric: tabular-nums; }
-  .card .mv { margin-left: auto; font-size: var(--fs-micro); font-weight: 400; padding: 0 6px; min-height: calc(var(--ctl-xs) - 2px); background: transparent; color: var(--muted); border: 2px solid var(--line); box-shadow: none; border-radius: var(--r-sm); }
+  .card .mv { margin-left: auto; font-size: var(--fs-micro); font-weight: 400; padding: 0 6px; min-height: var(--ctl-xs); background: transparent; color: var(--muted); border: 2px solid var(--line); box-shadow: none; border-radius: var(--r-sm); }
   .card .mv:hover, .card .mv[aria-expanded="true"] { background: var(--chip); color: var(--ink); border-color: var(--field-line); }
   /* Move… shows on the card under the pointer or with focus (it stays in the Tab order and for screen readers); twenty
      of them at once were the loudest repeated shape on the board. With a mouse it floats over the end of the facts line,
@@ -1130,7 +1130,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   /* All six fit a 256px panel (on touch screens they scroll, with the fade at the right edge). */
   /* Six tabs in a 224px panel: a size smaller, spread across the row (they all fit, evenly spaced). */
   .o-act .tabs { justify-content: space-between; }
-  .o-act .tabs button { padding: 0 var(--s1); min-width: 0; font-size: var(--fs-meta); }
+  .o-act .tabs button { padding: 0 var(--s1); min-width: var(--ctl-xs); font-size: var(--fs-meta); } /* at least 24px each, like every control */
   @media (hover: none) and (pointer: coarse) { .o-act .tabs button { min-width: var(--ctl-xs); } }
   .o-act .feedwrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   @media (max-height: 760px) { .o-rcol > .o-right { max-height: 34%; } } /* short screens: Activity keeps room for a few events */

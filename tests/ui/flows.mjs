@@ -51,8 +51,9 @@ check('laptop: What to do now stays in view in its rail when the board scrolls, 
 await page.setViewport({ width: 960, height: 1000 }); await page.evaluate(() => window.scrollTo(0, 1600)); await sleep(400);
 const needs = await page.$eval('#needs', (e) => ({ hidden: e.hidden, t: e.innerText.replace(/\s+/g, ' '), label: e.querySelector('button')?.getAttribute('aria-label') || '' }));
 check('header need-attention badge when scrolled: questions and the mention, the blocked-on-a-question task not counted twice', !needs.hidden && /^3 need attention/.test(needs.t) && /2 questions/.test(needs.label) && /1 new mention/.test(needs.label) && !/blocked/.test(needs.label), JSON.stringify(needs));
-await page.click('#needs button'); await sleep(600);
-check('the badge goes back up to What to do now', await page.evaluate(() => !!document.activeElement?.closest('#now') && $('needs').hidden));
+await page.click('#needs button');
+// A smooth scroll: wait for it (slower on CI's software renderer) rather than a fixed time.
+check('the badge goes back up to What to do now', await page.waitForFunction(() => !!document.activeElement?.closest('#now') && $('needs').hidden, { timeout: 5000, polling: 100 }).then(() => true).catch(() => false));
 await page.setViewport({ width: 1440, height: 1000 });
 await page.evaluate(() => window.scrollTo(0, 0));
 check('XSS text rendered as text', await page.evaluate(() => [...document.querySelectorAll('.ev .eb')].some((e) => e.textContent.includes('<script>alert(1)</script>'))));
