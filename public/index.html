@@ -4621,6 +4621,11 @@ function viewAnim(v, from) {
     const sc = $('office-scene'); sc.style.transition = 'none'; sc.style.opacity = '0';
     const showScene = () => { sc.style.transition = ''; sc.style.opacity = ''; };
     run.anims.push({ cancel: showScene });
+    // The Tasks window already holds the real columns: it stays hidden while the copy falls (or two boards show), and
+    // takes over as the copy lands.
+    const tw = $('o-tasks'); if (tw) tw.style.visibility = 'hidden';
+    const showTasks = () => { if (tw) tw.style.visibility = ''; };
+    run.anims.push({ cancel: showTasks });
     // Wait for the room: its first load, then two frames so the canvas shows a fresh picture under the ghost.
     Promise.resolve(office.loading).then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))).then(() => {
       showScene();
@@ -4628,13 +4633,13 @@ function viewAnim(v, from) {
       if (boardView !== 'office') return viewAnimEnd();
       const t = $('o-tasks').getBoundingClientRect();
       const dy = Math.max(40, (t.height ? t.top : innerHeight) - from.top);
-      const drop = run.ghost.animate([{ transform: 'none', opacity: 1 }, { transform: `translateY(${dy * 0.85}px)`, opacity: 1, offset: 0.8 }, { transform: `translateY(${dy}px)`, opacity: 0 }], { duration: 420, easing: fall, fill: 'forwards' });
+      const drop = run.ghost.animate([{ transform: 'none', opacity: 1 }, { transform: `translateY(${dy * 0.85}px)`, opacity: 1, offset: 0.75 }, { transform: `translateY(${dy}px)`, opacity: 0 }], { duration: 420, easing: fall, fill: 'forwards' });
       run.anims.push(drop);
       drop.finished.then(() => {
         if (run.cancelled) return;
-        run.ghost.remove();
-        // The Tasks window takes the landing: a small settle.
-        const tw = $('o-tasks'); if (tw && !reduceMotion()) run.anims.push(tw.animate([{ transform: 'translateY(6px)' }, { transform: 'none' }], { duration: 180, easing: land }));
+        run.ghost.remove(); showTasks();
+        // The Tasks window takes the landing: it fades in with a small settle.
+        if (tw) tw.animate([{ transform: 'translateY(8px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 200, easing: land });
         vtRun = null; oFrame();
       }).catch(() => {});
     });
@@ -4643,10 +4648,11 @@ function viewAnim(v, from) {
   // 3D → Board: the real board rises from where the Tasks window was, over the room, which stays where it was (behind
   // the page, still drawing) and fades out at the end. The board is opaque all the way: no empty frame between views.
   const ov = $('office-view'); const keepRoom = !!(from.room && office.mod);
-  const dropRoom = () => { ov.removeAttribute('style'); ov.removeAttribute('aria-hidden'); if (boardView !== 'office') office.mod?.setActive(false); };
+  const otw = $('o-tasks');
+  const dropRoom = () => { ov.removeAttribute('style'); ov.removeAttribute('aria-hidden'); if (otw) otw.style.visibility = ''; if (boardView !== 'office') office.mod?.setActive(false); };
   if (keepRoom) {
     Object.assign(ov.style, { display: 'block', position: 'fixed', left: `${from.room.left}px`, top: `${from.room.top}px`, width: `${from.room.width}px`, height: `${from.room.height}px`, zIndex: '-1', pointerEvents: 'none' });
-    ov.setAttribute('aria-hidden', 'true');
+    ov.setAttribute('aria-hidden', 'true'); if (otw) otw.style.visibility = 'hidden';
     office.mod.setActive(true);
     run.anims.push({ cancel: dropRoom });
     run.anims.push(ov.animate([{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: 420, fill: 'forwards' }));

@@ -141,6 +141,7 @@ try {
     });
     check('the room gets at least half of the 3D view by default (was 38%)', share >= 0.5, share.toFixed(2));
     check('no Progress toggle: no bottom chips at all', await page.evaluate(() => !document.querySelector('.o-bot, #o-prog-chip, #o-act-chip, #o-chat-chip')));
+    check('the board copy falls alone: the Tasks window shows only once it has landed (never two boards at once)', await until(page, () => !document.querySelector('.vt-ghost') && getComputedStyle($('o-tasks')).visibility === 'visible'));
     await page.click('#o-tasks-fold');
     check('the button in the Tasks title bar opens the window', await page.evaluate(() => !$('o-tasks').classList.contains('folded') && $('o-cols').offsetHeight > 50 && $('o-tasks-fold').getAttribute('aria-expanded') === 'true'));
     check('the room fills the window under the header; the task columns are hidden; no scrolling', await page.evaluate(() => { const r = $('office-view').getBoundingClientRect(); const h = document.querySelector('#app > header').getBoundingClientRect(); return Math.abs(r.top - h.bottom) < 3 && Math.abs(r.bottom - innerHeight) < 2 && r.width === innerWidth && !$('board').offsetWidth && document.documentElement.scrollHeight <= innerHeight + 1; }));
