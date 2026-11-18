@@ -5,7 +5,7 @@ import './data.js';
 import { ACTIVE, AGENT_ONLINE_MS, ANYONE, HOLDING, me, seenMention, state, store, ui } from './state.js';
 import { agentRoot, clock, mentionsMe, plural, root, when } from './helpers.js';
 import { settingsText } from './activity.js';
-import { boardView } from './boot.js';
+import { boardView } from './office.js';
 
 // ---------- derived ----------
 // Every agent we know of, by agent name ("dana-codex"): from presence, plus things only agents do.

@@ -13,7 +13,8 @@ import { renderBoard, renderBoardEmpty, renderBoardNote, renderCi, renderFilter 
 import { announceActivity, dmUnreadCount, markDmSeen, renderFeed, renderLocks } from './activity.js';
 import { markMentionsSeen } from './actions.js';
 import { renderDialogLive } from './task-dialog.js';
-import { boardView, office, renderDocks, renderOffice } from './boot.js';
+import { boardView, office } from './office.js';
+import { renderDocks, renderOffice } from './panels.js';
 
 // ---------- render ----------
 let prevQIds = null;

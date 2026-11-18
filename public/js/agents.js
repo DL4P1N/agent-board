@@ -7,7 +7,7 @@ import { agentRoot, ago, esc, FUNNEL, hs, isStale, patch, root, short, taskById,
 import { agentInfo, agentsLine, agentState, capText, capTip, filterRoot, isLimited, limitText, notStartedText,
   openQuestions, people, startCmd } from './derived.js';
 import { teamCapHtml } from './setup.js';
-import { boardView } from './boot.js';
+import { boardView } from './office.js';
 
 // ---------- Agents: one component for both views ----------
 // Per person a heading line (initial, name, roles, the person filter), then one row per agent: its tool's dot, its name

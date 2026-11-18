@@ -10,7 +10,7 @@ import { agentInfoNow, isLimited, roster } from './derived.js';
 import { render } from './render.js';
 import { selfMoves } from './topbar.js';
 import { actionText, expandedEv, isAction, isChat, isLong } from './tasks.js';
-import { oShow } from './boot.js';
+import { oShow } from './panels.js';
 
 // Screen readers: mentions of me and newly blocked tasks, said politely, at most once every ACT_GAP ms.
 // Questions and the freeze have their own announcements (#announcer).

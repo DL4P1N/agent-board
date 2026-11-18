@@ -13,8 +13,9 @@ import { exportFile, inviteText, nfEvents, NOTIFY_KIND, rotateToken } from './se
 import { askAgents, doneOpen, moveTask, pingedAt, renderBoard, tv } from './tasks.js';
 import { closeAc, growMsg, openDm } from './activity.js';
 import { openTask } from './task-dialog.js';
-import { boardView, needBoard, oAct, oDl, oGoal, oMerge, oPlan, oRoles, oSetup, oShow, pickAgent, renderDocks,
-  renderOffice, setupFocus, togglePalette } from './boot.js';
+import { boardView, needBoard } from './office.js';
+import { oAct, oDl, oGoal, oMerge, oPlan, oRoles, oSetup, oShow, pickAgent, renderDocks, renderOffice, setupFocus } from './panels.js';
+import { togglePalette } from './palette.js';
 
 let keysOn = store.get('board-keys') !== 'off';
 

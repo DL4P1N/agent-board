@@ -12,7 +12,7 @@ import { agentInfo, agentLimited, approvalWait, clientOf, colOf, filterRoot, ope
 import { render } from './render.js';
 import { exportBtns } from './setup.js';
 import { focusMoveAsk, moveAskHtml } from './actions.js';
-import { renderOffice } from './boot.js';
+import { renderOffice } from './panels.js';
 
 function renderBoardEmpty(si) {
   const el = $('board-empty'); const S = state.settings;
