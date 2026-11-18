@@ -114,6 +114,26 @@ The rules for capacity, fair sharing, reservations and proposals are in [How wor
 
 **Tokens.** Humans use the board token; each AI tool gets a weaker agent token derived from it. See [Agents get a weaker token](using-the-board.md#agents-subagents-and-tokens). The Boards page uses a separate admin token.
 
+## Code layout
+
+`src/server.js` is the entry point: it reads the settings, opens the boards list and the boards, builds the app and starts listening. The rest of `src/`:
+
+| File | What it holds |
+|---|---|
+| `board.js` | The coordination engine: tasks, locks, events, `next_action`, SQLite. No HTTP. |
+| `mcp.js` | The MCP tools an agent calls. |
+| `boards.js` | The boards list (`boards.json`), board and admin tokens on disk. |
+| `runtime.js` | One running board: wires the modules below together and stops them on `close()`. |
+| `live-boards.js` | Which boards are running: start, stop, the "failed to open" list, the numbers for the Boards page. |
+| `app.js`, `admin.js` | The Express app (security headers, `/health`, routing to `/b/<slug>/` or the default board) and the admin API behind the Boards page. |
+| `routes-api.js`, `routes-mcp.js`, `routes-stream.js` | A board's REST routes, its MCP endpoint, and its live stream (server-sent events). |
+| `auth.js`, `tokens.js` | Token checks and the three roles, rotation and retired hashes; the derived agent and viewer tokens. |
+| `request-limits.js`, `limits.js` | The 429 answers; the in-memory counters behind them. |
+| `github.js` | PR status and main's CI through `gh`, and the messages they trigger. |
+| `notify.js`, `webhook.js` | Which events buzz a phone and in what format; the address checks and pinned delivery. |
+| `backup.js`, `announce.js`, `timers.js`, `board-settings.js` | Automatic backups; the feature-freeze announcements; a board's timers; its hidden (underscore) settings. |
+| `config.js`, `network.js`, `pidfile.js`, `startup.js`, `http-util.js` | Settings from the environment; where teammates can reach the server and the join commands; the `board.pid` marker; the startup banner and host-join offer; small request helpers. |
+
 ## Security model
 
 **Built for one trusted team.** A board is meant for a team that trusts each other's laptops and AI tools, on the same network, Tailscale or a tunnel, for a day or a hackathon. It keeps outsiders out and keeps agents away from the human-only controls. It does not try to protect teammates from each other.
@@ -123,7 +143,7 @@ The rules for capacity, fair sharing, reservations and proposals are in [How wor
 - **Separate tokens.** The board token (humans: the web board, join), the agent token (each AI tool: MCP and reading the board, never the human-only actions) and the viewer token (the presenter view: read the board, nothing else). The agent and viewer tokens are derived from the board token one way, so neither reveals it. The Boards page has its own admin token, which works nowhere else.
 - **Constant-time token compare** (`crypto.timingSafeEqual`).
 - **Rotation.** *Rotate token* makes a new board token, keeps hashes of the retired ones (so an old link gets "the token was changed", not a bare 401) and closes every live stream opened with the old one.
-- **Webhooks can't reach the host's network.** A webhook URL must be https (http only for localhost) and must not point at a private, loopback, link-local or reserved address, also when it's hidden in an IPv6 form (IPv4-mapped, NAT64, 6to4). The name is resolved and checked before every message, the message goes to the address that was checked, and redirects aren't followed. See [src/webhook.js](../src/webhook.js).
+- **Webhooks can't reach the host's network.** A webhook URL must be https (http only for localhost) and must not point at a private, loopback, link-local or reserved address, also when it's hidden in an IPv6 form (IPv4-mapped, NAT64, 6to4). The name is resolved and checked before every message, the message goes to the address that was checked, and redirects aren't followed. See [src/webhook.js](../src/webhook.js) (the address checks) and [src/notify.js](../src/notify.js) (the delivery glue).
 - **Rate and concurrency limits.** Board calls per agent and per network address, and open waits and live streams per agent and in total, answer 429 with `Retry-After` past their limits. They're there for runaway loops, not attackers. See [Limits](hosting.md#limits).
 - **Parameterised SQL.** Every value goes into SQLite as a `?` parameter; the few statements built from strings use fixed table and column names only.
 - **Untrusted text stays text.** Text from agents and from GitHub is escaped wherever the pages show it ([tests/ui/hostile.mjs](../tests/ui/hostile.mjs) pushes hostile strings through every field an agent controls), and GitHub comments reach agents as quoted data with `@` defused.
