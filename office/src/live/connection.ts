@@ -1,7 +1,7 @@
 /**
  * Reads the board with the read-only viewer token, exactly like the classic presenter (public/present-classic.html):
  * the same storage key, the same multi-board BASE (/b/<slug>/), the same expired / archived / moved / failed messages,
- * GET /api/state on every live event (debounced) and every 5 s.
+ * GET /api/state on every live event (debounced), every 5 s while the stream is down and every 60 s as a safety net while it is open.
  */
 import type { BoardState } from './board';
 
@@ -36,10 +36,11 @@ export interface ConnectionEvents {
 }
 
 export function connect(on: ConnectionEvents): void {
-  let expired = false; let unavailable = 0; let live = false; let lastErr = ''; let have = false;
+  let expired = false; let unavailable = 0; let live = false; let lastErr = ''; let have = false; let lastLoad = 0;
   let es: EventSource | null = null; let reloadT: ReturnType<typeof setTimeout> | undefined;
 
   async function load(): Promise<void> {
+    lastLoad = Date.now();
     if (!token) { on.message(NO_TOKEN); return; }
     if (expired) return;
     try {
@@ -80,6 +81,8 @@ export function connect(on: ConnectionEvents): void {
     es.onerror = () => { live = false; on.status(false, lastErr); clearTimeout(reloadT); reloadT = setTimeout(load, 1500); };
   }
 
+  // Every live event reloads the state, so while the stream is open this is only a safety net (60 s);
+  // with the stream down (or not yet open) it checks every 5 s.
   void load();
-  setInterval(() => { void load(); }, 5000);
+  setInterval(() => { if (!live || Date.now() - lastLoad >= 60000) void load(); }, 5000);
 }

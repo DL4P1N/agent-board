@@ -209,7 +209,8 @@ export class OfficeScene {
     this.cam.reducedMotion = this.reduced;
     this.cam.onClick = (x, y) => this.handleClick(x, y);
     this.cam.onHover = (x, y) => this.handleHover(x, y);
-    this.labels = new LabelLayer(this.container);
+    // A name tag selects its agent through the same pickCb a click on the sprite uses.
+    this.labels = new LabelLayer(this.container, (tag, id) => this.cam.addHandle(tag, () => this.pickCb?.(id)));
 
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(this.host);
@@ -280,6 +281,9 @@ export class OfficeScene {
       });
       this.pipeline.dispose();
       this.renderer?.dispose();
+      // dispose() frees the GPU objects but not the context itself: without this each 3D off/on leaves one open
+      // and the browser ends up at "Too many active WebGL contexts".
+      try { this.renderer?.forceContextLoss(); } catch { /* already lost */ }
     }
     this.container.parentNode?.removeChild(this.container);
   }

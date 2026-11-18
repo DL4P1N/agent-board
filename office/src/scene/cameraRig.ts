@@ -37,6 +37,8 @@ export class CameraRig {
   private downY = 0;
   onClick: ((x: number, y: number) => void) | null = null;
   onHover: ((x: number, y: number) => void) | null = null;
+  private tap: (() => void) | null = null;
+  addHandle: (h: HTMLElement, onTap: () => void) => void;
   private cleanup: (() => void)[] = [];
   reducedMotion = false;
   /** Where panels cover the view: the room is framed in the rest (eased, like the fit). */
@@ -47,7 +49,7 @@ export class CameraRig {
     const down = (e: PointerEvent) => {
       this.mode = e.button === 2 || e.shiftKey || e.button === 1 ? 'pan' : 'rotate';
       this.dragging = true;
-      this.moved = 0;
+      this.moved = 0; this.tap = null;
       this.lastX = this.downX = e.clientX;
       this.lastY = this.downY = e.clientY;
       try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
@@ -75,13 +77,21 @@ export class CameraRig {
       if (!this.dragging) return;
       this.dragging = false;
       try { el.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-      if (this.moved < 5 && e.button === 0) this.onClick?.(e.clientX, e.clientY);
+      const tap = this.tap; this.tap = null;
+      if (this.moved < 5 && e.button === 0) { if (tap) tap(); else this.onClick?.(e.clientX, e.clientY); }
     };
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
       this.zoom = THREE.MathUtils.clamp(this.zoom * Math.exp(-e.deltaY * 0.0012), 0.45, 6);
     };
     const ctx = (e: Event) => e.preventDefault();
+    // An element laid over the canvas (an agent's name tag) that still drives the camera: a press there starts the
+    // same drag (the canvas captures the pointer, so move / up reach the rig) and a plain click runs `onTap`.
+    this.addHandle = (h, onTap) => {
+      h.addEventListener('pointerdown', (e) => { down(e); this.tap = onTap; });
+      h.addEventListener('wheel', wheel, { passive: false });
+      h.addEventListener('contextmenu', ctx);
+    };
     el.addEventListener('pointerdown', down);
     el.addEventListener('pointermove', move);
     el.addEventListener('pointerup', up);

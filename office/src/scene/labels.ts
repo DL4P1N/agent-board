@@ -14,6 +14,7 @@ const CSS = `
 .ab-tag{position:absolute;left:0;top:0;will-change:transform;display:none;}
 .ab-tagin{transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;gap:3px;}
 .ab-card{background:rgba(18,14,32,.86);border:1px solid var(--pc);box-shadow:0 0 0 1px #000,2px 2px 0 rgba(0,0,0,.45);padding:2px 5px 3px;color:#f2ecff;font-size:9px;line-height:11px;font-weight:700;letter-spacing:.1px;white-space:nowrap;display:flex;flex-direction:column;gap:1px;min-width:0;}
+.ab-card{pointer-events:auto;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;}
 .ab-card.sel{box-shadow:0 0 0 1px #000,0 0 0 2px var(--pc),2px 3px 0 2px rgba(0,0,0,.5);background:rgba(26,20,46,.94);}
 .ab-r{display:flex;align-items:center;gap:4px;}
 .ab-dot{width:7px;height:7px;background:var(--pc);box-shadow:0 0 0 1px #000;flex:none;}
@@ -52,7 +53,8 @@ export class LabelLayer {
   private compact = false;
   private fl = new Map<string, { root: HTMLDivElement; inner: HTMLDivElement; seen: number; t: string; txt: string; col: string }>();
   private flFrame = 0;
-  constructor(host: HTMLElement) {
+  /** `bindTag` wires an agent's name tag (a plain element, not a Tab stop) to the scene's own pick / camera handling. */
+  constructor(host: HTMLElement, private bindTag: ((tag: HTMLElement, id: string) => void) | null = null) {
     if (!document.getElementById('ab-label-css')) {
       const style = document.createElement('style');
       style.id = 'ab-label-css';
@@ -64,7 +66,7 @@ export class LabelLayer {
     host.appendChild(this.root);
   }
 
-  private make(): El {
+  private make(id: string): El {
     const root = document.createElement('div'); root.className = 'ab-tag';
     const inner = document.createElement('div'); inner.className = 'ab-tagin';
     const bub = document.createElement('div'); bub.className = 'ab-bub'; bub.style.display = 'none';
@@ -85,6 +87,7 @@ export class LabelLayer {
     more.append(l1, l2);
     card.append(r1, r2, skills, more);
     inner.append(bub, card);
+    this.bindTag?.(card, id);
     root.appendChild(inner);
     this.root.appendChild(root);
     return { root, card, name, q, tier, model, owner, skills, more, l1, l2, bub, key: {}, lastT: '', seen: 0 };
@@ -97,7 +100,7 @@ export class LabelLayer {
     if (compact !== this.compact) { this.compact = compact; this.root.classList.toggle('compact', compact); }
     for (const it of items) {
       let e = this.els.get(it.id);
-      if (!e) { e = this.make(); this.els.set(it.id, e); }
+      if (!e) { e = this.make(it.id); this.els.set(it.id, e); }
       e.seen = this.frame;
       const vis = it.visible && (showLabels || (showBubbles && !!it.bubble));
       if (!vis) { if (e.key.d !== '0') { e.key.d = '0'; e.root.style.display = 'none'; } continue; }
