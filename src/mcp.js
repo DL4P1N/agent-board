@@ -112,22 +112,24 @@ export function buildMcpServer(board, baseAgent) {
     'post',
     {
       title: 'Post message',
-      description: 'Post a message to the board. Use @name to mention someone. Channels: general (default), help (blocked/need help), review (ready for review/merge), or any custom one.',
+      description: 'Post a message to the board. Use @name to mention someone (@planner and @merger reach whoever has that role). Channels: general (default), help (blocked/need help), review (ready for review/merge), or any custom one. ' +
+        'To answer a human who messaged you directly, pass `to` with their name: the reply goes in that direct-message thread, which other agents do not see. Only humans start those threads; `to` is refused when that human has not written to you.',
       inputSchema: {
         text: z.string(),
         channel: z.string().optional(),
         task_id: z.number().int().optional(),
+        to: z.string().optional().describe('Reply to a human in their direct-message thread with you (their name). Leave out for the shared chat.'),
         as: asArg,
       },
     },
-    wrap(({ text, channel, task_id, as }) => board.post(who(as), { text, channel, task_id }))
+    wrap(({ text, channel, task_id, to, as }) => board.post(who(as), { text, channel, task_id, to }))
   );
 
   tool(
     'read_events',
     {
       title: 'Read events',
-      description: 'Read board events (messages, task changes, locks, questions, answers) with id > since. Returns events and the new cursor.',
+      description: 'Read board events (messages, task changes, locks, questions, answers, and direct messages from humans to you) with id > since. Returns events and the new cursor.',
       inputSchema: {
         since: z.number().int().optional().describe('Event id cursor; default 0'),
         channel: z.string().optional(),
@@ -137,7 +139,7 @@ export function buildMcpServer(board, baseAgent) {
       },
     },
     wrap(({ since = 0, channel, task_id, include_own, limit }) => {
-      const events = board.events({ since, channel, task_id, limit, exclude_author: include_own ? undefined : baseAgent });
+      const events = board.events({ since, channel, task_id, limit, exclude_author: include_own ? undefined : baseAgent, direct: baseAgent });
       return { events, cursor: events.length ? events.at(-1).id : Math.max(since, 0) };
     })
   );
@@ -148,7 +150,8 @@ export function buildMcpServer(board, baseAgent) {
       title: 'Wait for events',
       description:
         `Block until new events from OTHER agents/humans arrive (or timeout, max ${MAX_WAIT_S}s). This is how you "receive webhooks". ` +
-        'Pass the cursor from your last call. Returns {events, cursor}. Empty events means timeout — call again or do other work.',
+        'Pass the cursor from your last call. Returns {events, cursor}. Empty events means timeout — call again or do other work. ' +
+        'A direct message from a human to you arrives as a message on channel "direct": answer it with post(to: "<their name>").',
       inputSchema: {
         since: z.number().int().optional().describe('Cursor from board_status / previous call. Omit to wait only for brand-new events.'),
         timeout_s: z.number().int().min(1).max(MAX_WAIT_S).optional().describe('Default 60'),
@@ -158,7 +161,7 @@ export function buildMcpServer(board, baseAgent) {
     wrap(async ({ since, timeout_s = 60, channel }, extra) => {
       const cursor0 = since ?? board.latestEventId();
       const events = await board.waitForEvents(
-        { since: cursor0, channel, exclude_author: baseAgent, limit: 200 },
+        { since: cursor0, channel, exclude_author: baseAgent, limit: 200, direct: baseAgent },
         Math.min(timeout_s, MAX_WAIT_S) * 1000,
         extra?.signal
       );

@@ -25,6 +25,9 @@ const SETTING_KEYS = ['goal', 'repo', 'integrator', 'planner', 'deadline', 'free
 const DEFAULT_SETTINGS = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '', planner_extra: '2' };
 // settings.integrator = ANYONE: any free agent may take a task in review and merge it.
 export const ANYONE = '*';
+// The channel of direct messages: one thread per agent, plus the planner's thread (DIRECT_PLANNER).
+export const DIRECT = 'direct';
+export const DIRECT_PLANNER = 'planner';
 // @mentions that reach everyone.
 const BROADCAST = ['all', 'everyone', 'humans', 'here'];
 // Board calls that only wait, read or chat: they keep an agent online but don't make it "busy".
@@ -224,14 +227,29 @@ export class Board {
 
   // ---------- events ----------
   emit({ author, kind, channel = 'general', task_id = null, text = '', data = null }) {
-    // "@name" at the start or after a non-word character (not "hit@3"), not a number or version
-    // ("@10", "@2.0.2"), and "@scope/pkg" only when "scope" is a known agent (a helper, e.g.
-    // "@alice/ui-worker"), so npm scopes like "@fastify/rate-limit" aren't mentions.
-    const known = this.mentionable();
-    const mentions = [...new Set([...String(text).matchAll(/(?:^|[^\w@])@([A-Za-z0-9_][\w.\-/]*)/g)]
-      .map((m) => normName(m[1]).replace(/[.\-/]+$/, ''))
-      .filter((n) => !/^\d/.test(n) && (!n.includes('/') || known.has(agentRootOf(n)))))];
-    if (mentions.length) data = { ...(data || {}), mentions };
+    // Direct messages reach only their thread: an @name in one mentions nobody.
+    if (channel !== DIRECT) {
+      // "@name" at the start or after a non-word character (not "hit@3"), not a number or version
+      // ("@10", "@2.0.2"), and "@scope/pkg" only when "scope" is a known agent (a helper, e.g.
+      // "@alice/ui-worker"), so npm scopes like "@fastify/rate-limit" aren't mentions.
+      const known = this.mentionable();
+      // @planner and @merger reach whoever holds the role right now: the text says who ("@planner (maya-claude)")
+      // and the mention is stored under that agent's name. Unless an agent really is called "planner".
+      const s = this.getSettings();
+      const holder = { planner: s.planner, merger: s.integrator && s.integrator !== ANYONE ? s.integrator : '' };
+      const alias = {};
+      text = String(text).replace(/(^|[^\w@])@(planner|merger)(?![\w\-/]|\.\w)(?! \([\w.\-/]+\))/gi, (m, pre, role) => {
+        role = role.toLowerCase();
+        if (!holder[role] || known.has(role)) return m;
+        alias[role] = holder[role];
+        return `${pre}@${role} (${holder[role]})`;
+      });
+      const mentions = [...new Set([...String(text).matchAll(/(?:^|[^\w@])@([A-Za-z0-9_][\w.\-/]*)/g)]
+        .map((m) => normName(m[1]).replace(/[.\-/]+$/, ''))
+        .filter((n) => !/^\d/.test(n) && (!n.includes('/') || known.has(agentRootOf(n))))
+        .map((n) => alias[n] || n))];
+      if (mentions.length) data = { ...(data || {}), mentions };
+    }
     const ts = Date.now();
     const r = this.db
       .prepare('INSERT INTO events (ts, author, kind, channel, task_id, text, data) VALUES (?,?,?,?,?,?,?)')
@@ -255,9 +273,12 @@ export class Board {
   }
 
   // before: the `limit` events just before that id (older pages of the feed), still oldest first.
-  events({ since = 0, before, channel, task_id, exclude_author, limit = 100 } = {}) {
+  // direct: an agent's name, to include the direct messages it may read (see canSee); without it there are none.
+  events({ since = 0, before, channel, task_id, exclude_author, limit = 100, direct } = {}) {
     let sql = 'SELECT * FROM events WHERE id > ?';
     const args = [since];
+    const [dsql, dargs] = this.directFilter(direct);
+    sql += dsql; args.push(...dargs);
     if (before) { sql += ' AND id < ?'; args.push(before); }
     if (channel) { sql += ' AND channel = ?'; args.push(channel); }
     if (task_id) { sql += ' AND task_id = ?'; args.push(task_id); }
@@ -268,8 +289,101 @@ export class Board {
     return before ? rows.reverse() : rows;
   }
 
+  // The shared feed: direct messages are not in it (humans get them with directMessages()).
   recentEvents(limit = 50) {
-    return this.db.prepare('SELECT * FROM events ORDER BY id DESC LIMIT ?').all(limit).map(rowToEvent).reverse();
+    return this.db.prepare('SELECT * FROM events WHERE channel != ? ORDER BY id DESC LIMIT ?').all(DIRECT, limit).map(rowToEvent).reverse();
+  }
+
+  // ---------- direct messages ----------
+  // A human writes to one agent (its thread is its name) or to the planner (the "planner" thread, read by whoever
+  // is the planner; while nobody is, its messages wait for the first one). The agent answers in the same thread.
+  // Hidden from other agents by convention: agents share one token and are told apart by the name they give.
+  // Every human sees every thread (one board token, so the server can't tell humans apart).
+  canSee(ev, agent) {
+    if (ev?.channel !== DIRECT) return true;
+    const me = agentRootOf(normName(agent));
+    if (!me) return false;
+    const dm = ev.data?.dm || {};
+    if (agentRootOf(normName(ev.author)) === me) return true;
+    if (dm.thread === DIRECT_PLANNER) return dm.to === me || this.getSettings().planner === me;
+    return dm.thread === me;
+  }
+
+  // The same rule as canSee, as SQL for events(). No agent: no direct messages at all.
+  directFilter(agent) {
+    const me = agentRootOf(normName(agent || ''));
+    if (!me) return [' AND channel != ?', [DIRECT]];
+    const planner = this.getSettings().planner === me ? 1 : 0;
+    return [
+      " AND (channel != ? OR author = ? OR substr(author, 1, ?) = ? OR json_extract(data, '$.dm.thread') = ?"
+        + " OR (json_extract(data, '$.dm.thread') = ? AND (? = 1 OR json_extract(data, '$.dm.to') = ?)))",
+      [DIRECT, me, me.length + 1, me + '/', me, DIRECT_PLANNER, planner, me],
+    ];
+  }
+
+  // Every thread's messages (for humans), oldest first.
+  directMessages(limit = 1000) {
+    return this.db.prepare('SELECT * FROM events WHERE channel = ? ORDER BY id DESC LIMIT ?').all(DIRECT, limit).map(rowToEvent).reverse();
+  }
+
+  thread(name) {
+    return this.db.prepare("SELECT * FROM events WHERE channel = ? AND json_extract(data, '$.dm.thread') = ? ORDER BY id").all(DIRECT, name).map(rowToEvent);
+  }
+
+  // A human's message to an agent ("maya-claude") or to the planner ("planner").
+  postDirect(author, { text, to }) {
+    text = String(text ?? '').trim();
+    if (!text) throw new Error('text is required');
+    const name = agentRootOf(normName(to));
+    if (!name) throw new Error('Say who the message is for: an agent\'s name, or "planner".');
+    if (name === DIRECT_PLANNER && !this.agentRow(DIRECT_PLANNER)) {
+      const planner = this.getSettings().planner || null;
+      return this.emit({ author, kind: 'message', channel: DIRECT, text, data: { dm: { thread: DIRECT_PLANNER, to: planner, from: 'human' } } });
+    }
+    if (!this.agentRow(name)) throw new Error(`There's no agent called ${name} on this board.`);
+    return this.emit({ author, kind: 'message', channel: DIRECT, text, data: { dm: { thread: name, to: name, from: 'human' } } });
+  }
+
+  // An agent answers a human in a thread that human wrote in: its own, or the planner's while it is the planner.
+  // Agents never start threads: with nothing from that human, it is refused.
+  replyDirect(author, { text, to }) {
+    text = String(text ?? '').trim();
+    if (!text) throw new Error('text is required');
+    const me = agentRootOf(normName(author));
+    const human = normName(to);
+    const threads = [me, ...(this.getSettings().planner === me ? [DIRECT_PLANNER] : [])];
+    const fromHumans = threads.flatMap((t) => this.thread(t)).filter((e) => e.data?.dm?.from === 'human');
+    const last = fromHumans.filter((e) => e.author === human).sort((a, b) => b.id - a.id)[0];
+    if (!last) {
+      const names = [...new Set(fromHumans.map((e) => e.author))];
+      throw new Error(names.length
+        ? `${human} hasn't messaged you directly, so there's no thread to answer in. Humans who have: ${names.join(', ')}. For anyone else, post in the shared chat (leave out "to").`
+        : 'No human has messaged you directly. Only humans start direct messages: post in the shared chat (leave out "to", use @name), or use ask_human for a decision.');
+    }
+    return this.emit({ author, kind: 'message', channel: DIRECT, text, data: { dm: { thread: last.data.dm.thread, to: human, from: 'agent' } } });
+  }
+
+  // Human messages this agent hasn't answered yet: in its own thread, and in the planner's while it is the planner.
+  // A message counts as answered once an agent has replied in that thread after it.
+  pendingDirect(agent) {
+    const me = agentRootOf(normName(agent));
+    const threads = [me, ...(this.getSettings().planner === me ? [DIRECT_PLANNER] : [])];
+    const out = [];
+    for (const t of threads) {
+      const list = this.thread(t);
+      const replied = Math.max(0, ...list.filter((e) => e.data?.dm?.from === 'agent').map((e) => e.id));
+      for (const e of list) if (e.data?.dm?.from === 'human' && e.id > replied) out.push({ id: e.id, thread: t, from: e.author, text: e.text, ts: e.ts });
+    }
+    return out;
+  }
+
+  // A new planner: the planner thread's unanswered messages go to it now. Said in the thread (humans see where they
+  // went), which also wakes the new planner's wait_for_events.
+  handPlannerThread(planner) {
+    if (!planner) return;
+    const waiting = this.pendingDirect(planner).filter((m) => m.thread === DIRECT_PLANNER);
+    if (!waiting.length) return;
+    this.emit({ author: 'board', kind: 'message', channel: DIRECT, text: `${planner} is the planner now and has ${countOf(waiting.length, 'message')} waiting here.`, data: { dm: { thread: DIRECT_PLANNER, to: planner, from: 'board' } } });
   }
 
   // Long-poll: resolve as soon as matching events exist, or after timeoutMs.
@@ -297,6 +411,7 @@ export class Board {
         if (ev.id <= (filter.since || 0)) return;
         if (filter.channel && ev.channel !== filter.channel) return;
         if (filter.exclude_author && ev.author === filter.exclude_author) return;
+        if (!this.canSee(ev, filter.direct)) return;
         // small debounce so bursts arrive together
         setTimeout(finish, 250);
       };
@@ -316,8 +431,11 @@ export class Board {
   }
 
   // ---------- messages ----------
-  post(author, { text, channel = 'general', task_id = null }) {
+  // to: a direct message instead (humans: to an agent or "planner"; agents: a reply to a human, see replyDirect).
+  post(author, { text, channel = 'general', task_id = null, to }, { human = false } = {}) {
+    if (to) return human ? this.postDirect(author, { text, to }) : this.replyDirect(author, { text, to });
     if (!text || !text.trim()) throw new Error('text is required');
+    if (channel === DIRECT) throw new Error('Direct messages need "to": who the message is for.');
     return this.emit({ author, kind: 'message', channel, task_id, text });
   }
 
@@ -714,7 +832,9 @@ export class Board {
       changes.push(describeSetting(key, val, cur));
     }
     if (changes.length) this.emit({ author, kind: 'settings', channel: 'general', text: changes.join('; ') });
-    return this.getSettings();
+    const now = this.getSettings();
+    if (now.planner && now.planner !== cur.planner) this.handPlannerThread(now.planner);
+    return now;
   }
 
   // Give up a role you hold (you can't do the job, e.g. no permission to merge on this laptop).
@@ -1289,6 +1409,18 @@ export class Board {
       }
       steps.push('A human marked you as out of usage on the web board. If you can still work, carry on: the mark clears by itself as you keep calling the board.');
     }
+    // Direct messages from humans come first, like a mention: answer in the thread, then act on them.
+    const pending = this.pendingDirect(root);
+    if (pending.length) {
+      // The latest few, quoted; the reply goes to the last writer (others who wrote are named too).
+      const quote = (list) => (list.length > 5 ? `(${list.length - 5} earlier, read them with read_events) ` : '') + list.slice(-5).map((m) => `${m.from}: "${String(m.text).slice(0, 400)}"`).join('; ');
+      const to = (list) => { const h = [...new Set(list.map((m) => m.from).reverse())]; return `post(to: "${h[0]}", text: "…")${h.length > 1 ? ` (${h.slice(1).join(', ')} wrote too: answer them the same way)` : ''}`; };
+      const mineDm = pending.filter((m) => m.thread !== DIRECT_PLANNER);
+      const plannerDm = pending.filter((m) => m.thread === DIRECT_PLANNER);
+      if (mineDm.length) steps.push(`A human messaged you directly: ${quote(mineDm)}. Reply in that thread with ${to(mineDm)}, then act on it. If it changes the plan, make it a task (create_task) or post a one-line note in general, so the team isn't left out.`);
+      if (plannerDm.length) steps.push(`In the planner thread (messages to whoever is the planner): ${quote(plannerDm)}. As planner, treat it as input to the plan. Reply with what you'll do (${to(plannerDm)}), then turn it into tasks: create_task, re-prioritise or reserve existing ones (update_task), or cancel_task what it replaces. Use ask_human only if something is unclear. Never just acknowledge and move on.`);
+      act('a direct message from a human');
+    }
     if (phase === 'needs_goal') {
       steps.push(
         'The team has not set a project goal yet. Ask the human you are chatting with: "What are we building, and what should the demo show?" ' +
@@ -1589,8 +1721,9 @@ export class Board {
     return parts.length ? `On this board so far (${st.done} done): ${parts.join('; ')}.` : '';
   }
 
-  // Markdown write-up of the day: goal, who built what, decisions, what's unfinished.
-  summary() {
+  // Markdown write-up of the day: goal, who built what, decisions, what's unfinished, the direct messages.
+  // direct=false: without the direct messages (for anyone but humans).
+  summary({ direct = true } = {}) {
     const s = this.getSettings();
     const tasks = this.listTasks();
     const done = tasks.filter((t) => t.status === 'done');
@@ -1627,13 +1760,38 @@ export class Board {
       for (const t of notDone) L.push(`- #${t.id} ${t.title} — ${STATUS_LABEL[t.status] || t.status.replace(/_/g, ' ')}${t.assignee ? ` (${t.assignee})` : ''}`);
       L.push('');
     }
+    // Direct messages (for humans): one section per thread, the planner's first.
+    const threads = direct ? this.directThreads() : [];
+    if (threads.length) {
+      L.push('## Direct messages', '');
+      for (const [name, list] of threads) {
+        L.push(`### ${name === DIRECT_PLANNER ? 'Planner thread' : name}`);
+        for (const e of list) L.push(`- ${fmt(e.ts)} ${e.author}${e.data?.dm?.from === 'board' ? '' : ` → ${e.data?.dm?.to || 'the planner (none yet)'}`}: ${String(e.text).replace(/\s*\n\s*/g, ' ')}`);
+        L.push('');
+      }
+    }
     return L.join('\n');
   }
 
-  // Everything on the board, for backups.
-  exportAll() {
+  // [thread, events] pairs: the planner's thread first, then by agent name.
+  directThreads() {
+    const by = new Map();
+    for (const e of this.directMessages(100000)) {
+      const t = e.data?.dm?.thread || '?';
+      if (!by.has(t)) by.set(t, []);
+      by.get(t).push(e);
+    }
+    return [...by].sort((a, b) => (b[0] === DIRECT_PLANNER) - (a[0] === DIRECT_PLANNER) || a[0].localeCompare(b[0]));
+  }
+
+  // Everything on the board, for backups. Direct messages are listed per thread (direct=false: left out).
+  exportAll({ direct = true } = {}) {
     const all = (table) => this.db.prepare(`SELECT * FROM ${table}`).all();
-    return { exported_at: new Date().toISOString(), settings: this.getSettings(), tasks: this.listTasks(), questions: all('questions'), locks: all('locks'), events: all('events').map((e) => ({ ...e, data: e.data ? JSON.parse(e.data) : null })) };
+    return {
+      exported_at: new Date().toISOString(), settings: this.getSettings(), tasks: this.listTasks(), questions: all('questions'), locks: all('locks'),
+      events: this.db.prepare('SELECT * FROM events WHERE channel != ?').all(DIRECT).map(rowToEvent),
+      ...(direct ? { direct_messages: Object.fromEntries(this.directThreads()) } : {}),
+    };
   }
 
   // ---------- summary ----------
@@ -1651,6 +1809,8 @@ export class Board {
       stale_tasks: tasks.filter((t) => t.stale),
       locks: this.listLocks(),
       open_questions: this.listQuestions({ open_only: true }),
+      // Humans' direct messages you haven't answered yet (reply with post(to: "<human>")).
+      direct_messages: this.pendingDirect(agent),
       recent: this.recentEvents(15),
     };
   }

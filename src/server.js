@@ -13,7 +13,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { spawn, spawnSync, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { Board, timeInfo, normName, callerLaptop } from './board.js';
+import { Board, timeInfo, normName, callerLaptop, DIRECT } from './board.js';
 import { agentTokenFor, viewerTokenFor } from './tokens.js';
 import { Registry, boardToken, adminToken } from './boards.js';
 import QRCode from 'qrcode';
@@ -405,6 +405,8 @@ function createBoardRuntime(slug, dir) {
       locks: board.listLocks(),
       questions: board.listQuestions(),
       events: board.recentEvents(200),
+      // Direct-message threads, for humans only: every human sees every thread; agents and the presenter never get them.
+      ...(human ? { direct: board.directMessages() } : {}),
       cursor: board.latestEventId(),
       settings: board.getSettings(),
       phase: g.phase,
@@ -476,7 +478,9 @@ function createBoardRuntime(slug, dir) {
     if (before) return { events: board.events({ before, limit: 200 }) };
     const exclude_author = req.query.exclude || undefined;
     const wait = Math.min(Number(req.query.wait || 0), 600);
-    const filter = { since, exclude_author, limit: 200 };
+    // An agent (the Stop hook) gets the direct messages it may read; the web feed gets none (they come with /state).
+    const direct = req.role === 'agent' || exclude_author ? normName(req.get('x-agent') || exclude_author || '') : undefined;
+    const filter = { since, exclude_author, limit: 200, direct };
     const ac = new AbortController();
     req.on('close', () => ac.abort());
     const events = wait > 0 ? await board.waitForEvents(filter, wait * 1000, ac.signal) : board.events(filter);
@@ -590,6 +594,8 @@ function createBoardRuntime(slug, dir) {
   // Which board events are worth a phone buzz.
   board.bus.on('event', (e) => {
     if (!e || !e.id) return;
+    // Direct messages never leave the board.
+    if (e.channel === DIRECT) return;
     const t = String(e.text || '');
     if (e.kind === 'question') return notify('questions', `${e.author} asks: ${t}`);
     if (e.kind === 'task_updated' && e.data?.status === 'blocked' && /→ blocked/.test(t)) {
@@ -787,13 +793,15 @@ function createBoardRuntime(slug, dir) {
   api.get('/retro', (_req, res) => res.type('text/markdown; charset=utf-8').send(board.retro()));
 
   // End-of-day write-up (markdown) and a full JSON backup of the board.
-  api.get('/summary', (_req, res) => res.type('text/markdown; charset=utf-8').send(board.summary()));
-  api.get('/export', (_req, res) => {
+  // Direct messages are in both for humans only.
+  api.get('/summary', (req, res) => res.type('text/markdown; charset=utf-8').send(board.summary({ direct: req.role === 'human' })));
+  api.get('/export', (req, res) => {
     res.set('Content-Disposition', `attachment; filename="agent-board-${slug}-${new Date().toISOString().slice(0, 10)}.json"`);
-    res.json(board.exportAll());
+    res.json(board.exportAll({ direct: req.role === 'human' }));
   });
 
-  api.post('/messages', h((req) => board.post(agentFrom(req), req.body)));
+  // {text, channel} for the shared chat, or {text, to} for a direct message (to: an agent's name, or "planner").
+  api.post('/messages', h((req) => board.post(agentFrom(req), req.body || {}, { human: true })));
   api.post('/tasks', h((req) => board.createTask(agentFrom(req), req.body || {}, { human: true })));
   api.post('/tasks/:id/decide', h((req) => board.decideProposal(agentFrom(req), Number(req.params.id), req.body || {}, { human: true })));
   api.patch('/tasks/:id', h((req) => board.updateTask(agentFrom(req), Number(req.params.id), req.body, { human: true })));
@@ -807,7 +815,11 @@ function createBoardRuntime(slug, dir) {
     res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
     res.flushHeaders();
     openStreams.add(res);
-    const send = (ev) => res.write(`data: ${JSON.stringify(ev)}\n\n`);
+    // Direct messages go to humans only (an agent's stream: its own threads; the presenter's: none).
+    const send = (ev) => {
+      if (ev?.channel === DIRECT && req.role !== 'human' && !(req.role === 'agent' && board.canSee(ev, agentFrom(req)))) return;
+      res.write(`data: ${JSON.stringify(ev)}\n\n`);
+    };
     const ping = setInterval(() => res.write(': ping\n\n'), 20000);
     board.bus.on('event', send);
     // ?name=<human> marks that person as watching the board.
