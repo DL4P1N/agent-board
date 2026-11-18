@@ -129,45 +129,48 @@ function oAct(focus = true) {
 // The goal, the demo time, the planner and who merges open in place under their chips in the top bar (one at a time), and each is
 // edited there. A click elsewhere or Esc closes them.
 function oGoal(open, { edit = false } = {}) {
-  ui.oGoal = open; ui.oGoalEdit = open && edit; ui.goalErr = ''; if (open) { ui.oDl = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; ui.oSetup = false; if (ui.themeOpen) themePop(false, false); }
+  ui.oGoal = open; ui.oGoalEdit = open && edit; ui.goalErr = ''; if (open) { ui.oDl = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; setupAway(); if (ui.themeOpen) themePop(false, false); }
   $('o-goal-b')._html = undefined; renderDocks(); $('tb-a')._html = undefined; $('tb-b')._html = undefined; renderTopbar(setupInfo());
   if (!open) return $('goal-btn')?.focus({ preventScroll: true });
   const ta = $('o-goal-in');
   if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } else $('o-goal').querySelector('.o-ib').focus({ preventScroll: true });
 }
 function oDl(open) {
-  ui.oDl = open; ui.dlErr = ''; if (open) { ui.oGoal = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; ui.oSetup = false; if (ui.themeOpen) themePop(false, false); }
+  ui.oDl = open; ui.dlErr = ''; if (open) { ui.oGoal = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; setupAway(); if (ui.themeOpen) themePop(false, false); }
   $('o-dl-b').innerHTML = ''; $('o-dl-b')._html = undefined; renderDocks();
   if (open) $('o-dl-in')?.focus(); else $('clock').focus({ preventScroll: true });
 }
 function oSetup(open, focus = true) {
-  ui.oSetup = open; if (open) { ui.oGoal = false; ui.oDl = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; if (ui.themeOpen) themePop(false, false); }
+  store.set('board-setup', open ? 'open' : 'closed'); ui.forceSetup = false;
+  if (open) { ui.oGoal = false; ui.oDl = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; if (ui.themeOpen) themePop(false, false); }
   render();
   if (focus) setupFocus(open);
 }
+// With 3D on, Setup is a popover too: another one opening (or a click elsewhere) closes it.
+function setupAway() { if (boardView === 'office' && setupShown()) { store.set('board-setup', 'closed'); ui.forceSetup = false; } }
 // Setup, in both views: opened, focus moves into it (its current step) and a phone scrolls it into view; closed, focus
 // goes back to the Setup chip.
 function setupFocus(open) {
   const el = $('setup');
   if (!open || el.hidden) return document.querySelector('[data-fk="s-open"]')?.focus({ preventScroll: true });
-  el.scrollTop = 0;
+  el.querySelector('.o-body').scrollTop = 0;
   (el.querySelector('.step.cur .step-h') || el.querySelector('.step-h'))?.focus({ preventScroll: true });
   const r = el.getBoundingClientRect();
   if (boardView !== 'office' && (r.top < 0 || r.top > innerHeight * 0.6)) el.scrollIntoView({ behavior: smooth(), block: 'start' });
 }
 function oMerge(open) {
-  ui.oMerge = open; if (open) { ui.oGoal = false; ui.oDl = false; ui.oPlan = false; ui.oRoles = false; ui.oSetup = false; if (ui.themeOpen) themePop(false, false); }
+  ui.oMerge = open; if (open) { ui.oGoal = false; ui.oDl = false; ui.oPlan = false; ui.oRoles = false; setupAway(); if (ui.themeOpen) themePop(false, false); }
   $('o-merge-b')._html = undefined; renderDocks(); $('tb-b')._html = undefined; renderTopbar(setupInfo());
   if (open) $('o-integ-sel')?.focus(); else $('merge-btn')?.focus({ preventScroll: true });
 }
 function oPlan(open) {
-  ui.oPlan = open; if (open) { ui.oGoal = false; ui.oDl = false; ui.oMerge = false; ui.oRoles = false; ui.oSetup = false; if (ui.themeOpen) themePop(false, false); }
+  ui.oPlan = open; if (open) { ui.oGoal = false; ui.oDl = false; ui.oMerge = false; ui.oRoles = false; setupAway(); if (ui.themeOpen) themePop(false, false); }
   $('o-plan-b')._html = undefined; renderDocks(); $('tb-b')._html = undefined; renderTopbar(setupInfo());
   if (open) $('o-plan-sel')?.focus(); else $('plan-btn')?.focus({ preventScroll: true });
 }
 // Roles (below 1600px): the planner and who merges, both chosen in one popover.
 function oRoles(open) {
-  ui.oRoles = open; if (open) { ui.oGoal = false; ui.oDl = false; ui.oMerge = false; ui.oPlan = false; ui.oSetup = false; if (ui.themeOpen) themePop(false, false); }
+  ui.oRoles = open; if (open) { ui.oGoal = false; ui.oDl = false; ui.oMerge = false; ui.oPlan = false; setupAway(); if (ui.themeOpen) themePop(false, false); }
   $('o-roles-b')._html = undefined; renderDocks(); $('tb-b')._html = undefined; renderTopbar(setupInfo());
   if (open) $('r-plan-sel')?.focus(); else $('roles-btn')?.focus({ preventScroll: true });
 }
@@ -182,7 +185,25 @@ document.addEventListener('click', (ev) => {
   if (ui.oMerge && !ev.target.closest?.('#o-merge, #merge-btn') && ev.target.isConnected) { ui.oMerge = false; renderDocks(); renderTopbar(setupInfo()); }
   if (ui.oPlan && !ev.target.closest?.('#o-plan, #plan-btn') && ev.target.isConnected) { ui.oPlan = false; renderDocks(); renderTopbar(setupInfo()); }
   if (ui.oRoles && !ev.target.closest?.('#o-roles, #roles-btn') && ev.target.isConnected) { ui.oRoles = false; renderDocks(); renderTopbar(setupInfo()); }
-  if (ui.oSetup && boardView === 'office' && ev.target.isConnected && !ev.target.closest?.('#setup, [data-fk="s-open"], [data-go^="step-"], [data-act="invite"], dialog, #toasts')) { ui.oSetup = false; render(); }
+  if (boardView === 'office' && setupShown() && ev.target.isConnected && !ev.target.closest?.('#setup, [data-fk="s-open"], [data-go^="step-"], [data-act="invite"], dialog, #toasts')) { setupAway(); render(); }
+});
+// A popover closes once focus leaves it and its chip (Tab, or a click on something that takes focus), like the theme
+// chooser. Tab past a popover's last control goes on to the chip after its own; Shift+Tab from its first, back to its chip.
+const POPS = { oGoal: ['o-goal', 'goal-btn'], oDl: ['o-dl', 'clock'], oMerge: ['o-merge', 'merge-btn'], oPlan: ['o-plan', 'plan-btn'], oRoles: ['o-roles', 'roles-btn'] };
+function popAway(k) { ui[k] = false; if (k === 'oGoal') ui.oGoalEdit = false; renderDocks(); renderTopbar(setupInfo()); }
+document.addEventListener('focusout', (ev) => {
+  // Onto another chip, its own click does the rest (a chip redrawn under the pointer would lose that click).
+  const to = ev.relatedTarget; if (!to || to.closest?.('#topbar, dialog')) return;
+  for (const [k, [pop, chip]] of Object.entries(POPS)) if (ui[k] && ev.target.closest?.(`#${pop}, #${chip}`) && !to.closest?.('#' + pop)) popAway(k);
+});
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Tab' || ev.defaultPrevented) return;
+  const pop = ev.target.closest?.('.o-pop'); const k = pop && Object.keys(POPS).find((x) => POPS[x][0] === pop.id); if (!k) return;
+  const fs = [...pop.querySelectorAll('button, input, select, textarea, a[href]')].filter((e) => !e.disabled && e.offsetWidth);
+  if (ev.target !== (ev.shiftKey ? fs[0] : fs[fs.length - 1])) return;
+  const chips = [...$('topbar').querySelectorAll('button')].filter((b) => b.offsetWidth);
+  const at = chips.indexOf($(POPS[k][1])); const fk = chips[ev.shiftKey ? at : at + 1]?.dataset.fk; if (!fk) return;
+  ev.preventDefault(); popAway(k); document.querySelector(`#topbar [data-fk="${fk}"]`)?.focus();
 });
 // The demo time form for its popover: the board's own (step 2 of Setup), with ids of its own.
 function oDlForm() {
@@ -208,7 +229,7 @@ function renderDocks(qOpen = openQuestions(), si = setupInfo()) {
     alone.map((t) => `<li><button type="button" class="link tref" data-open-task="${t.id}" data-fk="ob-${t.id}">#${t.id} ${esc(short(t.title, 48))}</button>${t.assignee ? ` <span class="muted">·</span> ${nameTag(agentRoot(t.assignee))}` : ''}${blockedNote(t) ? `<span class="o-why bad">${esc(short(blockedNote(t), 140))}</span>` : ''}</li>`).join('')}</ul></section>` : ''));
   // Folded Activity: its title bar says the latest event.
   const last = state.events.reduce((m, e) => (!m || e.id > m.id ? e : m), null);
-  const lt = last ? `${last.author}: ${last.kind === 'settings' ? settingsText(last) : last.text}` : 'Nothing yet';
+  const lt = last ? `${last.author}: ${last.kind === 'settings' ? settingsText(last) : last.text}` : 'No activity yet';
   $('o-act-x').textContent = oUi.actOff ? short(lt, 80) : ''; $('o-act-x').title = oUi.actOff ? lt : '';
   // The goal popover: the full goal, edited in place.
   const goal = String(state.settings.goal || '').trim();
@@ -268,8 +289,7 @@ document.addEventListener('keydown', (ev) => {
   if (ui.oMerge) return oMerge(false);
   if (ui.oPlan) return oPlan(false);
   if (ui.oRoles) return oRoles(false);
-  if (ui.oSetup && boardView === 'office') return oSetup(false);
-  if (boardView !== 'office' && setupShown() && ev.target.closest?.('#setup, [data-fk="s-open"]')) { store.set('board-setup', 'closed'); ui.forceSetup = false; render(); return setupFocus(false); }
+  if (setupShown() && (boardView === 'office' || ev.target.closest?.('#setup, [data-fk="s-open"]'))) return oSetup(false);
   if (ui.oGoal) return oGoal(false);
   if (boardView === 'office' && oMax() && !oTasksOff() && $('o-tasks').contains(ev.target)) { oExpand(false); return $('o-tasks-max').focus({ preventScroll: true }); }
   if (ui.picked && ev.target.closest?.('#o-right, #office-view')) { const n = ui.picked; pickAgent(null, true); document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }

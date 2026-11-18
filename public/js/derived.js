@@ -5,7 +5,7 @@ import './data.js';
 import { ACTIVE, AGENT_ONLINE_MS, ANYONE, HOLDING, me, seenMention, state, store, ui } from './state.js';
 import { agentRoot, clock, mentionsMe, plural, root, when } from './helpers.js';
 import { settingsText } from './activity.js';
-import { boardView } from './office.js';
+import './office.js';
 
 // ---------- derived ----------
 // Every agent we know of, by agent name ("dana-codex"): from presence, plus things only agents do.
@@ -165,9 +165,9 @@ const agentLive = (a) => { const p = (state.presence || []).find((x) => x.kind =
 // The host chose "No demo time" in step 2 (this browser only).
 const dlSkipped = () => store.get('board-dl-skip') === '1';
 function setupOpen(complete) { if (ui.forceSetup) return true; const p = store.get('board-setup'); return complete ? p === 'open' : p !== 'closed'; }
-// Setup is a panel above the board on the Board view (open until it's done, remembered), and a popover under the top
-// bar in the 3D view (open only when asked for: its chip, a "step" link). The Setup chip toggles it in both.
-function setupShown(si = setupInfo()) { return boardView === 'office' ? !!ui.oSetup : setupOpen(si.complete); }
+// Setup is a panel above the board on the Board view and a popover under the top bar in the 3D view, open or closed
+// the same in both: open until it's done, remembered (a "step" link opens it for this visit). The Setup chip toggles it.
+function setupShown(si = setupInfo()) { return setupOpen(si.complete); }
 function stepOpen(key, cur) { return key in ui.steps ? ui.steps[key] : key === cur; }
 function filterRoot() { return ui.filter === 'me' ? root(me) : ui.filter; }
 function taskVisible(t) {

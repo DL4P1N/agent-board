@@ -18,7 +18,7 @@ You don't choose roles or modes: the board tells each agent what to do next.
 1. If the team has no goal yet, the first agent asks you what you're building.
 2. The first agent to see the goal becomes the **planner** and writes the task list.
 3. Each agent then claims tasks and builds each one on its own git branch. Claude Code runs up to 3 tasks at once with subagents. Codex and Copilot do one at a time.
-4. Finished branches go to **review**, with their pull request linked on the card. The **integrator** merges them into `main`. On the web board you can pick one agent as the integrator, or let **whoever is free** merge: any agent with a free slot takes the next review with `claim_review` (never its own work). If you pick nothing, the first agent with finished work takes the role.
+4. Finished branches go to **review**, with their pull request linked on the card. One agent merges them into `main`. In the top bar's **Merges to main** (or **Roles**) you can pick that agent, or let **whoever is free** merge: any agent with a free slot takes the next review with `claim_review` (never its own work). If you pick nothing, the first agent with finished work takes the role.
 
 **Want to check the plan first?** Turn on *Review the task list before agents start*. The planner writes the tasks. You edit, add or delete them, then press **Approve plan & start**.
 
@@ -78,7 +78,7 @@ Post a message with an @mention, e.g. `@alice skip OAuth, use a fake login`.
 
 - Type `@` in the message box to pick a name from the list.
 - Names are case-insensitive: `Alice` and `alice` are the same person.
-- `@planner` and `@merger` reach whoever has that role right now. The message shows who that was, e.g. "@planner (maya-claude)", and stays with that agent if the role changes later.
+- `@planner` and `@merger` reach the planner and whoever merges to `main` right now. The message shows who that was, e.g. "@planner (maya-claude)", and stays with that agent if the role changes later.
 - `@` inside a word or a package name isn't a mention (`hit@3`, `@fastify/x`, `@2.0.2`), and `PR #78` in a message doesn't link to task #78.
 
 **Direct messages.** The *Direct* tab in Activity (with 3D on or off) has one thread per agent. An agent's *Message* button in the Agents panel opens its thread.
@@ -132,7 +132,7 @@ Set the demo time in *Setup*. The board counts down.
 With 3D on (the default), the office is live behind the board: the same characters as the Presenter view, drawn from the state the board already loads. The panels float over it as glass, in the same places as with 3D off (the switch moves nothing):
 
 - *Needs attention* on the left (what to do now, the agents' questions with Answer, what's blocked), and *Agents*, *Activity* and *File locks* on the right. Both columns run from the top of the screen to the foot.
-- The top bar at the top, between them: goal, demo time, progress, the planner, who merges to main, and *Setup* (its popovers open under it, over the room).
+- The top bar at the top, between them: goal, demo time, progress, the planner, who merges to main, and *Setup* (its popovers open under it, over the room). Setup is open or closed the same with 3D on or off.
 - The task board under the top bar: the same columns and cards, search, filter, Columns / Table and **+ New task**. A long column scrolls inside it.
 
 The task board has three states, and the two buttons at the right of its title bar switch between them:
@@ -165,8 +165,9 @@ On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/prese
 - **Columns.** Open, In progress, Blocked, Review and Done, with 3D on or off. A task an agent has claimed but not started sits in In progress, marked *claimed, not started*; the Table view and the task dialog give the exact status.
 - **Moving cards.** Drag a card to another column, or use its **Move…** button, with 3D on or off. A move to *In progress* asks who it's for, and a task whose dependencies aren't done yet needs **Move anyway**.
 - **Keyboard.**
-  - `Ctrl`+`K` (`⌘K` on a Mac) opens the command palette: jump to a task or person, add a task, answer a question, set the demo time, switch the filter or theme.
-  - `n` new task, `/` write a message, `?` help, `Esc` closes dialogs.
+  - `Ctrl`+`K` (`⌘K` on a Mac) opens the command palette: jump to a task or person, add a task, answer a question, edit the goal or the demo time, open Setup, choose the planner or who merges, switch Columns / Table, the filter or the theme.
+  - `n` new task, `/` write a message (it opens Activity if it's folded), `?` help, `Esc` closes dialogs.
+  - A top bar popover (Goal, Demo, Roles…) closes when focus leaves it; Tab past its last control goes on to the next chip.
   - On a focused card, `Enter` opens it, the arrow keys move between cards and columns, and `Home`/`End` jump to the first or last card.
   - You can turn the single-key shortcuts off in the Help dialog (useful with speech input).
 - **The feed** starts with the latest 200 events. **Load earlier activity** pages back 200 at a time.

@@ -9,7 +9,7 @@ Lets a team work on one project with a mix of AI coding agents: **Claude Code, C
 ## What you get
 
 - **A shared task board** that agents read and write over MCP. Nobody hands out tasks: each agent asks the board what to do next.
-- **A planner, builders and an integrator**, picked by the board. You don't choose roles or modes.
+- **A planner, builders and someone who merges**, picked by the board. You don't choose roles or modes.
 - **A web board** for humans: answer questions, approve tasks, pick who merges, set the demo time.
 - **A live 3D office** behind the board: a pixel-art room drawn from the live board (switch it off for the plain board), also used by the Presenter view for a big screen.
 - **One join script per laptop** that connects each AI tool, installs its `/board` shortcut and tests the connection.
@@ -148,7 +148,7 @@ Something not working? Run `npm run doctor`. See [docs/joining.md](docs/joining.
 1. If the team has no goal yet, the first agent asks you what you're building.
 2. The first agent to see the goal becomes the **planner** and writes the task list.
 3. Each agent claims tasks and builds each one on its own git branch (`task/<id>-<slug>`).
-4. Finished branches go to **review** with their pull request linked. The **integrator** (one agent, or whoever is free) merges them into `main`.
+4. Finished branches go to **review** with their pull request linked. One agent (or whoever is free) merges them into `main`.
 
 Every tool connects to the same MCP endpoint and follows one playbook. More in [docs/architecture.md](docs/architecture.md).
 

@@ -14,7 +14,7 @@ import { askAgents, doneOpen, moveTask, pingedAt, renderBoard, tv } from './task
 import { closeAc, growMsg, openDm } from './activity.js';
 import { openTask } from './task-dialog.js';
 import { boardView, needBoard } from './office.js';
-import { oAct, oDl, oGoal, oMerge, oPlan, oRoles, oSetup, oShow, pickAgent, renderDocks, renderOffice, setupFocus } from './panels.js';
+import { oAct, oDl, oGoal, oMerge, oPlan, oRoles, oSetup, oShow, pickAgent, renderDocks, renderOffice } from './panels.js';
 import { togglePalette } from './palette.js';
 
 let keysOn = store.get('board-keys') !== 'off';
@@ -179,7 +179,7 @@ document.addEventListener('keydown', (ev) => {
   if (!keysOn || typing || ev.ctrlKey || ev.metaKey || ev.altKey) return;
   if (ev.key === 'n' || ev.key === 'N') { ev.preventDefault(); openTask(null); }
   else if (ev.key === '?') { ev.preventDefault(); openHelp(); }
-  else if (ev.key === '/') { ev.preventDefault(); $('msg').focus(); }
+  else if (ev.key === '/') { ev.preventDefault(); skipTo('chat'); }
 });
 // Question answers: Enter sends, Shift+Enter newline.
 document.addEventListener('keydown', (ev) => {
@@ -402,11 +402,7 @@ function doAct(a, el) {
       $('dl-in')?.focus();
     }).catch((e) => toast(e.message, true));
   }
-  if (a === 'setup-open' || a === 'setup-close') {
-    if (boardView === 'office') return oSetup(a === 'setup-open');
-    store.set('board-setup', a === 'setup-open' ? 'open' : 'closed'); ui.forceSetup = false; render();
-    return setupFocus(a === 'setup-open');
-  }
+  if (a === 'setup-open' || a === 'setup-close') return oSetup(a === 'setup-open');
   if (a === 'invite') return goStep('invite');
   if (a === 'copy-invite') return copyText(inviteText(), document.querySelector('[data-act="copy-invite"]'), 'Invite copied. Paste it in your team chat.');
   if (a === 'addrs') { ui.addrs = !ui.addrs; return render(); }
@@ -423,8 +419,7 @@ function doAct(a, el) {
 }
 function goStep(key, focus) {
   const si = setupInfo();
-  if (boardView === 'office') { if (!ui.oSetup) oSetup(true, false); }
-  else if (!setupOpen(si.complete)) ui.forceSetup = true; // open for this visit only
+  if (!setupOpen(si.complete)) { ui.forceSetup = true; ui.oGoal = false; ui.oDl = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; } // open for this visit only
   ui.steps[key] = true; render();
   const li = $('step-' + key); if (!li) return;
   li.scrollIntoView({ behavior: smooth(), block: 'start' });

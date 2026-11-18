@@ -3,12 +3,13 @@
 import './panels.js';
 import { $, BASE, LABEL, me, smooth, state, ui } from './state.js';
 import { announce, esc, youTag } from './helpers.js';
-import { openQuestions, people } from './derived.js';
+import { openQuestions, people, setupShown } from './derived.js';
 import { doAct, goQuestion, helpDlg, openHelp, setFilter } from './actions.js';
 import { openTask, setDlgBackTo } from './task-dialog.js';
 import { setTheme, THEME_LIST, themePref } from './theme.js';
 import { boardView, officeAllowed, setBoardView } from './office.js';
-import { oExpand, oMax, oShow, oTasksOff, pickAgent } from './panels.js';
+import { oExpand, oGoal, oMax, oShow, oTasksOff, pickAgent } from './panels.js';
+import { tv } from './tasks.js';
 
 // ---------- command palette (Ctrl+K) ----------
 // Every command runs something that already exists in the page: it never does anything new by itself.
@@ -26,6 +27,13 @@ function palCommands() {
   const vt = state.setup?.viewer_token;
   if (vt) add('Action', 'Open the presenter view (new tab)', () => window.open(BASE + '/present.html?token=' + encodeURIComponent(vt), '_blank', 'noopener'), 'projector big screen present 3d office');
   add('Action', state.settings?.deadline ? 'Edit the demo time' : 'Set the demo time', () => doAct('clock'), 'deadline clock countdown freeze');
+  // The top bar's chips and the task bar's switch, in the words their own buttons use.
+  add('Action', state.settings?.goal ? 'Edit the goal' : 'Set the goal', () => oGoal(true, { edit: true }), 'goal building demo');
+  add('Action', setupShown() ? 'Close Setup' : 'Open Setup', () => doAct(setupShown() ? 'setup-close' : 'setup-open'), 'setup steps invite connect laptop join');
+  const roles = matchMedia('(max-width: 1599px)').matches;
+  add('Action', roles ? 'Choose the planner and who merges' : 'Choose the planner', () => doAct(roles ? 'roles' : 'planner'), 'planner roles');
+  if (!roles) add('Action', 'Choose who merges', () => doAct('merge'), 'merges to main merger integrator roles');
+  if (state.tasks.length) add('View', tv.view === 'table' ? 'Show Columns' : 'Show Table', () => $('viewtog').querySelector(`[data-view="${tv.view === 'table' ? 'columns' : 'table'}"]`).click(), 'tasks view columns table list');
   add('Action', 'Write a message in chat', () => { oShow('act'); $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); $('msg').focus({ preventScroll: true }); }, 'focus chat');
   add('Action', 'Open help', openHelp, 'what everything means keyboard');
   const others = people().map((p) => p.name).filter((n) => n !== me);

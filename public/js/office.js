@@ -45,13 +45,12 @@ function noOffice(msg) {
 function renderViewSwitch() {
   const b = $('o3d'); b.hidden = !officeAllowed();
   b.setAttribute('aria-pressed', String(boardView === 'office'));
-  b.title = boardView === 'office' ? 'The live 3D office is on, behind the board. Turn it off to save power (the plain board).' : 'Turn on the live 3D office behind the board';
+  b.title = boardView === 'office' ? 'Turn the 3D office off (the plain board: saves power)' : 'Turn the 3D office on (the live office behind the board)';
 }
 function setBoardView(v, { save = true, quiet = false } = {}) {
   if (v === 'office' && !officeAllowed()) v = 'board';
   if (v === 'office' && !office.mod && !webglWorks()) return noOffice("This browser can't show the 3D office (WebGL is off or not supported). Showing the plain board.");
   const changed = v !== boardView;
-  if (changed) ui.oSetup = false;
   if (changed && save && v === 'office') { office.dockOnce = false; oUi.max = false; oSave(); } // turned on: the board docked, the room in view
   boardView = v;
   document.documentElement.dataset.boardView = v;

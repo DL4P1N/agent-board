@@ -23,11 +23,11 @@ function renderClock() {
   const now = Date.now();
   // tm + detail: the detail (freeze time) hides on narrower screens when a verdict follows the time.
   let tm, detail = '', cls = '', tip;
-  if (t.past) { tm = 'time passed'; cls = 'past'; tip = `The demo was at ${when(t.deadline)}. Click to change the time.`; }
-  else if (t.frozen) { tm = `in ${dur(t.deadline - now)}`; cls = 'frozen'; tip = `Feature freeze since ${when(t.freezeAt)}: agents don't take new tasks, except priority-1 bug fixes. Demo at ${when(t.deadline)}. Click to change the time.`; }
+  if (t.past) { tm = 'time passed'; cls = 'past'; tip = `The demo was at ${when(t.deadline)}. Click to edit the time.`; }
+  else if (t.frozen) { tm = `in ${dur(t.deadline - now)}`; cls = 'frozen'; tip = `Feature freeze since ${when(t.freezeAt)}: agents don't take new tasks, except priority-1 bug fixes. Demo at ${when(t.deadline)}. Click to edit the time.`; }
   else {
     tm = `in ${dur(t.deadline - now)}`; detail = t.fm ? ` · freeze ${t.warn ? 'in ' + dur(t.freezeAt - now) : when(t.freezeAt)}` : '';
-    cls = t.warn ? 'warn' : ''; tip = `Demo at ${when(t.deadline)}${t.fm ? `; feature freeze at ${when(t.freezeAt)} (${t.fm} min before): agents stop taking new tasks then (priority-1 bug fixes still allowed)` : ''}. Click to change.`;
+    cls = t.warn ? 'warn' : ''; tip = `Demo at ${when(t.deadline)}${t.fm ? `; feature freeze at ${when(t.freezeAt)} (${t.fm} min before): agents stop taking new tasks then (priority-1 bug fixes still allowed)` : ''}. Click to edit the time.`;
   }
   const ol = outlook(t);
   // The verdict is a short word after the time, in its colour (on track, tight, behind by ~N); the full one is the
@@ -41,7 +41,7 @@ ${tip}`;
     ? '&nbsp;· feature freeze<span class="fz"> — finish &amp; merge</span>'
     : `${detail ? `<span class="fz">&nbsp;${esc(detail.slice(1))}</span>` : ''}${vd ? `<span class="vdw">&nbsp;· <b class="vd ${vd.verdict}">${esc(word)}</b></span>` : ''}`);
   if (b._html !== html) { b.innerHTML = html; b._html = html; tbFit(); }
-  b.className = 'tbc clock ' + cls + (vd ? ' v-' + vd.verdict : ''); b.title = tip; b.setAttribute('aria-label', `${text}. Change the demo time`);
+  b.className = 'tbc clock ' + cls + (vd ? ' v-' + vd.verdict : ''); b.title = tip; b.setAttribute('aria-label', `${text}. Edit the demo time`);
   // One polite announcement when the freeze starts while the page is open.
   if (prevFrozen === false && t.frozen && !t.past) announce(`Feature freeze started. Agents won't take new tasks; help merge and test.`);
   prevFrozen = t.frozen;
