@@ -38,13 +38,14 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | `tests/race.mjs` | Concurrency: 24 agents on their own MCP connections claim one task at the same moment (8 rounds: exactly one winner, the board agrees, the others are told who has it), race for a pool of 10 tasks (no task with two holders, nobody over its limit), the planner role and one file lock. `tests/smoke.mjs` has the two-agent version. |
 | `tests/rehearsal.mjs` | A whole day of work in a few seconds, modelled on the Kubecon board: planning, proposals, reviews that bounce, agents going offline or out of usage, role handovers, the freeze and the deadline, with invariants checked after every phase. |
 | `tests/gh.mjs` | The `gh`-backed parts, with a fake `gh`: PR checks and reviewer feedback to the author, main's CI going red and green, the retro report, QR codes. |
-| `tests/ops.mjs` | Webhook notifications (Slack, Discord, ntfy, generic), backups and `npm run restore`, token rotation. |
+| `tests/ops.mjs` | Webhook notifications (Slack, Discord, ntfy, generic), backups and `npm run restore`, token rotation, one server per data folder (a second one refuses to start; a stale `board.pid` doesn't block), which TypeErrors are 400 and which 500. |
 | `tests/limits.mjs` | Rate and concurrency limits: the token bucket on a fake clock (refill, `Retry-After`, the cap, 0 for off), and over the network: an agent or an address calling in a loop gets 429 with `Retry-After` and a message it can act on (REST and MCP), while other agents and humans stay served; open waits capped per agent and in total, and freed when they close. |
 | `tests/webhook.mjs` | Webhook safety without a board: private addresses (also IPv4-mapped, NAT64 and 6to4 forms), each name resolved once and checked, the request pinned to the checked address when DNS answers differently later, redirects not followed. |
 | `tests/retro.mjs` | Retro, summary and the freeze webhook: still-blocked time, review credit, plurals, readable statuses, the freeze announced when its time changes. |
 | `tests/token-deadline.mjs` | Token rotation errors (MCP and REST say why), the demo time (no past times; passing it wakes waiting agents), the startup banner and the host-join prompt. |
 | `tests/boards.mjs` | Several boards on one server: separate data and tokens, `/b/<board>/` links, the admin API, archive/restore/default/delete, `npm run boards`. |
 | `tests/themes.mjs` | The generated theme blocks are current on every page, each theme has a room, base colours pass 4.5:1. |
+| `tests/demo.mjs` | `npm run demo -- --static`: the seeded demo board (agents of every tool, people, subagents, a task in every status, a stale and a blocked one), its links, and stopping it deleting its temp folder. |
 
 ### Join, doctor and tunnel
 
@@ -92,6 +93,8 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 ## Writing tests
 
 Helpers for new tests are in `tests/helpers.mjs`: `startBoard`, `seed`, `agent`, `rest`, `launchBrowser`, `finish`.
+
+A suite ends with `finish(results)`, which prints `N/N passed`: the runner fails a suite that exits without that line or with fewer passed than run, so a suite that stops early can't pass by saying nothing. A suite times out after 8 minutes (`SUITE_TIMEOUT_MS`); on Linux and macOS it runs in its own process group, so the timeout (or Ctrl+C) ends everything it started.
 
 ## CI
 

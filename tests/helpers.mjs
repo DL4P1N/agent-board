@@ -28,12 +28,15 @@ export function removeTemp(d) {
 }
 export function cleanTemps() { for (const d of [...temps]) removeTemp(d); }
 
-// Ends a child process and everything it started, at once and synchronously (taskkill /T /F on Windows: a plain kill()
+// Ends a child process at once and synchronously. On Windows with everything it started (taskkill /T /F: a plain kill()
 // there returns before the child is gone, so it can still hold its database open while its folder is being deleted).
-export function killTree(c) {
+// On POSIX SIGKILL ends only the child itself, unless it was started with `detached: true` (its own process group) and
+// group is true: then the whole group goes (process.kill(-pid)), as tests/run.mjs does with a suite that timed out.
+export function killTree(c, { group = false } = {}) {
   if (!c || c.exitCode !== null || c.signalCode !== null) return;
   try {
     if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(c.pid), '/T', '/F'], { stdio: 'ignore', timeout: 5000 });
+    else if (group) process.kill(-c.pid, 'SIGKILL');
     else c.kill('SIGKILL');
   } catch {}
 }

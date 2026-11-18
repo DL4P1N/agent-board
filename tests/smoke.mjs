@@ -83,6 +83,7 @@ assert.ok(!(await loser.call('claim_task', { id: t2.id })).error, 'dependent cla
 const q = (await loser.call('ask_human', { question: `Dark mode? ${tag}` })).body;
 assert.ok(q.question_id);
 
-console.log('\nALL SMOKE TESTS PASSED');
+// One line the test runner reads (every suite ends with "N/N passed"): any failed assert above threw before it.
+console.log('\nALL SMOKE TESTS PASSED\n1/1 passed');
 await a.c.close(); await b.c.close();
 await board?.stop();

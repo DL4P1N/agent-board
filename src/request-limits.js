@@ -36,9 +36,10 @@ const slotText = (who, full) => (full.full === 'key'
   ? `${who} already has ${full.open} waits open (wait_for_events, the Stop hook or live pages), the most one agent may have. Let one of them return before starting another: they wake up as soon as something happens.`
   : `The board has ${full.open} waits and live streams open, as many as it allows. Try again in a few seconds.`);
 
-// The limit checks of one board (the keys carry its slug, so boards don't share counts).
+// The limit checks of one board. Agent and slot keys carry its slug, so boards don't share those counts; the
+// per-address count is one for the whole server (an address calling in a loop is the same load on any board).
 export function createRequestLimits(slug) {
-  // Board calls per network address (all tokens), and per agent once we know it's one.
+  // Board calls per network address, whatever the token or board. (Per agent: agentLimit, once we know the name.)
   const ipLimit = (mcp) => (req, res, next) => {
     const r = ipRate.take(clientIp(req));
     return r.ok ? next() : tooMany(req, res, r.retryAfter, rateText(`this address (${clientIp(req)})`, r, ipRate.perMinute), mcp);

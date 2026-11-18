@@ -73,5 +73,3 @@ for (const [k, [get, set]] of Object.entries(onWindowRw)) Object.defineProperty(
 
 onSignIn(start);
 start();
-
-export { start };

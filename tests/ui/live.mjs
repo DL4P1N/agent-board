@@ -79,14 +79,14 @@ try {
 
   // ---- J2 (and J1's typing): request interception: a late /api/state and a slow post ----
   await page.setRequestInterception(true);
-  let lateState = 0, slowPost = 0;
+  let lateState = 0, slowPost = 0, lateSent = false;
   const onReq = async (req) => {
     try {
       if (lateState && req.url().includes('/api/state')) {
         const ms = lateState; lateState = 0;
         const h = Object.fromEntries(Object.entries(req.headers()).filter(([k]) => /^(authorization|x-)/i.test(k)));
         const body = await (await fetch(req.url(), { headers: h })).text(); // the board as it is now...
-        await sleep(ms); return req.respond({ status: 200, contentType: 'application/json', body }); // ...arriving late
+        await sleep(ms); await req.respond({ status: 200, contentType: 'application/json', body }); lateSent = true; return; // ...arriving late
       }
       if (slowPost && req.method() === 'POST' && /\/api\/messages/.test(req.url())) { const ms = slowPost; slowPost = 0; await sleep(ms); }
       return req.continue();
@@ -97,7 +97,10 @@ try {
   await page.evaluate(() => { load(); });
   await sleep(150);
   await bob('post', { text: 'stale-load check' }); await alice('update_task', { id: t3.id, status: 'in_progress', note: 'newer' });
-  await sleep(1800);
+  // Once the late answer is in, the page has had it (and the load asked for meanwhile runs after it).
+  for (const t0 = Date.now(); !lateSent && Date.now() - t0 < 10e3;) await sleep(50);
+  check('J2 (the late /api/state answer was sent)', lateSent);
+  await until(page, () => /stale-load check/.test($('feed').innerText), undefined, 3000); await sleep(300);
   check('J2 a slow, older /api/state answer doesn\'t overwrite a newer one (the message stays)', await page.evaluate(() => state.events.some((e) => e.text === 'stale-load check') && /stale-load check/.test($('feed').innerText)));
   slowPost = 700;
   await page.click('#msg'); await page.type('#msg', 'first part');

@@ -5,7 +5,7 @@ import './tasks.js';
 import { $, ANYONE, LABEL, me, seenMention, setSeenMention, smooth, state, store, ui } from './state.js';
 import { agentRoot, canMove, esc, fmt, hs, isMe, mentionsLite, mentionsMe, patch, plural, refreshTimes, reveal, setText,
   short, taskById, timeEl, toast, who } from './helpers.js';
-import { act, api, scheduleReload } from './data.js';
+import { act, api, loadSettled, scheduleReload } from './data.js';
 import { agentInfoNow, isLimited, roster } from './derived.js';
 import { render } from './render.js';
 import { selfMoves } from './topbar.js';
@@ -257,21 +257,33 @@ function patchKeyed(el, items) {
 }
 // The feed starts with the last 200 events; "Load earlier activity" pages back 200 at a time. Once a page is loaded,
 // live reloads keep what's already here (see load()) until the feed is back at its newest line. It pages back to about
-// OLDER_MAX events; live events past that push the oldest out.
+// FEED_MAX events; live events past that push the oldest out (data.js keepOlder).
 const older = { more: null, loading: false, keep: false, quiet: false };
-const OLDER_MAX = 1000;
+const FEED_MAX = 1200;
 // Back at the newest line: the earlier pages go, the feed is the last 200 again.
 function dropOlder() { if (older.keep && !older.loading && feedPlace().atBottom) { older.keep = false; older.more = null; } }
+// The page fetched goes right in front of the feed's first line. A load of the board on its way could replace the feed
+// (the last 200 again, when no earlier page is kept yet), so Load earlier waits for it first, and keeps the feed as it is
+// for loads meanwhile (older.keep). If the feed's first line still changed by the time the page is back (the earlier
+// lines were dropped), the page doesn't fit any more: it is fetched again for the new first line, so the feed never has a hole.
 async function loadOlder() {
-  const first = state.events[0]; if (!first || older.loading) return;
+  if (older.loading || !state.events[0]) return;
   older.loading = true; older.quiet = true; render();
+  const kept = older.keep;
   try {
-    const r = await api(`/events?before=${first.id}`); const got = r?.events || [];
-    const have = new Set(state.events.map((e) => e.id));
-    state.events = [...got.filter((e) => !have.has(e.id)), ...state.events];
-    older.keep = true; older.more = got.length >= 200 && got[0].id > 1;
-    if (state.events.length >= OLDER_MAX) older.more = false; // far enough back: the feed stops offering more
-  } catch (e) { toast(`Couldn't load earlier activity: ${e.message}`, true); }
+    await loadSettled();
+    for (let tries = 0; tries < 3; tries++) {
+      const first = state.events[0]; if (!first) break;
+      older.keep = true;
+      const r = await api(`/events?before=${first.id}`); const got = r?.events || [];
+      if (state.events[0]?.id !== first.id) { older.keep = kept; continue; }
+      const have = new Set(state.events.map((e) => e.id));
+      state.events = [...got.filter((e) => !have.has(e.id)), ...state.events];
+      older.more = got.length >= 200 && got[0].id > 1;
+      if (state.events.length >= FEED_MAX) older.more = false; // far enough back: the feed stops offering more
+      break;
+    }
+  } catch (e) { older.keep = kept; toast(`Couldn't load earlier activity: ${e.message}`, true); }
   older.loading = false; older.quiet = true; render();
 }
 document.addEventListener('click', (ev) => {
@@ -423,5 +435,5 @@ $('msg').addEventListener('keydown', (ev) => {
 // mousedown, not click: the textarea keeps focus.
 $('msg-ac').addEventListener('mousedown', (ev) => { const li = ev.target.closest('[data-ac]'); if (!li) return; ev.preventDefault(); pickAc(Number(li.dataset.ac)); });
 
-export { ac, ACT_GAP, announceActivity, closeAc, dmUnreadCount, dropOlder, evHtml, feedPlace, growMsg, markDmSeen, older, openDm,
+export { ac, ACT_GAP, announceActivity, closeAc, dmUnreadCount, dropOlder, evHtml, FEED_MAX, feedPlace, growMsg, markDmSeen, older, openDm,
   renderFeed, renderLocks, setActGap, settingsText };

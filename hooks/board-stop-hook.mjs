@@ -20,8 +20,9 @@
 // is in one file per user, ~/.agent-board-hook.json, one entry per board + agent; entries unused for 30 days
 // are dropped.
 //
-// Exits by returning (process.exitCode), never process.exit(): exiting while fetch sockets close
-// crashes Node on Windows, and Claude Code ignores a hook that exits abnormally.
+// Exits by returning (process.exitCode), not process.exit() as soon as it's done: exiting while fetch sockets
+// close crashes Node on Windows (nodejs/node#56645), and Claude Code ignores a hook that exits abnormally. Only if
+// something still holds the process open 1.5s later (an idle keep-alive socket by then) does it call process.exit(0).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -223,5 +224,5 @@ try {
   process.stderr.write(`board hook: ${e.message}\n`); // allow the stop
 }
 process.exitCode = 0;
-// Keep-alive sockets can hold the process open; leave shortly after if they do.
+// Keep-alive sockets can hold the process open; leave 1.5s later if they do (they're idle by then, see the top).
 setTimeout(() => process.exit(0), 1500).unref();

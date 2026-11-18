@@ -296,7 +296,8 @@ const plan = tools.map((t, i) => ({
 // Identity + token travel in the URL, so the same URL works in every tool (no custom headers needed).
 // Agents get the agent token: enough for MCP and reading the board, not for human-only actions.
 // person: who the agent belongs to, so all of this laptop's tools show under one person on the web board.
-const urlFor = (p) => `${url}/mcp?${new URLSearchParams({ agent: p.agent, token: agentToken, person: name, laptop: laptopId, ...(p.plan ? { plan: p.plan } : {}), ...(p.slots ? { slots: String(p.slots) } : {}) })}`;
+// Normalised by URL (a " in the board address becomes %22), so it can't break the quoting of a .cmd tool's command line (run()).
+const urlFor = (p) => new URL(`${url}/mcp?${new URLSearchParams({ agent: p.agent, token: agentToken, person: name, laptop: laptopId, ...(p.plan ? { plan: p.plan } : {}), ...(p.slots ? { slots: String(p.slots) } : {}) })}`).href;
 // The web board link signs the human in under the same name as their agents.
 const webLink = isAgentToken ? "ask the host for the link (this join used an agent token, which can't open the web board)" : `${url}/?token=${encodeURIComponent(token)}&name=${encodeURIComponent(name)}`;
 // The Claude Stop hook reads `agent`; `npm run doctor` reads `agents`.

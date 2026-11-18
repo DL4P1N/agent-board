@@ -90,8 +90,14 @@ async function toggleNotify() {
   notifyOn = true; store.set('board-notify', 'on'); renderBell();
   toast('Notifications on. You\'ll get one when this tab is in the background.');
 }
-// Status changes this page made itself, so "blocked" by you doesn't notify you.
+// Status changes this page made itself, so "blocked" by you doesn't notify you. Only the last two minutes count, so
+// older ones are dropped as new ones come.
 const selfMoves = new Map();
+function noteSelfMove(id, status) {
+  const now = Date.now();
+  for (const [k, v] of selfMoves) if (now - v.ts >= 2 * 60e3) selfMoves.delete(k);
+  selfMoves.set(id, { status, ts: now });
+}
 let notifyCursor = null;
 function noteFor(e) {
   if (e.kind === 'question') {
@@ -171,4 +177,4 @@ function tbFit() {
 if ('ResizeObserver' in window) new ResizeObserver(() => tbFit()).observe($('topbar'));
 document.fonts?.ready.then(tbFit);
 
-export { checkNotify, renderBell, renderClock, renderTopbar, selfMoves, setTimeKey, tickTime, timeKey, toggleNotify };
+export { checkNotify, noteSelfMove, renderBell, renderClock, renderTopbar, selfMoves, setTimeKey, tickTime, timeKey, toggleNotify };

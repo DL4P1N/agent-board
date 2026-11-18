@@ -3,7 +3,7 @@
 import zlib from 'node:zlib';
 import QRCode from 'qrcode';
 import { timeInfo, normName, callerLaptop } from './board.js';
-import { agentFrom, h, laptopParam, internalError, wantsGzip } from './http-util.js';
+import { agentFrom, h, laptopParam, internalError, wantsGzip, GZIP_VARY } from './http-util.js';
 import { clientIp } from './request-limits.js';
 
 // How long a built /api/state answer may be reused while nothing happens on the board.
@@ -52,7 +52,7 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
       if (!internalError(res, e)) res.status(400).json({ error: String(e?.message || e) });
       return;
     }
-    res.set('Vary', 'Accept-Encoding').type('json');
+    res.set('Vary', GZIP_VARY).type('json');
     if (c.json.length > 1024 && wantsGzip(req)) {
       c.gz ||= zlib.gzipSync(c.json);
       return res.set('Content-Encoding', 'gzip').send(c.gz);
@@ -60,7 +60,7 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     res.send(c.json);
   });
   function stateBody(req, human) {
-    const g = board.nextAction(agentFrom(req));
+    const phase = board.phase();
     // Only humans get `setup`: it holds the board token (join commands, web links). Agents and the
     // presenter view must never be able to read it, or every human-only route is one GET away.
     return {
@@ -72,7 +72,7 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
       ...(human ? { direct: board.directMessages() } : {}),
       cursor: board.latestEventId(),
       settings: board.getSettings(),
-      phase: g.phase,
+      phase,
       // Deadline / feature freeze: {deadline, freezeAt, frozen} (ms), so the page can count down.
       time: timeInfo(board.getSettings()),
       presence: board.presence(onlineHumans()),

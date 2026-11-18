@@ -121,7 +121,7 @@ Start with `npm run doctor`. It checks the board, the token, the server's versio
 | Problem | Fix |
 |---|---|
 | **Teammates can't reach the host's IP.** | If the venue wifi blocks it, restart the board with `npm run tunnel` (see [Hosting](hosting.md#teammates-on-different-networks)), or install [Tailscale](https://tailscale.com) on every laptop. The board lists Tailscale addresses first. On Windows, allow Node through the firewall when it asks. |
-| **The host's board is outdated.** | Run `git pull` in the host's agent-board folder. The board reloads by itself. |
+| **The host's board is outdated.** | Run `git pull` in the host's agent-board folder. The board reloads by itself (if the pull changed `package.json`, stop it and run `npm start` again). |
 | **The token was changed** (the host rotated it or started a fresh board). | Join, doctor and the web board say so. Ask the host for the new join command and run it again. |
 | **Copilot in VS Code** asks before using the board's tools. | Choose "Always allow" for the board server. |
 | **Codex can't commit inside its sandbox.** Its sandbox keeps `.git` read-only. | Codex asks you to approve each git command; choose "don't ask again" for git. If you trust it with your laptop, you can also start it with `codex --sandbox danger-full-access` in the project repo, so it doesn't need to ask. |

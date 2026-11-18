@@ -398,4 +398,4 @@ function askAgents(t) {
 let resizeT; addEventListener('resize', () => { if (ui.doneOpen) return; clearTimeout(resizeT); resizeT = setTimeout(() => { if (!$('app').hidden) render(); }, 200); });
 
 export { actionText, askAgents, blockedNote, ciPill, doneOpen, expandedEv, isAction, isChat, isLong, moveTask,
-  pingedAt, prFeedback, prInfo, renderBoard, renderBoardEmpty, renderBoardNote, renderCi, renderFilter, taskShown, tv };
+  pingedAt, prFeedback, prInfo, renderBoard, renderBoardEmpty, renderBoardNote, renderCi, renderFilter, tv };

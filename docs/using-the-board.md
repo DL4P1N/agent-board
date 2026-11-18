@@ -95,7 +95,7 @@ Post a message with an @mention, e.g. `@alice skip OAuth, use a fake login`.
 In *Setup* step 1, add a webhook (Slack, Discord, [ntfy](https://ntfy.sh) for your phone, or any URL that takes a POST) and pick what reaches you: questions, `main` failing, blocked tasks, one name on two laptops, the freeze, usage limits.
 
 - Only humans see or change it.
-- The URL must be https and not point at a private address (localhost is fine for a local relay). Its name is looked up again before every message and the message goes to the address that was checked, so a name can't switch to a private address in between.
+- The URL must be https and not point at a private address or at the host itself. A relay on the host (localhost) works only when the host starts the board with `BOARD_WEBHOOK_LOCALHOST=1` (then http is fine too). Its name is looked up again before every message and the message goes to the address that was checked, so a name can't switch to a private address in between.
 - Messages can't ping a whole Slack or Discord channel, and at most 20 go out per 10 minutes.
 
 ### If `main` breaks

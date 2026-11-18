@@ -70,6 +70,15 @@ function describeSetting(key, val, cur) {
   return `${key} → ${val || 'nobody'}`;
 }
 
+// The team's phase from the settings and the task list. Proposals don't count as a plan.
+function phaseOf(s, tasks) {
+  if (!s.goal) return 'needs_goal';
+  if (!tasks.some((t) => t.status !== 'proposed')) return 'needs_plan';
+  if (tasks.every((t) => t.status === 'done')) return 'all_done';
+  if (s.require_approval && !s.plan_approved) return 'awaiting_approval';
+  return 'building';
+}
+
 export class Board {
   constructor(dataDir) {
     fs.mkdirSync(dataDir, { recursive: true });
@@ -264,7 +273,8 @@ export class Board {
   // Moves whenever the database changes: rows this board wrote (total_changes) or a commit by another
   // connection, e.g. a script (data_version). Anything cached from the database is stale once it moves.
   changeCount() {
-    return `${this.db.prepare('SELECT total_changes() AS n').get().n}:${this.db.prepare('PRAGMA data_version').get().data_version}`;
+    this.changeStmts ||= [this.db.prepare('SELECT total_changes() AS n'), this.db.prepare('PRAGMA data_version')];
+    return `${this.changeStmts[0].get().n}:${this.changeStmts[1].get().data_version}`;
   }
 
   // Something the web board shows changed without an event of its own (presence, a tool, a helper): live pages reload.
@@ -1400,6 +1410,13 @@ export class Board {
   }
 
   // ---------- guidance ----------
+  // Only the phase of nextAction (needs_goal, needs_plan, awaiting_approval, building, all_done), without the
+  // guidance for one agent: what /api/state needs. Approves proposals that are due first, as nextAction does.
+  phase() {
+    this.sweepProposals();
+    return phaseOf(this.getSettings(), this.listTasks());
+  }
+
   // What phase is the team in, and what should THIS agent do next? Plain-language instructions.
   // actionable: there's something for this agent to do right now (the Stop hook nudges it then).
   nextAction(agent) {
@@ -1436,12 +1453,7 @@ export class Board {
     let actionable = false; const why = [];
     const act = (r) => { actionable = true; why.push(r); };
 
-    let phase;
-    if (!s.goal) phase = 'needs_goal';
-    else if (!planned.length) phase = 'needs_plan';
-    else if (tasks.every((t) => t.status === 'done')) phase = 'all_done';
-    else if (s.require_approval && !s.plan_approved) phase = 'awaiting_approval';
-    else phase = 'building';
+    const phase = phaseOf(s, tasks);
     const time = timeInfo(s);
     const label = (t) => `#${t.id} P${t.priority} ${t.size} ${t.title}${t.reserved_for ? ' (reserved for you)' : ''}`;
 

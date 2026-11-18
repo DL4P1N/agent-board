@@ -21,7 +21,7 @@ npm start
 
 - It prints the web board link and the join command for teammates.
 - It then offers to connect the host's own AI tool in the same window. If you say no, it remembers (in `.host-join-declined` in the board's data folder) and next time only prints the join command. `BOARD_NO_JOIN=1` skips the offer.
-- `npm start` reloads by itself when `src/` changes, e.g. after `git pull`.
+- `npm start` reloads by itself when `src/` changes, e.g. after `git pull`. If the pull changed `package.json`, stop it (Ctrl+C) and run `npm start` again: that installs any new dependencies first.
 - It refuses to start a second board on a busy port, and `/health` reports the running version.
 
 ## Teammates on different networks

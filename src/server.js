@@ -9,12 +9,20 @@
 import fs from 'node:fs';
 import { Registry, adminToken } from './boards.js';
 import { PORT, HOST, DATA_DIR } from './config.js';
-import { writePid, dropPid } from './pidfile.js';
+import { otherOwner, writePid, dropPid } from './pidfile.js';
 import { createLiveBoards } from './live-boards.js';
 import { createApp } from './app.js';
 import { printBanner, offerHostJoin, handleListenErrors } from './startup.js';
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
+// One server per data folder: a second one would open the same databases and write over the first one's data.
+// (`npm start`'s reload after a change stops the old process before it starts the new one.)
+const owner = await otherOwner();
+if (owner) {
+  console.error(`\n✗ Another board server (process ${owner.pid}, port ${owner.port}) is already using the data folder ${DATA_DIR}.`);
+  console.error(`  Use that one, or stop it first (Ctrl+C in its window). To run a second, separate server, give it its own folder:  BOARD_DATA=<folder> PORT=<port> npm start`);
+  process.exit(1);
+}
 writePid();
 process.once('exit', dropPid);
 let registry;
@@ -36,7 +44,12 @@ const app = createApp({ registry, live, adminToken: ADMIN_TOKEN });
 
 const httpServer = app.listen(PORT, HOST, () => {
   writePid();
-  for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => { dropPid(); process.exit(0); });
+  // Ctrl+C or a stop: close every board's database (its last writes are flushed), then exit.
+  for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => {
+    for (const rt of live.runtimes.values()) try { rt.close(); } catch {}
+    dropPid();
+    process.exit(0);
+  });
   printBanner({ registry, live, adminToken: ADMIN_TOKEN });
   offerHostJoin(live);
 });

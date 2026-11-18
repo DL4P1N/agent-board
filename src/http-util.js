@@ -21,18 +21,22 @@ export function agentFrom(req) {
 }
 // Send this answer gzipped? Only to browsers that accept it (every browser's User-Agent starts "Mozilla/"): Node's
 // fetch accepts gzip too, but on Windows a script that exits soon after reading a gzipped answer can crash in
-// libuv, and our scripts (join, doctor, the tests) don't need it.
+// libuv (nodejs/node#56645), and our scripts (join, doctor, the tests) don't need it. The answer depends on the
+// User-Agent as well as Accept-Encoding, so both are in Vary (GZIP_VARY), for any cache in between.
+export const GZIP_VARY = 'Accept-Encoding, User-Agent';
 export const wantsGzip = (req) => /^Mozilla\//.test(req.get('user-agent') || '') && /\bgzip\b/i.test(req.get('accept-encoding') || '');
 
 // join's laptop id (?laptop=, X-Laptop, a body field): letters, digits, _ and -, at most 32; '' when missing.
 export const laptopParam = (v) => String(v || '').replace(/[^\w-]/g, '').slice(0, 32);
 
 // A bug or a database error, not a refusal meant for the caller: its text (SQL, property names) stays in the
-// server's window. A TypeError is nearly always a malformed request (a field missing or of the wrong type): 400.
+// server's window. A TypeError from reading the request (a field missing or of the wrong type, e.g. "Cannot read
+// properties of undefined", "x.trim is not a function") is a malformed request: 400. Any other TypeError is a bug: 500.
+const INPUT_TYPE_ERROR = /^Cannot read properties of (undefined|null) |\bis not iterable\b|^\S+\.\w+ is not a function$|^The "[^"]+" argument must be/;
 export function internalError(res, e) {
   if (!(e instanceof TypeError || e instanceof ReferenceError || e instanceof RangeError || /^ERR_/.test(String(e?.code || '')))) return false;
   console.error('board request failed:', e);
-  if (e instanceof TypeError) res.status(400).json({ error: 'The request is missing a field or has one of the wrong type.' });
+  if (e instanceof TypeError && INPUT_TYPE_ERROR.test(e.message || '')) res.status(400).json({ error: 'The request is missing a field or has one of the wrong type.' });
   else res.status(500).json({ error: 'Something went wrong on the board server (the details are in its window).' });
   return true;
 }

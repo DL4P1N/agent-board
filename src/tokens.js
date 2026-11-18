@@ -25,6 +25,7 @@ export function newBoardToken() {
 // Writes a token file through a temp file and a rename, so a crash mid-write never leaves an empty token.
 export function writeTokenFile(file, token) {
   const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, token);
+  // Readable by this user only (on POSIX; Windows ignores the mode, the user's profile folder is private anyway).
+  fs.writeFileSync(tmp, token, { mode: 0o600 });
   fs.renameSync(tmp, file);
 }

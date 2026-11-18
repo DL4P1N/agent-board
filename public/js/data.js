@@ -6,8 +6,8 @@ import './helpers.js';
 import { $, BASE, DEFAULT_SETTINGS, me, setMe, setState, setToken, SLUG, state, store, token } from './state.js';
 import { esc, knownPeople, toast } from './helpers.js';
 import { render, renderQuiet } from './render.js';
-import { selfMoves } from './topbar.js';
-import { dropOlder, older } from './activity.js';
+import { noteSelfMove } from './topbar.js';
+import { dropOlder, FEED_MAX, older } from './activity.js';
 import { checkOverwrites } from './task-dialog.js';
 
 // A page that held a working token gets a 401: the host rotated the token or started a fresh board.
@@ -19,7 +19,7 @@ let savingN = 0;
 function savingCount(d) { savingN = Math.max(0, savingN + d); $('conn').toggleAttribute('data-saving', savingN > 0); }
 async function api(path, opts = {}) {
   let r;
-  if (opts.method === 'PATCH' && /^\/tasks\/\d+$/.test(path)) { try { const b = JSON.parse(opts.body); if (b.status) selfMoves.set(Number(path.split('/')[2]), { status: b.status, ts: Date.now() }); } catch {} }
+  if (opts.method === 'PATCH' && /^\/tasks\/\d+$/.test(path)) { try { const b = JSON.parse(opts.body); if (b.status) noteSelfMove(Number(path.split('/')[2]), b.status); } catch {} }
   // A slow save (bad wifi): the header says "Saving…" until the server answers.
   let slowOn = false; const slow = opts.method && opts.method !== 'GET' ? setTimeout(() => { slowOn = true; savingCount(1); }, 700) : 0;
   try {
@@ -61,14 +61,22 @@ function showUnavailable(kind, info = '') {
   if (kind === 'moved') {
     const to = String(info).replace(/\/+$/, '');
     const url = new URL(to + '/', location.origin); url.searchParams.set('token', token); if (me) url.searchParams.set('name', me);
+    // Only a web address becomes a link (the server sends /b/<board>; anything else, e.g. javascript:, doesn't).
+    if (!/^https?:$/.test(url.protocol)) return showUnavailable('failed', 'it moved, but its new address is not a web link. Ask the host for the new link.');
     $('moved-link').textContent = new URL(to + '/', location.origin).href; $('moved-link').href = url.href; $('moved-open').href = url.href;
     document.title = 'Board moved · Agent Board';
   }
   if (kind === 'failed') { $('failed-msg').textContent = String(info).replace(/^(This|The default) board failed to open:\s*/i, ''); document.title = `Couldn't open · ${SLUG ? name + ' · ' : ''}Agent Board`; }
   clearInterval(recoverTimer); recoverTimer = setInterval(tryRecover, 4000);
 }
+// One check at a time: a slow answer (the server busy restoring) doesn't get a second check started beside it.
+let recovering = false;
 async function tryRecover() {
-  if (!unavailable || !token) return;
+  if (!unavailable || !token || recovering) return;
+  recovering = true;
+  try { await recoverOnce(); } finally { recovering = false; }
+}
+async function recoverOnce() {
   let r; try { r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); } catch { return; }
   const body = await r.clone().json().catch(() => ({}));
   if (r.ok) {
@@ -122,13 +130,18 @@ $('me-btn').onclick = () => showGate();
 
 // ---------- data ----------
 // One /api/state at a time: a load asked for while one is on its way runs once it is back (it fetches what changed
-// meanwhile), so an older answer never replaces a newer one. Resolves true once the page has the board's state.
+// meanwhile), so an older answer never replaces a newer one. Resolves true once the page has the board's state, false
+// otherwise; it never rejects (an error while applying the state is logged), so callers needn't catch.
 let loading = null, again = false;
 async function load() {
   if (loading) { again = true; return loading; }
-  loading = (async () => { let ok; do { again = false; ok = await loadOnce(); } while (again && !unavailable && !$('app').hidden); return ok; })();
+  const once = () => loadOnce().catch((e) => { console.error('Loading the board failed:', e); return false; });
+  loading = (async () => { let ok; do { again = false; ok = await once(); } while (again && !unavailable && !$('app').hidden); return ok; })();
   try { return await loading; } finally { loading = null; }
 }
+// Waits for a load on its way (if any) to finish. Load earlier waits for it, so a page it fetches can't land beside a feed
+// that load is about to replace.
+const loadSettled = () => loading || Promise.resolve();
 async function loadOnce() {
   let s;
   try {
@@ -175,10 +188,9 @@ async function keepOlder(latest) {
   }
   const all = [...state.events.filter((e) => e.id < (gap[0]?.id ?? first)), ...gap, ...latest];
   // Live events past the cap push the oldest out (Load earlier brings them back).
-  if (all.length > OLDER_CAP) { older.more = true; return all.slice(-OLDER_CAP); }
+  if (all.length > FEED_MAX) { older.more = true; return all.slice(-FEED_MAX); }
   return all;
 }
-const OLDER_CAP = 1200;
 // A burst of events makes one load (at most one every 150ms, and one at a time).
 let reloadTimer = 0;
 const scheduleReload = () => { if (!reloadTimer) reloadTimer = setTimeout(() => { reloadTimer = 0; load(); }, 150); };
@@ -235,5 +247,5 @@ async function recheck() {
   if (!es || es.readyState === EventSource.CLOSED) connect();
 }
 
-export { act, api, connect, es, esOpen, load, onSignIn, paint, recheck, retrying, scheduleReload, setConn, setLoad,
+export { act, api, connect, es, esOpen, load, loadSettled, onSignIn, paint, recheck, retrying, scheduleReload, setConn, setLoad,
   showGate, tokenError, unavailable, unavailableStatus };

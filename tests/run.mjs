@@ -17,17 +17,23 @@ const suites = [
   ...fs.readdirSync(path.join(ROOT, 'tests', 'ui')).filter((f) => f.endsWith('.mjs')).sort().map((f) => path.join(ROOT, 'tests', 'ui', f)),
 ].filter((f) => path.basename(f).includes(filter));
 
-// Runs one suite; on a timeout, ends its whole process tree (its boards and browsers too).
+// Runs one suite; on a timeout, ends its whole process tree (its boards and browsers too). On POSIX the suite gets its
+// own process group (detached), so killing the group reaches everything it started; Ctrl+C on the runner, which no
+// longer reaches that group by itself, ends it the same way.
+const posix = process.platform !== 'win32';
+let current = null;
+for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => { killTree(current, { group: posix }); process.exit(130); });
 const run = (file, env) => new Promise((resolve) => {
-  const child = spawn(process.execPath, [file], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = current = spawn(process.execPath, [file], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'], detached: posix });
   let out = '';
   child.stdout.on('data', (d) => { out += d; });
   child.stderr.on('data', (d) => { out += d; });
   let timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; killTree(child); }, TIMEOUT);
+  const timer = setTimeout(() => { timedOut = true; killTree(child, { group: posix }); }, TIMEOUT);
   // Output is read until the pipes close, but not for long after the suite exits (something it started could hold them).
   child.once('exit', (status) => {
     clearTimeout(timer);
+    if (current === child) current = null;
     const done = () => resolve({ status, out, timedOut });
     const t = setTimeout(done, 2000);
     child.once('close', () => { clearTimeout(t); done(); });
@@ -45,10 +51,14 @@ for (const file of suites) {
   const r = await run(file, { ...process.env, TMPDIR: tmp, TEMP: tmp, TMP: tmp });
   const left = r.timedOut ? [] : fs.readdirSync(tmp).filter((n) => /^(agent-board|claude-board|board-|cb-|cf-args|rehearse|puppeteer_dev_)/.test(n));
   try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); } catch {}
-  const out = `${r.out}${r.timedOut ? `\nFAIL timed out after ${Math.round(TIMEOUT / 1000)}s (stopped)\n` : ''}${left.length ? `\nFAIL left temp folders behind: ${left.join(', ')}\n` : ''}`;
+  let out = `${r.out}${r.timedOut ? `\nFAIL timed out after ${Math.round(TIMEOUT / 1000)}s (stopped)\n` : ''}${left.length ? `\nFAIL left temp folders behind: ${left.join(', ')}\n` : ''}`;
   const failures = out.split('\n').filter((l) => /^(FAIL|CRASH)\b/.test(l));
+  // Every suite ends with "N/N passed" (helpers.mjs finish()): a suite that exits 0 without it, or with fewer passed
+  // than run, ended early or lost checks somewhere, and fails.
   const counts = out.match(/(\d+)\/(\d+) passed/g)?.pop();
-  const ok = r.status === 0 && !failures.length;
+  const [pass, total] = (counts?.match(/\d+/g) || []).map(Number);
+  const ok = r.status === 0 && !failures.length && total > 0 && pass === total;
+  if (r.status === 0 && !failures.length && !ok) out += counts ? `\nFAIL only ${counts}\n` : '\nFAIL no "N/N passed" line: the suite ended without reporting its checks\n';
   if (!ok) process.stdout.write(out.split('\n').filter((l) => !/^PASS\b/.test(l)).join('\n') + '\n');
   summary.push(`${ok ? '✓' : '✗'} ${name}${counts ? `  (${counts})` : ''}  ${Math.round((Date.now() - t0) / 1000)}s`);
   process.stdout.write(`${summary.at(-1)}\n`);

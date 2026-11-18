@@ -245,6 +245,6 @@ function shortcutPath({ tool, dir }) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  // exitCode, not process.exit(): exiting while fetch sockets are still closing crashes Node on Windows.
+  // exitCode, not process.exit(): exiting while fetch sockets are still closing crashes Node on Windows (nodejs/node#56645).
   process.exitCode = (await runDoctor()) ? 1 : 0;
 }

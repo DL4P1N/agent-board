@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { startBoard, finish, agent, ROOT } from './helpers.mjs';
 import { agentTokenFor, newBoardToken } from '../src/tokens.js';
+import { internalError } from '../src/http-util.js';
 
 const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' && !ok ? ' — ' + x : ''}`);
@@ -269,6 +270,8 @@ check('the presenter view still gets no setup and no direct messages (one shared
 const page = await raw('/', { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0' });
 const pagePlain = await raw('/');
 check('the web board page is gzipped when asked, revalidated on each load', page.headers['content-encoding'] === 'gzip' && zlib.gunzipSync(page.body).equals(pagePlain.body) && /max-age=0/.test(page.headers['cache-control']) && /Accept-Encoding/i.test(page.headers.vary || ''), JSON.stringify(page.headers));
+// Gzipped or not depends on the User-Agent too (browsers only), so a cache in between must key on it as well.
+check('gzip-eligible answers vary on User-Agent as well as Accept-Encoding', [page, pagePlain, sz, sp].every((x) => /Accept-Encoding/i.test(x.headers.vary || '') && /User-Agent/i.test(x.headers.vary || '')), [page, pagePlain, sz, sp].map((x) => x.headers.vary).join(' | '));
 check('an unchanged page answers 304', (await raw('/', { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0', 'If-None-Match': page.headers.etag })).status === 304);
 const chunk = fs.readdirSync(path.join(ROOT, 'public', 'office')).find((f) => /^OfficeScene-[\w-]{8}\.js$/.test(f));
 const cz = await raw(`/office/${chunk}`, { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0' });
@@ -285,6 +288,27 @@ check('MCP refuses JSON-RPC batches (400)', batch.status === 400 && /Batched req
 // A malformed request gets a plain answer, not the server's internals (here: "Cannot read properties of undefined").
 r = await c2('/locks/release', 'POST', {}, tok3);
 check('a malformed request: 400 without internal details', r.status === 400 && /missing a field/.test(r.body?.error || '') && !/properties of undefined/.test(r.body?.error || ''), JSON.stringify(r));
+{
+  // Only a TypeError from reading the request is the caller's fault; another TypeError is a bug on the server: 500.
+  const statusFor = (e) => { let s = 0; const res = { status: (n) => { s = n; return res; }, json: () => res }; const log = console.error; console.error = () => {}; try { internalError(res, e); } finally { console.error = log; } return s; };
+  const input = [() => undefined.x, () => { for (const _ of 5); }, () => (5).trim()].map((f) => { try { f(); } catch (e) { return statusFor(e); } });
+  const bugs = [() => { const k = 1; k = 2; }, () => Object.keys(null), () => JSON.stringify({ n: 1n }), () => { undefined.x = 1; }].map((f) => { try { f(); } catch (e) { return statusFor(e); } });
+  check('internalError: input TypeErrors are 400, other TypeErrors (bugs) 500', input.every((s) => s === 400) && bugs.every((s) => s === 500), JSON.stringify({ input, bugs }));
+}
+// A second server on the same data folder (another port) refuses to start: it would open the same databases.
+{
+  const pf = path.join(b2.dataDir, 'board.pid');
+  const before = fs.readFileSync(pf, 'utf8');
+  const s2 = spawnSync(process.execPath, [path.join(ROOT, 'src', 'server.js')], {
+    env: { ...process.env, PORT: '0', BOARD_TOKEN: tok3, BOARD_DATA: b2.dataDir, BOARD_NO_JOIN: '1' }, encoding: 'utf8', timeout: 15000,
+  });
+  check('a second server on the same data folder refuses to start (exit 1, says which process has it)', s2.status === 1 && /already using the data folder/.test(s2.stderr) && s2.stderr.includes(String(b2.child.pid)) && fs.readFileSync(pf, 'utf8') === before, `${s2.status} ${s2.stdout} ${s2.stderr}`);
+  check('the first board still answers after that', (await fetch(`${b2.base}/health`)).ok);
+  // A board.pid naming a live process that isn't a board (a pid taken again after a crash) doesn't block a start.
+  fs.writeFileSync(pf, JSON.stringify({ pid: process.pid, port: b2.port + 1, started: new Date(Date.now() - 5 * 60e3).toISOString() }));
+  await b2.relaunch();
+  check('a stale board.pid whose pid now belongs to another program is replaced', JSON.parse(fs.readFileSync(pf, 'utf8')).pid === b2.child.pid);
+}
 await b2.stop();
 // A clean stop removes board.pid. On Windows the test's stop kills the process outright (no exit
 // handlers), which leaves a stale file naming a dead process; restore ignores those.

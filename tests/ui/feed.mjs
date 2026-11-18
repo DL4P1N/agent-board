@@ -104,6 +104,33 @@ try {
     return { first: ids[0], sorted: ids.every((x, i) => !i || ids[i - 1] < x), dup: new Set(ids).size !== ids.length, all: Array.from({ length: 260 }, (_, i) => `burst ${i}`).every((t) => texts.includes(t)) };
   });
   check('WB-21 a reload after 260 new events keeps every event (gap fetched, no duplicates)', gap.first === 1 && gap.sorted && !gap.dup && gap.all, JSON.stringify(gap));
+  // Load earlier while a load of the board is on its way (a fresh tab: the feed is the last 200, no earlier page yet):
+  // the load must not replace the feed under the page Load earlier is fetching, or the lines between the two go missing.
+  {
+    const p2 = await browser.newPage();
+    p2.on('pageerror', (e) => errors.push('pageerror (2nd tab): ' + e.message));
+    await p2.goto(`${board.base}/?token=${board.token}&name=dana`);
+    await p2.waitForFunction(() => document.getElementById('conn').classList.contains('live') && state.events.length === 200 && !!document.querySelector('#feed [data-older]'), { timeout: 10000 });
+    const had = await p2.evaluate(() => state.events.map((e) => e.id));
+    // Task events (not chat lines, which the page adds itself) pile up while loading is held back...
+    await p2.evaluate(() => { window.__load = load; load = async () => true; });
+    for (let i = 0; i < 50; i++) await rest('erin', '/tasks', 'POST', { title: `race task ${i}` });
+    // ...then Load earlier's page comes back slowly, and a load (the last 200, now 50 further on) lands first.
+    await p2.evaluate(() => {
+      const f = window.fetch;
+      window.fetch = async (u, o) => { const r = await f(u, o); if (/\/api\/events\?before=/.test(String(u))) await new Promise((ok) => setTimeout(ok, 800)); return r; };
+      load = window.__load;
+    });
+    await p2.$eval('#feed', (f) => { f.scrollTop = 0; });
+    await p2.click('#feed [data-older]');
+    await p2.evaluate(() => load());
+    await p2.waitForFunction(() => !document.querySelector('#feed [data-older][disabled]'), { timeout: 10000 });
+    const after = await p2.evaluate(() => ({ ids: state.events.map((e) => e.id), titles: state.tasks.filter((t) => /^race task/.test(t.title)).length }));
+    const kept = new Set(after.ids);
+    const lost = had.filter((id) => !kept.has(id));
+    check('WB-21 Load earlier during a load: no line goes missing, the earlier page is in front, the load applied', !lost.length && after.ids[0] < had[0] && after.ids.every((x, i, a) => !i || a[i - 1] < x) && after.titles === 50, JSON.stringify({ lost: lost.length, first: after.ids[0], had0: had[0], titles: after.titles }));
+    await p2.close();
+  }
 
   // WB-25: I save a task, then someone else saves over it: I'm told.
   const t = await rest('erin', '/tasks', 'POST', { title: 'Write the README' });

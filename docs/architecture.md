@@ -184,7 +184,7 @@ The modules run in the order of this table: each imports the one before it first
 
 - One SQLite database per board: `data/board.db` for the first board, `data/boards/<board>/board.db` for the others.
 - Every 10 minutes (when something changed) each board copies its database to `backups/` in its folder and keeps the newest 24. Restoring is in [Backups](hosting.md#backups).
-- `npm start` reloads by itself when `src/` changes.
+- `npm start` reloads by itself when `src/` changes. It doesn't install dependencies on a reload: after a change to `package.json`, stop it and run `npm start` again (its `prestart` runs `scripts/ensure-deps.mjs`).
 
 ## REST notes
 

@@ -202,4 +202,6 @@ try {
 
 demo.stdin.write('stop\n');
 await Promise.race([demoExit, sleep(15000)]);
+// Without WebGL the 3D checks above are skipped; CI runs Chrome with SwiftShader, so there they must have run.
+if (process.env.CI) check('CI: WebGL works in this browser (SwiftShader), so the 3D layout checks ran', webgl);
 await finish(R, { browser });

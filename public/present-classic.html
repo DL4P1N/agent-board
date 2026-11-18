@@ -385,6 +385,8 @@ async function load() {
       if (r.status === 503) return showMsg(`This board couldn't open: ${esc(body.error || 'unknown error')}. Checking again by itself.`);
       const to = String(body.moved_to || '').replace(/\/+$/, '');
       const url = new URL(to + '/present-classic.html', location.origin); url.searchParams.set('token', token);
+      // Only a web address becomes a link (the server sends /b/<board>; anything else, e.g. javascript:, doesn't).
+      if (!/^https?:$/.test(url.protocol)) return showMsg('This board moved to its own address. Ask the host for the new presenter link.');
       return showMsg(`This board moved to its own address. <a href="${esc(url.href)}">Open the presenter view there</a>.`);
     }
     if (!r.ok) throw new Error(r.statusText);

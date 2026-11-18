@@ -40,7 +40,8 @@ export function printBanner({ registry, live, adminToken }) {
     for (const o of others) console.log(`      ${registry.get(o.slug)?.name || o.slug}:  ${best}/b/${o.slug}/?token=${o.token}`);
   }
   console.log(`\n Manage boards (create, switch, archive):  ${best}/boards?admin=${adminToken}`);
-  console.log(`\n Keep this window open. After a \`git pull\` the board reloads by itself.`);
+  console.log(`\n Keep this window open. After a \`git pull\` the board reloads by itself; if the pull changed package.json,`);
+  console.log(` stop it (Ctrl+C) and run  npm start  again, so new dependencies get installed.`);
   console.log(`${line}\n`);
 }
 
