@@ -819,6 +819,24 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .tref { color: var(--accent); font-variant-numeric: tabular-nums; }
   .jump { position: absolute; bottom: var(--s4); left: 50%; translate: -50% 0; font-size: var(--fs-meta); padding: 0 var(--s5); min-height: var(--ctl-sm); border-radius: var(--r-full); box-shadow: var(--e2); }
   .jump:active { translate: calc(-50% + 1px) 1px; transform: none; }
+  /* Direct messages: the thread list (the planner's thread pinned on top), and the open thread's bar above the feed. */
+  .dmlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+  .dmlist .pin { border-bottom: 1px solid var(--line); padding-bottom: var(--s2); margin-bottom: var(--s2); }
+  .dmrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: var(--s3); width: 100%; min-height: var(--ctl-sm); padding: var(--s2) var(--s3); background: transparent; color: var(--ink); border: 0; border-left: 2px solid transparent; border-radius: var(--r-sm); box-shadow: none; font-size: var(--fs-sm); font-weight: 400; text-align: left; white-space: normal; }
+  .dmrow:hover { background: var(--chip); }
+  .dmrow:active { transform: none; box-shadow: none; }
+  .dmrow.unread { border-left-color: var(--mention-line); }
+  .dmrow .dn { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dmrow .dn .muted { font-weight: 400; }
+  .dmrow .dr { display: inline-flex; align-items: baseline; gap: var(--s2); }
+  .dmrow time { color: var(--muted); font-size: var(--fs-micro); white-space: nowrap; }
+  .dmrow .dl { grid-column: 1 / -1; color: var(--muted); font-size: var(--fs-meta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dmrow .n { background: var(--accent); color: var(--accent-ink); border-radius: var(--r-full); padding: 0 5px; font-size: var(--fs-micro); font-weight: 700; font-variant-numeric: tabular-nums; box-shadow: 0 0 0 1px var(--outline); }
+  .dmbar { display: flex; align-items: baseline; gap: var(--s3); margin: 0 0 var(--s3); font-size: var(--fs-sm); min-width: 0; }
+  .dmbar .dmt { font-weight: 700; white-space: nowrap; }
+  .dmbar .muted { font-size: var(--fs-meta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .dmbar button.link { font-size: var(--fs-meta); color: var(--muted); white-space: nowrap; }
+  .composer.dm #chan { display: none; }
   .composer { position: relative; display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s4); align-items: flex-end; }
   .composer select { width: auto; flex: 0 0 auto; }
   .composer #msg { order: -1; flex: 1 0 100%; }
@@ -1101,12 +1119,14 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 
   /* Activity: filters, the feed, the chat. File locks: folded to their title bar (with the count) by default. */
   .o-act > .o-body { display: flex; flex-direction: column; padding: var(--s3) var(--s5) var(--s4); overflow: hidden; }
-  .o-act .tabs { justify-content: flex-start; margin: 0 0 var(--s3); flex: 0 0 auto; flex-wrap: nowrap; gap: var(--s1); overflow-x: auto; scrollbar-width: none; }
+  .o-act .tabs { justify-content: flex-start; margin: 0 0 var(--s3); flex: 0 0 auto; flex-wrap: nowrap; gap: 0; overflow-x: auto; scrollbar-width: none; }
   .o-act .tabs button { flex: 0 0 auto; }
   /* "New activity" sits between the feed and the composer, not over the last event. */
   .o-act .jump { position: static; translate: none; align-self: center; margin-top: var(--s2); }
   .o-act .jump:active { translate: 1px 1px; }
-  .o-act .tabs button { padding: 0 var(--s1); min-width: var(--ctl-xs); } /* all five fit a 256px panel */
+  /* All six fit a 256px panel (on touch screens they scroll, with the fade at the right edge). */
+  .o-act .tabs button { padding: 0 var(--s1); min-width: 0; }
+  @media (hover: none) and (pointer: coarse) { .o-act .tabs button { min-width: var(--ctl-xs); } }
   .o-act .feedwrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   @media (max-height: 760px) { .o-rcol > .o-right { max-height: 34%; } } /* short screens: Activity keeps room for a few events */
   .o-act .feed { max-height: none; flex: 1 1 auto; min-height: 96px; }
@@ -1148,7 +1168,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-rcol > #o-right-pill { align-self: flex-end; flex: 0 0 auto; }
   /* Short laptop screens: the chat hint is the composer's description (read out, and its tooltip), so the feed keeps
      the room. */
-  @media (max-height: 900px) { .o-act #chat-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
+  @media (max-height: 900px) { .o-act :is(#chat-hint, #dm-hint) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
   /* Up to 1100px: two columns. Needs attention over Agents and Activity on the left, the board on the right; the page scrolls
      as one. */
   @media (max-width: 1100px) {
@@ -1481,7 +1501,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
             <button data-tab="me" aria-pressed="false" aria-label="@me">@me</button>
             <button data-tab="problems" aria-pressed="false" title="Blocked or sent-back tasks, usage limits, name clashes">Problems</button>
             <button data-tab="merges" aria-pressed="false" title="Merges and reviews: tasks going to review, and merged into main">Merges</button>
+            <button data-tab="direct" aria-pressed="false" title="Direct messages: talk to one agent, or to whoever is the planner. Other agents don't see these threads; everyone on this page does.">Direct</button>
           </div>
+          <div class="dmbar" id="dmbar" hidden></div>
           <div class="feedwrap">
             <div class="feed" id="feed" role="log" aria-live="off" tabindex="0" aria-label="Activity feed"></div>
             <button class="jump" id="jump" hidden>New activity ↓</button>
@@ -1493,6 +1515,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
             <button type="submit" id="send" class="ghost">Send</button>
           </form>
           <p class="hint" id="chat-hint">Agents read this chat: <code>@alice</code> for alice's agent, <code>@all</code> for everyone. Enter sends, Shift+Enter adds a line<span id="slash-hint"> · press / to focus</span></p>
+          <p class="hint" id="dm-hint" hidden></p>
         </div>
       </section>
       <section class="o-panel o-locks" id="o-locks" aria-labelledby="l-h">
@@ -1663,7 +1686,7 @@ let me = (nameParam || store.get('board-name') || '').toLowerCase();
 const DEFAULT_SETTINGS = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '', planner_extra: '2' };
 const ANYONE = '*'; // settings.integrator: whoever is free merges
 let state = { tasks: [], locks: [], questions: [], events: [], settings: { ...DEFAULT_SETTINGS }, phase: 'needs_goal', presence: [], setup: null };
-let ui = { nf: { open: false, loaded: false, loading: false, url: '', kind: null, events: null, err: '' }, rotateArm: false, filter: store.get('board-filter') || '', tab: store.get('board-tab') || 'all', showAllDone: false, confirmLock: null, dragging: false, steps: {}, editGoal: false, editRepo: false, addrs: false, picked: null, moveMenu: null, doneOpen: store.get('board-done') };
+let ui = { nf: { open: false, loaded: false, loading: false, url: '', kind: null, events: null, err: '' }, rotateArm: false, filter: store.get('board-filter') || '', tab: store.get('board-tab') || 'all', dm: store.get('board-dm') || null, showAllDone: false, confirmLock: null, dragging: false, steps: {}, editGoal: false, editRepo: false, addrs: false, picked: null, moveMenu: null, doneOpen: store.get('board-done') };
 // Folded panels, the same in both views and remembered per board in this browser: Needs attention and Agents (to chips),
 // Activity, File locks and the 3D Tasks window (to their title bars), the maximised Tasks window. File locks start
 // folded; the Tasks window starts folded on screens up to 900px tall.
@@ -2370,7 +2393,10 @@ function render() {
   prevQIds = new Set(qOpen.map((q) => q.id));
   const unread = unreadMentions();
   if (ui.tab === 'me' && unread.length) { markMentionsSeen(); return render(); }
-  document.title = (qOpen.length + unread.length ? `(${qOpen.length + unread.length}) ` : '') + (SLUG ? `${state.board?.name || SLUG} · ` : '') + 'Agent Board';
+  // The open thread is read while it's on screen.
+  if (ui.tab === 'direct' && ui.dm && document.visibilityState === 'visible') markDmSeen(ui.dm);
+  const dmN = dmUnreadCount();
+  document.title = (qOpen.length + unread.length + dmN ? `(${qOpen.length + unread.length + dmN}) ` : '') + (SLUG ? `${state.board?.name || SLUG} · ` : '') + 'Agent Board';
   if (SLUG && state.board?.name) { const b = $('bname'); if (b.textContent !== state.board.name) { b.textContent = state.board.name; b.title = `Board "${state.board.name}" (/b/${SLUG}/) on this server`; } }
   renderNeeds(qOpen, unread);
   renderClock(); renderBell();
@@ -3016,7 +3042,7 @@ function agentDetail(a, qOpen, lastText) {
   return `<div class="o-det" id="o-det" role="group" aria-label="${esc(a.name)}">${cap}${what ? `<p class="muted">${esc(what)}</p>` : ''}${lines.length ? `<ul>${lines.join('')}</ul>` : ''}${doing}`
     + (q ? `<p><span class="pill warn">Question</span> ${esc(short(q.question, 110))}</p>` : '')
     + (lastText && !/^#\d+ updated$/.test(lastText) ? `<div class="last" title="${esc(lastText)}">${esc(short(lastText, 120))}</div>` : '') // "#12 updated" says nothing
-    + `<div class="oc-a">${q ? `<button type="button" class="sm" data-go-q="${q.id}" data-fk="oq-${esc(a.name)}">Answer</button>` : ''}<button type="button" class="ghost sm" data-mention="${esc(a.name)}" data-fk="om-${esc(a.name)}">Message ${esc(a.name)}</button></div>`
+    + `<div class="oc-a">${q ? `<button type="button" class="sm" data-go-q="${q.id}" data-fk="oq-${esc(a.name)}">Answer</button>` : ''}<button type="button" class="ghost sm" data-dm="${esc(a.name)}" data-fk="om-${esc(a.name)}" title="${esc(`Open your direct thread with ${a.name}: other agents don't see it, everyone on this page does`)}">Message ${esc(a.name)}</button></div>`
     + agentControls(a) + '</div>';
 }
 function renderAgents(si, qOpen) {
@@ -3347,6 +3373,7 @@ function evHtml(e, prev) {
   return html;
 }
 function evHtmlRaw(e, prev) {
+  if (e.channel === 'direct' && e.data?.dm?.from === 'board') return `<div class="ev sys" data-eid="${e.id}"><div class="eh"><span class="eb">${fmt(e.text, true)}</span>${timeEl(e.ts)}</div></div>`;
   if (!isChat(e)) {
     // Consecutive status lines from the same author are grouped: the name shows once.
     const cont = prev && !isChat(prev) && prev.author === e.author && e.ts - prev.ts < 10 * 60e3;
@@ -3356,7 +3383,7 @@ function evHtmlRaw(e, prev) {
   const tag = e.kind === 'question' ? '<span class="pill warn">asked the humans</span>' : e.kind === 'answer' ? '<span class="pill">answered</span>' : '';
   const open = e.kind === 'question' && state.questions.some((q) => q.id === e.data?.question_id && !q.answer);
   const long = isLong(e.text); const shown = long && expandedEv.has(e.id);
-  return `<div class="ev chat ${mention ? 'mention' : lite ? 'mention-lite' : ''} ${open ? 'question' : ''}${long ? ' long' : ''}${shown ? ' open' : ''}" data-eid="${e.id}"><div class="eh">${who(e.author, true)}${tag}${e.channel !== 'general' ? `<span class="ch">#${esc(e.channel)}</span>` : ''}${timeEl(e.ts)}</div>
+  return `<div class="ev chat ${mention ? 'mention' : lite ? 'mention-lite' : ''} ${open ? 'question' : ''}${long ? ' long' : ''}${shown ? ' open' : ''}" data-eid="${e.id}"><div class="eh">${who(e.author, true)}${tag}${e.channel === 'direct' ? (e.data?.dm?.from === 'agent' && e.data.dm.to && !isMe(e.data.dm.to) ? `<span class="ch">to ${esc(e.data.dm.to)}</span>` : '') : e.channel !== 'general' ? `<span class="ch">#${esc(e.channel)}</span>` : ''}${timeEl(e.ts)}</div>
     <div class="eb">${fmt(e.text, true)}</div>${long ? `<button type="button" class="link muted evmore" data-more="${e.id}" aria-expanded="${shown}">${shown ? 'Show less' : 'Show more'}</button>` : ''}</div>`;
 }
 // A status line written for the agents ends with the tool to use, "(decide_proposal)": people don't need it.
@@ -3377,34 +3404,121 @@ const isProblem = (e) => (e.kind === 'task_updated' && (e.data?.status === 'bloc
   || (e.kind === 'task_deleted' && /^rejected proposal/.test(e.text))
   || (e.kind === 'message' && (e.data?.notice === 'limit' || (e.author === 'board' && /is being used from \d+ laptops/.test(e.text))));
 const isMergeReview = (e) => e.kind === 'task_updated' && (e.data?.status === 'review' || e.data?.status === 'done') && /→ (review|done)\b/.test(e.text);
+// ---------- direct messages (the Activity panel's Direct tab, both views) ----------
+// One thread per agent (its name), plus the planner's thread ("planner"): whoever is the planner reads it, and while
+// nobody is, its messages wait for the first one. Every human sees every thread; other agents don't. Unread: replies
+// to me newer than what I last saw in that thread (remembered in this browser).
+const DM_PLANNER = 'planner';
+const seenDm = (() => { try { const v = JSON.parse(store.get('board-seen-dm') || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } })();
+const dmAll = () => state.direct || [];
+const dmThread = (name) => dmAll().filter((e) => e.data?.dm?.thread === name);
+const dmUnreadIn = (name) => dmThread(name).filter((e) => e.data?.dm?.from === 'agent' && isMe(e.data.dm.to) && e.id > (seenDm[name] || 0)).length;
+const dmUnreadCount = () => [...new Set(dmAll().map((e) => e.data?.dm?.thread))].reduce((n, t) => n + dmUnreadIn(t), 0);
+function markDmSeen(name) {
+  const max = Math.max(0, ...dmThread(name).map((e) => e.id));
+  if (max > (seenDm[name] || 0)) { seenDm[name] = max; store.set('board-seen-dm', JSON.stringify(seenDm)); return true; }
+  return false;
+}
+const dmTitle = (name) => (name === DM_PLANNER ? 'Planner' : name);
+// Who reads a thread: the agent, or for the planner's thread whoever is the planner now ('' = nobody yet).
+const dmReader = (name) => (name === DM_PLANNER ? state.settings.planner || '' : name);
+function dmEmptyText(name) {
+  if (name === DM_PLANNER) return state.settings.planner ? `Nothing here yet. Messages here go to ${esc(state.settings.planner)}, the planner, and follow the role if it changes.` : 'Nothing here yet. Nobody is the planner yet: messages wait here for the first agent that becomes planner.';
+  return `Nothing here yet. Write to ${esc(name)} below.`;
+}
+// The thread list: the planner's thread first, then threads by their latest message, then the other agents.
+function dmListHtml() {
+  const info = agentInfoNow();
+  const names = [...new Set([...dmAll().map((e) => e.data?.dm?.thread).filter((t) => t && t !== DM_PLANNER), ...info.keys()])];
+  const last = (n) => dmThread(n).at(-1);
+  names.sort((a, b) => (last(b)?.id || 0) - (last(a)?.id || 0) || a.localeCompare(b));
+  const row = (n) => {
+    const l = last(n); const un = dmUnreadIn(n); const pin = n === DM_PLANNER; const a = info.get(n);
+    const sub = pin ? (state.settings.planner ? `goes to ${state.settings.planner}` : 'no planner yet') : !a ? 'not on the board' : a.online ? '' : 'offline';
+    // The last message under the name; an agent with no thread yet is just its name.
+    const line = l ? `${l.data?.dm?.from === 'board' ? '' : `${l.author === me ? 'You' : l.author}: `}${short(l.text, 120)}` : pin ? 'Ideas and changes for the plan' : '';
+    const label = `${dmTitle(n)}${sub ? ` (${sub})` : ''}${un ? `, ${un} unread` : ''}. ${l ? `Last: ${short(l.text, 80)}` : line || 'No messages yet'}`;
+    return `<li${pin ? ' class="pin"' : ''}><button type="button" class="dmrow${un ? ' unread' : ''}" data-dm="${esc(n)}" data-fk="dm-${esc(n)}" aria-label="${esc(label)}">`
+      + `<span class="dn">${pin ? esc(dmTitle(n)) : `<span class="pc" ${hs(n)}>${esc(n)}</span>`}${sub ? ` <span class="muted">· ${esc(sub)}</span>` : ''}</span><span class="dr">${l ? timeEl(l.ts) : ''}${un ? `<span class="n" aria-hidden="true">${un}</span>` : ''}</span>`
+      + (line ? `<span class="dl">${esc(line)}</span>` : '') + '</button></li>';
+  };
+  return `<ul class="dmlist" aria-label="Direct message threads">${row(DM_PLANNER)}${names.map(row).join('')}</ul>`
+    + (names.length ? '' : '<div class="muted empty-note">No agents yet. When one connects, you can message it here.</div>');
+}
+// Above the feed while a thread is open: back to the list, and who reads it.
+function renderDmBar() {
+  const bar = $('dmbar'); const on = ui.tab === 'direct' && !!ui.dm;
+  bar.hidden = !on;
+  $('composer').hidden = ui.tab === 'direct' && !ui.dm;
+  $('composer').classList.toggle('dm', on);
+  syncComposer();
+  if (!on) return;
+  const r = dmReader(ui.dm);
+  const note = ui.dm === DM_PLANNER ? (r ? `to ${r}` : 'waits for a planner') : 'hidden from other agents';
+  patch(bar, `<button type="button" class="link" data-dm-back data-fk="dm-back" aria-label="Back to all threads">← Threads</button><span class="dmt">${esc(dmTitle(ui.dm))}</span><span class="muted" title="${esc(`Among the agents, only ${r || 'the planner'} reads this thread. Everyone on this web board can read it.`)}">${esc(note)}</span>`);
+}
+// The message box keeps a draft per place (the shared chat, each thread), so a chat draft never lands in a thread.
+const drafts = {}; let composerKey = 'chat';
+function syncComposer() {
+  const key = ui.tab === 'direct' && ui.dm ? 'dm:' + ui.dm : 'chat';
+  const m = $('msg');
+  if (key !== composerKey) { drafts[composerKey] = m.value; m.value = drafts[key] || ''; composerKey = key; growMsg(); closeAc(); }
+  const dm = key !== 'chat'; const r = dm && dmReader(ui.dm);
+  const ph = dm ? `Message ${ui.dm === DM_PLANNER ? 'the planner' : ui.dm}` : 'Message, @ to mention';
+  if (m.placeholder !== ph) m.placeholder = ph;
+  const tip = dm ? `Among the agents only ${r || 'the planner'} reads this; everyone on this web board can. Enter sends, Shift+Enter adds a line` : 'Agents read this chat: @name for one agent, @all for everyone. Enter sends, Shift+Enter adds a line';
+  if (m.title !== tip) m.title = tip;
+  // The shared chat's hint, or this thread's (the message box points at whichever is shown).
+  $('chat-hint').hidden = dm; $('dm-hint').hidden = !dm;
+  if (m.getAttribute('aria-describedby') !== (dm ? 'dm-hint' : 'chat-hint')) m.setAttribute('aria-describedby', dm ? 'dm-hint' : 'chat-hint');
+  if (!dm) return;
+  const who = ui.dm === DM_PLANNER ? (r ? `Goes to ${r}, the planner (it follows the role)` : 'Waits for the first agent that becomes planner') : `Goes to ${ui.dm} only`;
+  const t = `${who}. Other agents don't see it; everyone on this page does. Enter sends, Shift+Enter adds a line`;
+  if ($('dm-hint').textContent !== t) $('dm-hint').textContent = t;
+}
+// Open an agent's thread (its Message button) or the planner's, with the message box focused.
+function openDm(name, focus = true) {
+  oShow('act');
+  if ($('task-dlg').open) $('task-dlg').close();
+  ui.tab = 'direct'; store.set('board-tab', 'direct'); ui.dm = name; store.set('board-dm', name);
+  $('feed')._html = undefined; render();
+  if (focus) { const m = $('msg'); m.focus({ preventScroll: true }); m.setSelectionRange(m.value.length, m.value.length); }
+}
 const TAB_EMPTY = { me: 'No mentions of you yet.', problems: 'No problems so far: nothing blocked, sent back or out of usage.', merges: 'No reviews or merges yet.' };
 function renderFeed(unreadCount) {
   const tabs = { all: () => true, chat: isChat, me: (e) => mentionsMe(e), problems: isProblem, merges: isMergeReview };
+  const dmUnread = dmUnreadCount();
   $('tabs').querySelectorAll('button').forEach((b) => {
     b.setAttribute('aria-pressed', String(b.dataset.tab === ui.tab));
-    if (b.dataset.tab === 'me') {
-      const html = '@me' + (unreadCount ? `<span class="n" aria-hidden="true">${unreadCount}</span>` : '');
-      if (b.innerHTML !== html) b.innerHTML = html;
-      b.setAttribute('aria-label', unreadCount ? `@me, ${unreadCount} unread` : '@me');
-    }
+    const n = b.dataset.tab === 'me' ? unreadCount : b.dataset.tab === 'direct' ? dmUnread : null;
+    if (n === null) return;
+    const label = b.dataset.tab === 'me' ? '@me' : 'Direct';
+    const html = label + (n ? `<span class="n" aria-hidden="true">${n}</span>` : '');
+    if (b.innerHTML !== html) b.innerHTML = html;
+    b.setAttribute('aria-label', n ? `${label}, ${n} unread` : label);
   });
+  renderDmBar();
   const feed = $('feed');
   const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 40;
-  const evs = state.events.filter(tabs[ui.tab] || tabs.all);
+  const direct = ui.tab === 'direct';
+  const evs = direct ? (ui.dm ? dmThread(ui.dm) : []) : state.events.filter(tabs[ui.tab] || tabs.all);
   const before = feed._html;
   // Reading older messages? Remember the first visible line so new/expired events don't move it.
   let anchor = null;
   if (!atBottom && before !== undefined) {
     for (const n of feed.children) if (n.dataset.eid && n.offsetTop + n.offsetHeight > feed.scrollTop) { anchor = { id: n.dataset.eid, off: n.offsetTop - feed.scrollTop }; break; }
   }
-  const more = older.more ?? (state.events.length >= 200 && state.events[0]?.id > 1);
-  const html = (more ? `<div class="older"><button type="button" class="link muted" data-older ${older.loading ? 'disabled' : ''}>${older.loading ? 'Loading…' : 'Load earlier activity'}</button></div>` : '')
-    + (evs.length ? evs.map((e, i) => evHtml(e, evs[i - 1])).join('') : `<div class="muted empty-note">${TAB_EMPTY[ui.tab] || 'No activity yet. Messages from agents and teammates show up here.'}</div>`);
+  const more = !direct && (older.more ?? (state.events.length >= 200 && state.events[0]?.id > 1));
+  const html = direct && !ui.dm ? dmListHtml()
+    : (more ? `<div class="older"><button type="button" class="link muted" data-older ${older.loading ? 'disabled' : ''}>${older.loading ? 'Loading…' : 'Load earlier activity'}</button></div>` : '')
+    + (evs.length ? evs.map((e, i) => evHtml(e, evs[i - 1])).join('') : `<div class="muted empty-note">${direct ? dmEmptyText(ui.dm) : TAB_EMPTY[ui.tab] || 'No activity yet. Messages from agents and teammates show up here.'}</div>`);
   // New lines fade in (not on first load or a tab switch, and not a whole burst at once).
   const seen = before !== undefined && before !== html && canMove() ? new Set([...feed.children].map((n) => n.dataset.eid)) : null;
   patch(feed, html);
   if (seen) { const fresh = [...feed.children].filter((n) => n.dataset.eid && !seen.has(n.dataset.eid)); if (fresh.length <= 6) fresh.forEach((n) => reveal(n, 4)); }
-  if (atBottom || before === undefined) { feed.scrollTop = feed.scrollHeight; $('jump').hidden = true; }
+  // The thread list reads from the top and stays put; a thread or the feed follows its newest line.
+  if (direct && !ui.dm) { if (before === undefined) feed.scrollTop = 0; $('jump').hidden = true; }
+  else if (atBottom || before === undefined) { feed.scrollTop = feed.scrollHeight; $('jump').hidden = true; }
   else if (before !== feed._html) {
     const n = anchor?.id && feed.querySelector(`[data-eid="${CSS.escape(anchor.id)}"]`);
     if (n) feed.scrollTop = n.offsetTop - anchor.off;
@@ -3584,9 +3698,11 @@ document.addEventListener('click', (ev) => {
   if (d.go && d.go.startsWith('step-')) return goStep(d.go.slice(5));
   if (d.go === 'compose') { oShow('act'); $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); return $('msg').focus({ preventScroll: true }); }
   if (d.openTask) return openTask(Number(d.openTask));
+  if (d.dm) return openDm(d.dm);
+  if ('dmBack' in d) { const n = ui.dm; ui.dm = null; store.set('board-dm', ''); $('feed')._html = undefined; render(); return document.querySelector(`[data-fk="dm-${CSS.escape(n || '')}"]`)?.focus({ preventScroll: true }); }
   if (d.mention) return mention(d.mention);
   if ('filter' in d && el.id !== 'filter') { setFilter(filterRoot() === d.filter && d.filter ? '' : d.filter); return; }
-  if (d.tab) { ui.tab = d.tab; store.set('board-tab', ui.tab); if (ui.tab === 'me') markMentionsSeen(); $('feed')._html = undefined; return render(); }
+  if (d.tab) { ui.tab = d.tab; store.set('board-tab', ui.tab); if (ui.tab === 'me') markMentionsSeen(); if (ui.tab === 'direct') { ui.dm = null; store.set('board-dm', ''); } $('feed')._html = undefined; return render(); }
   if ('showDone' in d) { ui.showAllDone = !ui.showAllDone; return render(); }
   if (d.showCol) { const c = (ui.showCols ||= new Set()); c.has(d.showCol) ? c.delete(d.showCol) : c.add(d.showCol); return render(); }
   if (d.unlock) { ui.confirmLock = d.unlock; render(); return document.querySelector(`[data-fk="un-${CSS.escape(d.unlock)}"]`)?.focus(); }
@@ -3924,6 +4040,7 @@ function markMentionsSeen() {
 function mention(name) {
   oShow('act');
   if ($('task-dlg').open) $('task-dlg').close();
+  if (ui.tab === 'direct') { ui.tab = 'all'; store.set('board-tab', 'all'); $('feed')._html = undefined; render(); }
   const m = $('msg'); const tagText = '@' + name + ' ';
   if (!m.value.includes(tagText)) m.value = (m.value && !/\s$/.test(m.value) ? m.value + ' ' : m.value) + tagText;
   m.focus(); m.setSelectionRange(m.value.length, m.value.length); growMsg(); closeAc();
@@ -4309,7 +4426,8 @@ $('composer').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const text = $('msg').value.trim(); if (!text) return $('msg').focus();
   $('send').disabled = true; closeAc();
-  try { await act(api('/messages', { method: 'POST', body: JSON.stringify({ text, channel: $('chan').value }) })); $('msg').value = ''; growMsg(); $('feed').scrollTop = $('feed').scrollHeight; }
+  const to = composerKey.startsWith('dm:') ? composerKey.slice(3) : null;
+  try { await act(api('/messages', { method: 'POST', body: JSON.stringify(to ? { text, to } : { text, channel: $('chan').value }) })); $('msg').value = ''; growMsg(); $('feed').scrollTop = $('feed').scrollHeight; if (to) scheduleReload(); }
   catch {} finally { $('send').disabled = false; $('msg').focus(); }
 });
 // The message box grows with what you type (up to ~8 lines, then it scrolls).
@@ -4333,6 +4451,10 @@ function acNames() {
   for (const h of helpers) add(h, `subagent of ${agentRoot(h)}`, info.get(agentRoot(h))?.online || false, 'helper');
   for (const r of roster()) add(r.name, `person${r.agents.length ? ` · ${plural(r.agents.length, 'agent')}` : ''}${r.humanOnline ? ' · watching' : ''}`, r.humanOnline || r.agentOnline, 'person');
   add('all', 'every agent and person', true, 'broadcast'); add('everyone', 'every agent and person', true, 'broadcast'); add('humans', 'people on this page', true, 'broadcast');
+  // The role names reach whoever holds the role when the message is sent.
+  const S = state.settings;
+  if (S.planner) add('planner', `the planner, now ${S.planner}`, true, 'broadcast');
+  if (S.integrator && S.integrator !== ANYONE) add('merger', `who merges to main, now ${S.integrator}`, true, 'broadcast');
   return [...out.values()];
 }
 function closeAc() {
