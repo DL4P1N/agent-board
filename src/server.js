@@ -20,7 +20,7 @@ import { buildMcpServer } from './mcp.js';
 import { checkNotifyUrl, resolveNotifyTarget, sendWebhook } from './webhook.js';
 import { RateLimiter, Slots, envLimit } from './limits.js';
 import { ROOT, PORT, HOST, DATA_DIR, PUBLIC_URL, PUBLIC_DIR, VERSION } from './config.js';
-import { tokenFrom, TOKEN_ROTATED, safeEq, agentFrom, h } from './http-util.js';
+import { tokenFrom, safeEq, agentFrom, h } from './http-util.js';
 import { AGENT_TOOLS, serverAddresses, bestBase } from './network.js';
 import { writePid, dropPid } from './pidfile.js';
 import { hiddenSettings } from './board-settings.js';
@@ -29,6 +29,8 @@ import { setupNotifications } from './notify.js';
 import { startBackups } from './backup.js';
 import { startAnnouncements } from './announce.js';
 import { createTimers } from './timers.js';
+import { createAuth } from './auth.js';
+import { clientIp, createRequestLimits } from './request-limits.js';
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 writePid();
@@ -44,39 +46,6 @@ const ADMIN_TOKEN = adminToken(DATA_DIR);
 // in boards.json), never to "whichever board is the default right now": a default switch plus a restart
 // must not hand one board's token to another.
 const ENV_TOKEN_SLUG = process.env.BOARD_TOKEN ? registry.envTokenSlug() : null;
-
-// ---------- limits: one runaway client must not slow the board down for everyone ----------
-// Board calls per agent and per network address (token buckets: a minute's worth at once, refilling steadily),
-// and how many slow requests (wait_for_events, long-polls, live streams) may be open per agent and in total.
-// Generous on purpose: a normal day, the tests and the rehearsal never get near them. 0 turns one off.
-const LIMITS = {
-  agentPerMinute: envLimit('BOARD_RATE_AGENT', 600),
-  ipPerMinute: envLimit('BOARD_RATE_IP', 3000),
-  waitsPerAgent: envLimit('BOARD_WAITS_AGENT', 20),
-  waitsTotal: envLimit('BOARD_WAITS_TOTAL', 1000),
-};
-const agentRate = new RateLimiter(LIMITS.agentPerMinute);
-const ipRate = new RateLimiter(LIMITS.ipPerMinute);
-const slowSlots = new Slots(LIMITS.waitsPerAgent, LIMITS.waitsTotal);
-setInterval(() => { agentRate.sweep(); ipRate.sweep(); }, 60e3).unref();
-// Who's calling. Behind `npm run tunnel` every request comes from cloudflared on this machine, so Cloudflare's
-// header names the real address (trusted only from this machine itself).
-function clientIp(req) {
-  const peer = String(req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
-  const cf = String(req.get('cf-connecting-ip') || '').trim();
-  if (cf && (peer === '127.0.0.1' || peer === '::1') && net.isIP(cf)) return cf;
-  return peer || 'unknown';
-}
-// 429 with Retry-After and a message the agent can act on. MCP gets a JSON-RPC error (MCP clients show its text).
-function tooMany(req, res, retryAfter, error, mcp) {
-  res.status(429).set('Retry-After', String(retryAfter));
-  if (mcp) return res.json({ jsonrpc: '2.0', error: { code: -32000, message: error, data: { reason: 'rate_limited', retry_after: retryAfter } }, id: req.body?.id ?? null });
-  return res.json({ error, reason: 'rate_limited', retry_after: retryAfter });
-}
-const rateText = (who, r, per) => `Too many board calls from ${who}: the limit is ${per} a minute. Wait ${r.retryAfter} s, then carry on. If you're checking the board in a loop, call wait_for_events instead: it returns as soon as something happens.`;
-const slotText = (who, full) => (full.full === 'key'
-  ? `${who} already has ${full.open} waits open (wait_for_events, the Stop hook or live pages), the most one agent may have. Let one of them return before starting another: they wake up as soon as something happens.`
-  : `The board has ${full.open} waits and live streams open, as many as it allows. Try again in a few seconds.`);
 
 // Friendly name for the AI tool behind an MCP connection (from initialize's clientInfo.name).
 function clientLabel(info) {
@@ -102,70 +71,19 @@ function createBoardRuntime(slug, dir) {
   // but everything handed out uses the canonical address, so a default switch doesn't break it.
   const prefix = () => `/b/${slug}`;
   const envToken = slug === ENV_TOKEN_SLUG && process.env.BOARD_TOKEN ? process.env.BOARD_TOKEN : null;
-  // `let`: humans can rotate the token from the web board (POST /api/token/rotate).
-  let TOKEN = envToken || boardToken(dir);
-  // Two keys: the board token (humans, the web board, join) can do everything; the agent token
-  // (derived from it, written into each AI tool's config by join) can use MCP and read the API, but
-  // can't do human-only things like approving the plan, setting the deadline or deleting tasks.
-  let AGENT_TOKEN = agentTokenFor(TOKEN);
-  // A third, read-only key for the presenter view: GET /api/state (nothing secret) and the live stream only.
-  let VIEW_TOKEN = viewerTokenFor(TOKEN);
   const { every, later, forget, clearAll } = createTimers();
   const { rawSetting, putSetting, announced } = hiddenSettings(board);
   const presence = () => board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
-  // Tokens retired by a rotation (hashed, kept in the board's folder), so an old link or agent config
-  // gets "the token was changed" instead of a bare "bad token". reason: 'token_rotated' is for the web page.
-  const retiredFile = path.join(dir, 'retired-tokens');
-  const tokenHash = (t) => crypto.createHash('sha256').update(String(t)).digest('base64url');
-  let retired = [];
-  try { retired = JSON.parse(fs.readFileSync(retiredFile, 'utf8')).filter((x) => typeof x === 'string'); } catch {}
-
-  function auth(req, res, next) {
-    const t = tokenFrom(req);
-    if (safeEq(t, TOKEN)) req.role = 'human';
-    else if (safeEq(t, AGENT_TOKEN)) req.role = 'agent';
-    else if (safeEq(t, VIEW_TOKEN)) req.role = 'viewer';
-    else if (t && retired.includes(tokenHash(t))) return res.status(401).json({ error: TOKEN_ROTATED, reason: 'token_rotated' });
-    else return res.status(401).json({ error: 'bad or missing token' });
-    next();
-  }
-  function viewerLimits(req, res, next) {
-    if (req.role !== 'viewer') return next();
-    if (req.method === 'GET' && (req.path === '/state' || req.path === '/stream')) return next();
-    return res.status(403).json({ error: 'This is the read-only viewer token (presenter view).' });
-  }
-  function humanOnly(req, res, next) {
-    // An agent may report its own usage limit (the Claude Stop hook does, with the agent token).
-    if (req.method === 'POST' && req.role === 'agent' && /^\/agents\/[^/]+\/limit$/.test(req.path)) return next();
-    // join reserves its agent names (POST /names/:name) with whichever token it was given.
-    if (req.method === 'POST' && req.role === 'agent' && /^\/names\/[^/]+$/.test(req.path)) return next();
-    if (req.method !== 'GET' && req.role !== 'human') return res.status(403).json({ error: 'This needs the board token (humans on the web board), not an agent token.' });
-    next();
-  }
+  const tokens = createAuth({ dir, envToken });
+  const { auth, viewerLimits, humanOnly, humanToken } = tokens;
 
   const router = express.Router();
   // Archived (closed) while a request was being routed: nothing to serve any more.
   router.use((req, res, next) => (closed ? res.status(410).json({ error: 'This board is archived.' }) : next()));
   // Board calls per network address (all tokens), and per agent once we know it's one.
-  const ipLimit = (mcp) => (req, res, next) => {
-    const r = ipRate.take(clientIp(req));
-    return r.ok ? next() : tooMany(req, res, r.retryAfter, rateText(`this address (${clientIp(req)})`, r, ipRate.perMinute), mcp);
-  };
+  const { ipLimit, agentLimit, holdSlot } = createRequestLimits(slug);
   router.use('/mcp', ipLimit(true));
   router.use('/api', ipLimit(false));
-  const agentKey = (name) => `${slug}|${normName(name).split('/')[0] || 'anonymous'}`;
-  const agentLimit = (req, res, name, mcp) => {
-    const r = agentRate.take(agentKey(name));
-    if (!r.ok) tooMany(req, res, r.retryAfter, rateText(normName(name).split('/')[0] || 'this agent', r, agentRate.perMinute), mcp);
-    return r.ok;
-  };
-  // A slow request (a wait or a live stream) holds a slot until its connection closes. false = refused (429 sent).
-  const holdSlot = (req, res, key, who, mcp) => {
-    const got = slowSlots.acquire(`${slug}|${key}`);
-    if (typeof got !== 'function') { tooMany(req, res, 5, slotText(who, got), mcp); return false; }
-    res.on('close', got);
-    return true;
-  };
 
   // ---------- MCP (stateless streamable HTTP) ----------
   router.post('/mcp', auth, async (req, res) => {
@@ -252,8 +170,8 @@ function createBoardRuntime(slug, dir) {
       join_commands: list.map((a) => ({
         label: a.label,
         ip: a.ip,
-        command: `npm run join -- --url ${a.base}${p} --token ${TOKEN}`,
-        web_url: `${a.base}${p}/?token=${TOKEN}`,
+        command: `npm run join -- --url ${a.base}${p} --token ${tokens.token}`,
+        web_url: `${a.base}${p}/?token=${tokens.token}`,
       })),
     };
   }
@@ -278,7 +196,7 @@ function createBoardRuntime(slug, dir) {
       presence: board.presence(onlineHumans()),
       // Which board this is (several can run on one server).
       board: { slug, name: registry.get(slug)?.name || slug, default: isDefault(), path: prefix() },
-      ...(human ? { setup: { ...setupInfo(), viewer_token: VIEW_TOKEN } } : {}),
+      ...(human ? { setup: { ...setupInfo(), viewer_token: tokens.viewerToken } } : {}),
       // CI on the project's main branch (GitHub Actions via gh), or null.
       main_ci: board.mainCi || null,
       // How long tasks take on this board so far (null until 3 are done): for the planner and the retro.
@@ -362,8 +280,6 @@ function createBoardRuntime(slug, dir) {
 
   const announcements = startAnnouncements({ board, announced, every, later, forget });
 
-  // Humans only, even for reading: the URL is a secret that lets anyone post to your channel.
-  const humanToken = (req, res, next) => (req.role === 'human' ? next() : res.status(403).json({ error: 'This needs the board token (humans on the web board), not an agent token.' }));
   setupNotifications({ board, slug, api, prefix, humanToken, rawSetting, putSetting });
 
   // ---------- token rotation (a link with the token leaked) ----------
@@ -371,15 +287,11 @@ function createBoardRuntime(slug, dir) {
   const closeStreams = () => { for (const s of openStreams) { try { s.end(); } catch {} } openStreams.clear(); };
   api.post('/token/rotate', humanToken, h((req, res) => {
     if (envToken) { res.status(400); return { error: 'The token comes from BOARD_TOKEN; change it there and restart the board.' }; }
-    const t = crypto.randomBytes(12).toString('base64url');
-    fs.writeFileSync(path.join(dir, 'token'), t);
-    retired = [...retired, ...[TOKEN, AGENT_TOKEN, VIEW_TOKEN].map(tokenHash)].slice(-60);
-    try { fs.writeFileSync(retiredFile, JSON.stringify(retired)); } catch {}
-    TOKEN = t; AGENT_TOKEN = agentTokenFor(t); VIEW_TOKEN = viewerTokenFor(t);
+    const t = tokens.rotate();
     board.emit({ author: 'board', kind: 'message', channel: 'general', text: '@all The board token was rotated: everyone re-runs the join command from the web board.' });
     // Live streams were authorised with the old token: close them all (open pages reconnect with the new one).
     later(closeStreams, 50);
-    return { token: t, setup: { ...setupInfo(), viewer_token: VIEW_TOKEN } };
+    return { token: t, setup: { ...setupInfo(), viewer_token: tokens.viewerToken } };
   }));
 
   startBackups({ board, dir, slug, every, later });
@@ -472,9 +384,9 @@ function createBoardRuntime(slug, dir) {
 
   return {
     slug, dir, board, router, close, setupInfo,
-    get token() { return TOKEN; },
-    get agentToken() { return AGENT_TOKEN; },
-    get viewerToken() { return VIEW_TOKEN; },
+    get token() { return tokens.token; },
+    get agentToken() { return tokens.agentToken; },
+    get viewerToken() { return tokens.viewerToken; },
     get closed() { return closed; },
     onlineHumans,
   };

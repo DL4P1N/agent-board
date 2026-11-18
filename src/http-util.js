@@ -8,7 +8,6 @@ export function tokenFrom(req) {
   if (h.toLowerCase().startsWith('bearer ')) return h.slice(7).trim();
   return req.get('x-board-token') || req.query.token || '';
 }
-export const TOKEN_ROTATED = "The board's token was changed. Ask the host for the new link, then re-run the join command from the web board.";
 export function safeEq(a, b) {
   const x = Buffer.from(String(a));
   const y = Buffer.from(String(b));
