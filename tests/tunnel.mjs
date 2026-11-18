@@ -6,7 +6,7 @@ import os from 'node:os';
 import net from 'node:net';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { startBoard, finish, rest, ROOT, TOKEN } from './helpers.mjs';
+import { startBoard, finish, rest, ROOT, TOKEN, tempDir } from './helpers.mjs';
 
 const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
@@ -39,7 +39,7 @@ const killTree = (child) => {
 function runTunnel(env, extra = []) {
   const child = spawn(process.execPath, [path.join(ROOT, 'scripts', 'tunnel.mjs'), ...extra], {
     cwd: ROOT,
-    env: { ...process.env, BOARD_TOKEN: TOKEN, BOARD_NO_JOIN: '1', BOARD_DATA: fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-test-')), ...env },
+    env: { ...process.env, BOARD_TOKEN: TOKEN, BOARD_NO_JOIN: '1', BOARD_DATA: tempDir('agent-board-test-'), ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let out = '';
@@ -65,7 +65,7 @@ function runTunnel(env, extra = []) {
 }
 {
   const port = await freePort();
-  const argsFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cf-args-')), 'args.json');
+  const argsFile = path.join(tempDir('cf-args-'), 'args.json');
   const r = runTunnel({ CLOUDFLARED: FAKE, FAKE_CF_ARGS: argsFile, PORT: String(port) });
   const up = await r.waitFor(new RegExp(`npm run join -- --url ${PUB.replace(/\./g, '\\.')}/b/main --token ${TOKEN}`));
   check('banner shows the tunnel join command', up, r.out().slice(-600));
@@ -83,7 +83,7 @@ function runTunnel(env, extra = []) {
 const HOST = 'board.example.test';
 const startNamed = async (env, extra = [], label = 'named') => {
   const port = await freePort();
-  const argsFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cf-args-')), 'args.json');
+  const argsFile = path.join(tempDir('cf-args-'), 'args.json');
   const r = runTunnel({ CLOUDFLARED: FAKE, FAKE_CF_ARGS: argsFile, PORT: String(port), TUNNEL_NAMED_WAIT_MS: '15000', ...env }, extra);
   const up = await r.waitFor(/Keep this window open/);
   let args = []; try { args = JSON.parse(fs.readFileSync(argsFile, 'utf8')); } catch {}
@@ -99,7 +99,7 @@ const startNamed = async (env, extra = [], label = 'named') => {
   killTree(r.child); await r.exited;
 }
 {
-  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-test-'));
+  const data = tempDir('agent-board-test-');
   const logFile = path.join(data, 'cf-log.jsonl');
   // Not logged in yet: no origin certificate where TUNNEL_ORIGIN_CERT points.
   const s1 = runTunnel({ CLOUDFLARED: FAKE, FAKE_CF_LOG: logFile, BOARD_DATA: data, TUNNEL_ORIGIN_CERT: path.join(data, 'no-cert.pem') }, ['--setup', 'myboard', HOST]);
@@ -120,7 +120,7 @@ const startNamed = async (env, extra = [], label = 'named') => {
 {
   // Already logged in (a certificate exists): no login step. A hostname that already has a DNS record:
   // setup fails with the --overwrite-dns hint and saves nothing.
-  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-test-'));
+  const data = tempDir('agent-board-test-');
   const certFile = path.join(data, 'cert.pem'); fs.writeFileSync(certFile, 'fake');
   const logFile = path.join(data, 'cf-log.jsonl');
   const s2 = runTunnel({ CLOUDFLARED: FAKE, FAKE_CF_LOG: logFile, FAKE_CF_ROUTE: 'exists', BOARD_DATA: data, TUNNEL_ORIGIN_CERT: certFile }, ['--setup', 'myboard', HOST]);

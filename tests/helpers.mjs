@@ -13,6 +13,21 @@ export { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
+// Temp folders made by a suite are deleted when it ends (finish(), or on exit as a fallback), so test runs don't leave
+// a data folder behind in the system temp folder each time.
+const temps = new Set();
+const children = new Set();
+export function tempDir(prefix = 'agent-board-test-') {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  temps.add(d);
+  return d;
+}
+export function removeTemp(d) {
+  try { fs.rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }); temps.delete(d); } catch {}
+}
+export function cleanTemps() { for (const d of [...temps]) removeTemp(d); }
+process.once('exit', () => { for (const c of children) { try { c.kill(); } catch {} } cleanTemps(); });
+
 export const freePort = () => new Promise((resolve, reject) => {
   const s = net.createServer();
   s.unref();
@@ -23,16 +38,22 @@ export const freePort = () => new Promise((resolve, reject) => {
 // Starts `node src/server.js` on a free port with an empty data folder.
 // restart() replaces it with a fresh, empty board on the same port.
 // env: extra environment for the server, e.g. { PUBLIC_URL }.
-// Optional: port (default: a free one), token (default 'testtok'), prefix (temp folder name; the demo uses its own).
-export async function startBoard({ env = {}, port: wantPort, token = TOKEN, prefix = 'agent-board-test-' } = {}) {
+// Optional: port (default: a free one), token (default 'testtok'), prefix (temp folder name; the demo uses its own),
+// cleanup (default true: the data folder is deleted when the suite ends; the demo passes false and deletes its own).
+export async function startBoard({ env = {}, port: wantPort, token = TOKEN, prefix = 'agent-board-test-', cleanup = true } = {}) {
   const port = wantPort || await freePort();
   const board = { port, base: `http://localhost:${port}`, token, dataDir: '', child: null };
   const launch = async (keepData = false) => {
-    if (!keepData) board.dataDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    if (!keepData) {
+      if (board.dataDir && cleanup) removeTemp(board.dataDir); // restart(): the old board's folder goes
+      board.dataDir = cleanup ? tempDir(prefix) : fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    }
     board.child = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js')], {
       env: { ...process.env, PORT: String(port), BOARD_TOKEN: token, BOARD_DATA: board.dataDir, BOARD_NO_JOIN: '1', ...env },
       stdio: 'ignore',
     });
+    children.add(board.child);
+    board.child.once('exit', function () { children.delete(this); });
     for (let i = 0; i < 80; i++) {
       try { if ((await fetch(`${board.base}/health`)).ok) return; } catch {}
       await new Promise((r) => setTimeout(r, 100));
@@ -113,6 +134,9 @@ export async function finish(results, { browser, board } = {}) {
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
   try { await browser?.close(); } catch {}
   try { await board?.stop(); } catch {}
+  // Any other board the suite started stops too, then every temp folder it made is deleted.
+  await Promise.all([...children].map((c) => new Promise((r) => { c.once('exit', r); try { c.kill(); } catch { r(); } setTimeout(r, 3000).unref(); })));
+  cleanTemps();
   process.exitCode = failed.length ? 1 : 0;
   // Lingering keep-alive sockets can hold the process open; exit shortly after if so.
   setTimeout(() => process.exit(), 1000).unref();

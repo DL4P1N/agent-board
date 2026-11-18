@@ -5,13 +5,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { startBoard, finish, ROOT, TOKEN } from './helpers.mjs';
+import { startBoard, finish, ROOT, TOKEN, tempDir } from './helpers.mjs';
 
 const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
 const board = await startBoard();
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-doc-'));
+const tmp = tempDir('agent-board-doc-');
 const home = path.join(tmp, 'home'); fs.mkdirSync(home);
 const env = { ...process.env, HOME: home, USERPROFILE: home, APPDATA: path.join(home, 'AppData', 'Roaming'), LOCALAPPDATA: path.join(home, 'AppData', 'Local'), XDG_CONFIG_HOME: path.join(home, '.config') };
 for (const k of ['GEMINI_CLI_HOME', 'CODEX_HOME', 'COPILOT_HOME', 'CLAUDE_CONFIG_DIR']) delete env[k];

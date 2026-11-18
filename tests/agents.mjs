@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
-import { startBoard, finish, rest, ROOT, Client, StreamableHTTPClientTransport } from './helpers.mjs';
+import { startBoard, finish, rest, ROOT, Client, StreamableHTTPClientTransport, tempDir } from './helpers.mjs';
 import { agentTokenFor } from '../src/tokens.js';
 
 const board = await startBoard();
@@ -66,7 +66,7 @@ r = await post('/agents/ana/limit', { until: 'next tuesday-ish' }, { as: 'ana' }
 check('a bad reset time is refused', r.status === 400 && /until must be a time/.test(r.body.error || ''), JSON.stringify(r));
 
 // ================= 2. the Stop hook sees the limit in the transcript =================
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'board-hook-'));
+const tmp = tempDir('board-hook-');
 const line = (o) => JSON.stringify({ timestamp: new Date().toISOString(), ...o });
 function runHook(transcript, agentName = 'ana', extra = {}) {
   const tp = path.join(tmp, `t-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`);

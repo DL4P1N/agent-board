@@ -5,7 +5,7 @@ import os from 'node:os';
 import net from 'node:net';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { startBoard, finish, agent, ROOT } from './helpers.mjs';
+import { startBoard, finish, agent, ROOT, tempDir } from './helpers.mjs';
 import { agentTokenFor, viewerTokenFor } from '../src/tokens.js';
 
 const R = [];
@@ -92,7 +92,7 @@ async function host({ dataDir, home, answer }) {
   child.kill(); await done;
   return out;
 }
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-test-'));
+const tmp = () => tempDir('agent-board-test-');
 const home1 = tmp(); const data1 = tmp();
 const first = await host({ dataDir: data1, home: home1, answer: 'n\n' });
 check('banner: the token is the board\'s password', /The token in these links is the board's password: share it only with your team\./.test(first), first.slice(0, 200));

@@ -23,7 +23,7 @@ const SPEED = Math.max(0.1, Math.min(20, Number(opt('speed')) || 1));
 const TOKEN = 'demo-token';
 const REPO = 'https://github.com/demo-team/showcase-voting';
 
-const board = await startBoard({ token: TOKEN, port: Number(opt('port')) || undefined, prefix: 'agent-board-demo-' });
+const board = await startBoard({ token: TOKEN, port: Number(opt('port')) || undefined, prefix: 'agent-board-demo-', cleanup: false });
 const base = board.base;
 const AGENT_TOKEN = agentTokenFor(TOKEN);
 const VIEW_TOKEN = viewerTokenFor(TOKEN);

@@ -5,14 +5,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { startBoard, finish, ROOT, TOKEN } from './helpers.mjs';
+import { startBoard, finish, ROOT, TOKEN, tempDir } from './helpers.mjs';
 
 const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
 const board = await startBoard();
 const port = board.port;
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-ju-'));
+const tmp = tempDir('agent-board-ju-');
 const repo = path.join(tmp, 'hack');
 const git = (...a) => spawnSync('git', a, { encoding: 'utf8' });
 git('init', '-q', repo);

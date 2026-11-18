@@ -6,7 +6,7 @@ import os from 'node:os';
 import net from 'node:net';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { ROOT, launchBrowser, shotsDir, finish } from '../helpers.mjs';
+import { ROOT, launchBrowser, shotsDir, finish, tempDir } from '../helpers.mjs';
 
 const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
@@ -17,7 +17,7 @@ const freePort = () => new Promise((resolve) => { const s = net.createServer(); 
 const PORT = await freePort();
 const BASE = `http://localhost:${PORT}`;
 const ADMIN = 'adm';
-const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-boards-'));
+const dataDir = tempDir('agent-board-boards-');
 let child = null;
 // Starts the server (again, on the same port and data) and fails loudly if it doesn't come up.
 async function startServer() {

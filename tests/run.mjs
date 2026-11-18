@@ -4,6 +4,7 @@
 //   npm test                 all suites
 //   npm test -- journey      only suites whose name contains "journey"
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { ROOT } from './helpers.mjs';
@@ -18,8 +19,13 @@ const summary = [];
 for (const file of suites) {
   const name = path.relative(ROOT, file).replace(/\\/g, '/');
   process.stdout.write(`\n▶ ${name}\n`);
-  const r = spawnSync(process.execPath, [file], { cwd: ROOT, encoding: 'utf8' });
-  const out = `${r.stdout || ''}${r.stderr || ''}`;
+  // Each suite gets its own temp folder: anything a suite leaves there (a data folder it didn't delete) fails it, and
+  // the folder is deleted afterwards, so even a crashed suite doesn't litter the system temp folder.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-run-'));
+  const r = spawnSync(process.execPath, [file], { cwd: ROOT, encoding: 'utf8', env: { ...process.env, TMPDIR: tmp, TEMP: tmp, TMP: tmp } });
+  const left = fs.readdirSync(tmp).filter((n) => /^(agent-board|board-|cb-|cf-args|rehearse)/.test(n));
+  try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); } catch {}
+  const out = `${r.stdout || ''}${r.stderr || ''}${left.length ? `\nFAIL left temp folders behind: ${left.join(', ')}\n` : ''}`;
   const failures = out.split('\n').filter((l) => /^(FAIL|CRASH)\b/.test(l));
   const counts = out.match(/(\d+)\/(\d+) passed/g)?.pop();
   const ok = r.status === 0 && !failures.length;

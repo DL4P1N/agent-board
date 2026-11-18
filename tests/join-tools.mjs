@@ -5,14 +5,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { startBoard, finish, ROOT, TOKEN } from './helpers.mjs';
+import { startBoard, finish, ROOT, TOKEN, tempDir } from './helpers.mjs';
 
 const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
 const board = await startBoard();
 
 // A fake home, a project repo with an origin (a local bare repo, so doctor's dry-run push works).
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-jt-'));
+const tmp = tempDir('agent-board-jt-');
 const home = path.join(tmp, 'home'); fs.mkdirSync(home);
 const bare = path.join(tmp, 'origin.git');
 const repo = path.join(tmp, 'hack');

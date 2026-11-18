@@ -7,7 +7,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { startBoard, finish, Client, StreamableHTTPClientTransport, ROOT } from './helpers.mjs';
+import { startBoard, finish, Client, StreamableHTTPClientTransport, ROOT, tempDir } from './helpers.mjs';
 import { agentTokenFor, viewerTokenFor } from '../src/tokens.js';
 
 const R = [];
@@ -117,7 +117,7 @@ check('/api/next (the Stop hook) is actionable for it', restNext.body.actionable
 
 // The Stop hook marks it like a mention.
 {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'board-dm-hook-'));
+  const tmp = tempDir('board-dm-hook-');
   const runHook = (agentName) => new Promise((resolve) => {
     const child = spawn(process.execPath, [path.join(ROOT, 'hooks', 'board-stop-hook.mjs')], {
       env: { ...process.env, HOME: tmp, USERPROFILE: tmp, TMPDIR: tmp, TEMP: tmp, TMP: tmp, BOARD_URL: board.base, BOARD_TOKEN: AGENT, BOARD_AGENT: agentName, BOARD_HOOK_WAIT: '0' },

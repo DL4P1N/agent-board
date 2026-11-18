@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { startBoard, finish, agent, rest, ROOT, TOKEN } from './helpers.mjs';
+import { startBoard, finish, agent, rest, ROOT, TOKEN, tempDir } from './helpers.mjs';
 import { agentTokenFor } from '../src/tokens.js';
 
 const R = [];
@@ -112,12 +112,12 @@ check('cli list shows the boards', l.status === 0 && /main \(default\)/.test(l.s
 const n = cli('new', 'Next Event');
 check('cli new', n.status === 0 && /next-event/.test(n.stdout) && fs.existsSync(path.join(board.dataDir, 'boards', 'next-event', 'token')), n.stdout + n.stderr);
 // A saved board folder (board.db + token) to import, like test-data/kubecon-2026.
-const saved = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-saved-'));
+const saved = tempDir('agent-board-saved-');
 for (const f of ['board.db', 'board.db-wal', 'board.db-shm']) if (fs.existsSync(path.join(board.dataDir, f))) fs.copyFileSync(path.join(board.dataDir, f), path.join(saved, f));
 fs.writeFileSync(path.join(saved, 'token'), 'savedtok');
 const imp = cli('import', saved, 'Old Event');
 check('cli import keeps the data and the token', imp.status === 0 && fs.readFileSync(path.join(board.dataDir, 'boards', 'old-event', 'token'), 'utf8') === 'savedtok', imp.stdout + imp.stderr);
-check('cli import refuses a non-database', (() => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'cb-bad-')); fs.writeFileSync(path.join(d, 'board.db'), 'nope'); return cli('import', d, 'Bad One').status === 1; })());
+check('cli import refuses a non-database', (() => { const d = tempDir('cb-bad-'); fs.writeFileSync(path.join(d, 'board.db'), 'nope'); return cli('import', d, 'Bad One').status === 1; })());
 const a = cli('archive', 'second');
 check('cli archive', a.status === 0 && JSON.parse(fs.readFileSync(path.join(board.dataDir, 'boards.json'), 'utf8')).boards.find((b) => b.slug === 'second').status === 'archived', a.stdout + a.stderr);
 check('cli refuses to archive the default board', cli('archive', 'main').status === 1);
@@ -156,7 +156,7 @@ await admin('/boards/main/default', 'POST');
 {
   // Without an original board in the data folder: the first default is remembered, not the current one.
   const { Registry } = await import('../src/boards.js');
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'cb-reg-'));
+  const d = tempDir('cb-reg-');
   fs.writeFileSync(path.join(d, 'boards.json'), JSON.stringify({ default: 'a', boards: [{ slug: 'a', name: 'A', dir: 'boards/a', status: 'live' }, { slug: 'b', name: 'B', dir: 'boards/b', status: 'live' }] }));
   const r1 = new Registry(d); const first = r1.envTokenSlug(); r1.setDefault('b');
   const r2 = new Registry(d);
@@ -165,7 +165,7 @@ await admin('/boards/main/default', 'POST');
 
 // 3. Import never duplicates a token; two boards with one token are refused at start.
 await board.stop();
-const dupSrc = fs.mkdtempSync(path.join(os.tmpdir(), 'cb-dup-'));
+const dupSrc = tempDir('cb-dup-');
 fs.copyFileSync(path.join(saved, 'board.db'), path.join(dupSrc, 'board.db'));
 fs.writeFileSync(path.join(dupSrc, 'token'), TOKEN); // main's token (BOARD_TOKEN)
 // (The CLI sees BOARD_TOKEN like the server does, as in a Docker or shell setup that exports it.)

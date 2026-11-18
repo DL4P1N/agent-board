@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
-import { startBoard, finish, ROOT, TOKEN } from './helpers.mjs';
+import { startBoard, finish, ROOT, TOKEN, tempDir } from './helpers.mjs';
 import { agentTokenFor } from '../src/tokens.js';
 
 const R = [];
@@ -23,7 +23,7 @@ const tokenB = created.token;
 check('second board created', !!slug && !!tokenB && /\/b\//.test(created.join_command || ''), JSON.stringify(created).slice(0, 200));
 
 // A fake home and a project repo with an origin (a local bare repo, so doctor's dry-run push works).
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-board-jb-'));
+const tmp = tempDir('agent-board-jb-');
 const home = path.join(tmp, 'home'); fs.mkdirSync(home);
 const bare = path.join(tmp, 'origin.git');
 const repo = path.join(tmp, 'hack');
@@ -91,7 +91,7 @@ const post = (base, token, text) => fetch(`${base}/api/messages`, { method: 'POS
 await post(A, TOKEN, 'news only on board A');
 await post(B, tokenB, '@tess news only on board B');
 const hook = (url, token) => spawnSync(process.execPath, [path.join(ROOT, 'hooks', 'board-stop-hook.mjs')],
-  { cwd: ROOT, env: { ...env, BOARD_URL: url, BOARD_TOKEN: agentTokenFor(token), BOARD_AGENT: 'tess', BOARD_HOOK_WAIT: '0' }, input: '{}', encoding: 'utf8', timeout: 30e3 });
+  { cwd: ROOT, env: { ...env, BOARD_URL: url, BOARD_TOKEN: agentTokenFor(token), BOARD_AGENT: 'tess', BOARD_HOOK_WAIT: '0', TEMP: tmp, TMP: tmp, TMPDIR: tmp }, input: '{}', encoding: 'utf8', timeout: 30e3 });
 const hB = hook(B, tokenB);
 check('Stop hook on board B: sees board B\'s message, not board A\'s', /news only on board B/.test(hB.stdout) && !/news only on board A/.test(hB.stdout) && /MENTIONS YOU/.test(hB.stdout), (hB.stdout + hB.stderr).slice(0, 400));
 const hA = hook(A, TOKEN);

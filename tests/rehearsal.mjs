@@ -11,7 +11,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { startBoard, finish, rest, Client, StreamableHTTPClientTransport } from './helpers.mjs';
+import { startBoard, finish, rest, Client, StreamableHTTPClientTransport, tempDir } from './helpers.mjs';
 import { agentTokenFor } from '../src/tokens.js';
 
 const board = await startBoard();
@@ -296,7 +296,7 @@ check("retro counts the demo task's two bounces", new RegExp(`^- #${T.demo.id} [
 // A fake `claude` on PATH and a private temp dir: the dry run must say the board "would run" and
 // delete its temp folder unless --keep is passed.
 {
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'rehearse-dry-'));
+  const scratch = tempDir('rehearse-dry-');
   const bin = path.join(scratch, 'bin'); const temp = path.join(scratch, 'temp');
   fs.mkdirSync(bin); fs.mkdirSync(temp);
   if (process.platform === 'win32') {
