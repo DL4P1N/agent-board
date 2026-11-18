@@ -1,6 +1,6 @@
 // Where teammates can reach this server and how each AI tool starts the orchestrator (shown on the web board).
 import os from 'node:os';
-import { PORT, PUBLIC_URL } from './config.js';
+import { PORT, PUBLIC_URL, VERSION } from './config.js';
 
 // How to start the orchestrator in each supported tool (shown on the web board).
 export const AGENT_TOOLS = [
@@ -36,3 +36,26 @@ function reachableAddresses() {
   return out.sort((a, b) => a.rank - b.rank);
 }
 export const bestBase = () => serverAddresses()[0]?.base || `http://localhost:${PORT}`;
+
+// The setup info of one board: join commands and web links for the "invite teammates" step (they hold the board token).
+export function makeSetupInfo({ slug, registry, isDefault, prefix, tokens }) {
+  // Copy-paste join commands + web links, for the web board's "invite teammates" step. They carry the
+  // board's canonical /b/<slug> path, so they keep working when another board becomes the default.
+  return function setupInfo() {
+    const p = prefix();
+    const list = [...serverAddresses(), { ip: 'localhost', base: `http://localhost:${PORT}`, label: 'this machine only' }];
+    return {
+      port: PORT,
+      version: VERSION,
+      board: { slug, name: registry.get(slug)?.name || slug, default: isDefault(), path: p },
+      agent_tools: AGENT_TOOLS,
+      clone_command: 'git clone https://github.com/DL4P1N/agent-board && cd agent-board',
+      join_commands: list.map((a) => ({
+        label: a.label,
+        ip: a.ip,
+        command: `npm run join -- --url ${a.base}${p} --token ${tokens.token}`,
+        web_url: `${a.base}${p}/?token=${tokens.token}`,
+      })),
+    };
+  };
+}
