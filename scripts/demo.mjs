@@ -409,7 +409,8 @@ console.log(`
  Demo board (fake data, throwaway: your real board is untouched)
 
    Board (as "you"):  ${url}
-   3D office view:    ${url}&view=office
+   3D office, docked: ${url}&view=office
+   Plain board:       ${url}&view=board
    Presenter view:    ${base}/present.html?token=${VIEW_TOKEN}
 
    Data folder:       ${board.dataDir}

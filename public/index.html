@@ -443,9 +443,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .clock .vd.ok { color: var(--ok); }
   .clock .vd.tight { color: var(--warn); }
   .clock .vd.behind { color: var(--warn); } /* a pace note, not an error: amber on every screen */
-  /* The view switch (Board | 3D office) needs room too: it says "3D" from 1440px. (The Presenter view link lives in
-     the help dialog and the command palette.) */
-  @media (max-width: 1440px) { .vseg .lt { display: none; } }
   .now .cut-list { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
   .now .cut-list .n { color: var(--muted); }
   /* Show tasks for: on the task bar, beside search (it filters the board). */
@@ -907,12 +904,16 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   /* ---------- view switch (Board | 3D office) ---------- */
   /* The demo's segmented view switch, in the board's look: a sunken box like the needs badges; pressed buttons like
      Columns / Table (the current view is ink with an underline). Not on phones (a tiny 3D room is no use there). */
-  .vseg { display: inline-flex; align-items: center; padding: 0 var(--s1); border: 2px solid var(--line); background: var(--sunken); }
-  .vseg button { font: 400 var(--fs-meta) var(--mono); padding: 0 var(--s3); min-height: var(--ctl-xs); background: transparent; color: var(--muted); border: 0; box-shadow: none; }
-  .vseg button:hover { background: transparent; color: var(--ink); }
-  .vseg button:active { transform: none; box-shadow: none; }
-  .vseg button[aria-pressed="true"] { color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--ink); }
-  @media (max-width: 760px) { .vseg { display: none !important; } }
+  /* The 3D switch: the live office behind the board, on or off (off: the plain board, nothing on the GPU). */
+  .o3d { display: inline-flex; align-items: center; gap: var(--s3); font: 700 var(--fs-meta) var(--mono); padding: 0 var(--s3); min-height: var(--ctl-xs); background: var(--sunken); color: var(--muted); border: 2px solid var(--line); box-shadow: none; }
+  .o3d:hover { background: var(--sunken); color: var(--ink); }
+  .o3d:active { transform: none; box-shadow: none; }
+  .o3d .sw { position: relative; width: 22px; height: 12px; box-shadow: inset 0 0 0 2px currentColor; }
+  .o3d .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 6px; height: 6px; background: currentColor; transition: translate var(--t-base) var(--ease); }
+  .o3d[aria-pressed="true"] { color: var(--ink); }
+  .o3d[aria-pressed="true"] .sw { background: var(--accent); box-shadow: inset 0 0 0 2px var(--outline); }
+  .o3d[aria-pressed="true"] .sw::after { translate: 10px 0; background: var(--accent-ink); }
+  @media (max-width: 760px) { .o3d { display: none !important; } }
 
   /* ---------- panels: one component for both views ---------- */
   /* The demo's pixel window: a 2px border and a hard shadow (no second ring: in light themes it read as a heavy double frame). Its title bar (.o-head) is the
@@ -1050,7 +1051,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-left .now .also { flex-direction: column; align-items: flex-start; gap: 0; }
   .o-left .now .also .link + .link::before { display: none; }
   .o-left .now .also .link { padding: 2px 0; }
-  html[data-board-view="office"] .now [data-leaves]::after { content: " (Board view)"; color: var(--muted); font-weight: 400; font-size: var(--fs-sm); }
   .o-left .nyou > .attn { padding: var(--s4) 0 0; margin-top: var(--s4); border-top: 2px dashed var(--line); }
   .o-left .qs { grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
   .o-left .qcard { padding: var(--s2) var(--s4) var(--s3); }
@@ -1137,10 +1137,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-act .feed { max-height: none; flex: 1 1 auto; min-height: 96px; }
   .o-locks .panel-hint { margin: 0 0 var(--s3); }
 
-  /* ---------- Board view: the panels as three columns ---------- */
+  /* ---------- 3D off (the plain board; phones): the panels as three columns ---------- */
   /* The side columns stick under the header and scroll on their own, so the board never leaves the screen. Folding a
      panel leaves its title bar across the column, which keeps its width (nothing shifts or turns on its side); the
-     folded panels stack at the top. The same in the 3D view. */
+     folded panels stack at the top. */
   main { --dock: clamp(272px, 20vw, 340px); --top: calc(var(--hdr, 54px) + var(--s4)); isolation: isolate;
     display: grid; grid-template-columns: var(--dock-l, var(--dock)) minmax(0, 1fr) var(--dock-r, var(--dock)); grid-template-areas: "left centre right" "left foot right"; grid-template-rows: 1fr auto; gap: 0 var(--s5); align-items: start;
     padding: var(--s4) var(--s5) var(--s5); }
@@ -1181,10 +1181,11 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 
   }
 
-  /* ---------- 3D view: the same panels over the room ---------- */
-  /* The room fills the window under the header; the panels float over it as glass: Needs attention (left), Agents with
-     Activity and File locks under it (right), the top bar, and Tasks (a window at the foot, folded to its title bar on
-     screens up to 900px tall). The header (and every popover and dialog) stays above all of them. */
+  /* ---------- 3D on: the same panels over the live room ---------- */
+  /* The room fills the window under the header; the panels float over it as glass. The top bar runs across the top;
+     everything else hangs from the foot: Needs attention (left), Agents with Activity and File locks (right) and the
+     task board between them (expanded up to the top bar, docked as a window at the foot, or folded to its title bar).
+     Folded panels are title bars along the bottom edge. The header (and every popover and dialog) stays above all. */
   html[data-board-view="office"] body { overflow: hidden; }
   html[data-board-view="office"] #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
   html[data-board-view="office"] main { display: block; position: relative; flex: 1 1 auto; min-height: 0; width: 100%; max-width: none; padding: 0; overflow: hidden; background: var(--bg);
@@ -1193,7 +1194,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
        bar and the Tasks window between them where the Board view's centre column is. */
     --o-x: calc(var(--s5) + 2px); --o-y: calc(var(--s4) + 2px); --o-w: calc(var(--dock) - 4px);
     --o-cl: calc(var(--dock-l, var(--dock)) + var(--s5) * 2 + 2px); --o-cr: calc(var(--dock-r, var(--dock)) + var(--s5) * 2 + 2px);
-    --o-gap: 8px; --o-bottom: 18px; --o-tasks-h: clamp(176px, 27%, 270px); --glass: color-mix(in srgb, var(--panel) 92%, transparent); }
+    --o-gap: 8px; --o-bottom: 18px; --o-tasks-h: clamp(176px, 27%, 270px); --glass: color-mix(in srgb, var(--panel) 92%, transparent);
+    --o-top: calc(var(--o-y) + var(--tb-h, 48px) + var(--o-gap)); }
   html[data-board-view="office"] :is(.o-panel, .o-pill) { background: var(--glass); box-shadow: 4px 4px 0 rgba(0, 0, 0, .28);
     -webkit-backdrop-filter: blur(8px) saturate(1.15); backdrop-filter: blur(8px) saturate(1.15); }
   html[data-board-view="office"] :is(.o-agent, .o-det, .qcard) { background: color-mix(in srgb, var(--raised) 85%, transparent); }
@@ -1211,32 +1213,29 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .office-scene .ab-more { border-top-color: var(--border); }
   .office-scene .ab-bub { background: var(--panel); color: var(--ink); border-color: var(--ink); }
   .office-scene .ab-bub:after { border-top-color: var(--ink); }
-  /* Switching views (viewAnim): the panels both views share stay still; only the tasks move, the one board: from the
-     Board view's centre down into the Tasks window at the foot (showing the room behind it, once drawn), and back up.
-     With the window folded, a copy of the board (.vt-ghost) drops off the bottom instead. Reduced motion: instant. */
-  .vt-ghost { position: fixed; z-index: 2; margin: 0; pointer-events: none; overflow: hidden; background: var(--bg); will-change: transform, opacity; }
   .office-scene { transition: opacity 300ms var(--ease); }
   .office-view.loading .office-scene { opacity: 0; transition: none; }
   .office-load { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; margin: 0; color: var(--muted); font: var(--fs-sm) var(--mono); }
   .office-view.loading .office-load { display: flex; }
-  html[data-board-view="office"] #o-left { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); width: var(--o-w); max-height: calc(100% - var(--o-y) - var(--o-bottom)); } /* as tall as its content, like on the Board view */
-  html[data-board-view="office"] #o-left-pill { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); width: var(--o-w); }
-  html[data-board-view="office"] .o-rcol { position: absolute; z-index: 3; top: var(--o-y); bottom: var(--o-bottom); right: var(--o-x); width: calc(var(--dock-r, var(--dock)) - 4px); pointer-events: none; }
+  html[data-board-view="office"] #o-left { position: absolute; z-index: 3; bottom: var(--o-bottom); left: var(--o-x); width: var(--o-w); max-height: calc(100% - var(--o-top) - var(--o-bottom)); } /* as tall as its content, from the foot */
+  html[data-board-view="office"] #o-left-pill { position: absolute; z-index: 3; bottom: var(--o-bottom); left: var(--o-x); width: var(--o-w); }
+  html[data-board-view="office"] .o-rcol { position: absolute; z-index: 3; top: var(--o-top); bottom: var(--o-bottom); right: var(--o-x); width: calc(var(--dock-r, var(--dock)) - 4px); justify-content: flex-end; pointer-events: none; }
   html[data-board-view="office"] .o-rcol > * { pointer-events: auto; }
-  /* The centre column keeps only the top bar (and the goal under it), between the docks. */
-  html[data-board-view="office"] .centre { position: absolute; top: var(--o-y); left: var(--o-cl); right: var(--o-cr); display: block; pointer-events: none; }
+  /* The centre column keeps only the top bar (and the goal under it), across the top. */
+  html[data-board-view="office"] .centre { position: absolute; top: var(--o-y); left: var(--o-x); right: var(--o-x); display: block; pointer-events: none; }
   html[data-board-view="office"] .centre > :not(#topbar, #o-goal, #setup) { display: none !important; }
   /* Setup: a popover under the top bar, like the goal, scrolling inside itself. */
-  html[data-board-view="office"] #setup { position: absolute; z-index: 7; top: calc(var(--tb-h, 48px) + var(--s4)); left: 0; right: 0; margin: 0; max-height: calc(100vh - var(--hdr, 54px) - var(--tb-h, 48px) - 40px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  html[data-board-view="office"] #setup { position: absolute; z-index: 7; top: calc(var(--tb-h, 48px) + var(--s4)); left: 0; right: 0; max-width: 820px; margin: 0 auto; max-height: calc(100vh - var(--hdr, 54px) - var(--tb-h, 48px) - 40px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
     background: var(--glass); -webkit-backdrop-filter: blur(8px) saturate(1.15); backdrop-filter: blur(8px) saturate(1.15); box-shadow: 4px 4px 0 rgba(0, 0, 0, .28); }
   html[data-board-view="office"] #setup > .sh { position: sticky; top: 0; z-index: 1; background: var(--panel); }
   html[data-board-view="office"] .centre > * { pointer-events: auto; }
   html[data-board-view="office"] .topbar { position: relative; z-index: 4; }
   html[data-board-view="office"] .centre > .o-goal { left: 50%; translate: -50% 0; }
-  /* Tasks: the board's columns (or its table) in a window between the docks at the bottom. Its title bar is the
-     board's task bar: Tasks, search, Show and Columns / Table. Maximised, it covers the room under the top bar (still glass). */
+  /* The task board: the board's columns (or its table) in a window between the side columns. Its title bar is the
+     board's task bar: Tasks, search, Show and Columns / Table. Expanded (.max, the default), it reaches up to the top bar
+     and covers the room as glass; docked, it's a window at the foot; folded, its title bar. */
   .o-tasks { position: absolute; z-index: 3; left: var(--o-cl); right: var(--o-cr); bottom: var(--o-bottom); height: var(--o-tasks-h); }
-  .o-tasks.max { left: var(--o-x); right: var(--o-x); top: calc(var(--o-y) + var(--o-gap) + var(--tb-h, 48px)); height: auto; z-index: 6; } /* under the top bar, which stays */
+  .o-tasks.max { top: var(--o-top); height: auto; } /* under the top bar, which stays */
   .o-tasks > .o-head { padding-left: var(--s4); }
   .o-tasks .taskbar { flex: 1 1 auto; min-width: 0; margin: 0; flex-wrap: nowrap; gap: var(--s4); }
   .o-tasks .taskbar .tabs { margin-left: auto; flex: none; flex-wrap: nowrap; }
@@ -1246,8 +1245,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-tasks.nomatch:not(.folded) { height: auto; }
   .o-tasks.folded .taskbar > #new-task-btn { display: none; }
   .o-tasks.folded .taskbar > :not(h2) { display: none; }
-  /* Folded, the Tasks window is just its title bar, centred at the foot. */
-  .o-tasks.folded { left: 50%; right: auto; translate: -50% 0; width: max-content; height: auto; max-width: calc(100% - var(--o-cl) - var(--o-cr)); }
+  /* Folded, the task board is just its title bar, across its place at the foot (like the folded side panels). */
+  .o-tasks.folded { height: auto; }
   .o-tasks.folded > .o-head { gap: var(--s5); }
   .o-tasks.folded #o-tasks-max { display: none; }
   .o-tasks .o-body { padding: var(--s3) var(--s4) var(--s4); overflow: hidden; }
@@ -1386,7 +1385,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   <header>
     <h1><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><g transform="translate(-.5 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(18.7 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(6.1 6.8) scale(.76)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="mi"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="mi"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g></svg><span class="wm">Agent Board</span></h1>
     <span class="bname" id="bname" hidden></span>
-    <div class="vseg" id="vseg" role="group" aria-label="View" hidden><button type="button" data-vset="board" aria-pressed="true" tabindex="-1" title="The task board">Board</button><button type="button" data-vset="office" aria-pressed="false" aria-label="3D office" title="The team's agents in a live 3D office, with what needs attention, the agents and the tasks around it">3D<span class="lt"> office</span></button></div>
+    <button type="button" class="o3d" id="o3d" aria-pressed="true" aria-label="3D office" hidden>3D<span class="sw" aria-hidden="true"></span></button>
     <span class="tagline">your team's AI coding agents, on one task board</span>
     <span id="conn" class="conn" role="status">Connecting…</span>
     <div class="needs" id="needs"></div>
@@ -1967,8 +1966,6 @@ async function load() {
     if (older.keep && s.events?.length) s.events = await keepOlder(s.events);
     checkOverwrites(s);
     state = s; state.loaded = true; setConn(esOpen ? 'live' : 'connecting'); render();
-    // Once the board shows, load the 3D view in the background when the browser is idle.
-    if (!office.preTimer) office.preTimer = setTimeout(() => (window.requestIdleCallback || ((f) => f()))(officePreload, { timeout: 3000 }), 1200);
   }
   catch (e) { if (e.message !== 'Token rejected') setConn('down', e.message); }
 }
@@ -2549,8 +2546,7 @@ function renderNow(qOpen, unread, si) {
   if (!over && unread.length && go !== 'mentions') more.splice(more[0]?.freeze ? 1 : 0, 0, { go: 'mentions', text: plural(unread.length, 'new mention') });
   if (!over && S.goal && !tm.deadline && !dlSkipped()) more.push({ act: 'clock', text: 'Set the demo time so agents stop on time' });
   if (si.cur === 'invite' && !S.goal) more.push({ go: 'step-goal', text: 'Write the goal (step 2)' });
-  // In the 3D view, links that lead to a part only the Board view has say so (CSS adds "(Board view)").
-  const lv = (g) => (g && !stays(g) ? ' data-leaves' : '');
+  const lv = () => '';
   // "Also:" only before two of them; one is just the link.
   const moreHtml = more.length ? `<div class="also">${more.length > 1 ? '<span class="n">Also:</span>' : ''}${more.slice(0, 2).map((m, i) => `<button type="button" class="link" ${m.act ? `data-act="${m.act}"` : `data-go="${m.go}"${lv(m.go)}`} data-fk="now-more-${i}">${esc(m.text)} <span aria-hidden="true">→</span></button>`).join('')}</div>` : '';
   const cutHtml = ui.showCut && cut?.list.length && !over ? `<ul class="cut-list" id="cut-list" aria-label="P3 tasks that probably won't make it"><li class="n">Probably won't make it:</li>${cut.list.map((t) => `<li><button type="button" class="link" data-open-task="${t.id}" data-fk="cut-${t.id}">#${t.id} ${esc(short(t.title, 48))}</button></li>`).join('')}</ul>` : '';
@@ -4614,18 +4610,22 @@ $('theme-pop').addEventListener('keydown', (ev) => {
 });
 syncThemeButtons();
 
-// ---------- view: Board | 3D office ----------
-// The header's view switch swaps the main area in place, like the office demo's. Board is the default. The office
-// (three.js and the scene: public/office/embed.js, built from office/src/live/embed.ts by `npm run build:present`)
-// loads on the first switch only, and draws the same /api/state this page loads: it fetches nothing itself.
-// Remembered per board in this browser ('board-view-mode'); ?view=office|board overrides. Not on phones, and not
-// without WebGL (a note, then the board).
-const office = { mod: null, loading: null, failed: false };
-let boardView = 'board';
+// ---------- the 3D office: on or off ----------
+// With 3D on (the default wherever it can run) the office is always live behind the page: the panels float over it
+// as glass, and the task board is the Tasks window: expanded over the room, docked at the foot (the room above it), or
+// folded to its title bar. With 3D off (the header switch; phones; no WebGL) it's the plain board: no office code and
+// no GPU. The office (three.js and the scene: public/office/embed.js, built from office/src/live/embed.ts by
+// `npm run build:present`) draws the same /api/state this page loads: it fetches nothing itself.
+// On / off is saved in this browser for every board ('agent-board-3d'); ?view=office (3D on, the board docked) and
+// ?view=board (3D off) set it for this visit only.
+const office = { mod: null, loading: null, failed: false, dockOnce: false };
+let boardView = 'board'; // 'office' while 3D is on
 const viewParam = ['office', 'board'].includes(qs.get('view')) ? qs.get('view') : '';
+const D3_KEY = 'agent-board-3d';
+const d3Pref = () => { try { return localStorage.getItem(D3_KEY) !== 'off'; } catch { return true; } };
 const phoneMq = matchMedia('(max-width: 760px)');
 const officeAllowed = () => !office.failed && !phoneMq.matches && 'WebGLRenderingContext' in window;
-// Probed on the first switch to the office only, so the board alone never touches the GPU.
+// Probed before the office loads, so a browser without WebGL never downloads it.
 function webglWorks() {
   try {
     const c = document.createElement('canvas');
@@ -4639,261 +4639,54 @@ const scenePalette = () => { const t = window.themeOf(document.documentElement.g
 function noOffice(msg) {
   office.failed = true;
   setBoardView('board', { save: false, quiet: true });
-  store.set('board-view-mode', 'board');
   toast(msg);
 }
 function renderViewSwitch() {
-  $('vseg').hidden = !officeAllowed();
-  // One Tab stop: the view you can switch to (pressing the current one does nothing); both are read as a group.
-  for (const b of $('vseg').querySelectorAll('[data-vset]')) { const on = b.dataset.vset === boardView; b.setAttribute('aria-pressed', String(on)); b.tabIndex = on ? -1 : 0; }
+  const b = $('o3d'); b.hidden = !officeAllowed();
+  b.setAttribute('aria-pressed', String(boardView === 'office'));
+  b.title = boardView === 'office' ? 'The live 3D office is on, behind the board. Turn it off to save power (the plain board).' : 'Turn on the live 3D office behind the board';
 }
 function setBoardView(v, { save = true, quiet = false } = {}) {
   if (v === 'office' && !officeAllowed()) v = 'board';
-  if (v === 'office' && !office.mod && !webglWorks()) return noOffice("This browser can't show the 3D office (WebGL is off or not supported). Staying on the board.");
+  if (v === 'office' && !office.mod && !webglWorks()) return noOffice("This browser can't show the 3D office (WebGL is off or not supported). Showing the plain board.");
   const changed = v !== boardView;
-  // Measured before the DOM changes: what the animation starts from (a second press mid-way just ends it).
-  const from = changed && !quiet && state.loaded ? viewAnimStart(v) : null;
   if (changed) ui.oSetup = false;
   boardView = v;
   document.documentElement.dataset.boardView = v;
-  if (save) store.set('board-view-mode', v);
+  if (save) { try { localStorage.setItem(D3_KEY, v === 'office' ? 'on' : 'off'); } catch {} }
   if (qs.has('view')) { try { const u = new URL(location.href); u.searchParams.set('view', v); history.replaceState(null, '', u); } catch {} }
   renderViewSwitch();
   officeMount(v === 'office');
   if (state.loaded) render(); else oApply();
   if (v === 'office') showOffice();
-  else office.mod?.setActive(false);
-  if (changed && !quiet) announce(v === 'office' ? 'Showing the 3D office' : 'Showing the board');
-  if (from) viewAnim(v, from);
+  else if (office.mod) { office.mod.destroy(); office.mod = null; } // off: nothing left on the GPU
+  if (changed && !quiet) announce(v === 'office' ? '3D office on' : '3D office off: the plain board');
 }
-// The switch's animation. There is one task board: the Board view's columns (or table), which officeMount moves into
-// the 3D Tasks window and back. Board → 3D: the window starts exactly over the board (the columns where they were, the
-// window's border, glass and shadow not there yet) and its top edge slides down to its place, uncovering the room,
-// while its chrome comes in. 3D → Board: the mirror, the board rising from the window's place as the chrome goes.
-// One element moves; nothing is copied or cross-faded. With the window folded to its title bar, a copy of the board
-// falls off the bottom (and the board rises back from the title bar). Nothing waits on it: the DOM is already in the
-// new view. A second switch while one runs goes straight to the end; reduced motion switches at once.
-let vtRun = null;
-const VT_D = 480, VT_EASE = 'cubic-bezier(.4, 0, .2, 1)';
-function viewAnimEnd() {
-  if (!vtRun) return false;
-  vtRun.cancelled = true; vtRun.ghost?.remove(); for (const a of vtRun.anims) a.cancel();
-  vtRun = null; return true;
-}
-// The part of the tasks that shows: the columns, the table, or the "no tasks match" line.
-const taskPane = () => TASK_PARTS.map($).find((e) => e && !e.hidden && e.offsetHeight) || $('board');
-const rectOf = (e) => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
-// Before the swap: where the tasks are now.
-// A still copy of a small piece of the view being left (the page-foot hint, the window's buttons), placed where it is, so
-// it can fade out instead of vanishing with the swap.
-function vtCopy(e) {
-  if (!e || e.hidden || !e.offsetHeight) return null;
-  const r = e.getBoundingClientRect(), cs = getComputedStyle(e), g = e.cloneNode(true);
-  g.removeAttribute('id'); for (const x of g.querySelectorAll('[id]')) x.removeAttribute('id');
-  g.setAttribute('aria-hidden', 'true'); g.inert = true;
-  for (const p of ['color', 'background-color', 'border', 'border-radius', 'font-family', 'font-size', 'font-weight', 'padding', 'line-height', 'text-align', 'display', 'align-items', 'justify-content', 'box-shadow']) g.style.setProperty(p, cs.getPropertyValue(p));
-  Object.assign(g.style, { position: 'fixed', zIndex: '8', margin: '0', pointerEvents: 'none', boxSizing: 'border-box', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
-  return { el: g, top: r.top };
-}
-function viewAnimStart(v) {
-  if (viewAnimEnd() || reduceMotion()) return null;
-  if (v === 'office') {
-    const src = $('boardwrap'); const r = src.getBoundingClientRect(); if (!r.width || !r.height) return null;
-    const hint = vtCopy($('cols-hint'));
-    if (!oTasksOff()) return { pane: rectOf(taskPane()), hint };
-    const g = src.cloneNode(true);
-    g.removeAttribute('id'); for (const e of g.querySelectorAll('[id]')) e.removeAttribute('id');
-    for (const e of g.querySelectorAll('[data-fk]')) e.removeAttribute('data-fk');
-    g.classList.add('vt-ghost'); g.setAttribute('aria-hidden', 'true'); g.inert = true;
-    Object.assign(g.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
-    return { ghost: g, top: r.top, hint };
-  }
-  const tw = $('o-tasks'), t = tw?.getBoundingClientRect();
-  const room = $('office-view').getBoundingClientRect();
-  const out = { tasksTop: t?.height ? t.top : innerHeight, room: room.width ? room : null };
-  if (t?.height && !tw.classList.contains('folded')) {
-    const cs = getComputedStyle(tw);
-    Object.assign(out, { pane: rectOf(taskPane()), win: rectOf(tw), glass: cs.backgroundColor, line: cs.borderTopColor, barEnd: $('taskbar').getBoundingClientRect().right,
-      btns: [$('o-tasks-max'), $('o-tasks-fold')].map(vtCopy).filter(Boolean) });
-  }
-  return out;
-}
-function viewAnim(v, from) {
-  const run = vtRun = { anims: [], ghost: from.ghost || null, cancelled: false };
-  const land = 'cubic-bezier(.2, .7, .3, 1)';
-  const keep = (a) => { run.anims.push(a); return a; };
-  // A copied piece of the view being left fades out (moving `dy` with what it belonged to), then goes.
-  const fadeCopy = (c, dy, D) => {
-    if (!c) return; $('main').append(c.el); keep({ cancel: () => c.el.remove() });
-    const a = keep(c.el.animate([{ top: `${c.top}px`, opacity: 1 }, { top: `${c.top + dy}px`, opacity: 0 }], { duration: D, easing: VT_EASE, fill: 'forwards' }));
-    a.finished.then(() => c.el.remove()).catch(() => {});
-  };
-  if (v === 'office') {
-    fadeCopy(from.hint, 16, 240); // the page-foot hint (the 3D view has none) goes down with the board, fading
-    // The room's picture stays hidden (at once, no fade out) until it has drawn a fresh frame: a reactivated or resized
-    // canvas can show a stale or blank frame for a moment. Then it fades in.
-    const sc = $('office-scene'); sc.style.transition = 'none'; sc.style.opacity = '0';
-    const showScene = () => { sc.style.transition = ''; sc.style.opacity = ''; };
-    keep({ cancel: showScene });
-    const tw = $('o-tasks'), ov = $('office-view'), head = $('o-tasks-head');
-    const ready = Promise.resolve(office.loading).then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-    if (!run.ghost) {
-      // Where the window ends up (the camera is framed for it meanwhile: oFrame reads run.tasksTop), and where it starts:
-      // moved and widened so the tasks inside sit exactly where they were on the board.
-      const end = tw.getBoundingClientRect(), o = ov.getBoundingClientRect(), p = taskPane().getBoundingClientRect();
-      run.tasksTop = end.top; oFrame();
-      const cs = getComputedStyle(tw), hcs = getComputedStyle(head);
-      const at = { left: end.left - o.left, right: o.right - end.right, top: end.top - o.top };
-      const px = (n) => `${Math.round(n)}px`;
-      const k0 = { left: px(at.left + from.pane.left - p.left), right: px(at.right - (from.pane.right - p.right)), top: px(at.top + from.pane.top - p.top) };
-      const k1 = { left: px(at.left), right: px(at.right), top: px(at.top) };
-      // Its chrome: none at first (the page's own background, as behind the board), the window's at the end.
-      const bg = getComputedStyle($('main')).backgroundColor;
-      const c0 = { backgroundColor: bg, borderColor: 'transparent', boxShadow: 'none' }, c1 = { backgroundColor: cs.backgroundColor, borderColor: cs.borderTopColor, boxShadow: cs.boxShadow };
-      const h0 = { borderBottomColor: 'transparent' }, h1 = { borderBottomColor: hcs.borderBottomColor };
-      // The window's own buttons (maximise, fold) open up from nothing at the bar's end, so the task bar keeps the
-      // board's width at first and gives them room gradually (no jump of its controls).
-      const btns = [$('o-tasks-max'), $('o-tasks-fold')];
-      const gap = parseFloat(hcs.columnGap) || 0;
-      const b1 = btns.map((b) => ({ width: `${b.offsetWidth}px`, minWidth: '0px', marginLeft: '0px', opacity: 1 }));
-      const b0 = { width: '0px', minWidth: '0px', marginLeft: `${-gap}px`, opacity: 0 };
-      Object.assign(tw.style, { ...k0, ...c0, height: 'auto' }); Object.assign(head.style, h0);
-      for (const b of btns) Object.assign(b.style, { ...b0, opacity: '0', overflow: 'hidden' });
-      const reset = () => {
-        for (const k of ['left', 'right', 'top', 'height', 'backgroundColor', 'borderColor', 'boxShadow']) tw.style[k] = '';
-        head.style.borderBottomColor = ''; for (const b of btns) for (const k of ['width', 'minWidth', 'marginLeft', 'opacity', 'overflow']) b.style[k] = '';
-        run.tasksTop = null;
-      };
-      keep({ cancel: reset });
-      ready.then(() => {
-        showScene();
-        if (run.cancelled) return;
-        if (boardView !== 'office') return viewAnimEnd();
-        reset(); run.tasksTop = end.top;
-        const move = keep(tw.animate([{ ...k0, height: 'auto' }, { ...k1, height: 'auto' }], { duration: VT_D, easing: VT_EASE }));
-        keep(tw.animate([c0, c1], { duration: VT_D, easing: VT_EASE }));
-        keep(head.animate([h0, h1], { duration: VT_D, easing: VT_EASE }));
-        btns.forEach((b, i) => { b.style.overflow = 'hidden'; keep({ cancel: () => { b.style.overflow = ''; } }); keep(b.animate([b0, b1[i]], { duration: VT_D, easing: VT_EASE })); });
-        move.finished.then(() => { if (run.cancelled) return; for (const b of btns) b.style.overflow = ''; run.tasksTop = null; vtRun = null; oFrame(); }).catch(() => {});
-      });
-      return;
-    }
-    // The Tasks window folded to its title bar: a copy of the board falls off the bottom of the screen, then the title
-    // bar shows. Until the room is ready the copy covers the centre; the title bar waits hidden.
-    $('main').append(run.ghost);
-    tw.style.visibility = 'hidden';
-    const showTasks = () => { tw.style.visibility = ''; };
-    keep({ cancel: showTasks });
-    ready.then(() => {
-      showScene();
-      if (run.cancelled) return;
-      if (boardView !== 'office') return viewAnimEnd();
-      const D = 420;
-      const drop = keep(run.ghost.animate([{ transform: 'none' }, { transform: `translateY(${Math.max(40, innerHeight - from.top)}px)` }], { duration: D, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' }));
-      showTasks();
-      keep(tw.animate([{ opacity: 0 }, { opacity: 0, offset: 0.7 }, { opacity: 1 }], { duration: D + 120 }));
-      drop.finished.then(() => { if (run.cancelled) return; run.ghost.remove(); vtRun = null; oFrame(); }).catch(() => {});
-    });
-    return;
-  }
-  // 3D → Board. The room stays where it was (behind the page, still drawing, its Tasks window empty and hidden) and
-  // fades out at the end.
-  const ov = $('office-view'); const keepRoom = !!(from.room && office.mod);
-  const otw = $('o-tasks');
-  const dropRoom = () => { ov.removeAttribute('style'); ov.removeAttribute('aria-hidden'); if (otw) otw.style.visibility = ''; if (boardView !== 'office') office.mod?.setActive(false); };
-  if (keepRoom) {
-    Object.assign(ov.style, { display: 'block', position: 'fixed', left: `${from.room.left}px`, top: `${from.room.top}px`, width: `${from.room.width}px`, height: `${from.room.height}px`, zIndex: '-1', pointerEvents: 'none' });
-    ov.setAttribute('aria-hidden', 'true'); if (otw) otw.style.visibility = 'hidden';
-    office.mod.setActive(true);
-    keep({ cancel: dropRoom });
-  }
-  const b = $('boardwrap'); const r = b.getBoundingClientRect();
-  const fadeRoom = (D) => keepRoom && keep(ov.animate([{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: D, fill: 'forwards' }));
-  if (from.pane) {
-    // The window was open: the board starts where the tasks were in it (moved, and narrowed by margins) and rises to its
-    // place, the window's border, glass and shadow drawn around it at first and fading out.
-    const p = taskPane().getBoundingClientRect();
-    const pad = Math.max(2, from.pane.left - from.win.left);
-    const m0 = { top: `${Math.round(from.pane.top - p.top)}px`, marginLeft: `${Math.round(from.pane.left - p.left)}px`, marginRight: `${Math.round(p.right - from.pane.right)}px` };
-    const m1 = { top: '0px', marginLeft: '0px', marginRight: '0px' };
-    const ring = (g, l, s) => `0 0 0 ${pad - 2}px ${g}, 0 0 0 ${pad}px ${l}, ${pad + 4}px ${pad + 4}px 0 ${pad - 2}px ${s}`;
-    const c0 = { backgroundColor: from.glass, boxShadow: ring(from.glass, from.line, 'rgba(0, 0, 0, 0.28)') };
-    const c1 = { backgroundColor: 'rgba(0, 0, 0, 0)', boxShadow: ring('rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)') };
-    b.style.position = 'relative';
-    keep({ cancel: () => { b.style.position = ''; } });
-    const rise = keep(b.animate([m0, m1], { duration: VT_D, easing: VT_EASE }));
-    // It opens from the window's height to its full length as it rises: a long column's cards below the window's
-    // bottom edge come in with that edge (the window's frame, drawn around the board, follows it down).
-    const h0 = Math.max(0, from.pane.bottom - (r.top + (from.pane.top - p.top)));
-    if (h0 < r.height - 1) {
-      b.style.overflow = 'clip'; keep({ cancel: () => { b.style.overflow = ''; } });
-      keep(b.animate([{ maxHeight: `${h0}px` }, { maxHeight: `${r.height}px` }], { duration: VT_D, easing: VT_EASE }));
-    }
-    // The window's own buttons (maximise, fold), left in the 3D view: they rise with the board and fade.
-    for (const c of from.btns || []) fadeCopy(c, -(from.pane.top - p.top), VT_D * 0.6);
-    keep(b.animate([c0, c1], { duration: VT_D, easing: VT_EASE }));
-    // The task bar ended before the window's own buttons (maximise, fold): it gives that room back gradually.
-    const bar = $('taskbar'), bm = parseFloat(getComputedStyle(bar).marginRight) || 0, room = Math.max(0, from.pane.right - from.barEnd);
-    keep(bar.animate([{ marginRight: `${bm + room}px` }, { marginRight: `${bm}px` }], { duration: VT_D, easing: VT_EASE }));
-    // The page's foot (the board's hint) comes in with the board.
-    if (!$('cols-hint').hidden) keep($('cols-hint').animate([{ opacity: 0 }, { opacity: 0, offset: 0.5 }, { opacity: 1 }], { duration: VT_D }));
-    fadeRoom(VT_D);
-    rise.finished.then(() => {
-      if (run.cancelled) return;
-      for (const a of run.anims) a.cancel?.();
-      vtRun = null;
-    }).catch(() => {});
-    return;
-  }
-  fadeRoom(420);
-  const dy = Math.max(40, from.tasksTop - r.top);
-  const rise = keep(b.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 420, easing: land }));
-  rise.finished.then(() => {
-    if (run.cancelled) return;
-    if (keepRoom) { for (const a of run.anims) if (a !== rise && a.effect) a.cancel(); dropRoom(); }
-    vtRun = null;
-  }).catch(() => {});
-}
-// Anything that leads to a part of the board the office view hides (the task columns).
-function needBoard() { if (boardView === 'office') setBoardView('board'); }
-// The 3D view loads in the background once the board is up (preload), so the first switch doesn't wait for the
-// download, the scene or the shaders: the room is built off-screen at the view's size, draws its first frames, then
-// pauses (no drawing while the Board view shows). Quietly: if it can't load, the switch says so later.
-function officeParkStyle(on) {
-  const ov = $('office-view');
-  if (!on) { if (office.parked) { office.parked = false; for (const k of ['display', 'position', 'left', 'top', 'width', 'height', 'visibility']) ov.style[k] = ''; ov.removeAttribute('aria-hidden'); } return; }
-  const m = $('main').getBoundingClientRect();
-  office.parked = true; ov.setAttribute('aria-hidden', 'true');
-  Object.assign(ov.style, { display: 'block', position: 'fixed', left: '-30000px', top: '0px', width: `${Math.round(m.width)}px`, height: `${Math.max(300, Math.round(innerHeight - m.top))}px`, visibility: 'hidden' });
-}
-function officePreload() {
-  if (office.mod || office.loading || office.failed || boardView === 'office' || !officeAllowed() || navigator.connection?.saveData) return;
-  officeParkStyle(true); showOffice({ preload: true });
-}
-function showOffice({ preload = false } = {}) {
-  if (!preload) officeParkStyle(false);
-  if (office.mod) { if (preload) return; office.mod.setActive(true); if (state) office.mod.update(officeState()); office.mod.select(ui.picked || null); return; }
+// Anything that leads to the task columns: with 3D on, the board comes up over the room (unfolded, expanded).
+function needBoard() { if (boardView !== 'office') return; if (oTasksOff()) oFold('tasks', false); if (!oMax()) oExpand(true); }
+function showOffice() {
+  if (office.mod) { office.mod.setActive(true); oRate(); if (state) office.mod.update(officeState()); office.mod.select(ui.picked || null); return; }
   if (office.loading) return;
   const view = $('office-view'); view.classList.add('loading'); view.setAttribute('aria-busy', 'true');
-  const quiet = () => preload && boardView !== 'office'; // a preload nobody is waiting on fails silently
   office.loading = import(BASE + '/office/embed.js').then((m) => {
+    if (boardView !== 'office') return; // turned off while it loaded
     const o = m.mount($('office-scene'), { theme: scenePalette(), reducedMotion: reduceMotion(), onPick: pickAgent });
-    if (!o.usable) { o.destroy(); return quiet() ? undefined : noOffice("The 3D office couldn't start WebGL in this browser. Staying on the board."); }
+    if (!o.usable) { o.destroy(); return noOffice("The 3D office couldn't start WebGL in this browser. Showing the plain board."); }
     office.mod = o;
     if (state) o.update(state);
     o.select(ui.picked || null);
-    // A preload draws its first frames (that compiles the shaders), then pauses in finally().
-    if (boardView !== 'office' && !preload) o.setActive(false);
+    oRate(); oFrame();
     // The room fades in once its first frame is drawn (it stays hidden while .loading): no empty room first.
     return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   }).catch((e) => {
-
     console.warn('3D office did not load', e);
-    if (quiet()) return;
     if (boardView === 'office') setBoardView('board', { save: false, quiet: true });
-    toast("The 3D office didn't load (offline?). Staying on the board.");
-  }).finally(() => { office.loading = null; view.classList.remove('loading'); view.removeAttribute('aria-busy'); if (boardView !== 'office') { office.mod?.setActive(false); officeParkStyle(false); } });
+    toast("The 3D office didn't load (offline?). Showing the plain board.");
+  }).finally(() => { office.loading = null; view.classList.remove('loading'); view.removeAttribute('aria-busy'); });
 }
+// While the board is expanded over it, the room keeps moving behind the glass at a few frames a second; docked or
+// folded, at its full (calm) rate. A hidden tab draws nothing (the browser stops the frames).
+function oRate() { office.fps = !office.mod ? 0 : oSlide ? 1 : oMax() && !oTasksOff() ? 4 : 30; office.mod?.setFps?.(office.fps); }
 // A copy of what the office draws, for tests and the console (null until it has loaded).
 Object.defineProperty(window, '__officeState', { get: () => office.mod?.snapshot() ?? null, configurable: true });
 // Another tab (the board, the presenter, the Boards page) changed the theme, or the OS switched light / dark.
@@ -4901,15 +4694,18 @@ addEventListener('storage', (e) => { if (e.key !== 'board-theme') return; themeP
 // Keep the MediaQueryList: a temporary one can be garbage-collected and take its listener with it.
 const darkMq = matchMedia('(prefers-color-scheme: dark)');
 darkMq.addEventListener?.('change', () => office.mod?.setTheme(scenePalette()));
-phoneMq.addEventListener?.('change', () => { if (phoneMq.matches && boardView === 'office') setBoardView('board', { save: false }); renderViewSwitch(); });
-$('vseg').addEventListener('click', (ev) => { const b = ev.target.closest('[data-vset]'); if (b) setBoardView(b.dataset.vset); });
-// In the 3D view, links to parts only the Board view has (the task columns) switch to it first, then do what they say.
-// What to do now's other links (stays) lead into the panels both views share, or open Setup as a popover.
+phoneMq.addEventListener?.('change', () => {
+  if (phoneMq.matches && boardView === 'office') setBoardView('board', { save: false, quiet: true });
+  else if (!phoneMq.matches && boardView !== 'office' && d3Pref() && viewParam !== 'board') setBoardView('office', { save: false, quiet: true });
+  renderViewSwitch();
+});
+$('o3d').addEventListener('click', () => setBoardView(boardView === 'office' ? 'board' : 'office'));
+// With 3D on, What to do now's links to the task columns bring the board up first, then do what they say.
 document.addEventListener('click', (ev) => {
   if (boardView !== 'office') return;
   const el = ev.target.closest?.('[data-go]');
   if (!el || stays(el.dataset.go)) return;
-  setBoardView('board');
+  needBoard();
 }, true);
 
 // ---------- the panels, the same in both views ----------
@@ -4917,10 +4713,9 @@ document.addEventListener('click', (ev) => {
 // clock. One fold state for both views (oUi), one way to open each panel again: a dock folds to its chip, Activity
 // and File locks (and the 3D Tasks window) to their title bars.
 const oHome = {};
-// The Board view's tasks move into the 3D Tasks window while the 3D view is on, and back: its task bar (Tasks,
-// search, Show, Columns / Table) becomes the window's title bar, its columns (or table) the window's body. One task
-// board in both views, the same elements: the search text, the filter, scroll and focus carry over, and the view
-// switch moves this one board (viewAnim) instead of handing over between two.
+// The plain board's tasks move into the Tasks window while 3D is on, and back: its task bar (Tasks, search, Show,
+// Columns / Table) becomes the window's title bar, its columns (or table) the window's body. One task board, the same
+// elements: the search text, the filter, scroll and focus carry over when 3D goes on or off.
 const TASK_PARTS = ['board-empty', 'board', 'tasktable'];
 function officeMount(on) {
   const tb = $('taskbar'), parts = TASK_PARTS.map($);
@@ -4930,9 +4725,25 @@ function officeMount(on) {
     if (!$('o-tasks-b').contains(parts[0])) $('o-tasks-b').append(...parts);
   } else if (oHome.tb) { if (oHome.tb.nextSibling !== tb) oHome.tb.after(tb); if (oHome.body.nextSibling !== parts[0]) oHome.body.after(...parts); }
 }
-// The Tasks window folds to its title bar by default on screens up to 900px tall (the room needs the height) and is
-// open above that; File locks start folded. Folding or unfolding one yourself is remembered.
-const oTasksOff = () => (typeof oUi.tasks === 'boolean' ? oUi.tasks : innerHeight <= 900);
+// The task board starts expanded over the room (board first) and open; File locks start folded. Folding, expanding or
+// docking one yourself is remembered. ?view=office docks it for that visit.
+const oTasksOff = () => (typeof oUi.tasks === 'boolean' ? oUi.tasks : false);
+const oMax = () => (office.dockOnce ? false : typeof oUi.max === 'boolean' ? oUi.max : true);
+// Expanded <-> docked: the board's top edge slides between the top bar and the window's place at the foot (its glass
+// covering the room above it as it goes, or uncovering it); one element, the columns inside it the same. Instant with
+// reduced motion or when it's folded.
+let oSlide = null;
+function oExpand(on) {
+  const tw = $('o-tasks'), r0 = tw.getBoundingClientRect(), shown = boardView === 'office' && !oTasksOff() && !!tw.offsetHeight;
+  office.dockOnce = false; oUi.max = on; oSave(); oApply(); office.mod?.resize();
+  oSlide?.cancel(); oSlide = null;
+  if (!shown || reduceMotion()) return;
+  const r1 = tw.getBoundingClientRect(), o = $('office-view').getBoundingClientRect();
+  if (Math.abs(r0.top - r1.top) < 2) return;
+  oSlide = tw.animate([{ top: `${r0.top - o.top}px`, height: 'auto' }, { top: `${r1.top - o.top}px`, height: 'auto' }], { duration: 420, easing: 'cubic-bezier(.4, 0, .2, 1)' });
+  oRate(); // the room holds still while the board slides (its camera eases once it has landed), so the slide stays smooth
+  oSlide.finished.then(() => { oSlide = null; oRate(); oFrame(); }).catch(() => {});
+}
 const oLocksOff = () => (typeof oUi.locks === 'boolean' ? oUi.locks : store.get('board-locks') !== 'open');
 const oOff = (w) => (w === 'tasks' ? oTasksOff() : w === 'locks' ? oLocksOff() : w === 'act' ? !!oUi.actOff : !!oUi[w]);
 // The Tasks window's maximise / restore icons (corners out, corners in).
@@ -4950,10 +4761,11 @@ function oApply() {
     $('o-' + s).hidden = !!oUi[s]; $('o-' + s + '-pill').hidden = !oUi[s];
     m.classList.toggle(s[0] + '-off', !!oUi[s]);
   }
-  const tOff = oTasksOff();
-  $('o-tasks').classList.toggle('max', !!oUi.max && !tOff);
-  $('o-tasks-max').setAttribute('aria-pressed', String(!!oUi.max)); $('o-tasks-max').setAttribute('aria-label', oUi.max ? 'Restore the tasks window' : 'Maximise the tasks'); $('o-tasks-max').title = oUi.max ? 'Restore (Esc)' : 'Maximise';
-  $('o-tasks-max').innerHTML = oUi.max ? O_RESTORE : O_MAX;
+  const tOff = oTasksOff(), max = oMax();
+  $('o-tasks').classList.toggle('max', max && !tOff);
+  $('o-tasks-max').setAttribute('aria-pressed', String(max)); $('o-tasks-max').setAttribute('aria-label', max ? 'Slide the board down to show the office' : 'Expand the board over the office'); $('o-tasks-max').title = max ? 'Show the office (Esc)' : 'Expand the board';
+  $('o-tasks-max').innerHTML = max ? O_RESTORE : O_MAX;
+  oRate();
   for (const [box, b, off, what] of [[$('o-tasks'), $('o-tasks-fold'), tOff, 'the tasks'], [$('o-act'), $('o-act-fold'), !!oUi.actOff, 'Activity'], [$('o-locks'), $('l-tog'), oLocksOff(), 'the file locks']]) {
     box.classList.toggle('folded', off); b.setAttribute('aria-expanded', String(!off));
     b.title = off ? 'Show' : 'Fold'; b.setAttribute('aria-label', off ? `Show ${what}` : `Fold ${what} to ${what === 'Activity' ? 'its' : 'their'} title bar`);
@@ -4979,12 +4791,15 @@ function oFrame() {
   const v = $('office-view').getBoundingClientRect(); if (!v.width || !v.height) return;
   const R = (id) => { const e = $(id); return e && !e.hidden && e.offsetWidth ? e.getBoundingClientRect() : null; };
   const l = R('o-left'), r = R('o-right') || R('o-act'), t = R('o-tasks'), top = $('topbar').getBoundingClientRect();
-  const maxed = t && $('o-tasks').classList.contains('max');
+  // Expanded (or sliding), the board covers the room: it's framed as if docked (the window's CSS height at the foot),
+  // so sliding the board down or up doesn't move the camera.
+  const dockTop = () => v.bottom - 18 - Math.max(Math.min(Math.max(176, 0.27 * v.height), 270), Math.min(innerHeight * 0.5, 360));
+  const covered = t && ($('o-tasks').classList.contains('max') || !!oSlide);
   office.mod.setInsets({
     left: l ? (l.right - v.left) / v.width : 0,
     right: r ? (v.right - r.left) / v.width : 0,
     top: Math.max(0, (top.bottom - v.top) / v.height),
-    bottom: t && !maxed ? (v.bottom - (vtRun?.tasksTop ?? t.top)) / v.height : 0, // mid-switch: where the window ends up
+    bottom: t ? (v.bottom - (covered ? dockTop() : t.top)) / v.height : 0,
   });
 }
 function oFold(which, folded = !oOff(which)) {
@@ -5127,7 +4942,7 @@ $('app').addEventListener('click', (ev) => {
   const t = ev.target.closest('button'); if (!t) return;
   const d = t.dataset;
   if (d.oFold) return oFold(d.oFold);
-  if ('oMax' in d) { oUi.max = !oUi.max; oSave(); oApply(); return office.mod?.resize(); }
+  if ('oMax' in d) return oExpand(!oMax());
   if (d.oClose === 'goal') return oGoal(false);
   if (d.oClose === 'dl') return oDl(false);
   if (d.oClose === 'merge') return oMerge(false);
@@ -5148,7 +4963,7 @@ document.addEventListener('keydown', (ev) => {
   if (ui.oSetup && boardView === 'office') return oSetup(false);
   if (boardView !== 'office' && setupShown() && ev.target.closest?.('#setup, [data-fk="s-open"]')) { store.set('board-setup', 'closed'); ui.forceSetup = false; render(); return setupFocus(false); }
   if (ui.oGoal) return oGoal(false);
-  if (boardView === 'office' && oUi.max && !oTasksOff()) { oUi.max = false; oSave(); oApply(); office.mod?.resize(); return $('o-tasks-max').focus({ preventScroll: true }); }
+  if (boardView === 'office' && oMax() && !oTasksOff() && $('o-tasks').contains(ev.target)) { oExpand(false); return $('o-tasks-max').focus({ preventScroll: true }); }
   if (ui.picked && ev.target.closest?.('#o-right, #office-view')) { const n = ui.picked; pickAgent(null, true); document.querySelector(`[data-fk="oa-${CSS.escape(n)}"]`)?.focus({ preventScroll: true }); }
 });
 
@@ -5163,7 +4978,8 @@ function palCommands() {
   const oq = openQuestions()[0];
   if (oq) add('Action', `Answer the oldest question (from ${oq.asker})`, () => goQuestion(oq.id), 'reply ' + oq.question);
   add('Action', 'New task', () => openTask(null), 'add create');
-  if (officeAllowed()) add('View', boardView === 'office' ? 'Switch to Board' : 'Switch to 3D office', () => setBoardView(boardView === 'office' ? 'board' : 'office'), 'view office 3d board scene characters');
+  if (officeAllowed()) add('View', boardView === 'office' ? 'Turn the 3D office off' : 'Turn the 3D office on', () => setBoardView(boardView === 'office' ? 'board' : 'office'), 'view office 3d scene characters background performance power');
+  if (boardView === 'office' && !oTasksOff()) add('View', oMax() ? 'Show the office (slide the board down)' : 'Expand the board over the office', () => oExpand(!oMax()), 'view office board tasks expand dock');
   const vt = state.setup?.viewer_token;
   if (vt) add('Action', 'Open the presenter view (new tab)', () => window.open(BASE + '/present.html?token=' + encodeURIComponent(vt), '_blank', 'noopener'), 'projector big screen present 3d office');
   add('Action', state.settings?.deadline ? 'Edit the demo time' : 'Set the demo time', () => doAct('clock'), 'deadline clock countdown freeze');
@@ -5251,7 +5067,14 @@ async function start() {
   // Only a non-secret "this browser is the host's" flag (set by the Boards page); the admin token itself never leaves that page.
   $('boards-link').hidden = !(() => { try { return localStorage.getItem('board-is-host') === '1'; } catch { return false; } })();
   applyKeys();
-  setBoardView(viewParam || (store.get('board-view-mode') === 'office' ? 'office' : 'board'), { save: false, quiet: true });
+  // Before the switch was 3D on / off there were two views, Board and 3D office, remembered per board: the 3D office
+  // one means the board docked (Board, the default state: expanded). Either way 3D is on.
+  const oldView = store.get('board-view-mode');
+  if (oldView) { if (oldView === 'office' && typeof oUi.max !== 'boolean') { oUi.max = false; oSave(); } try { localStorage.removeItem(nsKey('board-view-mode')); } catch {} }
+  if (viewParam === 'office') office.dockOnce = true;
+  // 3D on by default, but quietly the plain board where WebGL can't run (no note: nobody asked for 3D).
+  if (!viewParam && d3Pref() && officeAllowed() && !webglWorks()) office.failed = true;
+  setBoardView(viewParam || (d3Pref() ? 'office' : 'board'), { save: false, quiet: true });
   await load(); if (!unavailable && !$('app').hidden) connect();
   if (!started) {
     started = true;

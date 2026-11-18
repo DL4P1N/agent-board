@@ -4,14 +4,14 @@ Lets a team work on one project with a mix of AI coding agents: **Claude Code, C
 
 ![The board: what needs attention, the task columns, agents and activity](docs/img/board.png)
 
-![The same board in the 3D office view](docs/img/office.png)
+![The same board with the 3D office live behind it](docs/img/office.png)
 
 ## What you get
 
 - **A shared task board** that agents read and write over MCP. Nobody hands out tasks: each agent asks the board what to do next.
 - **A planner, builders and an integrator**, picked by the board. You don't choose roles or modes.
 - **A web board** for humans: answer questions, approve tasks, pick who merges, set the demo time.
-- **A 3D office view**: a pixel-art room drawn from the live board, also used by the Presenter view for a big screen.
+- **A live 3D office** behind the board: a pixel-art room drawn from the live board (switch it off for the plain board), also used by the Presenter view for a big screen.
 - **One join script per laptop** that connects each AI tool, installs its `/board` shortcut and tests the connection.
 - **Fair sharing across subscriptions**, pull request reviews, CI watching on `main`, backups, and an end-of-day summary and retro.
 
@@ -71,7 +71,7 @@ Tools without hooks keep calling `wait_for_events`, which returns as soon as som
 
 - three.js draws the room at low resolution, scales it up with nearest-neighbour sampling, then applies Bayer dithering, palette quantisation and depth-based outlines.
 - The camera snaps to the pixel grid so nothing shimmers.
-- The 3D view loads in the background once the board is up, so the first switch is instant; it stops drawing whenever it is hidden.
+- Behind the expanded task board the room draws at a few frames a second, at 30 when it's in view, and not at all in a hidden tab. Switched off, no 3D code loads.
 - The build is deterministic, and CI fails if the committed bundle is out of date.
 
 **A small footprint.**
@@ -83,7 +83,7 @@ Tools without hooks keep calling `wait_for_events`, which returns as soon as som
 **Tested end to end.** About 45 suites ([docs/testing.md](docs/testing.md)) cover:
 
 - the server and MCP tools;
-- browser tests that drive a real Chrome, including the 3D view, with software WebGL in CI;
+- browser tests that drive a real Chrome, including the 3D office, with software WebGL in CI;
 - a rehearsal that replays a whole working day in seconds while checking that the rules hold;
 - races where 24 agents grab one task, a pool of tasks, the planner role and a file lock at the same moment (exactly one winner each time), hostile HTML in every field an agent writes, and the rate limits;
 - contrast in all 15 themes;
@@ -105,7 +105,7 @@ You need [Node.js](https://nodejs.org) 22.13+ and git. Dependencies install them
 ```
 npm run demo
 ```
-A throwaway board with a seeded, moving mid-project team (8 agents, subagents, 20 tasks, questions, locks, a deadline). It prints the Board, 3D view and presenter links. Ctrl+C stops it and deletes its temp data; your real board and `data/` are never touched. Flags: `--static`, `--speed 2`, `--port N`, `--open`, `--keep`.
+A throwaway board with a seeded, moving mid-project team (8 agents, subagents, 20 tasks, questions, locks, a deadline). It prints the board, 3D office (docked), plain board and presenter links. Ctrl+C stops it and deletes its temp data; your real board and `data/` are never touched. Flags: `--static`, `--speed 2`, `--port N`, `--open`, `--keep`.
 
 **Host a board** (one laptop, kept awake all day):
 ```

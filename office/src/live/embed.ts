@@ -1,7 +1,7 @@
 /**
- * The 3D office as a view inside the main board (public/index.html), built into public/office/embed.js by
- * `npm run build:present`. The board loads it with a dynamic import() only when someone first switches to
- * "3D office", so three.js never loads for people who stay on the board.
+ * The 3D office live behind the main board (public/index.html), built into public/office/embed.js by
+ * `npm run build:present`. The board loads it with a dynamic import() while its 3D switch is on, so three.js never
+ * loads for people who turn it off (or on phones).
  *
  * Unlike the presenter (main.ts) it reads nothing by itself: the board passes the GET /api/state object it already
  * loads on every reload to update(). Same adapter (LiveWorld) and OfficeScene as the presenter.
@@ -37,8 +37,11 @@ export interface OfficeEmbed {
   /** A fresh board state (the /api/state object). Cheap: call it on every reload. */
   update(state: BoardState): void;
   setTheme(theme: Palette): void;
-  /** Pause rendering while the office is hidden (the board view), resume when it is shown again. */
+  /** Pause rendering while the office is hidden, resume when it is shown again. */
   setActive(on: boolean): void;
+  /** Frames a second while active (30 by default): a few while the board covers the room, so it still moves behind
+   *  the glass at little cost. */
+  setFps(fps: number): void;
   /** Where the page's panels cover the view, as fractions of its width (left, right) and height (top, bottom): the room
    *  is framed in the part left free, so no desk sits under a dock or the Tasks window. */
   setInsets(i: { top: number; right: number; bottom: number; left: number }): void;
@@ -87,7 +90,7 @@ export function mount(container: HTMLElement, opts: EmbedOptions): OfficeEmbed {
   }
 
   let last = performance.now();
-  const FRAME = 1 / 30; // calm, and light on a laptop that also runs the agents: 30 fps is plenty
+  let FRAME = 1 / 30; // calm, and light on a laptop that also runs the agents: 30 fps is plenty
   const frame = (now: number): void => {
     raf = 0;
     if (dead || !active || !scene.usable) return;
@@ -126,6 +129,7 @@ export function mount(container: HTMLElement, opts: EmbedOptions): OfficeEmbed {
       active = on;
       if (on) { scene.resize(); run(); } else if (raf) { cancelAnimationFrame(raf); raf = 0; }
     },
+    setFps(fps: number) { FRAME = 1 / Math.max(1, Math.min(30, fps || 30)); },
     select(agent) { if (dead) return; selected = agent; scene.selectAgent(agent); settle(); },
     setInsets(i) {
       if (dead) return;

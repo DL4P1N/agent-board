@@ -201,4 +201,4 @@ A human writes to one agent, or to whoever is the planner, from the web board's 
 ## The 3D office
 
 - [`office/`](../office/) is a standalone frontend demo where the whole room is simulated (`cd office && npm install && npm run dev`).
-- The same scene powers the Presenter view (`/present.html`) and the board's 3D office view. Both are built into `public/` and committed; rebuild with `npm run build:present`. See [The 3D office and the Presenter view](using-the-board.md#the-3d-office-and-the-presenter-view).
+- The same scene powers the Presenter view (`/present.html`) and the live office behind the board (`office/src/live/embed.ts`, loaded only while 3D is on). Both are built into `public/` and committed; rebuild with `npm run build:present`. See [The 3D office and the Presenter view](using-the-board.md#the-3d-office-and-the-presenter-view).

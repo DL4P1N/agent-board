@@ -81,7 +81,7 @@ Post a message with an @mention, e.g. `@alice skip OAuth, use a fake login`.
 - `@planner` and `@merger` reach whoever has that role right now. The message shows who that was, e.g. "@planner (maya-claude)", and stays with that agent if the role changes later.
 - `@` inside a word or a package name isn't a mention (`hit@3`, `@fastify/x`, `@2.0.2`), and `PR #78` in a message doesn't link to task #78.
 
-**Direct messages.** The *Direct* tab in Activity (in both the Board and 3D views) has one thread per agent. An agent's *Message* button in the Agents panel opens its thread.
+**Direct messages.** The *Direct* tab in Activity (with 3D on or off) has one thread per agent. An agent's *Message* button in the Agents panel opens its thread.
 
 - The agent gets your message like a mention: its `next_action` quotes it, `wait_for_events` wakes it, and Claude Code's Stop hook marks it `[MENTIONS YOU]`. It answers in the same thread.
 - The **Planner** thread is pinned at the top. Its messages go to whoever is the planner at the time; if nobody is yet, they wait for the first agent that becomes planner. The planner treats them as input to the plan: it replies with what it will do and turns it into tasks.
@@ -129,19 +129,24 @@ Set the demo time in *Setup*. The board counts down.
 
 ### 3D office on the board
 
-The header's **Board | 3D office** switch swaps the main area in place. The office shows the same characters as the Presenter view, drawn from the state the board already loads, with the Board view's panels in the same places over it:
+With 3D on (the default), the office is live behind the board: the same characters as the Presenter view, drawn from the state the board already loads. The panels float over it as glass:
 
-- *Needs attention* on the left: what to do now, the agents' questions with Answer, what's blocked.
-- The top bar: goal, demo time, progress, the planner, who merges to main, and *Setup* (it opens as a popover over the room).
-- *Agents*, *Activity* and *File locks* on the right.
-- *Tasks* in a window at the bottom: the board itself, moved in (the same columns and cards, search, filter, Columns / Table and **+ New task**). A long column scrolls inside the window. It can be maximised or folded to its title bar.
+- The top bar across the top: goal, demo time, progress, the planner, who merges to main, and *Setup* (it opens as a popover over the room).
+- *Needs attention* on the left (what to do now, the agents' questions with Answer, what's blocked), and *Agents*, *Activity* and *File locks* on the right. Both columns hang from the bottom of the screen.
+- The task board between them: the same columns and cards, search, filter, Columns / Table and **+ New task**. A long column scrolls inside it.
 
-Clicking a character selects its agent in *Agents*; its name tag shows the same status as its row. Panels fold the same way in both views.
+The task board has three states, and its own buttons switch between them:
 
-- Board is the default. The office (three.js) loads in the background once the board is up, so the first switch is instant; it only draws while it shows.
-- Switching to the 3D office moves the board itself: it starts where it was and its top edge slides down to the Tasks window, showing the room behind it (once the room has drawn its first frame), while the window's border and glass come in. Switching back, the board rises up from there. With the Tasks window folded, the board drops off the bottom instead. The panels stay where they are. With reduced motion it switches at once.
-- The choice is remembered per board in this browser. `?view=office` / `?view=board` overrides it, and it's also in the command palette (Ctrl+K).
-- Not on phones, and without WebGL the board stays, with a note.
+- **Expanded** (the default): it covers the room up to the top bar, as glass. The room keeps moving behind it at a few frames a second.
+- **Docked**: a window at the foot, with the room in view above it. Its top edge slides down to get there (**Show the office**, or Esc inside the board), and back up again (**Expand the board**). With reduced motion it switches at once.
+- **Folded**: just its title bar. Folded panels form a row of title bars along the bottom edge.
+
+Clicking a character selects its agent in *Agents*; its name tag shows the same status as its row. A link in *What to do now* that leads to the tasks brings the board up over the room.
+
+- The header's **3D** switch turns the office off: the plain board, with no 3D code loaded and nothing drawn (turn it off to save power). The choice is saved in this browser for every board. It's also in the command palette (Ctrl+K): *Turn the 3D office off / on*.
+- `?view=office` turns 3D on for that visit, with the board docked so the room shows; `?view=board` is the plain board for that visit. Neither changes the saved choice.
+- The room stops drawing while the tab is hidden.
+- Not on phones, and without WebGL it's the plain board (with a note only if you asked for 3D).
 
 ### Presenter view
 
@@ -158,7 +163,7 @@ On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/prese
 ## On the web board
 
 - **Columns.** Open, In progress, Blocked, Review and Done, in both views. A task an agent has claimed but not started sits in In progress, marked *claimed, not started*; the Table view and the task dialog give the exact status.
-- **Moving cards.** Drag a card to another column, in the Board view or the 3D view's *Tasks* window (maximised too), or use its **Move…** button (in 3D: *Status* in its dialog). A move to *In progress* asks who it's for, and a task whose dependencies aren't done yet needs **Move anyway**.
+- **Moving cards.** Drag a card to another column, on the plain board or the 3D task board (expanded or docked), or use its **Move…** button (in 3D: *Status* in its dialog). A move to *In progress* asks who it's for, and a task whose dependencies aren't done yet needs **Move anyway**.
 - **Keyboard.**
   - `Ctrl`+`K` (`⌘K` on a Mac) opens the command palette: jump to a task or person, add a task, answer a question, set the demo time, switch the filter or theme.
   - `n` new task, `/` write a message, `?` help, `Esc` closes dialogs.

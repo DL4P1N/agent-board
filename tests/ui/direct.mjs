@@ -114,7 +114,7 @@ try {
   await page.evaluate(() => setTheme('auto'));
 
   // ---- the 3D view: the same panel ----
-  await page.click('#vseg [data-vset="office"]');
+  await page.click('#o3d');
   const office = await until(() => document.documentElement.dataset.boardView === 'office', null, 10000);
   if (!office) {
     check('no WebGL in this browser: the 3D view checks are skipped', true);

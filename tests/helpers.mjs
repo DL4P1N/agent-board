@@ -81,11 +81,22 @@ export function findBrowser() {
   throw new Error('No Chrome or Edge found for the UI tests. Install one, or set BROWSER_PATH=/path/to/chrome.');
 }
 
-export async function launchBrowser(opts = {}) {
+export async function launchBrowser({ office = false, ...opts } = {}) {
   const { default: puppeteer } = await import('puppeteer-core');
   // CI containers (GitHub Actions) need --no-sandbox for Chrome.
   const args = [...(opts.args || []), ...(process.env.CI ? ['--no-sandbox', '--disable-dev-shm-usage'] : [])];
-  return puppeteer.launch({ headless: true, ...opts, args, executablePath: findBrowser() });
+  const browser = await puppeteer.launch({ headless: true, ...opts, args, executablePath: findBrowser() });
+  // The board turns the live 3D office on by default (wherever WebGL runs, software WebGL included). Most suites test
+  // the board itself, so their pages start with 3D off, as if the switch had been turned off; a suite that tests the
+  // office passes { office: true } (or sets 'agent-board-3d' itself).
+  if (!office) {
+    const off = (page) => page.evaluateOnNewDocument(() => { try { if (localStorage.getItem('agent-board-3d') === null) localStorage.setItem('agent-board-3d', 'off'); } catch {} }).then(() => page);
+    const wrap = (target) => { const np = target.newPage.bind(target); target.newPage = async (...a) => off(await np(...a)); return target; };
+    wrap(browser);
+    const cbc = browser.createBrowserContext.bind(browser);
+    browser.createBrowserContext = async (...a) => wrap(await cbc(...a));
+  }
+  return browser;
 }
 
 // Screenshots go to tests/ui/shots/<suite>/ (git-ignored).

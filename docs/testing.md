@@ -72,7 +72,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | `tests/ui/people.mjs` | The Agents panel: stable person colours, one row per agent by its own name, its state in words, *Belongs to*, availability in the Reserve-for and Assign-to lists. |
 | `tests/ui/palette-theme.mjs` | The themes and the theme chooser (keyboard grid, Auto by the OS, old saved values), a contrast scan of every visible text in every theme, and the Ctrl+K command palette. |
 | `tests/ui/usability.mjs` | The usability-review fixes. Guidance states, the invite message, the busy-board layout at 1366×768, contrast, keyboard Tab stops, accessibility. |
-| `tests/ui/hostile.mjs` | Hostile text: HTML, script tags, attribute breakouts and `javascript:` links in every field an agent controls (titles, descriptions, notes, branch, PR link, chat and channel, questions, activity, tool and model, subagent names, locks, limits, the goal). Nothing runs or renders as HTML in the Board view, the 3D view, the classic and the 3D presenter. The security headers (CSP). |
+| `tests/ui/hostile.mjs` | Hostile text: HTML, script tags, attribute breakouts and `javascript:` links in every field an agent controls (titles, descriptions, notes, branch, PR link, chat and channel, questions, activity, tool and model, subagent names, locks, limits, the goal). Nothing runs or renders as HTML in the plain board, the 3D office, the classic and the 3D presenter. The security headers (CSP). |
 | `tests/ui/a11y.mjs` | Accessibility and phone checks: live announcements, one Tab stop per column, 12px minimum text, no header badge row on a phone, the header's Chat button on a phone, 32px touch targets. |
 | `tests/ui/boards.mjs` | The Boards page and a board served under `/b/<board>/` in a real browser. |
 
@@ -82,7 +82,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 |---|---|
 | `tests/ui/present.mjs` | The classic (2D) presenter view. |
 | `tests/ui/office-present.mjs` | The 3D presenter view: live overlay and adapted office state, live updates, themes, reduced motion, the WebGL fallback. |
-| `tests/ui/office-toggle.mjs` | The board's Board / 3D office switch: Board by default with the office loading in the background (hidden), live state in the scene, answering from it, the agent card, saved choice and `?view=`, phones, no WebGL, the header staying one row. |
+| `tests/ui/office-toggle.mjs` | The live 3D office behind the board and the header's 3D switch: on by default with the task board expanded, the slide down to docked and back (one board, no copy), folded title bars along the foot, frame rates, live state in the scene, answering from it, the agent card, 3D off (nothing loaded), the saved choice and `?view=`, reduced motion, phones, no WebGL, the header staying one row. Other suites open pages with 3D off (the test helper's default; `launchBrowser({ office: true })` keeps it on). |
 
 ## Writing tests
 

@@ -277,7 +277,7 @@ await page.screenshot({ path: `${out}/v2-desktop-light.png` });
 {
   const dragT = await rest('dana', '/tasks', 'POST', { title: '3D drag test', priority: 1 }); // P1: at the top of Open (a long column shows its first cards)
   await page.waitForFunction((id) => !!taskById(id), { timeout: 5000 }, dragT.id);
-  await page.click('#vseg [data-vset="office"]');
+  await page.click('#o3d');
   const in3d = await page.waitForFunction(() => document.documentElement.dataset.boardView === 'office', { timeout: 8000 }).then(() => true, () => false);
   if (!in3d) check('3D drag skipped: no WebGL in this browser', true);
   else {
@@ -295,7 +295,7 @@ await page.screenshot({ path: `${out}/v2-desktop-light.png` });
     await page.waitForFunction((id) => document.querySelector(`#o-tasks-b .col[data-status="review"] .card[data-id="${id}"]`), { timeout: 5000 }, dragT.id).catch(() => {});
     const dr = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === dragT.id);
     check('3D: dragging a card from Open to Review moves it (the server has it in Review, its card in that column)', dr.status === 'review' && !!(await page.$(`#o-tasks-b .col[data-status="review"] .card[data-id="${dragT.id}"]`)), dr.status);
-    await page.click('#vseg [data-vset="board"]');
+    await page.click('#o3d');
     await page.waitForFunction(() => document.documentElement.dataset.boardView === 'board', { timeout: 5000 });
   }
 }
