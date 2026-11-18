@@ -16,6 +16,10 @@
 //   BOARD_HOOK_WAIT  seconds to long-poll for new events before letting Claude stop (0 = don't wait)
 //   BOARD_HOOK=off   disable the hook
 //
+// What it remembers between stops (the event cursor, the last usage-limit notice it reported, the last nudge)
+// is in one file per user, ~/.agent-board-hook.json, one entry per board + agent; entries unused for 30 days
+// are dropped.
+//
 // Exits by returning (process.exitCode), never process.exit(): exiting while fetch sockets close
 // crashes Node on Windows, and Claude Code ignores a hook that exits abnormally.
 import crypto from 'node:crypto';
@@ -26,6 +30,25 @@ import path from 'node:path';
 const RECENT_MS = 15 * 60e3;
 // At most one "the board has work for you" nudge per agent in this window.
 const NUDGE_EVERY_MS = 3 * 60e3;
+const STATE_FILE = path.join(os.homedir(), '.agent-board-hook.json');
+const KEEP_MS = 30 * 24 * 3600e3;
+
+// The hook's memory for one board + agent: read once, saved with save(patch).
+function hookState(key) {
+  const read = () => { try { const a = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); return a && typeof a === 'object' && !Array.isArray(a) ? a : {}; } catch { return {}; } };
+  const entry = { ...(read()[key] || {}) };
+  const save = (patch) => {
+    Object.assign(entry, patch);
+    // Read again just before writing: another session's hook may have saved its own entry meanwhile.
+    const all = read();
+    const now = Date.now();
+    all[key] = { ...entry, seen: now };
+    for (const k of Object.keys(all)) if (!(now - (all[k]?.seen || 0) < KEEP_MS)) delete all[k];
+    const tmp = `${STATE_FILE}.${process.pid}.tmp`;
+    try { fs.writeFileSync(tmp, JSON.stringify(all)); fs.renameSync(tmp, STATE_FILE); } catch { try { fs.unlinkSync(tmp); } catch {} }
+  };
+  return { entry, save };
+}
 
 async function main() {
   let cfg = {};
@@ -45,28 +68,23 @@ async function main() {
   const continuing = input.stop_hook_active === true;
   const wait = continuing ? 0 : Number(process.env.BOARD_HOOK_WAIT ?? cfg.hook_wait ?? 0);
 
-  // One cursor per board + agent, so a different (or freshly wiped) board doesn't inherit an old position.
+  // One entry per board + agent, so a different (or freshly wiped) board doesn't inherit an old position.
   // A hash of the whole URL, path included: two boards on one host (/b/<a>, /b/<b>) never share a cursor.
   const boardKey = crypto.createHash('sha256').update(url).digest('hex').slice(0, 16);
-  const cursorName = (app) => path.join(os.tmpdir(), `${app}-cursor-${agent.replace(/[^\w.-]/g, '_')}-${boardKey}`);
-  const cursorFile = cursorName('agent-board');
-  // Cursor files from before the rename to Agent Board: carry them over once, so nothing is reported twice.
-  for (const s of ['', '-limit', '-nudge']) {
-    try { if (!fs.existsSync(cursorFile + s)) fs.renameSync(cursorName('claude-board') + s, cursorFile + s); } catch {}
-  }
+  const state = hookState(`${boardKey}|${agent}`);
+  // The laptop id lets the board know this name's owner is still here while its agent works quietly
+  // (and that a usage limit reported from another laptop isn't the owner's).
+  const laptop = /^[a-z0-9]{8,16}$/.test(cfg.laptop_id || '') ? { 'X-Laptop': cfg.laptop_id } : {};
   const get = async (p) => {
-    // The laptop id lets the board know this name's owner is still here while its agent works quietly.
-    const laptop = /^[a-z0-9]{8,16}$/.test(cfg.laptop_id || '') ? { 'X-Laptop': cfg.laptop_id } : {};
     const r = await fetch(url + p, { headers: { Authorization: `Bearer ${token}`, 'X-Agent': agent, ...laptop }, signal: AbortSignal.timeout((wait + 15) * 1000) });
     if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
     return r.json();
   };
 
   // Stopped because of a usage limit? Tell the board once, then let Claude stop: no nudging.
-  if (await reportUsageLimit({ input, url, token, agent, markFile: cursorFile + '-limit' })) return;
+  if (await reportUsageLimit({ input, url, token, agent, laptop, state })) return;
 
-  let since;
-  try { since = Number(fs.readFileSync(cursorFile, 'utf8')); } catch {}
+  let since = state.entry.cursor;
   const { cursor: latest } = await get('/api/cursor');
   // First run, or the board was started fresh (our position is past its newest event):
   // look at the last ~50 events but only react to the last 15 minutes, so the first turn isn't missed.
@@ -74,10 +92,12 @@ async function main() {
   if (fresh) since = Math.max(0, latest - 50);
 
   const { events, cursor } = await get(`/api/events?since=${since}&exclude=${encodeURIComponent(agent)}&wait=${wait}`);
-  fs.writeFileSync(cursorFile, String(cursor));
+  state.save({ cursor });
 
-  const relevant = events.filter((e) => !['lock', 'unlock'].includes(e.kind) && (!fresh || Date.now() - e.ts < RECENT_MS));
-  if (!relevant.length) return continuing ? undefined : nudgeIfWork({ get, agent, nudgeFile: cursorFile + '-nudge' }); // else allow the stop
+  // The board leaves out this agent's own events; its own subagents' (<agent>/<name>) are left out here.
+  const own = (e) => String(e.author || '').toLowerCase().startsWith(agent + '/');
+  const relevant = events.filter((e) => !['lock', 'unlock'].includes(e.kind) && !own(e) && (!fresh || Date.now() - e.ts < RECENT_MS));
+  if (!relevant.length) return continuing ? undefined : nudgeIfWork({ get, agent, state }); // else allow the stop
 
   // A direct message from a human counts as a mention (the board only sends this agent its own threads).
   const direct = (e) => e.channel === 'direct' && e.data?.dm?.from !== 'agent';
@@ -165,35 +185,31 @@ function nextWallClock(h, m, tz, now) {
   }
   return null;
 }
-async function reportUsageLimit({ input, url, token, agent, markFile }) {
+async function reportUsageLimit({ input, url, token, agent, laptop, state }) {
   const notice = limitNotice(input.transcript_path);
   if (!notice) return false;
   const key = `${notice.at}|${notice.text.slice(0, 120)}`;
-  let seen = '';
-  try { seen = fs.readFileSync(markFile, 'utf8'); } catch {}
-  if (seen === key) return true; // already reported this one: just let Claude stop
+  if (state.entry.limit === key) return true; // already reported this one: just let Claude stop
   try {
     const r = await fetch(`${url}/api/agents/${encodeURIComponent(agent)}/limit`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'X-Agent': agent, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${token}`, 'X-Agent': agent, 'Content-Type': 'application/json', ...laptop },
       body: JSON.stringify({ until: notice.until || undefined, note: `reported by its Stop hook: ${notice.text.slice(0, 120)}` }),
       signal: AbortSignal.timeout(10e3),
     });
-    if (r.ok) fs.writeFileSync(markFile, key);
+    if (r.ok) state.save({ limit: key });
   } catch {}
   return true;
 }
 
 // Nothing new from teammates: ask the board whether this agent still has something to do right now.
 // Older boards have no /api/next (404): then just allow the stop.
-async function nudgeIfWork({ get, agent, nudgeFile }) {
-  let last = 0;
-  try { last = Number(fs.readFileSync(nudgeFile, 'utf8')) || 0; } catch {}
-  if (Date.now() - last < NUDGE_EVERY_MS) return; // nudged recently: allow the stop
+async function nudgeIfWork({ get, agent, state }) {
+  if (Date.now() - (Number(state.entry.nudge) || 0) < NUDGE_EVERY_MS) return; // nudged recently: allow the stop
   let next;
   try { next = await get(`/api/next?agent=${encodeURIComponent(agent)}`); } catch { return; }
   if (!next?.actionable) return;
-  fs.writeFileSync(nudgeFile, String(Date.now()));
+  state.save({ nudge: Date.now() });
   const reason =
     `The board has work for you${next.reason ? ` (${next.reason})` : ''}:\n${next.next_action || ''}\n\n` +
     'Do it now with the board MCP tools (call board_status if you need the details). ' +

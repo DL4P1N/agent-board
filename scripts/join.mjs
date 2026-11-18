@@ -85,7 +85,14 @@ const url = (() => {
   } catch {}
   return u.replace(/\/+$/, '');
 })();
-const token = args.token && args.token !== true ? args.token : pastedToken;
+const token = String(args.token || pastedToken).trim();
+// An agent token (agent-…, e.g. copied from a teammate's tool config) is used as it is: enough to connect this
+// laptop's agents, not to open the web board as a person. The presenter view's read-only token can't set anything up.
+const isAgentToken = token.startsWith('agent-');
+if (token.startsWith('view-')) {
+  console.error("✗ That is the presenter view's read-only token: it can't connect agents. Copy the join command from the web board (Setup → step 1) or from the host's npm start window.");
+  process.exit(1);
+}
 if (url && url !== String(args.url).trim().replace(/\/+$/, '')) console.log(`  • using the board address ${url}`);
 // How long an idle Claude keeps listening to the board before it stops (its Stop hook). 0 turns waiting off.
 const wait = args.wait === undefined || args.wait === true ? 120 : Math.max(0, Math.min(600, Number(args.wait) || 0));
@@ -130,7 +137,7 @@ const ask = async (q, def) => {
 };
 
 // Names already on this board that this laptop didn't set up before (so re-running join is fine).
-const agentToken = agentTokenFor(token);
+const agentToken = isAgentToken ? token : agentTokenFor(token);
 // This board's name (multi-board servers say it; older ones don't): shown when a tool switches boards.
 const boardName = boardState?.board?.name || boardState?.board?.slug || url;
 // What this laptop set up before, on any board. Each agent entry remembers its own board (url + token);
@@ -261,7 +268,7 @@ if (!args.repo) {
   for (let i = 0; i < 3 && !r && rl && /^required/.test(why) && !(projectUrl && !fs.existsSync(sibling)); i++) r = await ask(`A repo path is ${why}. Path to your copy of the project repo`, def);
   if (r) args.repo = r.replace(/^["']|["']$/g, '');
   else if (projectUrl && rl && !fs.existsSync(sibling)) {
-    const c = sh(`git clone ${q(projectUrl)} ${q(sibling)}`);
+    const c = run('git', ['clone', projectUrl, sibling]);
     if (c.status === 0) { ok(`cloned ${projectUrl} → ${sibling}`); args.repo = sibling; }
     else bad(`git clone failed: ${(c.stderr || '').trim().split('\n').pop()}`);
   }
@@ -270,7 +277,7 @@ rl?.close();
 const expandHome = (p) => String(p).replace(/^~(?=$|[\\/])/, os.homedir());
 const repo = args.repo ? path.resolve(expandHome(args.repo)) : null;
 if (repo && !fs.existsSync(repo)) fail(`repo path not found: ${repo}`);
-if (repo && sh(`git -C ${q(repo)} rev-parse --is-inside-work-tree`, true).status !== 0) {
+if (repo && run('git', ['-C', repo, 'rev-parse', '--is-inside-work-tree'], true).status !== 0) {
   bad(`${repo} is not a git repository. Agents branch, commit and push with git: clone the team's repo (or run git init and add an origin remote) first.`);
   if (multi) fail('Several tools on one laptop need a git repo (each gets its own worktree).');
 }
@@ -291,7 +298,7 @@ const plan = tools.map((t, i) => ({
 // person: who the agent belongs to, so all of this laptop's tools show under one person on the web board.
 const urlFor = (p) => `${url}/mcp?${new URLSearchParams({ agent: p.agent, token: agentToken, person: name, laptop: laptopId, ...(p.plan ? { plan: p.plan } : {}), ...(p.slots ? { slots: String(p.slots) } : {}) })}`;
 // The web board link signs the human in under the same name as their agents.
-const webLink = `${url}/?token=${encodeURIComponent(token)}&name=${encodeURIComponent(name)}`;
+const webLink = isAgentToken ? "ask the host for the link (this join used an agent token, which can't open the web board)" : `${url}/?token=${encodeURIComponent(token)}&name=${encodeURIComponent(name)}`;
 // The Claude Stop hook reads `agent`; `npm run doctor` reads `agents`.
 const claudeAgent = plan.find((p) => p.tool === 'claude')?.agent || name;
 // Each tool connects to one board at a time (one MCP server named "board"). Joining a board replaces
@@ -350,27 +357,28 @@ if (problems) process.exitCode = 1;
 // A separate checkout of the same repo, so two tools on one laptop never edit the same folder.
 function ensureWorktree(dir) {
   if (fs.existsSync(dir)) {
-    const top = sh(`git -C ${q(dir)} rev-parse --show-toplevel`, true);
+    const top = run('git', ['-C', dir, 'rev-parse', '--show-toplevel'], true);
     if (top.status === 0 && path.resolve(top.stdout.trim()) === path.resolve(dir)) {
       ok(`using existing worktree ${dir}`);
       return;
     }
     throw new Error(`${dir} already exists and isn't a git checkout. Move it away and re-run join.`);
   }
-  if (sh(`git -C ${q(repo)} rev-parse --is-inside-work-tree`, true).status !== 0) {
+  if (run('git', ['-C', repo, 'rev-parse', '--is-inside-work-tree'], true).status !== 0) {
     throw new Error(`${repo} is not a git repo, so a separate worktree can't be created.`);
   }
   // Detached: the agent creates its task branches from origin/main itself; main can only be checked out once.
-  const r = sh(`git -C ${q(repo)} worktree add --detach ${q(dir)}`, true);
+  const r = run('git', ['-C', repo, 'worktree', 'add', '--detach', dir], true);
   if (r.status !== 0) throw new Error(`git worktree add failed: ${(r.stderr || '').trim()}`);
   ok(`created its own worktree ${dir}`);
 }
 
 function setupClaude({ mcpUrl, dir }) {
   if (!onPath('claude')) throw new Error('`claude` not found on PATH. Install Claude Code, then re-run join.');
-  sh('claude mcp remove board -s user', true);
-  const r = sh(`claude mcp add --transport http -s user board ${q(mcpUrl)}`);
-  if (r.status !== 0) throw new Error(`claude mcp add failed. Run manually:\n  claude mcp add --transport http -s user board ${q(mcpUrl)}`);
+  run('claude', ['mcp', 'remove', 'board', '-s', 'user'], true);
+  const add = ['mcp', 'add', '--transport', 'http', '-s', 'user', 'board', mcpUrl];
+  const r = run('claude', add);
+  if (r.status !== 0) throw new Error(`claude mcp add failed. Run manually:\n  claude ${shown(add)}`);
   ok('connected Claude Code to the board (MCP server "board", all projects)');
 
   const cmdDir = path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'commands');
@@ -430,9 +438,10 @@ function setupCodex({ mcpUrl, dir }) {
   // Back up both files once, before anything (including `codex mcp add`) changes them.
   backupOnce(cfg);
   if (gitAllow) backupOnce(rulesPath);
-  sh('codex mcp remove board', true);
-  const r = sh(`codex mcp add board --url ${q(mcpUrl)}`);
-  if (r.status !== 0) throw new Error(`codex mcp add failed. Run manually:\n  codex mcp add board --url ${q(mcpUrl)}`);
+  run('codex', ['mcp', 'remove', 'board'], true);
+  const add = ['mcp', 'add', 'board', '--url', mcpUrl];
+  const r = run('codex', add);
+  if (r.status !== 0) throw new Error(`codex mcp add failed. Run manually:\n  codex ${shown(add)}`);
   // Pre-approve the board's tools so Codex doesn't stop to ask before every board call. (Only the
   // [mcp_servers.board] table Codex just wrote is touched; project trust is left to Codex's own prompt.)
   let toml = fs.readFileSync(cfg, 'utf8');
@@ -595,13 +604,13 @@ function installOurFile(src, dest, what) {
 // Files that contain the board token: keep them out of git without touching the repo's .gitignore.
 function keepOutOfGit(file, createdByUs, dir) {
   const rel = path.relative(dir, file).replace(/\\/g, '/');
-  const tracked = sh(`git -C ${q(dir)} ls-files --error-unmatch ${q(rel)}`, true).status === 0;
+  const tracked = run('git', ['-C', dir, 'ls-files', '--error-unmatch', rel], true).status === 0;
   if (tracked) {
     console.log(`  • ${rel} is tracked by git and now contains the board token. Don't commit that change.`);
     return;
   }
   // Worktrees share the main repo's info/exclude (it lives in the common git dir).
-  const gitDir = sh(`git -C ${q(dir)} rev-parse --git-common-dir`, true);
+  const gitDir = run('git', ['-C', dir, 'rev-parse', '--git-common-dir'], true);
   if (gitDir.status !== 0 || !createdByUs) return;
   const exclude = path.resolve(dir, gitDir.stdout.trim(), 'info', 'exclude');
   const cur = fs.existsSync(exclude) ? fs.readFileSync(exclude, 'utf8') : '';
@@ -611,14 +620,31 @@ function keepOutOfGit(file, createdByUs, dir) {
   }
 }
 
-function sh(cmd, quiet = false) {
-  return spawnSync(cmd, { shell: true, encoding: 'utf8', stdio: quiet ? 'pipe' : ['ignore', 'pipe', 'pipe'] });
+// Runs a program with its arguments as a list: no shell, so nothing in a path, URL or token is ever interpreted.
+// On Windows, tools installed with npm are .cmd files, which only run through cmd.exe: then each argument is
+// quoted for it (paths can't hold a double quote there; one in a URL is doubled).
+function run(bin, argv, quiet = false) {
+  const opts = { encoding: 'utf8', windowsHide: true, stdio: quiet ? 'pipe' : ['ignore', 'pipe', 'pipe'] };
+  if (process.platform === 'win32' && !/\.(exe|com)$/i.test(whereIs(bin)[0] || '')) {
+    return spawnSync([bin, ...argv].map((a) => `"${String(a).replace(/"/g, '""')}"`).join(' '), { ...opts, shell: true });
+  }
+  return spawnSync(bin, argv, opts);
+}
+// The matches on PATH, in the order the shell would pick them ([] when missing). Looked up once per program.
+function whereIs(bin) {
+  const found = (whereIs.found ??= new Map());
+  if (!found.has(bin)) {
+    const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', [bin], { encoding: 'utf8', windowsHide: true });
+    found.set(bin, r.status === 0 ? (r.stdout || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean) : []);
+  }
+  return found.get(bin);
 }
 function onPath(bin) {
-  return sh(process.platform === 'win32' ? `where ${bin}` : `command -v ${bin}`, true).status === 0;
+  return whereIs(bin).length > 0;
 }
-function q(s) {
-  return `"${String(s).replace(/"/g, '\\"')}"`;
+// How a command looks when it's printed for a person to run by hand.
+function shown(argv) {
+  return argv.map((a) => (/[\s"'$&|<>()]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)).join(' ');
 }
 function readJson(p, def) {
   try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return def; }
@@ -633,14 +659,14 @@ function fail(msg) { console.error(`✗ ${msg}`); process.exit(1); }
 
 // Your git name's first word, else nothing (the OS user name is often a shared or made-up account).
 function defaultName() {
-  const r = sh('git config user.name', true);
+  const r = run('git', ['config', 'user.name'], true);
   const raw = (r.stdout || '').trim().split(/\s+/)[0] || '';
   return raw.toLowerCase().replace(/[^\w.-]/g, '');
 }
 
 // The git repo of the folder join was started from (npm sets INIT_CWD), unless that is this board tool's own folder.
 function hereRepo() {
-  const r = sh(`git -C ${q(process.env.INIT_CWD || process.cwd())} rev-parse --show-toplevel`, true);
+  const r = run('git', ['-C', process.env.INIT_CWD || process.cwd(), 'rev-parse', '--show-toplevel'], true);
   if (r.status !== 0 || !r.stdout.trim()) return '';
   const top = path.resolve(r.stdout.trim());
   const norm = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
@@ -660,15 +686,30 @@ function closestTool(word) {
   return best && best[1] <= 3 ? best[0] : '';
 }
 
+// --key value or --key=value. These always take the next argument as their value, even when it starts with
+// "-" (a token can): --url --token --name --repo --tool --plan. --slots and --wait take a number (alone, --wait
+// keeps its default). The rest are on/off flags.
 function parseArgs(argv) {
+  const VALUE = ['url', 'token', 'name', 'repo', 'tool', 'plan'];
+  const NUMBER = ['slots', 'wait'];
+  const FLAGS = ['shared', 'no-git-allow', 'yes', 'offline', 'verbose'];
   const out = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (!a.startsWith('--')) continue;
-    const k = a.slice(2);
-    const v = argv[i + 1];
-    if (v === undefined || v.startsWith('--')) out[k] = true;
-    else { out[k] = v; i++; }
+    if (!a.startsWith('--')) { console.error(`  • ignoring "${a}" (options start with --)`); continue; }
+    const eq = a.indexOf('=');
+    const k = eq > 0 ? a.slice(2, eq) : a.slice(2);
+    const inline = eq > 0 ? a.slice(eq + 1) : undefined;
+    if (VALUE.includes(k)) {
+      const v = inline ?? argv[++i];
+      if (v === undefined) { console.error(`✗ --${k} needs a value, e.g. --${k} ${k === 'url' ? 'http://HOST:4000' : k.toUpperCase()}`); process.exit(1); }
+      out[k] = v;
+    } else if (NUMBER.includes(k)) {
+      if (inline !== undefined) out[k] = inline;
+      else if (argv[i + 1] !== undefined && !argv[i + 1].startsWith('--')) out[k] = argv[++i];
+      else out[k] = true;
+    } else if (FLAGS.includes(k)) out[k] = inline === undefined ? true : !/^(0|false|no|off)$/i.test(inline);
+    else console.error(`  • ignoring unknown option --${k}`);
   }
   return out;
 }

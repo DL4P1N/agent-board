@@ -16,7 +16,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { agentTokenFor } from '../src/tokens.js';
+import { agentTokenFor, newBoardToken } from '../src/tokens.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = parseArgs(process.argv.slice(2));
@@ -194,7 +194,7 @@ async function main() {
   log("  uses your existing ~/.claude and ~/.codex settings (nothing is written to them); the board's Stop hook isn't installed, so it isn't tested here");
   const proj = makeProject(tmp);
   const port = await freePort();
-  const token = crypto.randomBytes(12).toString('base64url');
+  const token = newBoardToken();
   const agentToken = agentTokenFor(token);
   const board = await startBoard(tmp, port, token);
   // Tokens are only shown on a real run (a throwaway board on 127.0.0.1, but dry-run output gets pasted around).

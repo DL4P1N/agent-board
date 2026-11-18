@@ -122,15 +122,24 @@ await unmark('ana');
 await runHook(same);
 const n2 = (await state()).events.filter((e) => /hit its usage limit/.test(e.text)).length;
 check('hook: the same notice is not reported twice', n1 > before && n2 === n1 && !(await agentP('ana')).limited, `${before} → ${n1} → ${n2}`);
-// Hook state saved before the rename to Agent Board (claude-board-cursor-…) is carried over, not lost:
-// with its mark under the old name, the same notice is still not reported again.
-const ours = fs.readdirSync(tmp).filter((f) => f.startsWith('agent-board-cursor-ana-'));
-for (const f of ours) fs.renameSync(path.join(tmp, f), path.join(tmp, f.replace(/^agent-board-/, 'claude-board-')));
-await runHook(same);
-const n3 = (await state()).events.filter((e) => /hit its usage limit/.test(e.text)).length;
-check('hook: state files from before the rename (claude-board-cursor-…) are carried over',
-  ours.length > 0 && n3 === n1 && ours.every((f) => fs.existsSync(path.join(tmp, f))) && !fs.readdirSync(tmp).some((f) => f.startsWith('claude-board-cursor-')),
-  `${ours.join(',')} ${n1} → ${n3}`);
+// The hook keeps its state in one file per user (~/.agent-board-hook.json, one entry per board + agent),
+// not in loose files in the temp folder; entries unused for 30 days are dropped when it saves.
+const stateFile = path.join(tmp, '.agent-board-hook.json');
+let hookState = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+const anaKey = Object.keys(hookState).find((k) => k.endsWith('|ana'));
+check('hook: its state is one entry per board + agent in ~/.agent-board-hook.json, no files in the temp folder',
+  !!anaKey && Number.isFinite(hookState[anaKey].cursor) && !!hookState[anaKey].limit && !fs.readdirSync(tmp).some((f) => /cursor/.test(f)), JSON.stringify(hookState));
+hookState['0123456789abcdef|old-agent'] = { cursor: 5, seen: Date.now() - 31 * 24 * 3600e3 };
+hookState['0123456789abcdef|recent-agent'] = { cursor: 7, seen: Date.now() - 2 * 24 * 3600e3 };
+fs.writeFileSync(stateFile, JSON.stringify(hookState));
+await runHook([]);
+hookState = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+// The board leaves out the agent's own events; the hook also leaves out its own subagents' (ana/<name>).
+await ana('post', { text: 'note from my own subagent', as: 'helper' });
+await ben('post', { text: 'note from ben' });
+h = await runHook([]);
+check('hook: its own subagents\' posts don\'t wake it, a teammate\'s does', /note from ben/.test(h.out) && !/note from my own subagent/.test(h.out), h.out);
+check('hook: entries unused for 30 days are dropped, newer ones kept', !hookState['0123456789abcdef|old-agent'] && !!hookState['0123456789abcdef|recent-agent'] && !!hookState[anaKey], Object.keys(hookState).join(','));
 
 // ================= 2b. hook: only Claude Code's own notice, only as the last assistant entry =================
 // Review finding: ordinary work text used to match ("rate limit", "resets 3 …", "usage limit banner").

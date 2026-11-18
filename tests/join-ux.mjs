@@ -176,5 +176,29 @@ check('Claude: the git rules are still written', settings.permissions.allow.incl
 const verbose = run(l10.env, ['--url', board.base, '--token', TOKEN, '--name', 'gus', '--tool', 'claude', '--plan', 'pro', '--repo', repo, '--wait', '0', '--verbose']);
 check('--verbose lists the git/gh commands and the force-push note', /git fetch, switch, .*rev-parse, remote; gh pr, run, auth status, repo view\. Force pushes are discouraged, not prevented/.test(verbose.out), (verbose.out.match(/^ {4}git .*$/m) || [''])[0]);
 
+// ---- the command line: values that look like options, --key=value, agent and viewer tokens, odd paths ----
+// About 1 board token in 4000 used to start with "--" (base64url), and join read it as the next option.
+const dash = await startBoard({ token: '--dash-tok-1234567' });
+const l11 = envFor('dashes');
+const dashed = run(l11.env, ['--url', dash.base, '--token', '--dash-tok-1234567', '--name', 'hal', ...base]);
+check('a token that starts with "--" is taken as the token', dashed.status === 0 && /You're in as "hal"/.test(dashed.out), dashed.out.slice(-400));
+const eqs = run(l11.env, [`--url=${dash.base}`, '--token=--dash-tok-1234567', '--name=hal', '--tool=other', '--wait=0']);
+check('--key=value works for every option', eqs.status === 0 && /You're in as "hal"/.test(eqs.out), eqs.out.slice(-400));
+const agentTok = JSON.parse(fs.readFileSync(path.join(l11.home, '.agent-board.json'), 'utf8')).token;
+const l12 = envFor('agenttok');
+const withAgent = run(l12.env, ['--url', dash.base, '--token', agentTok, '--name', 'ivy', ...base]);
+const ivyCfg = JSON.parse(fs.readFileSync(path.join(l12.home, '.agent-board.json'), 'utf8'));
+check('an agent token is used as it is (not derived again): the agents connect', withAgent.status === 0 && /^agent-/.test(agentTok) && ivyCfg.token === agentTok && ivyCfg.agents.every((a) => a.token === agentTok) && /ask the host for the link/.test(withAgent.out), withAgent.out.slice(-400));
+const viewTok = (await (await fetch(`${dash.base}/api/state`, { headers: { Authorization: `Bearer ${dash.token}` } })).json()).setup.viewer_token;
+const withView = run(envFor('viewtok').env, ['--url', dash.base, '--token', viewTok, '--name', 'jo', ...base]);
+check('the presenter view\'s token is refused with a clear message', withView.status === 1 && /read-only token: it can't connect agents/.test(withView.out), withView.out.slice(-300));
+await dash.stop();
+// Commands run without a shell: a repo path with spaces, & and $(…) is just a path.
+const oddRepo = path.join(tmp, 'odd $(touch PWNED) & dir');
+git('init', '-q', oddRepo);
+git('-C', oddRepo, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'init');
+const odd = run(envFor('oddpath', { PATH: l10.env.PATH }).env, ['--url', board.base, '--token', TOKEN, '--name', 'kit', '--tool', 'claude,other', '--plan', 'claude=pro', '--repo', oddRepo, '--wait', '0']);
+check('a repo path with spaces, & and $(…) works and runs nothing', /connected Claude Code to the board/.test(odd.out) && /created its own worktree/.test(odd.out) && fs.existsSync(`${oddRepo}-other`) && !fs.existsSync(path.join(ROOT, 'PWNED')) && !fs.existsSync(path.join(tmp, 'PWNED')) && !fs.existsSync(path.join(oddRepo, 'PWNED')), odd.out.slice(-500));
+
 try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
 await finish(R, { board });
