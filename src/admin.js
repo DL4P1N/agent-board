@@ -20,7 +20,7 @@ export function createAdminRouter({ registry, live, adminToken }) {
     const b = registry.create(req.body?.name, req.body?.slug);
     try { startBoard(b); } catch (e) {
       // Don't leave a "live" board that nothing serves.
-      registry.data.boards = registry.data.boards.filter((x) => x.slug !== b.slug); registry.save();
+      registry.forget(b.slug);
       failures.delete(b.slug);
       throw e;
     }
@@ -37,7 +37,7 @@ export function createAdminRouter({ registry, live, adminToken }) {
     const prev = { status: before.status, archived_at: before.archived_at };
     const b = registry.restore(req.params.slug);
     try { startBoard(b); } catch (e) {
-      const x = registry.get(b.slug); x.status = prev.status; if (prev.archived_at) x.archived_at = prev.archived_at; registry.save();
+      registry.setStatus(b.slug, prev);
       failures.delete(b.slug);
       throw e;
     }

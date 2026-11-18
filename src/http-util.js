@@ -6,7 +6,8 @@ import { normName } from './board.js';
 export function tokenFrom(req) {
   const h = req.get('authorization') || '';
   if (h.toLowerCase().startsWith('bearer ')) return h.slice(7).trim();
-  return req.get('x-board-token') || req.query.token || '';
+  const t = req.get('x-board-token') || req.query.token || '';
+  return typeof t === 'string' ? t : '';
 }
 export function safeEq(a, b) {
   const x = Buffer.from(String(a));
@@ -18,10 +19,28 @@ export function agentFrom(req) {
   // Names are case-insensitive: "Dana" and "dana" are one person.
   return normName(a).replace(/[^\w.\-/]/g, '').slice(0, 64) || 'anonymous';
 }
+// Send this answer gzipped? Only to browsers that accept it (every browser's User-Agent starts "Mozilla/"): Node's
+// fetch accepts gzip too, but on Windows a script that exits soon after reading a gzipped answer can crash in
+// libuv, and our scripts (join, doctor, the tests) don't need it.
+export const wantsGzip = (req) => /^Mozilla\//.test(req.get('user-agent') || '') && /\bgzip\b/i.test(req.get('accept-encoding') || '');
+
+// join's laptop id (?laptop=, X-Laptop, a body field): letters, digits, _ and -, at most 32; '' when missing.
+export const laptopParam = (v) => String(v || '').replace(/[^\w-]/g, '').slice(0, 32);
+
+// A bug or a database error, not a refusal meant for the caller: its text (SQL, property names) stays in the
+// server's window. A TypeError is nearly always a malformed request (a field missing or of the wrong type): 400.
+export function internalError(res, e) {
+  if (!(e instanceof TypeError || e instanceof ReferenceError || e instanceof RangeError || /^ERR_/.test(String(e?.code || '')))) return false;
+  console.error('board request failed:', e);
+  if (e instanceof TypeError) res.status(400).json({ error: 'The request is missing a field or has one of the wrong type.' });
+  else res.status(500).json({ error: 'Something went wrong on the board server (the details are in its window).' });
+  return true;
+}
 export const h = (fn) => async (req, res) => {
   // A handler may set its own error status (e.g. 403) before throwing; otherwise 400.
   try { res.json(await fn(req, res)); } catch (e) {
     if (res.headersSent) return;
+    if (!e?.status && internalError(res, e)) return;
     res.status(e?.status || (res.statusCode >= 400 ? res.statusCode : 400)).json({ error: String(e?.message || e) });
   }
 };

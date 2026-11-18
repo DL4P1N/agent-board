@@ -66,10 +66,15 @@ export function isPrivateAddress(ip) {
   return (g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xffc0) === 0xfec0 || (g[0] & 0xff00) === 0xff00;
 }
 
+// Webhooks to this computer (a relay on the host) only when the host turns them on with BOARD_WEBHOOK_LOCALHOST=1:
+// otherwise anyone with the board token could probe the host's local ports through "Send a test".
+const localAllowed = () => process.env.BOARD_WEBHOOK_LOCALHOST === '1';
+
 // The URL's shape: https (http only for localhost), and not a private address written out as an IP.
 export function checkNotifyUrl(url) {
   let u; try { u = new URL(url); } catch { throw new Error('That isn\'t a valid URL. Paste the webhook URL from Slack, Discord or ntfy.'); }
   const local = LOCAL_HOSTS.includes(u.hostname);
+  if (local && !localAllowed()) throw new Error('The webhook URL points at this computer (localhost). Use the public webhook URL from Slack, Discord or ntfy.');
   if (u.protocol !== 'https:' && !(u.protocol === 'http:' && local)) throw new Error('The webhook URL must start with https:// (http only for localhost).');
   if (!local && isPrivateAddress(u.hostname)) throw new Error('The webhook URL points at a private network address. Use the public webhook URL from Slack, Discord or ntfy.');
   return u.toString();

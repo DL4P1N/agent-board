@@ -1,13 +1,19 @@
 // GitHub through the host's `gh`: pull request status for tasks in review, and CI on the project's main branch.
 // The text helpers and the gh calls are shared by all boards; startGithubPolling runs the polls of one board.
-import { spawnSync, execFile } from 'node:child_process';
+import { execFile } from 'node:child_process';
 
-// `gh auth status` is checked with a timeout (a slow network must not stall startup), and retried every
-// 10 minutes until it works; each board then polls its PRs and main's CI every GH_POLL_MS.
-const ghReady = () => spawnSync('gh', ['auth', 'status'], { stdio: 'ignore', timeout: 8e3, windowsHide: true }).status === 0;
-let ghOk = false; let ghCheckedAt = 0;
-export function ghAvailable() {
-  if (!ghOk && Date.now() - ghCheckedAt > 10 * 60e3) { ghCheckedAt = Date.now(); ghOk = ghReady(); }
+// `gh auth status` is checked in the background with a timeout (a slow network must not stall any board), and
+// retried every 10 minutes until it works; each board then polls its PRs and main's CI every GH_POLL_MS.
+const ghReady = () => new Promise((resolve) => {
+  execFile('gh', ['auth', 'status'], { timeout: 8e3, windowsHide: true }, (err) => resolve(!err));
+});
+let ghOk = false; let ghCheckedAt = 0; let ghChecking = null;
+export async function ghAvailable() {
+  if (!ghOk && !ghChecking && Date.now() - ghCheckedAt > 10 * 60e3) {
+    ghCheckedAt = Date.now();
+    ghChecking = ghReady().then((ok) => { ghOk = ok; ghChecking = null; });
+  }
+  if (ghChecking) await ghChecking;
   return ghOk;
 }
 const gh = (args) => new Promise((resolve) => {
@@ -154,7 +160,7 @@ export function startGithubPolling({ board, announced, rawSetting, putSetting, i
     const tick = async () => {
       if (polling || isClosed()) return; polling = true;
       try {
-        if (ghAvailable()) {
+        if (await ghAvailable()) {
           await pollPrs();
           if (Date.now() - ciAt >= CI_POLL_MS) { ciAt = Date.now(); if (await pollMainCi()) presence(); }
         }

@@ -7,7 +7,7 @@ export function startAnnouncements({ board, announced, every, later, forget }) {
   // Remembered in the board's data, so a restart (or `--watch` reload) doesn't announce twice;
   // a different freeze time (to the nearest 5 min) is announced again.
   const flagKey = (k, t) => `_announced_${k}_${Math.round(t.freezeAt / 300e3)}`;
-  const announceTime = () => {
+  const check = () => {
     if (board.closed) return;
     const t = timeInfo(board.getSettings());
     if (!t.deadline) return;
@@ -29,6 +29,8 @@ export function startAnnouncements({ board, announced, every, later, forget }) {
       board.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all Demo time (${t.deadlineLabel}). Wrap up: push and merge what's finished, release what isn't with a note, and post a short status in general.` });
     }
   };
+  // Called from timers and setImmediate too: an error is logged, never thrown (it would stop every board).
+  const announceTime = () => { try { check(); } catch (e) { console.error('feature-freeze announcement failed:', e); } };
   every(announceTime, 20e3);
   // Also check right at the warning, the freeze and the demo time, so nobody waits for the next tick.
   // Rescheduled only when the deadline or freeze time actually changes (other settings edits leave them

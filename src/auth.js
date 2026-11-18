@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { agentTokenFor, viewerTokenFor } from './tokens.js';
+import { agentTokenFor, viewerTokenFor, newBoardToken, writeTokenFile } from './tokens.js';
 import { boardToken } from './boards.js';
 import { tokenFrom, safeEq } from './http-util.js';
 
@@ -29,6 +29,8 @@ export function createAuth({ dir, envToken }) {
 
   function auth(req, res, next) {
     const t = tokenFrom(req);
+    // No token never matches (a board token can't be empty either: see boardToken).
+    if (!t || !TOKEN) return res.status(401).json({ error: 'bad or missing token' });
     if (safeEq(t, TOKEN)) req.role = 'human';
     else if (safeEq(t, AGENT_TOKEN)) req.role = 'agent';
     else if (safeEq(t, VIEW_TOKEN)) req.role = 'viewer';
@@ -54,8 +56,8 @@ export function createAuth({ dir, envToken }) {
 
   // A new board token (the old ones are retired). Returns it; the caller announces it and closes live streams.
   function rotate() {
-    const t = crypto.randomBytes(12).toString('base64url');
-    fs.writeFileSync(path.join(dir, 'token'), t);
+    const t = newBoardToken();
+    writeTokenFile(path.join(dir, 'token'), t);
     retired = [...retired, ...[TOKEN, AGENT_TOKEN, VIEW_TOKEN].map(tokenHash)].slice(-60);
     try { fs.writeFileSync(retiredFile, JSON.stringify(retired)); } catch {}
     TOKEN = t; AGENT_TOKEN = agentTokenFor(t); VIEW_TOKEN = viewerTokenFor(t);

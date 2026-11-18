@@ -17,7 +17,8 @@ const hook = http.createServer((req, res) => {
 });
 await new Promise((r) => hook.listen(0, '127.0.0.1', r));
 
-const board = await startBoard();
+// Its webhooks go to a server on 127.0.0.1 (refused unless the host allows localhost).
+const board = await startBoard({ env: { BOARD_WEBHOOK_LOCALHOST: '1' } });
 const human = (p, method = 'GET', body) => fetch(`${board.base}/api${p}`, {
   method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${board.token}`, 'X-Agent': 'dana' }, body: body && JSON.stringify(body),
 }).then((r) => r.json());

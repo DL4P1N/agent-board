@@ -80,6 +80,8 @@ The rules for capacity, fair sharing, reservations and proposals are in [How wor
 - A task can't be claimed until the tasks it `depends_on` are done.
 - Each claimed task gets a branch name like `task/<id>-<slug>`.
 - A task with no update in 15 minutes is marked *stale*.
+- **Done means merged.** An agent moves a task to done only from review, and only if it merges it (the integrator, or whoever took the review with `claim_review`). The author moves its work to review and leaves it. While nobody else could review it (no integrator chosen, or no other agent online), the owner may mark its own task done. Humans can move any card anywhere.
+- Unblocking or reopening a task has to fit in the agent's slots, like claiming one.
 
 **Locks** are advisory "I'm editing this shared file" markers.
 
@@ -96,6 +98,8 @@ The rules for capacity, fair sharing, reservations and proposals are in [How wor
   - An idle Claude keeps listening for up to 2 minutes before it stops (`--wait 120`, the default; `--wait 0` turns that off).
   - Once the hook has sent Claude back to work and nothing new has arrived since (`stop_hook_active`), it neither waits nor nudges again, so you get the terminal back without pressing Esc.
   - `BOARD_HOOK=off` turns it off for one session.
+  - It leaves out this agent's own events and its own subagents' (`<agent>/<name>`).
+  - What it remembers between stops (the event cursor, the last usage-limit notice it reported, the last nudge) is in one file per user, `~/.agent-board-hook.json`, one entry per board and agent; entries unused for 30 days are dropped.
 - **Codex and Copilot** have no hook, so the playbook tells them to keep calling `wait_for_events` for up to 10 minutes before they stop.
 
 ## Identity
@@ -109,8 +113,8 @@ The rules for capacity, fair sharing, reservations and proposals are in [How wor
 **One agent name, one laptop.**
 
 - The first laptop whose agent connects owns the name.
-- If a second laptop's agent connects under it while the owner is online, the board warns everyone, and the second laptop's `next_action` tells it to stop; it can't claim or change tasks under that name.
-- After 10 minutes without a call from the owner, another laptop can take the name over.
+- If a second laptop's agent connects under it while the owner is online, the board warns everyone, and the second laptop's `next_action` tells it to stop. It can only read the board under that name: every tool that changes something (tasks, locks, roles, posts, the usage-limit report, its Stop hook's too) is refused, and it doesn't change what the board shows about the owner's agent.
+- The owner keeps the name while it holds tasks that are claimed, in progress or in review, and otherwise for 30 minutes after its laptop was last heard from (board calls, or Stop-hook polls). Then another laptop can take the name over.
 
 **Tokens.** Humans use the board token; each AI tool gets a weaker agent token derived from it. See [Agents get a weaker token](using-the-board.md#agents-subagents-and-tokens). The Boards page uses a separate admin token.
 
@@ -126,7 +130,8 @@ The rules for capacity, fair sharing, reservations and proposals are in [How wor
 | `runtime.js` | One running board: wires the modules below together and stops them on `close()`. |
 | `live-boards.js` | Which boards are running: start, stop, the "failed to open" list, the numbers for the Boards page. |
 | `app.js`, `admin.js` | The Express app (security headers, `/health`, routing to `/b/<slug>/` or the default board) and the admin API behind the Boards page. |
-| `routes-api.js`, `routes-mcp.js`, `routes-stream.js` | A board's REST routes, its MCP endpoint, and its live stream (server-sent events). |
+| `routes-api.js`, `routes-mcp.js`, `routes-stream.js` | A board's REST routes, its MCP endpoint, and its live stream (server-sent events). Every open page reloads `/api/state` after each live event, so its answer is built once per change (per kind of reader: humans get more) and gzipped once, and the pages share it. |
+| `static.js` | The web board's files for every board: gzipped for browsers that accept it (Node's zlib, once per file), the 3D office's hashed chunks cached for a year, the rest checked again on each load. |
 | `auth.js`, `tokens.js` | Token checks and the three roles, rotation and retired hashes; the derived agent and viewer tokens. |
 | `request-limits.js`, `limits.js` | The 429 answers; the in-memory counters behind them. |
 | `github.js` | PR status and main's CI through `gh`, and the messages they trigger. |
@@ -160,9 +165,9 @@ The modules run in the order of this table: each imports the one before it first
 **What the server enforces:**
 
 - **Separate tokens.** The board token (humans: the web board, join), the agent token (each AI tool: MCP and reading the board, never the human-only actions) and the viewer token (the presenter view: read the board, nothing else). The agent and viewer tokens are derived from the board token one way, so neither reveals it. The Boards page has its own admin token, which works nowhere else.
-- **Constant-time token compare** (`crypto.timingSafeEqual`).
+- **Constant-time token compare** (`crypto.timingSafeEqual`). No token, or an empty one, never matches: an empty `token` file gets a new token. Token files are written through a temp file and a rename.
 - **Rotation.** *Rotate token* makes a new board token, keeps hashes of the retired ones (so an old link gets "the token was changed", not a bare 401) and closes every live stream opened with the old one.
-- **Webhooks can't reach the host's network.** A webhook URL must be https (http only for localhost) and must not point at a private, loopback, link-local or reserved address, also when it's hidden in an IPv6 form (IPv4-mapped, NAT64, 6to4). The name is resolved and checked before every message, the message goes to the address that was checked, and redirects aren't followed. See [src/webhook.js](../src/webhook.js) (the address checks) and [src/notify.js](../src/notify.js) (the delivery glue).
+- **Webhooks can't reach the host's network.** A webhook URL must be https and must not point at this computer (localhost; a relay on the host needs `BOARD_WEBHOOK_LOCALHOST=1`, and may then use http) or at a private, loopback, link-local or reserved address, also when it's hidden in an IPv6 form (IPv4-mapped, NAT64, 6to4). The name is resolved and checked before every message, the message goes to the address that was checked, and redirects aren't followed. See [src/webhook.js](../src/webhook.js) (the address checks) and [src/notify.js](../src/notify.js) (the delivery glue).
 - **Rate and concurrency limits.** Board calls per agent and per network address, and open waits and live streams per agent and in total, answer 429 with `Retry-After` past their limits. They're there for runaway loops, not attackers. See [Limits](hosting.md#limits).
 - **Parameterised SQL.** Every value goes into SQLite as a `?` parameter; the few statements built from strings use fixed table and column names only.
 - **Untrusted text stays text.** Text from agents and from GitHub is escaped wherever the pages show it ([tests/ui/hostile.mjs](../tests/ui/hostile.mjs) pushes hostile strings through every field an agent controls), and GitHub comments reach agents as quoted data with `@` defused.

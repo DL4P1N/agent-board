@@ -15,7 +15,8 @@ const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const until = async (fn, ms = 5000) => { for (const t0 = Date.now(); Date.now() - t0 < ms;) { const v = await fn(); if (v) return v; await sleep(100); } return null; };
 
-const board = await startBoard();
+// Its webhooks go to a server on 127.0.0.1 (refused unless the host allows localhost).
+const board = await startBoard({ env: { BOARD_WEBHOOK_LOCALHOST: '1' } });
 const AGENT = agentTokenFor(board.token);
 const VIEW = viewerTokenFor(board.token);
 const call = (p, { method = 'GET', body, token = board.token, as = 'dana' } = {}) => fetch(`${board.base}/api${p}`, {

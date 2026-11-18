@@ -3,11 +3,12 @@
 // Run all suites with: npm test
 import fs from 'node:fs';
 import http from 'node:http';
+import zlib from 'node:zlib';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { startBoard, finish, agent, ROOT } from './helpers.mjs';
-import { agentTokenFor } from '../src/tokens.js';
+import { agentTokenFor, newBoardToken } from '../src/tokens.js';
 
 const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' && !ok ? ' — ' + x : ''}`);
@@ -28,7 +29,7 @@ await new Promise((r) => hook.listen(0, '127.0.0.1', r));
 const HOOK = `http://localhost:${hook.address().port}`;
 const json = (g) => { try { return JSON.parse(g.body); } catch { return null; } };
 
-const board = await startBoard({ env: { BOARD_BACKUP_SECONDS: '1' } });
+const board = await startBoard({ env: { BOARD_BACKUP_SECONDS: '1', BOARD_WEBHOOK_LOCALHOST: '1' } });
 const call = (p, method = 'GET', body, token = board.token) => fetch(`${board.base}/api${p}`, {
   method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Agent': 'dana' }, body: body && JSON.stringify(body),
 }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }));
@@ -160,7 +161,7 @@ check('rotation refused when the token comes from BOARD_TOKEN', r.status === 400
 check('agents can\'t rotate the token', (await call('/token/rotate', 'POST', undefined, AGENT)).status === 403);
 await board.stop();
 
-const b2 = await startBoard({ env: { BOARD_TOKEN: '', BOARD_BACKUP_MINUTES: '0' } });
+const b2 = await startBoard({ env: { BOARD_TOKEN: '', BOARD_BACKUP_MINUTES: '0', BOARD_WEBHOOK_LOCALHOST: '1' } });
 const oldTok = fs.readFileSync(path.join(b2.dataDir, 'token'), 'utf8').trim();
 const c2 = (p, method = 'GET', body, token) => fetch(`${b2.base}/api${p}`, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Agent': 'dana' }, body: body && JSON.stringify(body) }).then(async (x) => ({ status: x.status, body: await x.json().catch(() => null) }));
 r = await c2('/token/rotate', 'POST', undefined, oldTok);
@@ -240,6 +241,50 @@ check('everyone is told to re-run join', st2.body.events.some((e) => /token was 
   });
   check('rotating the token closes open live streams', streamEnded);
 }
+// ================= tokens, compression and caching =================
+// An empty token file gets a new token: an empty one used to let in any request that sent no token.
+fs.writeFileSync(path.join(b2.dataDir, 'token'), '');
+await b2.relaunch();
+const tok3 = fs.readFileSync(path.join(b2.dataDir, 'token'), 'utf8').trim();
+check('an empty token file gets a new token, and no token is refused', tok3.length >= 16 && (await fetch(`${b2.base}/api/state`)).status === 401 && (await fetch(`${b2.base}/api/state?token=`)).status === 401, tok3);
+check('new board tokens never start with "-" or "_" (they would read as an option on a command line)', Array.from({ length: 4000 }, newBoardToken).every((t) => /^[A-Za-z0-9]/.test(t)));
+// fetch decompresses by itself, so these use plain http.
+const raw = (p, headers = {}) => new Promise((resolve, reject) => {
+  http.get(`${b2.base}${p}`, { headers }, (res) => {
+    const parts = []; res.on('data', (d) => parts.push(d));
+    res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(parts) }));
+  }).on('error', reject);
+});
+const auth3 = { Authorization: `Bearer ${tok3}`, 'X-Agent': 'dana' };
+const sz = await raw('/api/state', { ...auth3, 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0' });
+const sp = await raw('/api/state', auth3);
+check('/api/state is gzipped when the browser accepts it, the same JSON as without', sz.headers['content-encoding'] === 'gzip' && zlib.gunzipSync(sz.body).equals(sp.body) && !sp.headers['content-encoding'] && Array.isArray(JSON.parse(sp.body).tasks) && /json/.test(sp.headers['content-type']), JSON.stringify(sz.headers));
+// Node's fetch accepts gzip too, but a script that exits right after a gzipped answer can crash on Windows.
+check('a script (gzip accepted, not a browser) gets it uncompressed', !(await raw('/api/state', { ...auth3, 'Accept-Encoding': 'gzip, deflate' })).headers['content-encoding'] && !(await raw('/', { 'Accept-Encoding': 'gzip, deflate' })).headers['content-encoding']);
+await c2('/messages', 'POST', { text: 'cache check' }, tok3);
+check('a new event is in the next /api/state at once (the shared answer is rebuilt)', JSON.parse((await raw('/api/state', auth3)).body).events.some((e) => e.text === 'cache check'));
+const viewerTok = JSON.parse(sp.body).setup?.viewer_token;
+const vst = JSON.parse((await raw('/api/state', { Authorization: `Bearer ${viewerTok}` })).body);
+check('the presenter view still gets no setup and no direct messages (one shared answer per kind of reader)', !!viewerTok && !vst.setup && !vst.direct && Array.isArray(vst.tasks));
+const page = await raw('/', { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0' });
+const pagePlain = await raw('/');
+check('the web board page is gzipped when asked, revalidated on each load', page.headers['content-encoding'] === 'gzip' && zlib.gunzipSync(page.body).equals(pagePlain.body) && /max-age=0/.test(page.headers['cache-control']) && /Accept-Encoding/i.test(page.headers.vary || ''), JSON.stringify(page.headers));
+check('an unchanged page answers 304', (await raw('/', { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0', 'If-None-Match': page.headers.etag })).status === 304);
+const chunk = fs.readdirSync(path.join(ROOT, 'public', 'office')).find((f) => /^OfficeScene-[\w-]{8}\.js$/.test(f));
+const cz = await raw(`/office/${chunk}`, { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0' });
+const cp = await raw(`/office/${chunk}`);
+check('the 3D office\'s hashed chunks are cached for a year, gzipped or not', cz.status === 200 && cz.headers['content-encoding'] === 'gzip' && /immutable/.test(cz.headers['cache-control']) && /immutable/.test(cp.headers['cache-control'] || ''), `${chunk} ${cz.headers['cache-control']} ${cp.headers['cache-control']}`);
+check('office/embed.js (no hash in its name) is revalidated', /max-age=0/.test((await raw('/office/embed.js', { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0' })).headers['cache-control']));
+const slashless = await raw('/b/main', { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0' });
+check('/b/<board> without its slash still redirects to /b/<board>/', slashless.status >= 300 && slashless.status < 400 && /\/b\/main\/$/.test(slashless.headers.location || ''), `${slashless.status} ${slashless.headers.location}`);
+check('hidden files and paths outside public/ are not served', (await raw('/../package.json', { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0' })).status === 404 && (await raw('/%2e%2e/package.json', { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0' })).status !== 200);
+// A JSON-RPC batch would get several wait_for_events past the open-waits limit in one request.
+const wait = (id) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'wait_for_events', arguments: { timeout_s: 1 } } });
+const batch = await fetch(`${b2.base}/mcp?agent=batcher&token=${agentTokenFor(tok3)}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify([wait(1), wait(2), wait(3)]) });
+check('MCP refuses JSON-RPC batches (400)', batch.status === 400 && /Batched requests/.test((await batch.json().catch(() => ({})))?.error?.message || ''), batch.status);
+// A malformed request gets a plain answer, not the server's internals (here: "Cannot read properties of undefined").
+r = await c2('/locks/release', 'POST', {}, tok3);
+check('a malformed request: 400 without internal details', r.status === 400 && /missing a field/.test(r.body?.error || '') && !/properties of undefined/.test(r.body?.error || ''), JSON.stringify(r));
 await b2.stop();
 // A clean stop removes board.pid. On Windows the test's stop kills the process outright (no exit
 // handlers), which leaves a stale file naming a dead process; restore ignores those.

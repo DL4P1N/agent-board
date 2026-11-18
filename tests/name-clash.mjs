@@ -50,6 +50,28 @@ r = await benB('release_task', { id: t1.id });
 check('second laptop: release refused', /Another laptop/.test(r.error || ''), JSON.stringify(r));
 r = await benB('claim_role', { role: 'planner' });
 check('second laptop: role claim refused', /Another laptop/.test(r.error || ''), JSON.stringify(r));
+// Every tool that acts is refused, not only claims and task changes (the owner is the planner here, so
+// cancel_task and decide_proposal would otherwise go through).
+await human('/settings', 'PUT', { planner: 'ben-claude' });
+const t3 = await human('/tasks', 'POST', { title: 'Third task', size: 'S' });
+for (const [tool, args] of [['cancel_task', { id: t3.id, reason: 'duplicate' }], ['create_task', { title: 'From the second laptop' }], ['lock_files', { paths: ['package.json'] }],
+  ['report_usage_limit', { note: 'not mine' }], ['set_activity', { doing: 'something' }], ['post', { text: 'hello' }], ['release_role', { role: 'planner' }],
+  ['decide_proposal', { id: t3.id, approve: false }], ['claim_task', { id: t3.id, as: 'helper' }]]) {
+  r = await benB(tool, args);
+  check(`second laptop: ${tool}${args.as ? ' (as a subagent)' : ''} refused`, /Another laptop is already using the name ben-claude/.test(r.error || ''), JSON.stringify(r));
+}
+await benB('board_status', { model: 'Fake Model 1' });
+const st = await human('/state');
+const benRow = st.presence.find((p) => p.kind === 'agent' && p.name === 'ben-claude');
+check('second laptop changed nothing: task kept, no lock, owner not out of usage, model untouched, planner kept',
+  st.tasks.some((t) => t.id === t3.id && t.status === 'open') && !st.locks.length && !benRow?.limited && benRow?.model !== 'Fake Model 1' && st.settings.planner === 'ben-claude', JSON.stringify(benRow));
+r = await fetch(`${board.base}/api/agents/ben-claude/limit`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${AGENT_TOKEN}`, 'X-Agent': 'ben-claude', 'X-Laptop': 'lapb2222' }, body: '{}' });
+check('Stop hook usage-limit report from the second laptop (X-Laptop): 403', r.status === 403, r.status);
+r = await benA('lock_files', { paths: ['shared/'], as: 'helper' });
+check('the owner\'s subagents (ben-claude/helper) still work', r.ok === true, JSON.stringify(r));
+await benA('unlock_files', { paths: ['shared/'], as: 'helper' });
+await human(`/tasks/${t3.id}`, 'DELETE');
+await human('/settings', 'PUT', { planner: '' });
 const t1now = (await human('/state')).tasks.find((t) => t.id === t1.id);
 check('the first laptop\'s task is untouched', t1now?.status === 'claimed' && t1now?.assignee === 'ben-claude', JSON.stringify(t1now).slice(0, 200));
 

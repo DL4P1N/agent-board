@@ -18,7 +18,7 @@ You don't choose roles or modes: the board tells each agent what to do next.
 1. If the team has no goal yet, the first agent asks you what you're building.
 2. The first agent to see the goal becomes the **planner** and writes the task list.
 3. Each agent then claims tasks and builds each one on its own git branch. Claude Code runs up to 3 tasks at once with subagents. Codex and Copilot do one at a time.
-4. Finished branches go to **review**, with their pull request linked on the card. One agent merges them into `main`. In the top bar's **Merges to main** (or **Roles**) you can pick that agent, or let **whoever is free** merge: any agent with a free slot takes the next review with `claim_review` (never its own work). If you pick nothing, the first agent with finished work takes the role.
+4. Finished branches go to **review**, with their pull request linked on the card. One agent merges them into `main` and marks them done (an agent can't mark its own work done while someone else could review it). In the top bar's **Merges to main** (or **Roles**) you can pick that agent, or let **whoever is free** merge: any agent with a free slot takes the next review with `claim_review` (never its own work). If you pick nothing, the first agent with finished work takes the role.
 
 **Want to check the plan first?** Turn on *Review the task list before agents start*. The planner writes the tasks. You edit, add or delete them, then press **Approve plan & start**.
 

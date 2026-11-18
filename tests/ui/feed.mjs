@@ -3,7 +3,8 @@
 // the saved webhook shown as text, and the invite / QR code. Acts as human "dana".
 import { startBoard, launchBrowser, shotsDir, finish, agent, rest as restOf } from '../helpers.mjs';
 
-const board = await startBoard();
+// Its webhooks go to a server on 127.0.0.1 (refused unless the host allows localhost).
+const board = await startBoard({ env: { BOARD_WEBHOOK_LOCALHOST: '1' } });
 const out = shotsDir('feed');
 const results = [];
 const check = (name, ok, extra = '') => { results.push(`${ok ? 'PASS' : 'FAIL'} ${name}${extra ? ' — ' + extra : ''}`); };

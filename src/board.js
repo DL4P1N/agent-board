@@ -255,8 +255,21 @@ export class Board {
       .prepare('INSERT INTO events (ts, author, kind, channel, task_id, text, data) VALUES (?,?,?,?,?,?,?)')
       .run(ts, author, kind, channel, task_id, text, data ? JSON.stringify(data) : null);
     const ev = { id: Number(r.lastInsertRowid), ts, author, kind, channel, task_id, text, data };
-    this.bus.emit('event', ev);
+    // Inside a transaction the event goes out once it is committed (see tx).
+    if (this.txEvents) this.txEvents.push(ev);
+    else this.bus.emit('event', ev);
     return ev;
+  }
+
+  // Moves whenever the database changes: rows this board wrote (total_changes) or a commit by another
+  // connection, e.g. a script (data_version). Anything cached from the database is stale once it moves.
+  changeCount() {
+    return `${this.db.prepare('SELECT total_changes() AS n').get().n}:${this.db.prepare('PRAGMA data_version').get().data_version}`;
+  }
+
+  // Something the web board shows changed without an event of its own (presence, a tool, a helper): live pages reload.
+  presenceChanged() {
+    this.bus.emit('event', { id: 0, kind: 'presence', text: '' });
   }
 
   // Names an @mention can reach: agents, people, humans (helpers count via their agent).
@@ -419,6 +432,27 @@ export class Board {
       this.bus.on('event', onEvent);
       signal?.addEventListener?.('abort', finish);
     });
+  }
+
+  // Runs fn as one transaction: its rows change together or not at all. Events it emits go out after the
+  // commit (none after a rollback). A tx inside a tx joins the outer one.
+  tx(fn) {
+    if (this.txEvents) return fn();
+    this.db.exec('BEGIN IMMEDIATE');
+    this.txEvents = [];
+    let events;
+    try {
+      const r = fn();
+      this.db.exec('COMMIT');
+      events = this.txEvents;
+      return r;
+    } catch (e) {
+      try { this.db.exec('ROLLBACK'); } catch {}
+      throw e;
+    } finally {
+      this.txEvents = null;
+      for (const ev of events || []) this.bus.emit('event', ev);
+    }
   }
 
   // Stop for good (the board was archived): settle every pending long-poll with [], then close the file.
@@ -587,13 +621,20 @@ export class Board {
       if (task.status === 'proposed' && changingStatus) throw new Error(`task #${id} is a proposal: the planner approves or rejects it with decide_proposal.`);
       // The merger may move a task out of review: done, back to in_progress for fixes, or blocked (can't test it).
       const merger = task.status === 'review' && ['done', 'in_progress', 'blocked'].includes(status) && canMerge;
-      // Blocked tasks don't hold a slot, so unblocking one has to fit within the slots again.
-      if (owner && task.status === 'blocked' && ['claimed', 'in_progress'].includes(status)) {
+      // Blocked and done tasks don't hold a slot, so unblocking or reopening one has to fit within the slots again.
+      if (owner && ['blocked', 'done'].includes(task.status) && ['claimed', 'in_progress'].includes(status)) {
         const cap = this.capacity(author);
-        if (cap.active >= cap.slots) throw new Error(`You hold ${cap.active} of ${cap.slots} task(s) at once: finish or release one before unblocking #${id}.`);
+        if (cap.active >= cap.slots) throw new Error(`You hold ${cap.active} of ${cap.slots} task(s) at once: finish or release one before ${task.status === 'done' ? 'reopening' : 'unblocking'} #${id}.`);
       }
-      // Nobody merges their own work while someone else is around to review it.
-      if (owner && !canMerge && task.status === 'review' && status === 'done' && s.integrator && this.onlineAgents().some((n) => !sameTeam(n, author))) {
+      // Done means merged: only whoever merges moves a task to done, and only from review. Without anyone to
+      // review it (no integrator yet, or no other agent online) the owner may mark its own work done.
+      // (Someone else's task: the ownership check below refuses it.)
+      if (owner && changingStatus && status === 'done' && !(task.status === 'review' && canMerge) && s.integrator && this.onlineAgents().some((n) => !sameTeam(n, author))) {
+        if (task.status !== 'review') {
+          throw new Error(canMerge
+            ? `Move #${id} to review first (update_task status "review"), then merge it and mark it done.`
+            : `Move #${id} to review first (update_task status "review", with pr_url if you opened a PR): ${s.integrator === ANYONE ? 'another agent takes it with claim_review' : `${s.integrator} reviews it`} and marks it done once it's merged.`);
+        }
         throw new Error(s.integrator === ANYONE
           ? `#${id} is waiting for review: another agent takes it with claim_review and merges it. Carry on with other work.`
           : `#${id} is waiting for ${s.integrator} to review and merge it. Carry on with other work.`);
@@ -634,6 +675,11 @@ export class Board {
     if (next.status === 'open' || next.status === 'proposed') next.assignee = null;
     // The review claim ends when the task leaves review.
     const reviewer = next.status === 'review' ? task.reviewer : null;
+    return this.tx(() => this.writeTask(id, author, task, next, { status, note, reserved_for, assignee, pr, reviewer }));
+  }
+
+  // updateTask's write: the row, its event and (done or open) its locks, as one transaction.
+  writeTask(id, author, task, next, { status, note, reserved_for, assignee, pr, reviewer }) {
     this.db
       .prepare('UPDATE tasks SET status=?, branch=?, title=?, description=?, priority=?, size=?, assignee=?, reserved_for=?, reviewer=?, pr_url=?, updated_at=? WHERE id=?')
       .run(next.status, next.branch, next.title, next.description, next.priority, next.size, next.assignee, next.reserved_for, reviewer, pr, Date.now(), id);
@@ -699,15 +745,17 @@ export class Board {
     return { deleted: id };
   }
 
-  // A task, its locks, and references to it from other tasks' depends_on.
+  // A task, its locks, and references to it from other tasks' depends_on (one transaction).
   removeTask(id) {
-    this.releaseLocksForTask(id);
-    for (const t of this.listTasks()) {
-      if (t.depends_on.includes(id)) {
-        this.db.prepare('UPDATE tasks SET depends_on = ? WHERE id = ?').run(JSON.stringify(t.depends_on.filter((d) => d !== id)), t.id);
+    this.tx(() => {
+      this.releaseLocksForTask(id);
+      for (const t of this.listTasks()) {
+        if (t.depends_on.includes(id)) {
+          this.db.prepare('UPDATE tasks SET depends_on = ? WHERE id = ?').run(JSON.stringify(t.depends_on.filter((d) => d !== id)), t.id);
+        }
       }
-    }
-    this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+      this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+    });
   }
 
   // ---------- locks ----------
@@ -737,7 +785,7 @@ export class Board {
     const up = this.db.prepare(
       'INSERT INTO locks (path, owner, task_id, reason, expires_at) VALUES (?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET owner=excluded.owner, task_id=excluded.task_id, reason=excluded.reason, expires_at=excluded.expires_at'
     );
-    for (const p of norm) up.run(p, author, task_id, reason, exp);
+    this.tx(() => { for (const p of norm) up.run(p, author, task_id, reason, exp); });
     this.emit({ author, kind: 'lock', channel: 'locks', task_id, text: `locked ${norm.join(', ')} for ${ttl_s}s${reason ? ` (${reason})` : ''}` });
     return { ok: true, locked: norm, expires_in_s: ttl_s };
   }
@@ -1040,8 +1088,11 @@ export class Board {
     if (!laptop) return;
     this.db.prepare("UPDATE name_owners SET seen_at = ? WHERE name = ? AND laptop = ? AND via = 'agent'").run(Date.now(), agentRootOf(normName(name)), laptop);
   }
+  clashText(name) {
+    return `Another laptop is already using the name ${agentRootOf(normName(name))}, so this one can't claim or change tasks under it. Ask your human to re-run join with a different name.`;
+  }
   assertOwnName(name) {
-    if (this.nameClash(name)) throw new Error(`Another laptop is already using the name ${agentRootOf(normName(name))}, so this one can't claim or change tasks under it. Ask your human to re-run join with a different name.`);
+    if (this.nameClash(name)) throw new Error(this.clashText(name));
   }
   // board_status for the second laptop: only the warning, not the owner's tasks.
   clashGuidance(name, g) {
@@ -1192,7 +1243,8 @@ export class Board {
     if (s.planner && sameTeam(root, s.planner) && s.goal && !tasks.some((t) => t.status !== 'proposed')) return 'planning the task list';
     if (s.planner && sameTeam(root, s.planner) && tasks.some((t) => t.status === 'proposed')) return 'deciding proposed tasks';
     if (row?.activity && now - (row.activity_at || 0) < ACTIVITY_MS) return row.activity;
-    if (row?.last_active && now - row.last_active < ACTIVE_MS) return `working (last board call: ${row.last_tool || 'a tool'})`;
+    // Busy with recent real board calls but nothing more to say (the tool's name is the board's business, not the page's).
+    if (row?.last_active && now - row.last_active < ACTIVE_MS) return 'working';
     if (tasks.some((t) => t.status === 'review' && sameTeam(root, t.assignee))) return null; // waiting for its review: free for more
     return null;
   }
@@ -1579,7 +1631,6 @@ export class Board {
     const events = this.db.prepare('SELECT * FROM events ORDER BY id').all().map(rowToEvent);
     const questions = this.db.prepare('SELECT * FROM questions').all();
     const min = (ms) => { const m = Math.round(ms / 60e3); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; };
-    const median = (xs) => { if (!xs.length) return 0; const a = [...xs].sort((x, y) => x - y); const i = Math.floor(a.length / 2); return a.length % 2 ? a[i] : (a[i - 1] + a[i]) / 2; };
     const at = (ms) => (ms ? clock(ms) : '—');
     const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
     const now = Date.now();
@@ -1848,9 +1899,6 @@ export function guessPerson(name, known = new Set()) {
   const i = root.lastIndexOf('-');
   if (i > 0 && known.has(root.slice(0, i))) return root.slice(0, i);
   return root;
-}
-export function personOf(name) {
-  return guessPerson(name);
 }
 
 function normPath(p) {

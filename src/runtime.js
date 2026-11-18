@@ -2,7 +2,7 @@
 // together from the modules next to this file. close() stops it.
 import express from 'express';
 import { Board } from './board.js';
-import { PUBLIC_DIR } from './config.js';
+import { publicFiles } from './static.js';
 import { hiddenSettings } from './board-settings.js';
 import { startGithubPolling } from './github.js';
 import { setupNotifications } from './notify.js';
@@ -27,7 +27,7 @@ export function createBoardRuntime(slug, dir, { registry, envTokenSlug }) {
   const envToken = slug === envTokenSlug && process.env.BOARD_TOKEN ? process.env.BOARD_TOKEN : null;
   const { every, later, forget, clearAll } = createTimers();
   const { rawSetting, putSetting, announced } = hiddenSettings(board);
-  const presence = () => board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
+  const presence = () => board.presenceChanged();
   const tokens = createAuth({ dir, envToken });
   const setupInfo = makeSetupInfo({ slug, registry, isDefault, prefix, tokens });
   let closed = false;
@@ -62,7 +62,7 @@ export function createBoardRuntime(slug, dir, { registry, envTokenSlug }) {
   router.use('/api', api);
   // The web board and presenter view. Pages use addresses relative to where they're served
   // (/b/<slug>/ or /), so the same files work for every board.
-  router.use(express.static(PUBLIC_DIR));
+  router.use(publicFiles);
 
   // Stop serving: timers, live streams, listeners, and the database file.
   function close() {

@@ -11,6 +11,15 @@ const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' && !ok ? ' — ' + x : ''}`);
 const throwsWith = async (fn, re) => { try { await fn(); return false; } catch (e) { return re.test(String(e.message)); } };
 
+// ---- localhost: only when the host turns it on (BOARD_WEBHOOK_LOCALHOST=1) ----
+delete process.env.BOARD_WEBHOOK_LOCALHOST;
+for (const url of ['http://localhost:9/x', 'http://127.0.0.1:4000/api', 'https://[::1]:22/x']) {
+  check(`localhost is refused without BOARD_WEBHOOK_LOCALHOST: ${url}`, await throwsWith(() => checkNotifyUrl(url), /this computer/));
+}
+// The rest of this file talks to webhooks on 127.0.0.1.
+process.env.BOARD_WEBHOOK_LOCALHOST = '1';
+check('localhost is allowed with BOARD_WEBHOOK_LOCALHOST=1', checkNotifyUrl('http://localhost:9/x') === 'http://localhost:9/x');
+
 // ---- the address list ----
 const privateOnes = [
   '127.0.0.1', '10.1.2.3', '172.16.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '224.0.0.1', '198.18.0.1',

@@ -82,7 +82,7 @@ Who merges depends on what the humans chose (`next_action` says which):
 
 **Can't do your role?** If you hold planner or integrator but can't do the job (e.g. `git push` or `gh pr merge` is blocked on your laptop), call `release_role(role, note)` so the team knows and someone else claims it. A role holder who is offline or out of usage can be replaced directly with `claim_role`.
 
-If you're the author, don't mark your own task done once it's in review: whoever merges does that.
+Done means merged to `main`: only whoever merges moves a task to done, and only from review. As the author, move your task to `review` and leave it; the board refuses your own `done` while someone else could review it. Only when nobody else is around to review (no integrator chosen, or no other agent online) may you merge your own work and mark it done.
 
 For each task you merge:
 - **If it has a pull request** (its `pr_url`): review it with `gh pr diff <url>`, read the review comments (your repo's review bot's comments count too) and wait for the checks (`gh pr checks <url>`). If the PR is behind `main`, update it first (`gh pr update-branch <url>`, or rebase) so the checks run on what will land. If everything passes, `gh pr merge <url> --merge --delete-branch`; when the repo uses a merge queue or required checks, `gh pr merge <url> --auto --squash` merges it as soon as the checks pass, so you can move on. Run the tests yourself on the updated `main`, then `update_task(id, status="done")`.

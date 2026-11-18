@@ -8,6 +8,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const MAX_WAIT_S = 90;
+// What a laptop may still do under a name another laptop owns (one name, one laptop): read the board.
+const READ_ONLY_TOOLS = new Set(['board_status', 'get_playbook', 'read_events', 'wait_for_events', 'list_tasks', 'get_task', 'list_locks']);
+// The longest text an agent may send in one field (as long as a task description).
+const MAX_TEXT = 10000;
 const PLAYBOOK_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'playbook.md');
 const playbook = () => fs.readFileSync(PLAYBOOK_PATH, 'utf8');
 
@@ -28,7 +32,7 @@ export function buildMcpServer(board, baseAgent) {
   );
 
   // First real use of the board (someone typed /board): show this agent as started on the web board.
-  const started = () => { if (board.markStarted(baseAgent)) board.bus.emit('event', { id: 0, kind: 'presence', text: '' }); };
+  const started = () => { if (board.markStarted(baseAgent)) board.presenceChanged(); };
   // Helper (subagent) name from `as`: short, plain characters only (no slashes, so nobody can pose as another agent); '' = the agent itself.
   const helperOf = (as) => {
     if (!as) return '';
@@ -42,9 +46,15 @@ export function buildMcpServer(board, baseAgent) {
   const wrap = (fn) => async (args, extra) => {
     try { return ok(await fn(args || {}, extra)); } catch (e) { return fail(e); }
   };
-  // Every tool call is recorded: real work (not waiting/reading) shows the agent as busy on the web board.
-  const presence = () => board.bus.emit('event', { id: 0, kind: 'presence', text: '' });
+  const presence = () => board.presenceChanged();
   const tool = (name, def, handler) => server.registerTool(name, def, async (args, extra) => {
+    // One name, one laptop: a second laptop using a name another laptop owns may only read the board (its
+    // board_status says to stop). Checked once here, for every tool, so none can act for the owner's agent.
+    if (board.nameClash(baseAgent)) {
+      if (!READ_ONLY_TOOLS.has(name)) return fail(new Error(board.clashText(baseAgent)));
+      return handler(args, extra);
+    }
+    // Every tool call is recorded: real work (not waiting/reading) shows the agent as busy on the web board.
     try { if (board.noteToolCall(baseAgent, name)) presence(); } catch {}
     // Any call that passes `as` records (or refreshes) that helper; a new or returning one reloads the web board.
     try { const h = helperOf(args?.as); if (h && board.touchHelper(baseAgent, h)) presence(); } catch {}
@@ -62,6 +72,8 @@ export function buildMcpServer(board, baseAgent) {
       inputSchema: { as: asArg, model: z.string().optional().describe('The model you are running, e.g. "Claude Sonnet 5.5" or "GPT-5.6". Optional; leave it out if you do not know.') },
     },
     wrap(({ as, model }) => {
+      // A second laptop on this name (see tool()) only gets the warning: it changes nothing about the owner's agent.
+      if (board.nameClash(baseAgent)) return board.status(who(as));
       started();
       const h = helperOf(as);
       if (model && (h ? board.setHelperModel(baseAgent, h, model) : board.setModel(baseAgent, model))) presence();
@@ -91,7 +103,7 @@ export function buildMcpServer(board, baseAgent) {
     {
       title: 'Set project goal',
       description: 'Set the team\'s project goal (1–3 sentences: what we are building and what the demo should show). Only works if no goal is set yet; humans can change it on the web board.',
-      inputSchema: { goal: z.string().min(5) },
+      inputSchema: { goal: z.string().min(5).max(MAX_TEXT) },
     },
     wrap(({ goal }) => board.setSettings(baseAgent, { goal }))
   );
@@ -115,8 +127,8 @@ export function buildMcpServer(board, baseAgent) {
       description: 'Post a message to the board. Use @name to mention someone (@planner and @merger reach whoever has that role). Channels: general (default), help (blocked/need help), review (ready for review/merge), or any custom one. ' +
         'To answer a human who messaged you directly, pass `to` with their name: the reply goes in that direct-message thread, which other agents do not see. Only humans start those threads; `to` is refused when that human has not written to you.',
       inputSchema: {
-        text: z.string(),
-        channel: z.string().optional(),
+        text: z.string().max(MAX_TEXT),
+        channel: z.string().max(40).optional(),
         task_id: z.number().int().optional(),
         to: z.string().optional().describe('Reply to a human in their direct-message thread with you (their name). Leave out for the shared chat.'),
         as: asArg,
@@ -231,13 +243,13 @@ export function buildMcpServer(board, baseAgent) {
     {
       title: 'Update task',
       description:
-        'Update your task: status (claimed, in_progress, blocked, review, done), a progress note, branch, size, or its pull request (pr_url). You can only change tasks you hold; whoever merges (the integrator, or the agent that took the review with claim_review) may move review → done, or → in_progress to send it back for fixes (the author is @mentioned). ' +
+        'Update your task: status (claimed, in_progress, blocked, review, done), a progress note, branch, size, or its pull request (pr_url). You can only change tasks you hold. Done means merged: only whoever merges (the integrator, or the agent that took the review with claim_review) moves a task to done, from review, or sends it back → in_progress for fixes (the author is @mentioned); you mark your own task done only while nobody else could review it. ' +
         'Use "review" when the branch is pushed and ready to merge (pass pr_url if you opened a PR); "blocked" with a note explaining why. Locks held for the task are released on done. Planner only: reserved_for reserves an open task for an agent ("" clears).',
       inputSchema: {
         id: z.number().int(),
         status: z.enum(['claimed', 'in_progress', 'blocked', 'review', 'done']).optional(),
-        note: z.string().optional(),
-        branch: z.string().optional(),
+        note: z.string().max(MAX_TEXT).optional(),
+        branch: z.string().max(200).optional(),
         size: z.enum(['S', 'M', 'L']).optional(),
         pr_url: z.string().optional().describe('Link to the pull request for this task'),
         reserved_for: z.string().optional().describe('Planner only: agent that should do this task ("" clears)'),
@@ -252,7 +264,7 @@ export function buildMcpServer(board, baseAgent) {
     {
       title: 'Release task',
       description: 'Give a task back to the open pool (you can\'t finish it, it should be split, or you hit your plan\'s usage limit). Releases its locks. You may also release someone else\'s task if it is stale (no update for 15+ min) and its owner is offline.',
-      inputSchema: { id: z.number().int(), note: z.string().optional(), as: asArg },
+      inputSchema: { id: z.number().int(), note: z.string().max(MAX_TEXT).optional(), as: asArg },
     },
     wrap(({ id, note, as }) => board.releaseTask(who(as), id, note))
   );
@@ -277,7 +289,7 @@ export function buildMcpServer(board, baseAgent) {
       inputSchema: {
         id: z.number().int(),
         approve: z.boolean(),
-        note: z.string().optional().describe('Why (sent to the proposer), especially when rejecting'),
+        note: z.string().max(MAX_TEXT).optional().describe('Why (sent to the proposer), especially when rejecting'),
         priority: z.number().int().min(1).max(3).optional(),
         size: z.enum(['S', 'M', 'L']).optional(),
         reserved_for: z.string().optional(),
@@ -359,10 +371,10 @@ export function buildMcpServer(board, baseAgent) {
         'Advisory all-or-nothing lock on repo paths (relative, forward slashes; a directory path like "src/db/" is fine). ' +
         'Only lock shared hot spots. Re-locking your own paths renews the TTL. Returns conflicts if someone else holds any path.',
       inputSchema: {
-        paths: z.array(z.string()).min(1),
+        paths: z.array(z.string().max(500)).min(1).max(200),
         ttl_s: z.number().int().min(30).max(3600).optional().describe('Default 900 (15 min), at most 3600; re-lock to renew'),
         task_id: z.number().int().optional(),
-        reason: z.string().optional(),
+        reason: z.string().max(300).optional(),
         as: asArg,
       },
     },
@@ -390,7 +402,7 @@ export function buildMcpServer(board, baseAgent) {
     {
       title: 'Ask a human',
       description: 'Ask the humans a question (product decisions, credentials, ambiguous requirements). It shows on the web board; the answer arrives as an "answer" event via wait_for_events.',
-      inputSchema: { question: z.string(), task_id: z.number().int().optional(), as: asArg },
+      inputSchema: { question: z.string().max(MAX_TEXT), task_id: z.number().int().optional(), as: asArg },
     },
     wrap(({ question, task_id, as }) => board.ask(who(as), { question, task_id }))
   );

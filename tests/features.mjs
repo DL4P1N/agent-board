@@ -160,7 +160,7 @@ await y('post', { text: 'just chatting' });
 check('chatting alone does not make it busy', (await agentP('y')).busy === false);
 await y('lock_files', { paths: ['README.md'], reason: 'editing the README' });
 py = await agentP('y');
-check('a real board call makes it busy for a while', py.busy === true && /working/.test(py.doing || '') && py.last_tool === 'lock_files', JSON.stringify(py));
+check('a real board call makes it busy for a while, shown as "working" (no tool names on the page)', py.busy === true && py.doing === 'working' && py.last_tool === 'lock_files', JSON.stringify(py));
 await x('claim_role', { role: 'planner' });
 check('planner with no tasks yet is "planning the task list"', (await agentP('x')).doing === 'planning the task list');
 const bt = await newTask('busy feature');
@@ -307,6 +307,21 @@ await o1('claim_task', { id: PT2.id });
 await o1('update_task', { id: PT2.id, status: 'review' });
 check('owner cannot mark its own review done when a specific integrator is set', /waiting for by/.test(err(await o1('update_task', { id: PT2.id, status: 'done' }))));
 check('the integrator can mark it done', (await by('update_task', { id: PT2.id, status: 'done' })).status === 'done');
+// Done means merged: the owner can't skip review, nor finish a task the merger sent back to it.
+const PT3 = await newTask('no shortcut to done');
+await o1('claim_task', { id: PT3.id });
+await o1('update_task', { id: PT3.id, status: 'in_progress' });
+check('owner cannot move its in-progress task straight to done while someone could review it', /Move #\d+ to review first/.test(err(await o1('update_task', { id: PT3.id, status: 'done' }))));
+await o1('update_task', { id: PT3.id, status: 'review' });
+await by('update_task', { id: PT3.id, status: 'in_progress', note: 'fix the tests' });
+check('…nor right after the merger sent it back from review', /review first/.test(err(await o1('update_task', { id: PT3.id, status: 'done' }))));
+// Reopening a done task has to fit in the agent's slots, like unblocking one.
+await human('/agents/o1', 'PATCH', { slots: 1 });
+check('reopening its done task while at capacity is refused', /before reopening/.test(err(await o1('update_task', { id: PT2.id, status: 'in_progress' }))));
+await human('/agents/o1', 'PATCH', { slots: null });
+// Nobody to review it (no integrator chosen): the owner may mark its own work done.
+await human('/settings', 'PUT', { integrator: '' });
+check('with no integrator chosen the owner may mark its task done', (await o1('update_task', { id: PT3.id, status: 'done' })).status === 'done');
 
 // --- claim_review: needs an integrator mode, and a free slot in "whoever is free" mode ---
 await board.restart();

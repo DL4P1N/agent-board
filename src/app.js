@@ -4,7 +4,7 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { PUBLIC_DIR, VERSION } from './config.js';
-import { tokenFrom, safeEq } from './http-util.js';
+import { tokenFrom, safeEq, internalError } from './http-util.js';
 import { createAdminRouter } from './admin.js';
 
 export function createApp({ registry, live, adminToken }) {
@@ -73,9 +73,12 @@ export function createApp({ registry, live, adminToken }) {
   });
 
   // Malformed JSON and other request errors: a JSON answer instead of Express's HTML page.
+  // Request errors (body-parser's, with a 4xx status) say what was wrong; anything else is the server's own.
   app.use((err, _req, res, next) => {
     if (res.headersSent) return next(err);
-    res.status(err.status || err.statusCode || 400).json({ error: err.type === 'entity.parse.failed' ? 'Request body is not valid JSON.' : String(err.message || err) });
+    const status = err.status || err.statusCode;
+    if (status >= 400 && status < 500) return res.status(status).json({ error: err.type === 'entity.parse.failed' ? 'Request body is not valid JSON.' : String(err.message || err) });
+    if (!internalError(res, err)) { console.error('board request failed:', err); res.status(500).json({ error: 'Something went wrong on the board server (the details are in its window).' }); }
   });
 
   return app;

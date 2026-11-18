@@ -1,9 +1,13 @@
 // The REST API of a board (<board>/api): the checks every call goes through, then the routes for the web
 // board, the Stop hook and join. The notification routes are in notify.js, the live stream in routes-stream.js.
+import zlib from 'node:zlib';
 import QRCode from 'qrcode';
-import { timeInfo, normName } from './board.js';
-import { agentFrom, h } from './http-util.js';
+import { timeInfo, normName, callerLaptop } from './board.js';
+import { agentFrom, h, laptopParam, internalError, wantsGzip } from './http-util.js';
 import { clientIp } from './request-limits.js';
+
+// How long a built /api/state answer may be reused while nothing happens on the board.
+const STATE_TTL_MS = 1000;
 
 export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, prefix, setupInfo, onlineHumans, closeStreams, later, presence, agentLimit, holdSlot }) {
   const { auth, viewerLimits, humanOnly, humanToken, envToken } = tokens;
@@ -18,18 +22,47 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     // A Stop-hook poll that says which laptop it runs on (X-Laptop or ?laptop=) keeps that laptop's hold on the
     // agent name while the agent works without board calls (one name, one laptop).
     if (req.role === 'agent' && req.method === 'GET' && (req.path === '/next' || req.path === '/events')) {
-      const laptop = String(req.get('x-laptop') || req.query.laptop || '').replace(/[^\w-]/g, '').slice(0, 32);
+      const laptop = laptopParam(req.get('x-laptop') || req.query.laptop);
       const who = req.get('x-agent') || req.query.agent || req.query.exclude;
       if (laptop && who) board.seenName(String(who), laptop);
     }
     next();
   });
 
-  api.get('/state', h((req) => {
+  // Every open page reloads /api/state after each live event, so the answer is built once per change and shared:
+  // one per kind of reader (humans get more), rebuilt after any board event (presence nudges included) or any
+  // write to the board's database, and at least every STATE_TTL_MS (online states and the deadline move with the
+  // clock), and gzipped once for browsers that accept it. The JSON is the same as building it for each request.
+  let version = 0;
+  board.bus.on('event', () => { version++; });
+  const stateKey = () => `${version}|${board.changeCount()}`;
+  const stateCache = new Map();
+  api.get('/state', (req, res) => {
+    const human = req.role === 'human';
+    let c = stateCache.get(human);
+    try {
+      if (!c || c.key !== stateKey() || Date.now() - c.at > STATE_TTL_MS) {
+        const at = Date.now();
+        const json = Buffer.from(JSON.stringify(stateBody(req, human)));
+        // Keyed after the build: what building it wrote (proposals approved on time, expired locks) is in it.
+        c = { key: stateKey(), at, json, gz: null };
+        stateCache.set(human, c);
+      }
+    } catch (e) {
+      if (!internalError(res, e)) res.status(400).json({ error: String(e?.message || e) });
+      return;
+    }
+    res.set('Vary', 'Accept-Encoding').type('json');
+    if (c.json.length > 1024 && wantsGzip(req)) {
+      c.gz ||= zlib.gzipSync(c.json);
+      return res.set('Content-Encoding', 'gzip').send(c.gz);
+    }
+    res.send(c.json);
+  });
+  function stateBody(req, human) {
     const g = board.nextAction(agentFrom(req));
     // Only humans get `setup`: it holds the board token (join commands, web links). Agents and the
     // presenter view must never be able to read it, or every human-only route is one GET away.
-    const human = req.role === 'human';
     return {
       tasks: board.listTasks(),
       locks: board.listLocks(),
@@ -53,7 +86,7 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
       // Times each task was sent back from review, {id: n}: the page flags tasks that keep bouncing.
       rejects: board.rejectCounts(),
     };
-  }));
+  }
 
   // What an agent should do now. The Claude Stop hook calls it (with the agent token) to nudge an idle agent.
   api.get('/next', h((req) => {
@@ -63,7 +96,6 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
 
   // Is an agent name taken by another laptop? join asks before any agent connects (GET), then reserves the
   // names it sets up (POST {laptop, person?}). laptop: join's laptop id. Same answer shape for both.
-  const laptopParam = (v) => String(v || '').replace(/[^\w-]/g, '').slice(0, 32);
   // Names are 1-64 letters, digits, _ . or -; anything else is refused before it reaches the board.
   const NAME_RE = /^[\w.-]{1,64}$/;
   const badName = (res, what) => { res.status(400); throw new Error(`${what} must be 1-64 letters, digits, _ . or -.`); };
@@ -86,6 +118,9 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
   api.post('/agents/:name/limit', h((req, res) => {
     const name = normName(req.params.name).split('/')[0];
     if (req.role !== 'human' && agentFrom(req).split('/')[0] !== name) { res.status(403); throw new Error('An agent can only report its own usage limit.'); }
+    // One name, one laptop: the Stop hook says which laptop it runs on; another laptop's limit isn't the owner's.
+    const laptop = req.role === 'human' ? '' : laptopParam(req.get('x-laptop'));
+    if (laptop && callerLaptop.run(laptop, () => board.nameClash(name))) { res.status(403); throw new Error(board.clashText(name)); }
     const r = board.reportUsageLimit(name, req.body || {}, { by: req.role === 'human' ? 'human' : 'agent' });
     presence();
     return r;

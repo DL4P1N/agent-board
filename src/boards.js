@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { newBoardToken, writeTokenFile } from './tokens.js';
 
 export const RESERVED = ['boards', 'api', 'b', 'trash', 'mcp', 'health', 'admin'];
 
@@ -129,6 +130,19 @@ export class Registry {
     return { ...b };
   }
 
+  // Undoes create() or restore() when the board then fails to start.
+  forget(slug) {
+    this.data.boards = this.data.boards.filter((x) => x.slug !== slug);
+    this.save();
+  }
+  setStatus(slug, { status, archived_at }) {
+    const b = this.must(slug);
+    b.status = status;
+    if (archived_at) b.archived_at = archived_at; else delete b.archived_at;
+    this.save();
+    return { ...b };
+  }
+
   setDefault(slug) {
     const b = this.must(slug);
     if (b.status !== 'live') throw new Error(`"${slug}" is archived: restore it first.`);
@@ -161,13 +175,17 @@ export class Registry {
   }
 }
 
-// A board's human token: its `token` file, created on first use.
+// A board's human token: its `token` file, created on first use (or when it is empty: an empty token would
+// match an empty one sent by anybody).
 export function boardToken(dir) {
   const f = path.join(dir, 'token');
-  if (fs.existsSync(f)) return fs.readFileSync(f, 'utf8').trim();
+  if (fs.existsSync(f)) {
+    const t = fs.readFileSync(f, 'utf8').trim();
+    if (t) return t;
+  }
   fs.mkdirSync(dir, { recursive: true });
-  const t = crypto.randomBytes(12).toString('base64url');
-  fs.writeFileSync(f, t);
+  const t = newBoardToken();
+  writeTokenFile(f, t);
   return t;
 }
 
@@ -175,8 +193,9 @@ export function boardToken(dir) {
 export function adminToken(root) {
   if (process.env.BOARD_ADMIN_TOKEN) return process.env.BOARD_ADMIN_TOKEN;
   const f = path.join(root, 'admin-token');
-  if (fs.existsSync(f)) return fs.readFileSync(f, 'utf8').trim();
+  const cur = fs.existsSync(f) ? fs.readFileSync(f, 'utf8').trim() : '';
+  if (cur) return cur;
   const t = 'admin-' + crypto.randomBytes(15).toString('base64url');
-  fs.writeFileSync(f, t);
+  writeTokenFile(f, t);
   return t;
 }
