@@ -204,7 +204,12 @@ try {
     // its columns were (its frame, title bar and padding hold the columns a few pixels in).
     const after = await places();
     const near = (a, b, d = 2) => !!a && !!b && a.every((x, i) => Math.abs(x - b[i]) <= d);
-    check('the 3D switch moves nothing: the top bar, Needs attention, Agents, Activity and File locks in the same places; the Tasks window where the board was', near(after.topbar, before.topbar) && near(after.left, before.left) && near(after.right, before.right) && near(after.act, before.act) && near(after.locks, before.locks)
+    // Activity is as tall as its feed (a near-empty one stays short), and the test board's feed can gain a line while 3D
+    // turns on: so Activity is compared by its top and sides, File locks by its sides, height and the gap above it.
+    const same = (a, b, idx) => !!a && !!b && idx.every((i) => Math.abs(a[i] - b[i]) <= 2);
+    check('the 3D switch moves nothing: the top bar, Needs attention, Agents, Activity and File locks in the same places; the Tasks window where the board was', near(after.topbar, before.topbar) && near(after.left, before.left) && near(after.right, before.right)
+      && same(after.act, before.act, [0, 1, 2]) && same(after.locks, before.locks, [0, 2]) && Math.abs((after.locks[3] - after.locks[1]) - (before.locks[3] - before.locks[1])) <= 2
+      && Math.abs((after.locks[1] - after.act[3]) - (before.locks[1] - before.act[3])) <= 2
       && Math.abs(after.tasks[0] - before.board[0]) <= 2 && Math.abs(after.tasks[2] - before.board[2]) <= 2 && Math.abs(after.board[1] - before.board[1]) <= 8, JSON.stringify({ before, after }));
     const share = await page.evaluate(() => {
       const v = $('office-view').getBoundingClientRect(); let n = 0, hit = 0;
