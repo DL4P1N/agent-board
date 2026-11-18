@@ -204,6 +204,7 @@ function cardNext(id) {
   return { id: (li?.nextElementSibling || li?.previousElementSibling)?.querySelector('.card')?.dataset.id || null, col: c?.closest('.col')?.id || null };
 }
 dlg.addEventListener('close', () => {
+  if (dlg.open) return; // a late close event for a dialog already reopened on another task: nothing to tidy
   const id = editing?.id; const back = dlgBackTo; dlgBackTo = null;
   editing = null; $('td-discard').hidden = true; resetCancel();
   const next = gone === id ? goneNext : null; gone = null; goneNext = null;
