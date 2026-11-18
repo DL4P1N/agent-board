@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import net from 'node:net';
 import { DatabaseSync } from 'node:sqlite';
 import { spawn, spawnSync, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +18,7 @@ import { Registry, boardToken, adminToken } from './boards.js';
 import QRCode from 'qrcode';
 import { buildMcpServer } from './mcp.js';
 import { checkNotifyUrl, resolveNotifyTarget, sendWebhook } from './webhook.js';
+import { RateLimiter, Slots, envLimit } from './limits.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 4000);
@@ -82,6 +84,39 @@ const h = (fn) => async (req, res) => {
     res.status(e?.status || (res.statusCode >= 400 ? res.statusCode : 400)).json({ error: String(e?.message || e) });
   }
 };
+
+// ---------- limits: one runaway client must not slow the board down for everyone ----------
+// Board calls per agent and per network address (token buckets: a minute's worth at once, refilling steadily),
+// and how many slow requests (wait_for_events, long-polls, live streams) may be open per agent and in total.
+// Generous on purpose: a normal day, the tests and the rehearsal never get near them. 0 turns one off.
+const LIMITS = {
+  agentPerMinute: envLimit('BOARD_RATE_AGENT', 600),
+  ipPerMinute: envLimit('BOARD_RATE_IP', 3000),
+  waitsPerAgent: envLimit('BOARD_WAITS_AGENT', 20),
+  waitsTotal: envLimit('BOARD_WAITS_TOTAL', 1000),
+};
+const agentRate = new RateLimiter(LIMITS.agentPerMinute);
+const ipRate = new RateLimiter(LIMITS.ipPerMinute);
+const slowSlots = new Slots(LIMITS.waitsPerAgent, LIMITS.waitsTotal);
+setInterval(() => { agentRate.sweep(); ipRate.sweep(); }, 60e3).unref();
+// Who's calling. Behind `npm run tunnel` every request comes from cloudflared on this machine, so Cloudflare's
+// header names the real address (trusted only from this machine itself).
+function clientIp(req) {
+  const peer = String(req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+  const cf = String(req.get('cf-connecting-ip') || '').trim();
+  if (cf && (peer === '127.0.0.1' || peer === '::1') && net.isIP(cf)) return cf;
+  return peer || 'unknown';
+}
+// 429 with Retry-After and a message the agent can act on. MCP gets a JSON-RPC error (MCP clients show its text).
+function tooMany(req, res, retryAfter, error, mcp) {
+  res.status(429).set('Retry-After', String(retryAfter));
+  if (mcp) return res.json({ jsonrpc: '2.0', error: { code: -32000, message: error, data: { reason: 'rate_limited', retry_after: retryAfter } }, id: req.body?.id ?? null });
+  return res.json({ error, reason: 'rate_limited', retry_after: retryAfter });
+}
+const rateText = (who, r, per) => `Too many board calls from ${who}: the limit is ${per} a minute. Wait ${r.retryAfter} s, then carry on. If you're checking the board in a loop, call wait_for_events instead: it returns as soon as something happens.`;
+const slotText = (who, full) => (full.full === 'key'
+  ? `${who} already has ${full.open} waits open (wait_for_events, the Stop hook or live pages), the most one agent may have. Let one of them return before starting another: they wake up as soon as something happens.`
+  : `The board has ${full.open} waits and live streams open, as many as it allows. Try again in a few seconds.`);
 
 // Friendly name for the AI tool behind an MCP connection (from initialize's clientInfo.name).
 function clientLabel(info) {
@@ -279,10 +314,35 @@ function createBoardRuntime(slug, dir) {
   const router = express.Router();
   // Archived (closed) while a request was being routed: nothing to serve any more.
   router.use((req, res, next) => (closed ? res.status(410).json({ error: 'This board is archived.' }) : next()));
+  // Board calls per network address (all tokens), and per agent once we know it's one.
+  const ipLimit = (mcp) => (req, res, next) => {
+    const r = ipRate.take(clientIp(req));
+    return r.ok ? next() : tooMany(req, res, r.retryAfter, rateText(`this address (${clientIp(req)})`, r, ipRate.perMinute), mcp);
+  };
+  router.use('/mcp', ipLimit(true));
+  router.use('/api', ipLimit(false));
+  const agentKey = (name) => `${slug}|${normName(name).split('/')[0] || 'anonymous'}`;
+  const agentLimit = (req, res, name, mcp) => {
+    const r = agentRate.take(agentKey(name));
+    if (!r.ok) tooMany(req, res, r.retryAfter, rateText(normName(name).split('/')[0] || 'this agent', r, agentRate.perMinute), mcp);
+    return r.ok;
+  };
+  // A slow request (a wait or a live stream) holds a slot until its connection closes. false = refused (429 sent).
+  const holdSlot = (req, res, key, who, mcp) => {
+    const got = slowSlots.acquire(`${slug}|${key}`);
+    if (typeof got !== 'function') { tooMany(req, res, 5, slotText(who, got), mcp); return false; }
+    res.on('close', got);
+    return true;
+  };
 
   // ---------- MCP (stateless streamable HTTP) ----------
   router.post('/mcp', auth, async (req, res) => {
     if (req.role === 'viewer') return res.status(403).json({ jsonrpc: '2.0', error: { code: -32001, message: 'The viewer token is read-only.' }, id: null });
+    if (!agentLimit(req, res, agentFrom(req), true)) return;
+    if (req.body?.method === 'tools/call' && req.body?.params?.name === 'wait_for_events') {
+      const who = agentFrom(req).split('/')[0];
+      if (!holdSlot(req, res, `wait:${who}`, who, true)) return;
+    }
     // An agent that just came online: nudge web boards to refresh (SSE {kind:'presence'}).
     // ?probe=1: a connection check (join/doctor), not a running agent, so it doesn't count as presence.
     const probe = req.query.probe === '1';
@@ -325,6 +385,7 @@ function createBoardRuntime(slug, dir) {
   // ---------- REST API ----------
   const api = express.Router();
   api.use(auth);
+  api.use((req, res, next) => (req.role !== 'agent' || agentLimit(req, res, agentFrom(req), false) ? next() : undefined));
   api.use(viewerLimits);
   api.use(humanOnly);
   // The web board sends X-Agent with the human's name. Agents (the Stop hook) send X-Agent too, with the
@@ -442,7 +503,14 @@ function createBoardRuntime(slug, dir) {
   api.put('/settings', h((req) => board.setSettings(agentFrom(req), req.body || {}, { human: true })));
 
   // Used by the Stop hook. wait>0 long-polls. before=<id>: the 200 events before that id (the web feed's "load earlier").
-  api.get('/events', h(async (req) => {
+  // A long-poll holds a slot while it waits. The Stop hook names its agent in X-Agent (or ?exclude=); a wait
+  // from nobody in particular counts per address.
+  const eventsSlot = (req, res, next) => {
+    if (!(Number(req.query.wait) > 0) || Number(req.query.before) > 0) return next();
+    const who = normName(req.get('x-agent') || req.query.agent || req.query.exclude || '').split('/')[0];
+    if (holdSlot(req, res, who ? `wait:${who}` : `ip:${clientIp(req)}`, who || 'this address', false)) next();
+  };
+  api.get('/events', eventsSlot, h(async (req) => {
     const since = Number(req.query.since || 0);
     const before = Math.max(0, Number(req.query.before) || 0) || undefined;
     if (before) return { events: board.events({ before, limit: 200 }) };
@@ -782,6 +850,9 @@ function createBoardRuntime(slug, dir) {
 
   // Live updates for the web UI. Open streams are tracked so a token rotation (or archiving) can close them.
   api.get('/stream', (req, res) => {
+    // Live pages count toward the open-slot limits too: per person (or per address for the presenter view).
+    const viewer = req.role === 'human' ? normName(req.query.name).replace(/[^\w.-]/g, '').slice(0, 64) : '';
+    if (!holdSlot(req, res, viewer ? `stream:${viewer}` : `stream:${req.role}:${clientIp(req)}`, viewer || 'this address', false)) return;
     res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
     res.flushHeaders();
     openStreams.add(res);
