@@ -841,12 +841,12 @@ html:not([data-board-view="office"]) #o-left-pill { position: sticky; top: var(-
 html:not([data-board-view="office"]) .topbar { margin: 2px; }
 .o-rcol { display: flex; flex-direction: column; gap: calc(var(--gap) + 4px); min-width: 0; min-height: 0; }
 html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top); height: calc(100vh - var(--top) - var(--s5)); padding: 2px 8px 6px 2px; margin-right: -6px; } /* its panels as wide as Needs attention's, 14px from the edge */
-.o-rcol > .o-right { flex: 0 0 auto; min-height: 120px; max-height: 45%; } /* its rows up to 45%; Activity takes the rest, its feed scrolling */
-.o-rcol > .o-act { flex: 0 1 auto; min-height: 0; }
+.o-rcol > .o-right { flex: 0 1 auto; min-height: 120px; max-height: 45%; } /* its rows up to 45%; Activity takes the rest, its feed scrolling */
+.o-rcol > .o-act { flex: 0 100 auto; min-height: 0; } /* short of room, Activity gives way first (down to its minimum), then Agents */
 .o-rcol > #o-right-pill:not([hidden]) + .o-act:not(.folded) { flex: 1 1 auto; } /* Agents folded: Activity takes the column */
-/* File locks open: Agents gives up room too (to 30%), File locks keeps its height up to 30% and Activity keeps enough for its tabs, a few events and the chat box. */
-.o-rcol:has(> .o-locks:not(.folded)) > .o-right { max-height: 30%; }
-.o-rcol > .o-locks:not(.folded) { flex-shrink: 0; }
+/* File locks open: it keeps its height up to 30%; Activity shrinks to make room, keeping enough for its tabs, a few events
+   and the chat box, and only past that does Agents give up room. */
+.o-rcol > .o-locks:not(.folded) { min-height: 120px; } /* past that, Agents and File locks share what is left */
 .o-rcol > .o-act:not(.folded) { min-height: min(250px, 40%); }
 .o-rcol > .o-locks { flex: 0 1 auto; min-height: 0; max-height: 30%; }
 .o-rcol > .o-act.folded, .o-rcol > .o-locks.folded { flex: 0 0 auto; }

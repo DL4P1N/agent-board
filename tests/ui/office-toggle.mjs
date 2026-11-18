@@ -239,8 +239,10 @@ try {
     check('progress (x of y done, bar) in the top bar; chat lives in Activity, no separate Chat chip', await page.evaluate(() => $('topbar').contains($('done-count')) && !!$('done-count').querySelector('.mbar') && !$('o-chat-chip')));
     // File locks: the Board view's panel, folded to its title bar with the count, at the foot of the right column.
     check('3D: File locks under Activity, folded, with the count; opening it lists the lock with Release', await page.evaluate(() => $('o-rcol').contains($('o-locks')) && !!$('o-locks').offsetWidth && /1 held/.test($('l-count').textContent) && $('l-body').hidden));
+    const agentsH = await page.evaluate(() => $('o-right').getBoundingClientRect().height);
     await page.click('#l-tog');
     check('3D: the File locks title bar opens the list (package.json, Release)', await page.evaluate(() => !$('l-body').hidden && /package\.json/.test($('locks').innerText) && !!$('locks').querySelector('[data-unlock]')?.offsetWidth));
+    check('3D: opening File locks takes its room from Activity, not Agents (Agents keeps its height while Activity has room to give)', await page.evaluate((h) => Math.abs($('o-right').getBoundingClientRect().height - h) < 2 && $('o-act').getBoundingClientRect().height >= 200, agentsH), agentsH);
     await page.click('#l-tog');
     const small = await page.evaluate(() => {
       const out = [];
