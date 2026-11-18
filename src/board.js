@@ -79,6 +79,13 @@ function phaseOf(s, tasks) {
   return 'building';
 }
 
+// Schema changes in order; a database's PRAGMA user_version is how many it has had. New ones go at the end.
+const MIGRATIONS = [
+  (b) => b.baseSchema(),
+  (b) => b.lowercaseNames(),
+  (b) => b.backfillPrLinks(),
+];
+
 export class Board {
   constructor(dataDir) {
     fs.mkdirSync(dataDir, { recursive: true });
@@ -92,8 +99,27 @@ export class Board {
     // CI on the project's main branch ({status: 'pass'|'fail'|'pending', failing, url, sha, title, at}), from the server's gh poller.
     this.mainCi = null;
     this.bus.setMaxListeners(0);
+    this.db.exec('PRAGMA journal_mode = WAL');
+    this.migrate();
+  }
+
+  // Brings the database up to date: runs each MIGRATIONS step it hasn't had yet, in order, each in one
+  // transaction with its PRAGMA user_version bump, so a step is applied fully or not at all.
+  migrate() {
+    const version = () => this.db.prepare('PRAGMA user_version').get().user_version;
+    for (let v = version(); v < MIGRATIONS.length; v++) {
+      this.tx(() => {
+        if (version() !== v) return;
+        MIGRATIONS[v](this);
+        this.db.exec(`PRAGMA user_version = ${v + 1}`);
+      });
+    }
+  }
+
+  // Version 1: the tables. Boards from before versioning (user_version 0) can have any older shape:
+  // missing tables are created and every column an older board lacks is added.
+  baseSchema() {
     this.db.exec(`
-      PRAGMA journal_mode = WAL;
       CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ts INTEGER NOT NULL,
@@ -147,11 +173,6 @@ export class Board {
         answered_at INTEGER
       );
     `);
-    this.migrate();
-  }
-
-  // Older boards created presence_v2 without the client column.
-  migrate() {
     const cols = this.db.prepare('PRAGMA table_info(presence_v2)').all().map((c) => c.name);
     if (!cols.includes('client')) this.db.exec('ALTER TABLE presence_v2 ADD COLUMN client TEXT');
     if (!cols.includes('started_at')) this.db.exec('ALTER TABLE presence_v2 ADD COLUMN started_at INTEGER');
@@ -180,11 +201,10 @@ export class Board {
     // done_at: it marked itself finished (subagent_done); doing: its set_activity note.
     this.db.exec('CREATE TABLE IF NOT EXISTS helpers (parent TEXT NOT NULL, name TEXT NOT NULL, model TEXT, started_at INTEGER NOT NULL, last_seen INTEGER NOT NULL, done_at INTEGER, doing TEXT, doing_at INTEGER, PRIMARY KEY (parent, name))');
     this.db.exec('CREATE TABLE IF NOT EXISTS name_owners (name TEXT PRIMARY KEY, laptop TEXT NOT NULL, person TEXT, via TEXT NOT NULL, seen_at INTEGER NOT NULL)');
-    this.lowercaseNames();
-    this.backfillPrLinks();
   }
 
-  // Once: tasks from before PR links existed get the PR URL their owner posted about them.
+  // Version 3: tasks from before PR links existed get the PR URL their owner posted about them.
+  // Boards from before versioning that already had this carry the _pr_backfill mark.
   backfillPrLinks() {
     if (this.db.prepare("SELECT 1 FROM settings WHERE key = '_pr_backfill'").get()) return;
     const tasks = this.db.prepare("SELECT id, assignee FROM tasks WHERE pr_url IS NULL AND status IN ('review', 'done')").all();
@@ -195,43 +215,38 @@ export class Board {
       const url = mine && String(mine.text).match(PR_RE)?.[0];
       if (url) this.db.prepare('UPDATE tasks SET pr_url = ? WHERE id = ?').run(url, t.id);
     }
-    this.db.prepare("INSERT INTO settings (key, value) VALUES ('_pr_backfill', '1')").run();
   }
 
-  // Once per board: names used to be case-sensitive, so "Dana" and "dana" were two people.
+  // Version 2: names used to be case-sensitive, so "Dana" and "dana" were two people.
   // Lowercase every stored name and merge the presence rows that now collide.
+  // Boards from before versioning that already had this carry the _names_lowercase mark.
   lowercaseNames() {
     if (this.db.prepare("SELECT 1 FROM settings WHERE key = '_names_lowercase'").get()) return;
-    this.db.exec('BEGIN');
-    try {
-      const rows = this.db.prepare('SELECT * FROM presence_v2').all();
-      const merged = new Map();
-      const pick = (a, b, f) => (a == null ? b : b == null ? a : f(a, b));
-      for (const r of rows) {
-        const k = `${normName(r.name)}\u0000${r.kind}`;
-        const m = merged.get(k);
-        if (!m) { merged.set(k, { ...r, name: normName(r.name) }); continue; }
-        const newer = r.last_seen > m.last_seen ? r : m;
-        for (const c of Object.keys(r)) if (m[c] == null) m[c] = r[c];
-        m.last_seen = Math.max(m.last_seen, r.last_seen);
-        m.started_at = pick(m.started_at, r.started_at, Math.min);
-        for (const c of ['client', 'plan', 'slots', 'model']) m[c] = newer[c] ?? m[c];
-      }
-      this.db.exec('DELETE FROM presence_v2');
-      for (const m of merged.values()) {
-        const cols = Object.keys(m);
-        this.db.prepare(`INSERT INTO presence_v2 (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...cols.map((c) => m[c]));
-      }
-      this.db.exec(`
-        UPDATE tasks SET assignee = lower(assignee), created_by = lower(created_by), reserved_for = lower(reserved_for), reviewer = lower(reviewer);
-        UPDATE locks SET owner = lower(owner);
-        UPDATE questions SET asker = lower(asker), answered_by = lower(answered_by);
-        UPDATE events SET author = lower(author);
-        UPDATE settings SET value = lower(value) WHERE key IN ('planner', 'integrator');
-        INSERT INTO settings (key, value) VALUES ('_names_lowercase', '1');
-      `);
-      this.db.exec('COMMIT');
-    } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+    const rows = this.db.prepare('SELECT * FROM presence_v2').all();
+    const merged = new Map();
+    const pick = (a, b, f) => (a == null ? b : b == null ? a : f(a, b));
+    for (const r of rows) {
+      const k = `${normName(r.name)}\u0000${r.kind}`;
+      const m = merged.get(k);
+      if (!m) { merged.set(k, { ...r, name: normName(r.name) }); continue; }
+      const newer = r.last_seen > m.last_seen ? r : m;
+      for (const c of Object.keys(r)) if (m[c] == null) m[c] = r[c];
+      m.last_seen = Math.max(m.last_seen, r.last_seen);
+      m.started_at = pick(m.started_at, r.started_at, Math.min);
+      for (const c of ['client', 'plan', 'slots', 'model']) m[c] = newer[c] ?? m[c];
+    }
+    this.db.exec('DELETE FROM presence_v2');
+    for (const m of merged.values()) {
+      const cols = Object.keys(m);
+      this.db.prepare(`INSERT INTO presence_v2 (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).run(...cols.map((c) => m[c]));
+    }
+    this.db.exec(`
+      UPDATE tasks SET assignee = lower(assignee), created_by = lower(created_by), reserved_for = lower(reserved_for), reviewer = lower(reviewer);
+      UPDATE locks SET owner = lower(owner);
+      UPDATE questions SET asker = lower(asker), answered_by = lower(answered_by);
+      UPDATE events SET author = lower(author);
+      UPDATE settings SET value = lower(value) WHERE key IN ('planner', 'integrator');
+    `);
   }
 
   // ---------- events ----------

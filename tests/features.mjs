@@ -1,11 +1,12 @@
 // Board features from live use: case-insensitive names, planner reservations, task proposals,
 // integrator modes (specific / whoever is free), busy vs idle, per-agent task limits, usage-limit
-// marks, planner extra slots, PR links, and /api/next for the Stop hook.
+// marks, planner extra slots, PR links, /api/next for the Stop hook, and schema upgrades of older boards.
 // Starts its own throwaway boards. Run all suites with: npm test
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { startBoard, finish, rest, Client, StreamableHTTPClientTransport } from './helpers.mjs';
+import { startBoard, finish, rest, tempDir, Client, StreamableHTTPClientTransport } from './helpers.mjs';
 import { agentTokenFor } from '../src/tokens.js';
+import { Board } from '../src/board.js';
 
 const board = await startBoard();
 const R = [];
@@ -53,7 +54,7 @@ db((d) => {
   d.prepare("INSERT INTO presence_v2 (name, kind, last_seen) VALUES ('Dana', 'human', ?)").run(Date.now());
   d.prepare("INSERT INTO tasks (title, status, assignee, created_by, created_at, updated_at) VALUES ('old task', 'claimed', 'Dana-claude', 'Dana', ?, ?)").run(Date.now(), Date.now());
   d.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('planner', 'Dana-claude')").run();
-  d.prepare("DELETE FROM settings WHERE key = '_names_lowercase'").run();
+  d.exec('PRAGMA user_version = 1'); // as if from before the lowercase step
 });
 await board.relaunch();
 st = await state();
@@ -580,12 +581,75 @@ db((d) => {
   d.prepare('UPDATE tasks SET pr_url = NULL WHERE id = ?').run(bf.id);
   d.prepare("INSERT INTO events (ts, author, kind, channel, task_id, text) VALUES (?, 'board', 'message', 'general', ?, 'see https://github.com/o/r/pull/99')").run(Date.now() - 2000, bf.id);
   d.prepare("INSERT INTO events (ts, author, kind, channel, task_id, text) VALUES (?, 'k1', 'task_updated', 'tasks', ?, ?)").run(Date.now() - 1000, bf.id, `#${bf.id} in_progress → review — done https://github.com/o/r/pull/12`);
-  d.prepare("DELETE FROM settings WHERE key = '_pr_backfill'").run();
+  d.exec('PRAGMA user_version = 2'); // as if from before the PR link backfill
 });
 await board.relaunch();
 const bfT = (await state()).tasks.find((t) => t.id === bf.id);
 check('PR link backfilled from the owner\'s earlier event', bfT?.pr_url === 'https://github.com/o/r/pull/12', JSON.stringify(bfT?.pr_url));
 
+}
+
+// ================= 14. schema versions: boards from older releases upgrade =================
+{
+  const open = (dir, fn) => { const d = new DatabaseSync(path.join(dir, 'board.db')); try { return fn(d); } finally { d.close(); } };
+  const shape = (d) => Object.fromEntries(d.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all()
+    .map((t) => [t.name, d.prepare(`PRAGMA table_info(${t.name})`).all().map((c) => `${c.name} ${c.type} ${c.notnull} ${c.dflt_value} ${c.pk}`).sort().join(', ')]));
+  const version = (d) => d.prepare('PRAGMA user_version').get().user_version;
+  const reopen = (dir) => new Board(dir).close();
+  const fresh = tempDir();
+  reopen(fresh);
+  const want = open(fresh, shape);
+  const latest = open(fresh, version);
+  check('a new board is at the latest schema version', latest > 0, latest);
+  const pr = 'https://github.com/o/r/pull/7';
+  const now = Date.now();
+
+  // The first release's tables (no settings, no presence), with a mixed-case task in review and its owner's PR event.
+  const first = tempDir();
+  open(first, (d) => {
+    d.exec(`
+      CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, author TEXT NOT NULL, kind TEXT NOT NULL, channel TEXT NOT NULL DEFAULT 'general', task_id INTEGER, text TEXT NOT NULL DEFAULT '', data TEXT);
+      CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'open', priority INTEGER NOT NULL DEFAULT 2, assignee TEXT, branch TEXT, depends_on TEXT NOT NULL DEFAULT '[]', created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+      CREATE TABLE locks (path TEXT PRIMARY KEY, owner TEXT NOT NULL, task_id INTEGER, reason TEXT NOT NULL DEFAULT '', expires_at INTEGER NOT NULL);
+      CREATE TABLE questions (id INTEGER PRIMARY KEY AUTOINCREMENT, asker TEXT NOT NULL, question TEXT NOT NULL, task_id INTEGER, answer TEXT, answered_by TEXT, created_at INTEGER NOT NULL, answered_at INTEGER);
+    `);
+    d.prepare("INSERT INTO tasks (title, status, assignee, branch, created_by, created_at, updated_at) VALUES ('first-release task', 'review', 'Ola', 'task/1-x', 'Ola', ?, ?)").run(now, now);
+    d.prepare("INSERT INTO events (ts, author, kind, channel, task_id, text) VALUES (?, 'Ola', 'task_updated', 'tasks', 1, ?)").run(now, `#1 in_progress → review — ${pr}`);
+    d.prepare("INSERT INTO locks (path, owner, task_id, expires_at) VALUES ('src/a.js', 'Ola', 1, ?)").run(now + 60e3);
+  });
+  reopen(first);
+  const up = open(first, (d) => ({ shape: shape(d), v: version(d), task: d.prepare('SELECT * FROM tasks').get(), lock: d.prepare('SELECT * FROM locks').get(), events: d.prepare('SELECT COUNT(*) n FROM events').get().n }));
+  check('first-release board: tables and columns match a new board', JSON.stringify(up.shape) === JSON.stringify(want), JSON.stringify(up.shape));
+  check('first-release board: at the latest version', up.v === latest, up.v);
+  check('first-release board: its task kept, names lowercased, new columns at their defaults, PR link backfilled',
+    up.task.title === 'first-release task' && up.task.status === 'review' && up.task.branch === 'task/1-x' && up.task.assignee === 'ola' && up.task.created_by === 'ola' && up.task.size === 'M' && up.task.reserved_for === null && up.task.pr_url === pr, JSON.stringify(up.task));
+  check('first-release board: its lock and events kept', up.lock?.owner === 'ola' && up.events === 1, JSON.stringify(up.lock));
+
+  // From before versioning and already past the old one-off steps (their marks are set): those don't run again.
+  const marked = tempDir();
+  open(marked, (d) => {
+    d.exec(`
+      CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '');
+      CREATE TABLE presence_v2 (name TEXT NOT NULL, kind TEXT NOT NULL, last_seen INTEGER NOT NULL, PRIMARY KEY (name, kind));
+      CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'open', priority INTEGER NOT NULL DEFAULT 2, assignee TEXT, branch TEXT, depends_on TEXT NOT NULL DEFAULT '[]', created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, pr_url TEXT);
+      CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, author TEXT NOT NULL, kind TEXT NOT NULL, channel TEXT NOT NULL DEFAULT 'general', task_id INTEGER, text TEXT NOT NULL DEFAULT '', data TEXT);
+      INSERT INTO settings (key, value) VALUES ('_names_lowercase', '1'), ('_pr_backfill', '1'), ('goal', 'Ship it');
+    `);
+    d.prepare("INSERT INTO presence_v2 (name, kind, last_seen) VALUES ('Pia', 'human', ?)").run(now);
+    d.prepare("INSERT INTO tasks (title, status, assignee, created_by, created_at, updated_at) VALUES ('marked task', 'done', 'Pia', 'Pia', ?, ?)").run(now, now);
+    d.prepare("INSERT INTO events (ts, author, kind, channel, task_id, text) VALUES (?, 'Pia', 'task_updated', 'tasks', 1, ?)").run(now, `#1 review → done ${pr}`);
+  });
+  reopen(marked);
+  const mk = open(marked, (d) => ({ shape: shape(d), v: version(d), task: d.prepare('SELECT * FROM tasks').get(), who: d.prepare('SELECT name FROM presence_v2').all().map((r) => r.name), goal: d.prepare("SELECT value FROM settings WHERE key = 'goal'").get()?.value }));
+  check('pre-versioning board: tables and columns match a new board', JSON.stringify(mk.shape) === JSON.stringify(want), JSON.stringify(mk.shape));
+  check('pre-versioning board: at the latest version, its settings kept', mk.v === latest && mk.goal === 'Ship it', `${mk.v} ${mk.goal}`);
+  check('pre-versioning board: steps it already had are not run again', mk.task.assignee === 'Pia' && mk.who.join() === 'Pia' && mk.task.pr_url === null, JSON.stringify(mk));
+
+  // Reopening an up-to-date board changes nothing (the lowercase step would rename Quinn, the backfill refill the link).
+  open(first, (d) => d.exec("UPDATE tasks SET pr_url = NULL; INSERT INTO presence_v2 (name, kind, last_seen) VALUES ('Quinn', 'human', 0)"));
+  reopen(first);
+  const again = open(first, (d) => ({ shape: shape(d), v: version(d), pr: d.prepare('SELECT pr_url FROM tasks').get().pr_url, who: d.prepare("SELECT name FROM presence_v2 WHERE kind = 'human'").get()?.name }));
+  check('reopening an up-to-date board is a no-op', JSON.stringify(again.shape) === JSON.stringify(want) && again.v === latest && again.pr === null && again.who === 'Quinn', JSON.stringify(again));
 }
 
 await finish(R, { board });

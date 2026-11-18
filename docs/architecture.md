@@ -183,6 +183,7 @@ The modules run in the order of this table: each imports the one before it first
 ## Storage and backups
 
 - One SQLite database per board: `data/board.db` for the first board, `data/boards/<board>/board.db` for the others.
+- Schema changes are numbered steps (`MIGRATIONS` in `src/board.js`). The database's `PRAGMA user_version` says how many it has had; on opening, the board runs the rest in order, each in one transaction with its version bump. A board from before versioning (version 0) starts at the first step, which adds whatever tables and columns it lacks, so boards from any older release, and older backups, upgrade in place.
 - Every 10 minutes (when something changed) each board copies its database to `backups/` in its folder and keeps the newest 24. Restoring is in [Backups](hosting.md#backups).
 - `npm start` reloads by itself when `src/` changes. It doesn't install dependencies on a reload: after a change to `package.json`, stop it and run `npm start` again (its `prestart` runs `scripts/ensure-deps.mjs`).
 
