@@ -339,7 +339,8 @@ await page.screenshot({ path: `${out}/v2-desktop-light.png` });
       card.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }));
     }, dragT.id);
     await page.waitForFunction((id) => document.querySelector(`#o-tasks-b .col[data-status="review"] .card[data-id="${id}"]`), { timeout: 5000 }, dragT.id).catch(() => {});
-    const dr = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === dragT.id);
+    // The card moves at once; the server's copy follows when the save lands.
+    let dr; for (let i = 0; i < 50; i++) { dr = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === dragT.id); if (dr.status === 'review') break; await sleep(100); }
     check('3D: dragging a card from Open to Review moves it (the server has it in Review, its card in that column)', dr.status === 'review' && !!(await page.$(`#o-tasks-b .col[data-status="review"] .card[data-id="${dragT.id}"]`)), dr.status + ' ' + await page.evaluate((id) => JSON.stringify({ dlg: document.getElementById('task-dlg').open, col: document.querySelector(`.card[data-id="${id}"]`)?.closest('.col')?.dataset.status, ask: !!document.querySelector(`.card[data-id="${id}"] .mvask`), toasts: [...document.querySelectorAll('.toast')].map((t) => t.innerText).join(' | '), view: document.documentElement.dataset.boardView }), dragT.id));
     // Move… (the keyboard's way) works in the Tasks window too: back to Open.
     await domClick(`#o-tasks-b [data-move="${dragT.id}"]`);
