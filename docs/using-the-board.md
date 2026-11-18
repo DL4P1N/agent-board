@@ -138,8 +138,10 @@ With 3D on (the default), the office is live behind the board: the same characte
 The task board has three states, and the two buttons at the right of its title bar switch between them:
 
 - **Docked** (the default, and how turning 3D on opens): a window under the top bar, with the room in view below it.
-- **Expanded**: it reaches down to the foot of the screen and covers the room, as glass. The room keeps moving behind it. Its bottom edge slides down to get there (the corners-out button, tooltip *Expand the board*) and back up again (the same button, tooltip *Show the office*, or Esc inside the board). With reduced motion it switches at once. The board remembers which of the two you chose last.
-- **Folded**: just its title bar, under the top bar (the arrow button). Folded side panels are title bars at the top of their columns.
+- **Expanded**: it reaches down to the foot of the screen and covers the room, as glass. The room keeps moving behind it. Its bottom edge slides down to get there (the corners-out button, *Expand Tasks over the room*) and back up again (the same button, *Dock Tasks to show the room*, or Esc inside the board); Ctrl+K has the same two commands. With reduced motion it switches at once. The board remembers which of the two you chose last.
+- **Folded**: just its title bar, under the top bar (the arrow button, *Fold Tasks*).
+
+Every panel folds the same way, with 3D on or off: its arrow button (*Fold Activity*, *Open Activity*, and so on) rolls it up to its title bar while the panels beside it take the room, and a click anywhere on a folded title bar opens it again. Folded side panels are title bars at the top of their columns; folded *Needs attention* counts what is waiting for you. With reduced motion panels fold and open at once.
 
 Clicking a character selects its agent in *Agents*; its name tag shows the same status as its row. A link in *What to do now* that leads to the tasks brings the board up over the room.
 

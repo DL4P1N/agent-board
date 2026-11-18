@@ -8,7 +8,7 @@ import { stays } from './derived.js';
 import { render } from './render.js';
 import { officeState } from './agents.js';
 import { setThemePref, syncThemeButtons } from './theme.js';
-import { oApply, oExpand, officeMount, oFold, oFrame, oMax, oSlide, oTasksOff, pickAgent } from './panels.js';
+import { oApply, oExpand, officeMount, oFold, oFrame, oMax, oMoving, oTasksOff, pickAgent } from './panels.js';
 
 // ---------- the 3D office: on or off ----------
 // With 3D on (the default wherever it can run) the office is always live behind the page: the panels float over it
@@ -94,8 +94,9 @@ function showOffice() {
   }).finally(() => { office.loading = null; view.classList.remove('loading'); view.removeAttribute('aria-busy'); });
 }
 // The room moves at its full (calm) rate behind the board, expanded or not (a few frames a second behind the glass
-// looked broken); it holds still while the board slides. A hidden tab draws nothing (the browser stops the frames).
-function oRate() { office.fps = !office.mod ? 0 : oSlide ? 1 : 30; office.mod?.setFps?.(office.fps); }
+// looked broken); it holds still while panels fold or the board slides. A hidden tab draws nothing (the browser stops
+// the frames).
+function oRate() { office.fps = !office.mod ? 0 : oMoving ? 1 : 30; office.mod?.setFps?.(office.fps); }
 // A copy of what the office draws, for tests and the console (null until it has loaded).
 Object.defineProperty(window, '__officeState', { get: () => office.mod?.snapshot() ?? null, configurable: true });
 // Another tab (the board, the presenter, the Boards page) changed the theme, or the OS switched light / dark.

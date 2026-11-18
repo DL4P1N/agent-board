@@ -17,7 +17,7 @@ html[data-board-view="office"] main { display: block; position: relative; flex: 
   --o-cl: calc(var(--dock-l, var(--dock)) - 4px + var(--edge) + var(--gutter)); --o-cr: calc(var(--dock-r, var(--dock)) - 4px + var(--edge) + var(--gutter));
   --o-gap: var(--gutter); --o-bottom: var(--edge); --o-tasks-h: clamp(176px, 27%, 270px);
   --o-top: calc(var(--o-y) + var(--tb-h, 48px) + var(--o-gap)); } /* the Tasks window's top, under the top bar */
-html[data-board-view="office"] :is(.o-panel, .o-pill) { background: var(--glass); box-shadow: var(--e-glass);
+html[data-board-view="office"] .o-panel { background: var(--glass); box-shadow: var(--e-glass);
   -webkit-backdrop-filter: blur(8px) saturate(1.15); backdrop-filter: blur(8px) saturate(1.15); }
 html[data-board-view="office"] :is(.o-agent, .o-det, .qcard) { background: color-mix(in srgb, var(--raised) 85%, transparent); }
 html[data-board-view="office"] .tochat { display: none !important; }
@@ -39,7 +39,6 @@ html[data-board-view="office"] .office-view { display: block; position: absolute
 .office-load { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; margin: 0; color: var(--muted); font: var(--fs-sm) var(--mono); }
 .office-view.loading .office-load { display: flex; }
 html[data-board-view="office"] #o-left { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); width: var(--o-w); max-height: calc(100% - var(--o-y) - var(--o-bottom)); } /* as tall as its content, from the top */
-html[data-board-view="office"] #o-left-pill { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); width: var(--o-w); }
 html[data-board-view="office"] .o-rcol { position: absolute; z-index: 3; top: var(--o-y); bottom: var(--o-bottom); right: var(--o-x); width: calc(var(--dock-r, var(--dock)) - 4px); justify-content: flex-start; pointer-events: none; }
 html[data-board-view="office"] .o-rcol > * { pointer-events: auto; }
 /* The centre column keeps only the top bar (and the popovers under it), at the top between the side columns. */

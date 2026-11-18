@@ -8,7 +8,7 @@ import { doAct, goQuestion, helpDlg, openHelp, setFilter } from './actions.js';
 import { openTask, setDlgBackTo } from './task-dialog.js';
 import { setTheme, THEME_LIST, themePref } from './theme.js';
 import { boardView, officeAllowed, setBoardView } from './office.js';
-import { oExpand, oGoal, oMax, oShow, oTasksOff, pickAgent } from './panels.js';
+import { oExpand, oGoal, oMax, oMaxLabel, oShow, oTasksOff, pickAgent } from './panels.js';
 import { tv } from './tasks.js';
 
 // ---------- command palette (Ctrl+K) ----------
@@ -23,7 +23,7 @@ function palCommands() {
   if (oq) add('Action', `Answer the oldest question (from ${oq.asker})`, () => goQuestion(oq.id), 'reply ' + oq.question);
   add('Action', 'New task', () => openTask(null), 'add create');
   if (officeAllowed()) add('View', boardView === 'office' ? 'Turn the 3D office off' : 'Turn the 3D office on', () => setBoardView(boardView === 'office' ? 'board' : 'office'), 'view office 3d scene characters background performance power');
-  if (boardView === 'office' && !oTasksOff()) add('View', oMax() ? 'Show the office (slide the board up)' : 'Expand the board over the office', () => oExpand(!oMax()), 'view office board tasks expand dock');
+  if (boardView === 'office' && !oTasksOff()) add('View', oMaxLabel(), () => oExpand(!oMax()), 'view office board tasks expand dock show the office slide');
   const vt = state.setup?.viewer_token;
   if (vt) add('Action', 'Open the presenter view (new tab)', () => window.open(BASE + '/present.html?token=' + encodeURIComponent(vt), '_blank', 'noopener'), 'projector big screen present 3d office');
   add('Action', state.settings?.deadline ? 'Edit the demo time' : 'Set the demo time', () => doAct('clock'), 'deadline clock countdown freeze');

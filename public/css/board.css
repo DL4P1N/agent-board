@@ -604,14 +604,16 @@ dialog:not([open]), dialog:not([open])::backdrop { pointer-events: none; }
 /* The demo's pixel window: a 2px border and a hard shadow (no second ring: in light themes it read as a heavy double frame). Its title bar (.o-head) is the
    one heading component of the page: the panel's name (mono, uppercase), its counts, then its fold button. The 3D view
    makes the same windows glass over the room. */
-.o-panel, .o-pill { background: var(--panel); border: 2px solid var(--border); box-shadow: var(--e2); color: var(--ink); }
+.o-panel { background: var(--panel); border: 2px solid var(--border); box-shadow: var(--e2); color: var(--ink); }
 .o-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .o-head { display: flex; align-items: center; gap: var(--s4); min-height: var(--bar); padding: 2px var(--s2) 2px var(--s5); border-bottom: 2px solid var(--border); flex: 0 0 auto; min-width: 0; }
 /* Section titles, the same everywhere (panels, sections, the top bar's chip labels): small uppercase mono, muted. The
    accent is kept for what needs attention (the need-you count, Answer, Approve, @me, "question waiting"). */
-.o-head h2, .o-h, .o-pill .o-t, .now .nl, .o-sec h3, .tp-h, .sec-h { font: 700 var(--fs-meta)/1.2 var(--mono); text-transform: uppercase; letter-spacing: .12em; text-shadow: var(--shade); color: var(--muted); }
+.o-head h2, .o-h, .now .nl, .o-sec h3, .tp-h, .sec-h { font: 700 var(--fs-meta)/1.2 var(--mono); text-transform: uppercase; letter-spacing: .12em; text-shadow: var(--shade); color: var(--muted); }
 .o-head h2 { flex: 0 0 auto; white-space: nowrap; }
-#o-left-sub { display: none; } /* open, the panel lists them; folded, its chip counts them */
+/* Folded, Needs attention's title bar counts what waits on you (the one count in amber); the others' facts are muted. */
+.o-head .o-n { color: var(--warn); font: 700 var(--fs-meta) var(--mono); }
+.o-head .o-n:empty { display: none; }
 .o-head .o-sub { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font: var(--fs-meta) var(--mono); white-space: nowrap; }
 .o-head .o-ib:first-of-type { margin-left: auto; }
 .o-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--s4) var(--s5) var(--s5); scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
@@ -619,25 +621,19 @@ dialog:not([open]), dialog:not([open])::backdrop { pointer-events: none; }
 .o-ib { flex: 0 0 auto; width: 26px; min-height: 26px; padding: 0; background: transparent; color: var(--muted); border: 2px solid transparent; box-shadow: none; font: 700 var(--fs-sm)/1 var(--mono); display: inline-flex; align-items: center; justify-content: center; }
 .o-ib:hover { background: transparent; color: var(--ink); border-color: var(--border); }
 .o-ib:active { transform: translate(1px, 1px); box-shadow: none; }
-/* One fold mark everywhere: a chevron that turns with aria-expanded. Title bars: down = open, up = folded. Docks
-   point the way they fold (Needs attention left, Agents right), their chips the way they open. */
+/* One fold mark everywhere, panels and top bar chips alike: an arrow that turns with aria-expanded, pointing where a
+   click sends the content: down (▾) to open it below, up (▴) to fold it away. Only the Done column folds sideways. */
 .chev { display: inline-block; font-family: var(--mono); line-height: 1; transition: rotate var(--t-base) var(--ease); }
-[aria-expanded="false"] > .chev { rotate: 180deg; }
-#o-left [data-o-fold] .chev, .dtog .chev { rotate: 90deg; }
-#o-right [data-o-fold] .chev, .dclose .chev { rotate: -90deg; }
-button.link[aria-expanded="false"] > .chev { rotate: -90deg; }
-/* Folded: the demo's pill, a title chip where the panel was. */
-.o-pill { display: inline-flex; align-items: center; gap: var(--s4); min-height: var(--bar); padding: 0 var(--s5); font-size: var(--fs-sm); }
-.o-pill:hover { background: var(--raised); }
-.o-pill .o-n { color: var(--warn); font: 700 var(--fs-meta) var(--mono); }
-.o-pill .o-n:empty { display: none; }
-.o-pill .o-ar { color: var(--muted); font-family: var(--mono); margin-left: auto; }
-/* A folded column keeps its width: its panels fold to title bars across it, nothing turns on its side. */
-#o-left-pill, #o-right-pill { display: flex; }
-#o-right-pill .o-ar { order: 9; } /* its arrow at the right edge too, like the title bars under it */
-/* Folded to the title bar (Activity, File locks, the 3D Tasks window): the body hides. */
-.o-panel.folded > .o-body { display: none; }
-.o-panel.folded > .o-head { border-bottom: 0; }
+[aria-expanded="true"] > .chev { rotate: 180deg; }
+.dtog .chev { rotate: 90deg; }
+.dclose .chev { rotate: -90deg; }
+/* Folded: just the title bar, across its column (which keeps its width: nothing turns on its side), as tall as when
+   the panel is open (the panel's bottom border takes the place of the title bar's rule). A click anywhere on it opens
+   it. While it folds or opens (.o-moving) the body stays in, clipped by the moving panel. */
+.o-panel.folded:not(.o-moving) > .o-body { display: none; }
+.o-panel.folded:not(.o-moving) > .o-head { border-bottom: 0; min-height: calc(var(--bar) - 2px); } /* the bar less its rule */
+.o-panel.folded > .o-head { cursor: pointer; }
+.o-panel.folded > .o-head:hover [data-o-fold] { color: var(--ink); border-color: var(--border); }
 
 /* The top bar, the same in both views: a row of separate chips, each a small uppercase mono label in the accent, then
    its value, and ▾ when it opens something in place: GOAL (the goal), DEMO (the countdown and the pace verdict; the
@@ -655,8 +651,7 @@ button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
 button.tbc:active { transform: translate(1px, 1px); }
 .tbc .tbl { font: 700 var(--fs-micro)/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); flex: 0 0 auto; text-shadow: var(--shade); }
 .tbc .o-x { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.tbc .o-ar { color: var(--muted); font-family: var(--mono); flex: 0 0 auto; }
-.tbc[aria-expanded="true"] .o-ar { transform: rotate(180deg); }
+.tbc .o-ar { color: var(--muted); flex: 0 0 auto; }
 .tbc .ci-pill { flex: 0 0 auto; }
 /* Who gives way when the row is short, in any font (no widths in px): the goal gives way first, down to about 20
    characters; then the names on the Planner, Merges and Roles chips, down to a few letters each; only then the goal,
@@ -835,25 +830,23 @@ main { --dock: clamp(272px, 20vw, 340px); --top: calc(var(--hdr, 54px) + var(--e
   display: grid; grid-template-columns: var(--dock-l, var(--dock)) minmax(0, 1fr) var(--dock-r, var(--dock)); grid-template-areas: "left centre right" "left foot right"; grid-template-rows: 1fr auto; gap: 0 calc(var(--gutter) - 4px); align-items: start;
   padding: calc(var(--edge) - 2px); }
 @media (max-width: 1400px) { main { --dock: clamp(256px, 20vw, 280px); } }
-#o-left, #o-left-pill { grid-area: left; } .centre { grid-area: centre; } .o-rcol { grid-area: right; }
+#o-left { grid-area: left; } .centre { grid-area: centre; } .o-rcol { grid-area: right; }
 .centre { position: relative; display: flex; flex-direction: column; gap: calc(var(--gutter) - 4px); min-width: 0; }
 .office-view { display: none; }
 html:not([data-board-view="office"]) #o-left { position: sticky; top: var(--top); max-height: calc(100vh - var(--top) - var(--edge) - 2px); margin: 2px; }
-html:not([data-board-view="office"]) #o-left-pill { position: sticky; top: var(--top); margin: 2px; justify-self: stretch; }
 html:not([data-board-view="office"]) :is(.topbar, #setup) { margin: 2px; }
 .o-rcol { display: flex; flex-direction: column; gap: var(--gutter); min-width: 0; min-height: 0; }
 html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top); height: calc(100vh - var(--top) - var(--edge) + 2px); padding: 2px; } /* its panels end where Needs attention's longest can */
 .o-rcol > .o-right { flex: 0 1 auto; min-height: 120px; max-height: 45%; } /* its rows up to 45%; Activity takes the rest, its feed scrolling */
 .o-rcol > .o-act { flex: 0 100 auto; min-height: 0; } /* short of room, Activity gives way first (down to its minimum), then Agents */
-.o-rcol > #o-right-pill:not([hidden]) + .o-act:not(.folded) { flex: 1 1 auto; } /* Agents folded: Activity takes the column */
+.o-rcol > .o-right.folded + .o-act:not(.folded) { flex: 1 1 auto; } /* Agents folded: Activity takes the column */
 /* File locks open: it keeps its height up to 30%; Activity shrinks to make room, keeping enough for its tabs, a few events
    and the chat box, and only past that does Agents give up room. */
 .o-rcol > .o-locks:not(.folded) { min-height: 120px; } /* past that, Agents and File locks share what is left */
 .o-rcol > .o-act:not(.folded) { min-height: min(250px, 40%); }
 .o-rcol > .o-locks { flex: 0 1 auto; min-height: 0; max-height: 30%; }
-.o-rcol > .o-act.folded, .o-rcol > .o-locks.folded { flex: 0 0 auto; }
+.o-rcol > :is(.o-right, .o-act, .o-locks).folded { flex: 0 0 auto; min-height: 0; }
 .o-rcol > .o-act.folded ~ .o-locks:not(.folded) { max-height: none; } /* Activity folded: the locks may take its room */
-.o-rcol > #o-right-pill { align-self: stretch; flex: 0 0 auto; }
 /* Short laptop screens: the chat hint is the composer's description (read out, and its tooltip), so the feed keeps
    the room. */
 @media (max-height: 900px) { .o-act :is(#chat-hint, #dm-hint) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
@@ -861,7 +854,7 @@ html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top)
    as one. */
 @media (max-width: 1100px) {
   main { grid-template-columns: 264px minmax(0, 1fr); grid-template-areas: "left centre" "right centre" "foot foot"; grid-template-rows: auto 1fr auto; gap: calc(var(--gutter) - 4px); }
-  html:not([data-board-view="office"]) :is(#o-left, #o-left-pill, .o-rcol) { position: static; max-height: none; height: auto; }
+  html:not([data-board-view="office"]) :is(#o-left, .o-rcol) { position: static; max-height: none; height: auto; }
   html:not([data-board-view="office"]) .o-rcol { padding: 2px; }
   html:not([data-board-view="office"]) .o-rcol > .o-panel { flex: 0 0 auto; max-height: none; }
   html:not([data-board-view="office"]) .o-act .feed { max-height: 50vh; }

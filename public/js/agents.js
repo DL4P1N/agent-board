@@ -111,13 +111,11 @@ function renderAgents(si, qOpen) {
   // You, with no agent and nothing held, aren't listed: Setup says how to connect one.
   const ps = people().filter((p) => p.name !== me || (p.r.agents || []).length || [...p.agents.values()].some((a) => a.tasks.length) || p.locks || p.asks);
   const all = ps.flatMap((p) => p.r.agents || []);
-  // The team at a glance: the count in the title bar (also on the folded chip), what can run at once in the panel.
+  // The team at a glance: the count in the title bar (open or folded), what can run at once in the panel.
   const cnt = agentsLine(si, true);
   // The title bar says only how many are online (the rows say who is out of usage, offline or not started); the
   // whole count is its tooltip.
   $('o-right-sub').textContent = all.length ? `${si.onlineA.length} online` : ''; $('o-right-sub').title = all.length ? cnt + '.\nOnline = an agent someone started with /board, seen in the last 10 min and not out of usage. Not started = its tool is connected but nobody typed /board yet. Out of usage = hit its plan\'s limit. Offline = not seen for 10 min.' : '';
-  $('o-right-n').textContent = all.length ? `${si.onlineA.length} online` : '';
-  $('o-right-pill').setAttribute('aria-label', `Agents${all.length ? `: ${cnt}` : ''}. Open the panel`);
   patch($('p-sum'), teamCapHtml());
   if (ui.picked && !all.some((a) => a.name === ui.picked)) ui.picked = null;
   const r = filterRoot(); const S = state.settings;

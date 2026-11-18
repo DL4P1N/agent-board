@@ -254,9 +254,9 @@ await page.evaluate(() => document.getElementById('toasts').replaceChildren());
 // locks: release with inline confirm
 const lockCount = await page.$$eval('#locks .lock', (l) => l.length);
 // File locks fold to their title bar (with the count); open them to release one. Open is remembered.
-check('file locks start folded, with the count in their title bar', await page.evaluate((n) => $('l-body').hidden && new RegExp(`${n} held`).test($('l-count').textContent) && $('l-tog').getAttribute('aria-expanded') === 'false' && $('o-locks').querySelector('.o-head').contains($('l-tog')), lockCount));
+check('file locks start folded, with the count in their title bar', await page.evaluate((n) => $('o-locks').classList.contains('folded') && !$('l-body').offsetHeight && new RegExp(`${n} held`).test($('l-count').textContent) && $('l-tog').getAttribute('aria-expanded') === 'false' && $('o-locks').querySelector('.o-head').contains($('l-tog')), lockCount));
 await page.click('#l-tog');
-check('the title bar opens the locks (remembered with the other panels)', await page.evaluate(() => !$('l-body').hidden && $('l-tog').getAttribute('aria-expanded') === 'true' && JSON.parse(localStorage.getItem('board-office-ui') || '{}').locks === false));
+check('the title bar opens the locks (remembered with the other panels)', await page.evaluate(() => !$('o-locks').classList.contains('folded') && $('l-tog').getAttribute('aria-expanded') === 'true' && JSON.parse(localStorage.getItem('board-office-ui') || '{}').locks === false));
 await page.$eval('[data-unlock="package.json"]', (b) => b.scrollIntoView({ block: 'center' })); await sleep(300); const hit = await page.evaluate(() => { const b = document.querySelector('[data-unlock="package.json"]').getBoundingClientRect(); const el = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return el.outerHTML.slice(0, 120); }); console.log('debug: element at release button = ' + hit);
 await page.click('[data-unlock="package.json"]');
 check('release asks inline confirmation (focus on Keep)', await page.evaluate(() => document.activeElement?.dataset.unlockNo !== undefined && !!document.querySelector('[data-unlock-yes="package.json"]')));

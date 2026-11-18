@@ -270,7 +270,7 @@ function observeMentions() {
 // File locks fold to their title bar (with the count), like the other panels: agents set and clear them, a human only
 // steps in when an owner is gone.
 function renderLocks() {
-  $('l-count').textContent = state.locks.length ? `${state.locks.length} held` : 'none';
+  $('l-count').textContent = state.locks.length ? `${state.locks.length} held` : '';
   patch($('locks'), state.locks.length ? state.locks.map((l) => {
     const mins = Math.max(0, Math.ceil((l.expires_at - Date.now()) / 60000));
     const confirming = ui.confirmLock === l.path;

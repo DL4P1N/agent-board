@@ -51,6 +51,22 @@ async function open(url = '/', { phone = false, vp, setup, errs = errors } = {})
   return { page, reqs };
 }
 const officeReqs = (reqs) => reqs.filter((u) => /\/office\//.test(u));
+// Click something that folds or opens a panel and follow the panels' heights every frame while they move: the motion
+// runs (an animation mid-way, heights strictly between start and end), lands on the final size, and nothing changes
+// after it lands (no snap at the end).
+const foldRun = (page, sel, ids) => page.evaluate(async (sel, ids) => {
+  const hs = () => ids.map((i) => Math.round(document.getElementById(i).getBoundingClientRect().height));
+  const frame = () => new Promise((r) => requestAnimationFrame(r));
+  const h0 = hs();
+  const el = document.querySelector(sel); if (el.matches('button')) el.focus(); el.click(); // as a real click: a button takes focus
+  const anims = document.getAnimations().filter((a) => a.id === 'glide').length;
+  const seen = []; const t0 = performance.now();
+  while (document.getAnimations().some((a) => a.id === 'glide') && performance.now() - t0 < 3000) { seen.push(hs()); await frame(); }
+  const end = hs(); await frame(); await frame();
+  const later = hs();
+  const between = seen.some((h) => h.some((x, i) => (x - h0[i]) * (x - end[i]) < -4)); // a frame part-way for some panel
+  return { anims, frames: seen.length, ms: Math.round(performance.now() - t0), between, h0, end, later, snap: end.some((x, i) => Math.abs(x - later[i]) > 1) };
+}, sel, ids);
 
 try {
   // ---- Default (nothing saved in this browser): 3D on, the board docked over the live room ----
@@ -217,14 +233,14 @@ try {
       return { anims, copies, frames: ys.length, ms: Math.round(performance.now() - t0), steady, first: ys[0], end: Math.round(tw.getBoundingClientRect().bottom), topKept: Math.abs(tw.getBoundingClientRect().top - top0) < 1, max: tw.classList.contains('max'), fps: office.fps, label: $('o-tasks-max').getAttribute('aria-label') };
     }, dir);
     const down = await slideTo('down');
-    check('the board\'s button expands it: one animation of its bottom edge, steadily down to the foot, its top kept, about 0.4 s, no second board; the room at its full rate', down.anims === 1 && down.copies === 1 && down.steady && down.frames >= 3 && down.ms < 1500 && down.end > down.first + 100 && down.topKept && down.max && down.fps === 30 && /show the office/.test(down.label), JSON.stringify(down));
+    check('the board\'s button expands it: one animation of its bottom edge, steadily down to the foot, its top kept, about a quarter of a second, no second board; the room at its full rate', down.anims === 1 && down.copies === 1 && down.steady && down.frames >= 3 && down.ms < 1500 && down.end > down.first + 100 && down.topKept && down.max && down.fps === 30 && down.label === 'Dock Tasks to show the room', JSON.stringify(down));
     const up = await slideTo('up');
-    check('and docks it again: its bottom edge steadily up, the room back in view', up.anims === 1 && up.steady && up.frames >= 3 && up.end < up.first - 100 && up.topKept && !up.max && up.fps === 30 && /Expand the board/.test(up.label), JSON.stringify(up));
+    check('and docks it again: its bottom edge steadily up, the room back in view', up.anims === 1 && up.steady && up.frames >= 3 && up.end < up.first - 100 && up.topKept && !up.max && up.fps === 30 && up.label === 'Expand Tasks over the room', JSON.stringify(up));
     check('no Progress toggle: no bottom chips at all', await page.evaluate(() => !document.querySelector('.o-bot, #o-prog-chip, #o-act-chip, #o-chat-chip')));
     check('no copy of the board anywhere (one board, moved, never two at once)', await page.evaluate(() => !document.querySelector('.vt-ghost') && document.querySelectorAll('#board').length === 1 && getComputedStyle($('o-tasks')).visibility === 'visible'));
     await page.click('#o-tasks-fold');
-    check('the fold button in the Tasks title bar folds it to its title bar under the top bar', await page.evaluate(() => { const t = $('o-tasks').getBoundingClientRect(), tb = $('topbar').getBoundingClientRect(); return $('o-tasks').classList.contains('folded') && !$('board').offsetHeight && $('o-tasks-fold').getAttribute('aria-expanded') === 'false' && t.top - tb.bottom >= 0 && t.top - tb.bottom < 16 && t.height < 70; }));
-    await page.click('#o-tasks-fold');
+    check('the fold button in the Tasks title bar folds it to its title bar under the top bar', await until(page, () => { const t = $('o-tasks').getBoundingClientRect(), tb = $('topbar').getBoundingClientRect(); return $('o-tasks').classList.contains('folded') && !$('board').offsetHeight && $('o-tasks-fold').getAttribute('aria-expanded') === 'false' && t.top - tb.bottom >= 0 && t.top - tb.bottom < 16 && t.height < 70; }));
+    await page.click('#o-tasks-fold'); await until(page, () => !document.getAnimations().some((a) => a.id === 'glide'));
     check('the button in the Tasks title bar opens the window (docked, as it was)', await page.evaluate(() => !$('o-tasks').classList.contains('folded') && $('o-tasks-b').contains($('board')) && $('board').offsetHeight > 50 && $('o-tasks-fold').getAttribute('aria-expanded') === 'true'));
     check('the room fills the window under the header; the Board view centre is hidden (its tasks are in the Tasks window); no scrolling', await page.evaluate(() => { const r = $('office-view').getBoundingClientRect(); const h = document.querySelector('#app > header').getBoundingClientRect(); return Math.abs(r.top - h.bottom) < 3 && Math.abs(r.bottom - innerHeight) < 2 && r.width === innerWidth && !$('boardwrap').offsetWidth && $('o-tasks-b').contains($('board')) && document.documentElement.scrollHeight <= innerHeight + 1; }));
     const lay = await page.evaluate(() => {
@@ -240,8 +256,8 @@ try {
     });
     check('docks, Activity and File locks under Agents, the top bar and the Tasks window are there, apart from each other, inside the room, the middle clear', lay.docks && lay.col && lay.apart && lay.mid && lay.inside, JSON.stringify(lay));
     check('Needs attention (left dock) holds What to do now and the questions, with Answer', await page.evaluate(() => !!$('o-left').contains($('now')) && $('o-left').contains($('q-panel'))) && await shown(page, '#q-panel textarea') && /Which login provider/.test(await page.$eval('#q-panel', (e) => e.innerText)));
-    const dock = await page.evaluate(() => { const f = $('questions').querySelector('form'); const ta = f.querySelector('textarea').getBoundingClientRect(); const b = f.querySelector('button').getBoundingClientRect(); return { sub: $('o-left-sub').textContent, badge: $('needs').querySelector('button')?.title, phases: !$('o-left').querySelector('.phases'), row: Math.abs(ta.top - b.top) < 12 && b.left > ta.right - 2 }; });
-    check('Needs attention: its counts (the same words and count as the need-you badge, shown on its folded chip), no phase track (the Demo popover has it), the answer box and Answer on one row', /1 question/.test(dock.sub) && dock.sub === dock.badge && dock.phases && dock.row, JSON.stringify(dock));
+    const dock = await page.evaluate(() => { const f = $('questions').querySelector('form'); const ta = f.querySelector('textarea').getBoundingClientRect(); const b = f.querySelector('button').getBoundingClientRect(); return { sub: $('o-left-n').title, badge: $('needs').querySelector('button')?.title, phases: !$('o-left').querySelector('.phases'), row: Math.abs(ta.top - b.top) < 12 && b.left > ta.right - 2 }; });
+    check('Needs attention: its counts (the same words and count as the need-you badge, its folded title bar\'s tooltip), no phase track (the Demo popover has it), the answer box and Answer on one row', /1 question/.test(dock.sub) && dock.sub === dock.badge && dock.phases && dock.row, JSON.stringify(dock));
     check('Agents (right dock): people, then their agents with tool dot, state and current task', await until(page, () => { const b = document.querySelector('[data-o-agent="ana-claude"]'); return b && $('o-right').contains(b) && !!b.querySelector('.tdot') && /asked you a question|#\d+ Vote API/.test(b.innerText) && /\bana\b/.test($('o-agents').innerText); }), await page.$eval('#o-agents', (e) => e.innerText.replace(/\s+/g, ' ')).catch(() => ''));
     // The row and the room say the same thing: a question is "Question" in both, boxed; working is a plain word.
     const st = await page.evaluate(() => { const s = document.querySelector('[data-o-agent="ana-claude"] .o-st'); return { word: s.textContent, boxed: s.classList.contains('bx'), bubble: window.__officeState?.agents.find((a) => a.id === 'ana-claude')?.bubble, badges: [...document.querySelectorAll('#o-agents .o-st.bx')].map((x) => x.textContent) }; });
@@ -296,10 +312,10 @@ try {
     await page.setViewport({ width: 1440, height: 900 }); await sleep(300);
     check('progress (x of y done, bar) in the top bar; chat lives in Activity, no separate Chat chip', await page.evaluate(() => $('topbar').contains($('done-count')) && !!$('done-count').querySelector('.mbar') && !$('o-chat-chip')));
     // File locks: the Board view's panel, folded to its title bar with the count, at the foot of the right column.
-    check('3D: File locks under Activity, folded, with the count; opening it lists the lock with Release', await page.evaluate(() => $('o-rcol').contains($('o-locks')) && !!$('o-locks').offsetWidth && /1 held/.test($('l-count').textContent) && $('l-body').hidden));
+    check('3D: File locks under Activity, folded, with the count; opening it lists the lock with Release', await page.evaluate(() => $('o-rcol').contains($('o-locks')) && !!$('o-locks').offsetWidth && /1 held/.test($('l-count').textContent) && $('o-locks').classList.contains('folded') && !$('l-body').offsetHeight));
     const agentsH = await page.evaluate(() => $('o-right').getBoundingClientRect().height);
     await page.click('#l-tog');
-    check('3D: the File locks title bar opens the list (package.json, Release)', await page.evaluate(() => !$('l-body').hidden && /package\.json/.test($('locks').innerText) && !!$('locks').querySelector('[data-unlock]')?.offsetWidth));
+    check('3D: the File locks title bar opens the list (package.json, Release)', await page.evaluate(() => !$('o-locks').classList.contains('folded') && $('l-body').offsetHeight > 0 && /package\.json/.test($('locks').innerText) && !!$('locks').querySelector('[data-unlock]')?.offsetWidth));
     check('3D: opening File locks takes its room from Activity, not Agents (Agents keeps its height while Activity has room to give)', await page.evaluate((h) => Math.abs($('o-right').getBoundingClientRect().height - h) < 2 && $('o-act').getBoundingClientRect().height >= 200, agentsH), agentsH);
     await page.click('#l-tog');
     const small = await page.evaluate(() => {
@@ -348,20 +364,25 @@ try {
     await page.keyboard.press('Escape'); await until(page, () => !document.getElementById('task-dlg').open);
     check('closing the dialog leaves the office as it was', await view(page) === 'office');
 
-    // Folding: docks fold to chips, Tasks and Activity to their title bars, maximise; remembered; Esc restores the
-    // maximised window.
-    await page.click('#o-left [data-o-fold]');
-    check('Needs attention folds to a chip, focus on the chip', await page.evaluate(() => $('o-left').hidden && !$('o-left-pill').hidden && document.activeElement === $('o-left-pill') && $('o-left-pill').getAttribute('aria-expanded') === 'false'));
-    await page.click('#o-right [data-o-fold]');
-    await page.click('#o-tasks-fold');
-    check('Agents folds (Activity takes the column); the Tasks window folds to its title bar, focus stays on its button', await page.evaluate(() => $('o-right').hidden && !$('o-right-pill').hidden && $('o-tasks').classList.contains('folded') && document.activeElement === $('o-tasks-fold') && $('o-act').getBoundingClientRect().height > $('office-view').getBoundingClientRect().height * 0.6));
-    await page.click('#o-act-fold');
-    check('Activity folds to its title bar under Agents (the column stacks to the top, File locks right under it), with the latest event in it', await page.evaluate(() => $('o-act').classList.contains('folded') && !$('feed').offsetHeight && $('o-act-fold').getAttribute('aria-expanded') === 'false' && $('o-act-x').textContent.length > 3 && $('o-locks').getBoundingClientRect().top - $('o-act').getBoundingClientRect().bottom < 16 && $('o-act').getBoundingClientRect().top - ($('o-right').offsetHeight ? $('o-right') : $('o-right-pill')).getBoundingClientRect().bottom < 16), await page.evaluate(() => JSON.stringify({ act: $('o-act').getBoundingClientRect(), locks: $('o-locks').getBoundingClientRect(), v: $('office-view').getBoundingClientRect(), x: $('o-act-x').textContent, cls: $('o-act').className })));
-    check('everything folded: a row along the top, lined up (the left title bar, the top bar, the right column\'s first title bar), the task board\'s title bar under the top bar', await page.evaluate(() => { const v = $('office-view').getBoundingClientRect(), y = v.top + 10; const bs = [$('o-left-pill'), $('topbar'), $('o-right-pill')].map((e) => e.getBoundingClientRect()); const t = $('o-tasks').getBoundingClientRect(); return bs.every((b) => Math.abs(b.top - y) < 3 && b.height < 70) && bs[0].right <= bs[1].left && bs[1].right <= bs[2].left && t.top >= bs[1].bottom && t.top - bs[1].bottom < 16 && t.height < 70 && Math.abs(t.left - bs[1].left) < 2 && Math.abs(t.right - bs[1].right) < 2; }), await page.evaluate(() => JSON.stringify([$('o-left-pill'), $('topbar'), $('o-tasks'), $('o-right-pill')].map((e) => { const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.right), Math.round(b.top), Math.round(b.bottom)]; }))));
+    // Folding: every panel folds to its title bar (the Tasks window too) and moves there, the others in its column
+    // taking its room in step; remembered; a click anywhere on a folded title bar opens it again.
+    const fl = await foldRun(page, '#o-left [data-o-fold]', ['o-left']);
+    check('Needs attention folds to its title bar: it rolls up (an animation part-way), lands on its title bar, no snap at the end', fl.anims >= 1 && fl.between && !fl.snap && fl.end[0] < 60 && fl.h0[0] > 100, JSON.stringify(fl));
+    check('folded, its title bar counts what needs you (amber), its button says Open Needs attention, focus stays on it', await page.evaluate(() => $('o-left').classList.contains('folded') && /^\d+$/.test($('o-left-n').textContent) && getComputedStyle($('o-left-n')).color === (() => { const t = document.createElement('i'); t.style.color = 'var(--warn)'; document.body.append(t); const c = getComputedStyle(t).color; t.remove(); return c; })() && document.activeElement === $('o-left').querySelector('[data-o-fold]') && $('o-left').querySelector('[data-o-fold]').getAttribute('aria-label') === 'Open Needs attention' && $('o-left').querySelector('[data-o-fold]').title === 'Open Needs attention'));
+    const fr = await foldRun(page, '#o-right [data-o-fold]', ['o-right', 'o-act', 'o-locks']);
+    check('Agents folds the same way while Activity grows into its room in step (the column\'s total height kept every frame), no snap', fr.anims >= 2 && fr.between && !fr.snap && fr.end[0] < 60 && fr.end[1] > fr.h0[1] + 100, JSON.stringify(fr));
+    const ft = await foldRun(page, '#o-tasks-fold', ['o-tasks']);
+    check('the Tasks window folds the same way, to its title bar under the top bar, no snap; the room held still meanwhile, back at its full rate after', ft.anims >= 1 && ft.between && !ft.snap && ft.end[0] < 60 && await until(page, () => office.fps === 30), JSON.stringify(ft));
+    check('Agents folded (Activity takes the column); the Tasks window folded, focus stays on its button', await page.evaluate(() => $('o-right').classList.contains('folded') && $('o-right-sub').textContent.length > 0 && $('o-tasks').classList.contains('folded') && document.activeElement === $('o-tasks-fold') && $('o-act').getBoundingClientRect().height > $('office-view').getBoundingClientRect().height * 0.6));
+    check('the folded title bars are as tall as the open ones\' title bars (the panel\'s bottom border in place of the rule)', await page.evaluate(() => { const open = $('o-act').querySelector('.o-head').getBoundingClientRect(), p = $('o-act').getBoundingClientRect(); return ['o-left', 'o-right', 'o-tasks'].every((i) => Math.abs($(i).getBoundingClientRect().height - (open.bottom - p.top)) < 1.5); }));
+    await page.click('#o-act-fold'); await until(page, () => !document.getAnimations().some((a) => a.id === 'glide'));
+    check('Activity folds to its title bar under Agents (the column stacks to the top, File locks right under it), with the latest event in it', await page.evaluate(() => $('o-act').classList.contains('folded') && !$('feed').offsetHeight && $('o-act-fold').getAttribute('aria-expanded') === 'false' && $('o-act-x').textContent.length > 3 && $('o-locks').getBoundingClientRect().top - $('o-act').getBoundingClientRect().bottom < 16 && $('o-act').getBoundingClientRect().top - $('o-right').getBoundingClientRect().bottom < 16), await page.evaluate(() => JSON.stringify({ act: $('o-act').getBoundingClientRect(), locks: $('o-locks').getBoundingClientRect(), v: $('office-view').getBoundingClientRect(), x: $('o-act-x').textContent, cls: $('o-act').className })));
+    check('everything folded: a row along the top, lined up (the left title bar, the top bar, the right column\'s first title bar), the task board\'s title bar under the top bar', await page.evaluate(() => { const v = $('office-view').getBoundingClientRect(), y = v.top + 10; const bs = [$('o-left'), $('topbar'), $('o-right')].map((e) => e.getBoundingClientRect()); const t = $('o-tasks').getBoundingClientRect(); return bs.every((b) => Math.abs(b.top - y) < 3 && b.height < 70) && bs[0].right <= bs[1].left && bs[1].right <= bs[2].left && t.top >= bs[1].bottom && t.top - bs[1].bottom < 16 && t.height < 70 && Math.abs(t.left - bs[1].left) < 2 && Math.abs(t.right - bs[1].right) < 2; }), await page.evaluate(() => JSON.stringify([$('o-left'), $('topbar'), $('o-tasks'), $('o-right')].map((e) => { const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.right), Math.round(b.top), Math.round(b.bottom)]; }))));
     await page.reload(); await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 8000 }); await sleep(300);
-    check('folded panels stay folded after a reload', await page.evaluate(() => $('o-left').hidden && $('o-right').hidden && $('o-tasks').classList.contains('folded') && $('o-act').classList.contains('folded') && !$('o-left-pill').hidden));
-    await page.click('#o-left-pill'); await page.click('#o-right-pill'); await page.click('#o-tasks-fold'); await page.click('#o-act-fold');
-    check('the chips and title-bar buttons open them again', await page.evaluate(() => !$('o-left').hidden && !$('o-right').hidden && !$('o-tasks').classList.contains('folded') && !$('o-act').classList.contains('folded') && $('feed').offsetHeight > 50 && $('o-left-pill').hidden));
+    check('folded panels stay folded after a reload', await page.evaluate(() => ['o-left', 'o-right', 'o-tasks', 'o-act'].every((i) => $(i).classList.contains('folded'))));
+    // A click on the title (not only the arrow) opens a folded panel.
+    for (const sel of ['#o-left-h', '#o-right-h', '#o-tasks .o-head h2', '#f-h']) { await page.click(sel); await until(page, () => !document.getAnimations().some((a) => a.id === 'glide')); }
+    check('a click on a folded title bar\'s title opens the panel, every one of them (a pointer over the bar)', await page.evaluate(() => ['o-left', 'o-right', 'o-tasks', 'o-act'].every((i) => !$(i).classList.contains('folded')) && $('feed').offsetHeight > 50 && getComputedStyle($('o-locks').querySelector('.o-head')).cursor === 'pointer'));
     await page.click('#o-tasks-max');
     check('expand: the Tasks window slides down and covers the room from under the top bar to the foot, the room at its full rate behind it', await until(page, () => { const r = $('o-tasks').getBoundingClientRect(); const v = $('office-view').getBoundingClientRect(); return $('o-tasks').classList.contains('max') && r.height > v.height * 0.75 && $('o-tasks-max').getAttribute('aria-pressed') === 'true' && office.fps === 30; }), await page.evaluate(() => JSON.stringify({ cls: $('o-tasks').className, h: $('o-tasks').getBoundingClientRect().height, v: $('office-view').getBoundingClientRect().height, fps: office.fps })));
     // The header and every popover stay above the maximised window: the theme picker, the goal, the demo time; the
@@ -454,13 +475,28 @@ try {
     // Folding is the same on both views, and remembered once: Needs attention folds to its title bar on the Board view
     // too, and stays folded in 3D. The column keeps its width (the title bar across it, not on its side): nothing shifts.
     const w0 = await page.evaluate(() => [$('board').getBoundingClientRect().left, $('board').getBoundingClientRect().width, $('o-left').getBoundingClientRect().width]);
+    const bf = await foldRun(page, '#o-left [data-o-fold]', ['o-left']);
+    check('Board view: Needs attention folds the same way (an animation part-way, its title bar at the end, no snap)', bf.anims >= 1 && bf.between && !bf.snap && bf.end[0] < 60, JSON.stringify(bf));
+    check('Board view: Needs attention folds to its title bar across the column (as wide as the panel, not turned), the board stays put, focus on its button', await until(page, ([l, w, pw]) => { const p = $('o-left').getBoundingClientRect(), b = $('board').getBoundingClientRect(); return $('o-left').classList.contains('folded') && Math.abs(p.width - pw) < 3 && p.height < 60 && Math.abs(b.left - l) < 2 && Math.abs(b.width - w) < 2 && document.activeElement === $('o-left').querySelector('[data-o-fold]'); }, w0));
+    const br = await foldRun(page, '#o-right [data-o-fold]', ['o-right', 'o-act']);
+    check('Board view: Agents folds while Activity takes its room in step, no snap', br.anims >= 2 && br.between && !br.snap && br.end[0] < 60 && br.end[1] > br.h0[1] + 100, JSON.stringify(br));
+    const bo = await foldRun(page, '#o-right .o-head', ['o-right', 'o-act']);
+    check('Board view: a click on the folded title bar opens it again, the same motion back', bo.anims >= 2 && bo.between && !bo.snap && !(await page.evaluate(() => $('o-right').classList.contains('folded'))) && Math.abs(bo.end[0] - br.h0[0]) < 3, JSON.stringify(bo));
+    const quick = await page.evaluate(async () => {
+      const idle = async () => { while (document.getAnimations().some((a) => a.id === 'glide')) await new Promise((r) => requestAnimationFrame(r)); };
+      $('o-right').querySelector('[data-o-fold]').click(); $('o-act').querySelector('[data-o-fold]').click(); await idle();
+      const h = ['o-right', 'o-act'].map((i) => Math.round($(i).getBoundingClientRect().height));
+      $('o-right').querySelector('[data-o-fold]').click(); $('o-act').querySelector('[data-o-fold]').click(); await idle();
+      return { h, open: ['o-right', 'o-act'].every((i) => !$(i).classList.contains('folded') && $(i).getBoundingClientRect().height > 100), moving: document.querySelectorAll('.o-moving').length };
+    });
+    check('Board view: two panels of a column folded one right after the other both land folded, and open again the same way', quick.h.every((x) => x < 60) && quick.open && !quick.moving, JSON.stringify(quick));
+    // The 3D switch: the new look in one frame (no colour transitions), then the panels fade in where they are.
+    const sw = await page.evaluate(() => { $('o3d').click(); return { noTx: document.documentElement.classList.contains('no-tx'), fades: document.getAnimations().filter((a) => a.id === 'view').map((a) => a.effect.target.id) }; });
+    check('the 3D switch applies in one frame (no transitions) and fades the panels and the top bar in (opacity only)', sw.noTx && ['o-left', 'topbar', 'o-tasks', 'o-act'].every((i) => sw.fades.includes(i)), JSON.stringify(sw));
+    check('3D on: the same fold (one memory for both)', await until(page, () => document.documentElement.dataset.boardView === 'office' && $('o-left').classList.contains('folded') && !!$('o-left').offsetWidth && $('o-left').getBoundingClientRect().height < 60));
     await page.click('#o-left [data-o-fold]');
-    check('Board view: Needs attention folds to its title bar across the column (as wide as the panel, not turned), the board stays put, focus on it', await until(page, ([l, w, pw]) => { const p = $('o-left-pill').getBoundingClientRect(), b = $('board').getBoundingClientRect(); return $('o-left').hidden && Math.abs(p.width - pw) < 3 && p.height < 60 && getComputedStyle($('o-left-pill')).writingMode === 'horizontal-tb' && Math.abs(b.left - l) < 2 && Math.abs(b.width - w) < 2 && document.activeElement === $('o-left-pill'); }, w0));
     await page.click('#o3d');
-    check('3D on: the same fold (one memory for both)', await until(page, () => document.documentElement.dataset.boardView === 'office' && $('o-left').hidden && !!$('o-left-pill').offsetWidth));
-    await page.click('#o-left-pill');
-    await page.click('#o3d');
-    check('unfolded in 3D: open on the Board view too', await until(page, () => document.documentElement.dataset.boardView === 'board' && !$('o-left').hidden && $('o-left-pill').hidden));
+    check('unfolded in 3D: open on the Board view too', await until(page, () => document.documentElement.dataset.boardView === 'board' && !$('o-left').classList.contains('folded') && $('o-left').getBoundingClientRect().height > 100));
 
     // Keyboard: the buttons work from the keyboard; the palette has the command.
     await page.focus('#o3d'); await page.keyboard.press('Enter');
@@ -573,6 +609,7 @@ try {
     const rm = await open('/', { setup: () => { try { localStorage.setItem('agent-board-3d', 'on'); } catch {} } });
     await rm.page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
     await until(rm.page, () => !!document.querySelector('#office-scene canvas'), null, 20000);
+    check('reduced motion: panels fold and open at once (no animation at all)', await rm.page.evaluate(() => { const ok = []; for (const s of ['#o-right [data-o-fold]', '#o-tasks-fold', '#o-left [data-o-fold]']) { document.querySelector(s).click(); ok.push(!document.getAnimations().length); document.querySelector(s).click(); ok.push(!document.getAnimations().length); } return ok.every(Boolean) && !$('o-right').classList.contains('folded'); }));
     check('reduced motion: the board expands and docks at once (no slide)', await rm.page.evaluate(() => { $('o-tasks-max').click(); const a = !$('o-tasks').getAnimations().length && $('o-tasks').classList.contains('max'); $('o-tasks-max').click(); return a && !$('o-tasks').getAnimations().length && !$('o-tasks').classList.contains('max'); }));
     await rm.page.close();
 

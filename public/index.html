@@ -139,10 +139,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <!-- One set of regions for both views. Left: Needs attention. Centre: the top bar (goal, progress, who merges), then the
          Board view's task board or the 3D view's room. Right: Agents, Activity, File locks. The Board view lays them out
          as columns (the side columns stay in view while the board scrolls; on a phone everything stacks in this order);
-         the 3D view floats the same panels over the room. Each panel folds the same way in both, remembered in this
+         the 3D view floats the same panels over the room. Each panel folds to its title bar the same way in both, remembered in this
          browser. -->
     <aside class="o-panel o-dock o-left" id="o-left" aria-labelledby="o-left-h">
-      <div class="o-head"><h2 id="o-left-h">Needs attention</h2><span class="o-sub" id="o-left-sub"></span><button type="button" class="o-ib" data-o-fold="left" aria-expanded="true" aria-controls="o-left" aria-label="Fold Needs attention to a chip" title="Fold"><span class="chev" aria-hidden="true">▾</span></button></div>
+      <div class="o-head"><h2 id="o-left-h">Needs attention</h2><span class="o-n" id="o-left-n"></span><button type="button" class="o-ib" data-o-fold="left" aria-expanded="true" aria-controls="o-left-b" aria-label="Fold Needs attention" title="Fold Needs attention"><span class="chev" aria-hidden="true">▾</span></button></div>
       <div class="o-body" id="o-left-b">
         <div class="nyou" id="nyou">
           <section id="now" class="now" aria-labelledby="now-h"></section>
@@ -155,7 +155,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         <div id="o-blocked"></div>
       </div>
     </aside>
-    <button type="button" class="o-pill" id="o-left-pill" data-o-fold="left" aria-expanded="false" aria-controls="o-left" hidden><span class="o-t">Needs attention</span><span class="o-n" id="o-left-n"></span><span class="o-ar chev" aria-hidden="true">▾</span></button>
 
     <div class="centre" id="centre">
       <section id="topbar" class="o-panel topbar" aria-label="Goal, demo time, progress and merges"><span class="tb-slot" id="tb-a"></span><button type="button" id="clock" class="tbc clock" data-act="clock" data-fk="tb-clock" aria-expanded="false" aria-controls="o-dl"></button><span class="tb-slot" id="tb-b"></span></section>
@@ -207,19 +206,18 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       <!-- Tasks: the Board view's tasks in a window under the top bar, moved in here while 3D is on (officeMount):
            its task bar (Tasks, search, Show) is the title bar, its columns (or table) the body. -->
       <section class="o-panel o-tasks" id="o-tasks" aria-labelledby="b-h">
-        <div class="o-head" id="o-tasks-head"><button type="button" class="o-ib" id="o-tasks-max" data-o-max aria-pressed="false" aria-label="Maximise the tasks" title="Maximise"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><button type="button" class="o-ib" id="o-tasks-fold" data-o-fold="tasks" aria-expanded="true" aria-controls="o-tasks-b" aria-label="Fold the tasks to their title bar" title="Fold"><span class="chev" aria-hidden="true">▾</span></button></div>
+        <div class="o-head" id="o-tasks-head"><button type="button" class="o-ib" id="o-tasks-max" data-o-max aria-pressed="false" aria-label="Expand Tasks over the room" title="Expand Tasks over the room"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><button type="button" class="o-ib" id="o-tasks-fold" data-o-fold="tasks" aria-expanded="true" aria-controls="o-tasks-b" aria-label="Fold Tasks" title="Fold Tasks"><span class="chev" aria-hidden="true">▾</span></button></div>
         <div class="o-body" id="o-tasks-b"></div>
       </section>
     </section>
 
     <div class="o-rcol" id="o-rcol">
       <aside class="o-panel o-dock o-right" id="o-right" aria-labelledby="o-right-h">
-        <div class="o-head"><h2 id="o-right-h">Agents</h2><span class="o-sub" id="o-right-sub"></span><button type="button" class="o-ib" data-o-fold="right" aria-expanded="true" aria-controls="o-right" aria-label="Fold Agents to a chip" title="Fold"><span class="chev" aria-hidden="true">▾</span></button></div>
+        <div class="o-head"><h2 id="o-right-h">Agents</h2><span class="o-sub" id="o-right-sub"></span><button type="button" class="o-ib" data-o-fold="right" aria-expanded="true" aria-controls="o-agents" aria-label="Fold Agents" title="Fold Agents"><span class="chev" aria-hidden="true">▾</span></button></div>
         <div class="o-body" id="o-agents"><p class="psum" id="p-sum"></p><ul class="people" id="people"></ul></div>
       </aside>
-      <button type="button" class="o-pill" id="o-right-pill" data-o-fold="right" aria-expanded="false" aria-controls="o-right" hidden><span class="o-ar chev" aria-hidden="true">▾</span><span class="o-t">Agents</span><span class="o-sub" id="o-right-n"></span></button>
       <section class="o-panel o-act" id="o-act" aria-labelledby="f-h">
-        <div class="o-head"><h2 id="f-h">Activity</h2><span class="o-sub" id="o-act-x"></span><button type="button" class="o-ib" id="o-act-fold" data-o-fold="act" aria-expanded="true" aria-controls="o-act-b" aria-label="Fold Activity to its title bar" title="Fold"><span class="chev" aria-hidden="true">▾</span></button></div>
+        <div class="o-head"><h2 id="f-h">Activity</h2><span class="o-sub" id="o-act-x"></span><button type="button" class="o-ib" id="o-act-fold" data-o-fold="act" aria-expanded="true" aria-controls="o-act-b" aria-label="Fold Activity" title="Fold Activity"><span class="chev" aria-hidden="true">▾</span></button></div>
         <div class="o-body" id="o-act-b">
           <div class="tabs" id="tabs">
             <button data-tab="all" aria-pressed="true">All</button>
@@ -244,9 +242,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
           <p class="hint" id="dm-hint" hidden></p>
         </div>
       </section>
-      <section class="o-panel o-locks" id="o-locks" aria-labelledby="l-h">
-        <div class="o-head"><h2 id="l-h">File locks</h2><span class="o-sub" id="l-count"></span><button type="button" class="o-ib" id="l-tog" data-o-fold="locks" aria-expanded="false" aria-controls="l-body" aria-label="Show the file locks" title="Show"><span class="chev" aria-hidden="true">▾</span></button></div>
-        <div class="o-body" id="l-body" hidden>
+      <section class="o-panel o-locks folded" id="o-locks" aria-labelledby="l-h">
+        <div class="o-head"><h2 id="l-h">File locks</h2><span class="o-sub" id="l-count"></span><button type="button" class="o-ib" id="l-tog" data-o-fold="locks" aria-expanded="false" aria-controls="l-body" aria-label="Open File locks" title="Open File locks"><span class="chev" aria-hidden="true">▾</span></button></div>
+        <div class="o-body" id="l-body">
           <ul class="locks" id="locks"></ul>
         </div>
       </section>
@@ -342,7 +340,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dt>File lock</dt>
     <dd>"I'm editing this shared file, don't touch it." Agents set these on busy files (like <code>package.json</code>) and they expire on their own. Release one only if its owner is gone.</dd>
     <dt>Questions (Needs attention)</dt>
-    <dd>When an agent needs a human decision it asks here and waits. Its question is waiting for a human answer under <b>Needs attention</b>, on the left: answer it there (or in the task's dialog, if the task is blocked on it); the agent continues as soon as you reply. When Needs attention is out of view or folded, the header's <b>need attention</b> badge (or its chip) counts what's waiting.</dd>
+    <dd>When an agent needs a human decision it asks here and waits. Its question is waiting for a human answer under <b>Needs attention</b>, on the left: answer it there (or in the task's dialog, if the task is blocked on it); the agent continues as soon as you reply. When Needs attention is out of view or folded, the header's <b>need attention</b> badge (or its folded title bar) counts what's waiting.</dd>
     <dt>Talking to agents</dt>
     <dd>Agents read the chat in Activity. Write <code>@alice</code> to address alice's agent, <code>@alice/ui-worker</code> for one subagent, or <code>@all</code> for everyone. <code>#12</code> links to task 12.</dd>
     <dt>Demo time &amp; feature freeze</dt>
@@ -350,7 +348,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dt>Plan approval</dt>
     <dd>Optional (Setup, step 4). When it's on, agents wait after the planner writes the task list until a human checks it and presses <b>Approve plan &amp; start</b>. You can edit and add tasks before approving.</dd>
     <dt>3D office and presenter view</dt>
-    <dd>The header's <b>3D</b> switch shows the team's agents as characters in a pixel office behind the board, like the office demo, with the same panels in the same places: <b>Needs attention</b> on the left (what to do now, the agents' questions with Answer, what's blocked), the top bar (chips for the goal, the demo time, progress and who merges to main, then Setup), <b>Agents</b>, <b>Activity</b> and <b>File locks</b> on the right (click an agent, or its character, to see what it's doing), and <b>Tasks</b> under the top bar, with the same search, Show filter and Columns / Table. Tasks opens docked, with the room in view below it; its title bar expands it over the room or folds it. Panels fold the same way with 3D on or off and stay that way in this browser; <code>Esc</code> closes the window on top. Only on windows wider than 1100px. The <b>presenter view</b> is the same office, read-only and large, for the room's big screen.
+    <dd>The header's <b>3D</b> switch shows the team's agents as characters in a pixel office behind the board, like the office demo, with the same panels in the same places: <b>Needs attention</b> on the left (what to do now, the agents' questions with Answer, what's blocked), the top bar (chips for the goal, the demo time, progress and who merges to main, then Setup), <b>Agents</b>, <b>Activity</b> and <b>File locks</b> on the right (click an agent, or its character, to see what it's doing), and <b>Tasks</b> under the top bar, with the same search, Show filter and Columns / Table. Tasks opens docked, with the room in view below it; its title bar expands it over the room or folds it. Panels fold to their title bars the same way with 3D on or off (a click on a folded title bar opens it) and stay that way in this browser; <code>Esc</code> closes the window on top. Only on windows wider than 1100px. The <b>presenter view</b> is the same office, read-only and large, for the room's big screen.
       <div class="xacts" id="present-row" hidden><a id="present-link" class="plink" href="present.html" hidden target="_blank" rel="noopener" title="Read-only, for the room's big screen (opens in a new tab)" aria-label="Open the presenter view (opens in a new tab)"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 11v2.5M5 13.5h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Open the presenter view</a></div></dd>
     <dt>Desktop notifications</dt>
     <dd>Press the bell in the header to get a desktop notification while this tab is in the background: a new question for the humans, a message that @mentions you, a task that gets blocked, and the feature-freeze reminders. Click a notification to jump to it. Nothing is sent for your own actions.</dd>
