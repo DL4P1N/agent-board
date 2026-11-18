@@ -4586,8 +4586,8 @@ function setBoardView(v, { save = true, quiet = false } = {}) {
   if (from) viewAnim(v, from);
 }
 // The switch's animation. Board → 3D: the board drops down into the Tasks window, showing the room. 3D → Board: the
-// board rises back up from there. Nothing waits on it: the DOM is already in the new view, the moving part is either
-// an inert copy (the ghost) or a transform on the real board. A second switch while one runs goes straight to the
+// board rises back up from there. Nothing waits on it: the DOM is already in the new view, the moving part is the
+// real Tasks window (its top edge), an inert copy (the ghost, when the window is folded) or a transform on the board. A second switch while one runs goes straight to the
 // end; reduced motion switches at once.
 let vtRun = null;
 function viewAnimEnd() {
@@ -4600,6 +4600,7 @@ function viewAnimStart(v) {
   if (viewAnimEnd() || reduceMotion()) return null;
   if (v === 'office') {
     const src = $('boardwrap'); const r = src.getBoundingClientRect(); if (!r.width || !r.height) return null;
+    if (!oTasksOff()) return { top: r.top }; // the Tasks window itself makes the drop (no copy)
     const g = src.cloneNode(true);
     g.removeAttribute('id'); for (const e of g.querySelectorAll('[id]')) e.removeAttribute('id');
     for (const e of g.querySelectorAll('[data-fk]')) e.removeAttribute('data-fk');
@@ -4615,35 +4616,56 @@ function viewAnim(v, from) {
   const run = vtRun = { anims: [], ghost: from.ghost || null, cancelled: false };
   const land = 'cubic-bezier(.2, .7, .3, 1)';
   if (v === 'office') {
-    $('main').append(run.ghost);
     // The room's picture stays hidden (at once, no fade out) until it has drawn a fresh frame: a reactivated or resized
-    // canvas can show a stale or blank frame for a moment, around the ghost's edges too. Then it fades in.
+    // canvas can show a stale or blank frame for a moment. Then it fades in.
     const sc = $('office-scene'); sc.style.transition = 'none'; sc.style.opacity = '0';
     const showScene = () => { sc.style.transition = ''; sc.style.opacity = ''; };
     run.anims.push({ cancel: showScene });
-    // The Tasks window already holds the real columns: it stays hidden while the copy falls (or two boards show), and
-    // takes over as the copy lands.
-    const tw = $('o-tasks'); if (tw) tw.style.visibility = 'hidden';
-    const showTasks = () => { if (tw) tw.style.visibility = ''; };
+    const tw = $('o-tasks'), ov = $('office-view');
+    const ready = Promise.resolve(office.loading).then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    if (!run.ghost) {
+      // The Tasks window open: it is the board already (the same bar and columns, moved in). It starts over the board's
+      // area, then its top edge slides down to where the window sits, uncovering the room: one surface, nothing swaps.
+      // The camera is framed for where the window ends up (oFrame reads run.tasksTop meanwhile).
+      const end = tw.getBoundingClientRect(), o = ov.getBoundingClientRect();
+      run.tasksTop = end.top; oFrame();
+      const t0 = `${Math.round(from.top - o.top)}px`, t1 = `${Math.round(end.top - o.top)}px`;
+      Object.assign(tw.style, { top: t0, height: 'auto' });
+      // Whole columns while it moves, like the board it starts as (cut to whole cards plus "Show N more" once landed).
+      for (const ul of $('o-cols')?.querySelectorAll('.o-col ul') || []) ul.style.maxHeight = '';
+      for (const m of $('o-cols')?.querySelectorAll('.o-more') || []) m.hidden = true;
+      const reset = () => {
+        tw.style.top = ''; tw.style.height = ''; run.tasksTop = null; oMore();
+        for (const m of $('o-cols')?.querySelectorAll('.o-more:not([hidden])') || []) m.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160 });
+      };
+      run.anims.push({ cancel: reset });
+      ready.then(() => {
+        showScene();
+        if (run.cancelled) return;
+        if (boardView !== 'office') return viewAnimEnd();
+        tw.style.top = t1;
+        const drop = tw.animate([{ top: t0 }, { top: t1 }], { duration: 480, easing: 'cubic-bezier(.4, 0, .2, 1)' });
+        run.anims.push(drop);
+        drop.finished.then(() => { if (run.cancelled) return; reset(); vtRun = null; oFrame(); }).catch(() => {});
+      });
+      return;
+    }
+    // The Tasks window folded to its title bar: a copy of the board falls off the bottom of the screen, then the title
+    // bar shows. Until the room is ready the copy covers the centre; the title bar waits hidden.
+    $('main').append(run.ghost);
+    tw.style.visibility = 'hidden';
+    const showTasks = () => { tw.style.visibility = ''; };
     run.anims.push({ cancel: showTasks });
-    // Wait for the room: its first load, then two frames so the canvas shows a fresh picture under the ghost.
-    Promise.resolve(office.loading).then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))).then(() => {
+    ready.then(() => {
       showScene();
       if (run.cancelled) return;
       if (boardView !== 'office') return viewAnimEnd();
-      const t = $('o-tasks').getBoundingClientRect();
-      const dy = Math.max(40, (t.height ? t.top : innerHeight) - from.top);
-      // One motion that eases out as it lands; over its last stretch the copy fades out while the Tasks window fades in
-      // under it, moving the same way (down), so the copy hands over to the window with no gap and no bounce.
-      const D = 460, ease = 'cubic-bezier(.45, 0, .2, 1)';
-      const drop = run.ghost.animate([{ transform: 'none', opacity: 1 }, { opacity: 1, offset: 0.6 }, { transform: `translateY(${dy}px)`, opacity: 0 }], { duration: D, easing: ease, fill: 'forwards' });
+      const D = 420;
+      const drop = run.ghost.animate([{ transform: 'none' }, { transform: `translateY(${Math.max(40, innerHeight - from.top)}px)` }], { duration: D, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' });
       run.anims.push(drop);
-      if (tw) { showTasks(); run.anims.push(tw.animate([{ transform: 'translateY(-14px)', opacity: 0 }, { transform: 'translateY(-14px)', opacity: 0, offset: 0.6 }, { transform: 'none', opacity: 1 }], { duration: D, easing: ease })); }
-      drop.finished.then(() => {
-        if (run.cancelled) return;
-        run.ghost.remove();
-        vtRun = null; oFrame();
-      }).catch(() => {});
+      showTasks();
+      run.anims.push(tw.animate([{ opacity: 0 }, { opacity: 0, offset: 0.7 }, { opacity: 1 }], { duration: D + 120 }));
+      drop.finished.then(() => { if (run.cancelled) return; run.ghost.remove(); vtRun = null; oFrame(); }).catch(() => {});
     });
     return;
   }
@@ -4779,7 +4801,7 @@ function oFrame() {
     left: l ? (l.right - v.left) / v.width : 0,
     right: r ? (v.right - r.left) / v.width : 0,
     top: Math.max(0, (top.bottom - v.top) / v.height),
-    bottom: t && !maxed ? (v.bottom - t.top) / v.height : 0,
+    bottom: t && !maxed ? (v.bottom - (vtRun?.tasksTop ?? t.top)) / v.height : 0, // mid-switch: where the window ends up
   });
 }
 function oFold(which, folded = !oOff(which)) {
@@ -4980,6 +5002,7 @@ $('o-cols').addEventListener('keydown', (ev) => {
 // 3 tasks. The list is cut under its last whole card, and N counts every card below that, the half-visible one too.
 function oMore() {
   if (boardView !== 'office' || $('o-tasks').hidden || $('o-tasks').classList.contains('folded')) return;
+  if (vtRun?.tasksTop != null) return; // the window is mid-drop; it runs once it has landed
   for (const col of $('o-cols').querySelectorAll('.o-col')) {
     const ul = col.querySelector('ul'); const m = col.querySelector('.o-more'); if (!ul || !m) continue;
     ul.style.maxHeight = ''; m.hidden = true;
