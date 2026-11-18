@@ -1,10 +1,10 @@
 /* 3D on: the same panels over the live office. Loaded last (after tokens.css and board.css). */
 /* ---------- 3D on: the same panels over the live room ---------- */
-/* The room fills the window under the header; the panels float over it as glass. The top bar (goal, demo, done,
-   roles, setup) runs across the foot; everything else hangs from the top: Needs attention (left), Agents with
-   Activity and File locks (right) and the task board between them (expanded down to the top bar, docked as a window
-   at the top, or folded to its title bar). Folded panels are title bars along the top edge, under the header. The
-   header (and every popover and dialog) stays above all. */
+/* The room fills the window under the header; the panels float over it as glass, where the Board view has them:
+   Needs attention (left) and Agents with Activity and File locks (right) from the top to the foot, the top bar (goal,
+   demo, done, roles, setup) at the top between them, and the task board under the top bar (docked as a window with the
+   room in view below it, expanded down to the foot over the room, or folded to its title bar). The header (and every
+   popover and dialog) stays above all. */
 html[data-board-view="office"] body { overflow: hidden; }
 html[data-board-view="office"] #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 html[data-board-view="office"] main { display: block; position: relative; flex: 1 1 auto; min-height: 0; width: 100%; max-width: none; padding: 0; overflow: hidden; background: var(--bg);
@@ -14,7 +14,7 @@ html[data-board-view="office"] main { display: block; position: relative; flex: 
   --o-x: calc(var(--s5) + 2px); --o-y: calc(var(--s4) + 2px); --o-w: calc(var(--dock) - 4px);
   --o-cl: calc(var(--dock-l, var(--dock)) + var(--s5) * 2 + 2px); --o-cr: calc(var(--dock-r, var(--dock)) + var(--s5) * 2 + 2px);
   --o-gap: 8px; --o-bottom: 18px; --o-tasks-h: clamp(176px, 27%, 270px); --glass: color-mix(in srgb, var(--panel) 92%, transparent);
-  --o-bar: calc(var(--o-bottom) + var(--tb-h, 48px) + var(--o-gap)); } /* the foot the top bar takes */
+  --o-top: calc(var(--o-y) + var(--tb-h, 48px) + var(--o-gap)); } /* the Tasks window's top, under the top bar */
 html[data-board-view="office"] :is(.o-panel, .o-pill) { background: var(--glass); box-shadow: 4px 4px 0 rgba(0, 0, 0, .28);
   -webkit-backdrop-filter: blur(8px) saturate(1.15); backdrop-filter: blur(8px) saturate(1.15); }
 html[data-board-view="office"] :is(.o-agent, .o-det, .qcard) { background: color-mix(in srgb, var(--raised) 85%, transparent); }
@@ -36,25 +36,25 @@ html[data-board-view="office"] .office-view { display: block; position: absolute
 .office-view.loading .office-scene { opacity: 0; transition: none; }
 .office-load { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; margin: 0; color: var(--muted); font: var(--fs-sm) var(--mono); }
 .office-view.loading .office-load { display: flex; }
-html[data-board-view="office"] #o-left { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); width: var(--o-w); max-height: calc(100% - var(--o-y) - var(--o-bar)); } /* as tall as its content, from the top */
+html[data-board-view="office"] #o-left { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); width: var(--o-w); max-height: calc(100% - var(--o-y) - var(--o-bottom)); } /* as tall as its content, from the top */
 html[data-board-view="office"] #o-left-pill { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); width: var(--o-w); }
-html[data-board-view="office"] .o-rcol { position: absolute; z-index: 3; top: var(--o-y); bottom: var(--o-bar); right: var(--o-x); width: calc(var(--dock-r, var(--dock)) - 4px); justify-content: flex-start; pointer-events: none; }
+html[data-board-view="office"] .o-rcol { position: absolute; z-index: 3; top: var(--o-y); bottom: var(--o-bottom); right: var(--o-x); width: calc(var(--dock-r, var(--dock)) - 4px); justify-content: flex-start; pointer-events: none; }
 html[data-board-view="office"] .o-rcol > * { pointer-events: auto; }
-/* The centre column keeps only the top bar (and the goal over it), across the foot. */
-html[data-board-view="office"] .centre { position: absolute; bottom: var(--o-bottom); left: var(--o-x); right: var(--o-x); display: block; pointer-events: none; }
+/* The centre column keeps only the top bar (and the popovers under it), at the top between the side columns. */
+html[data-board-view="office"] .centre { position: absolute; top: var(--o-y); left: var(--o-cl); right: var(--o-cr); display: block; pointer-events: none; }
 html[data-board-view="office"] .centre > :not(#topbar, #o-goal, #setup) { display: none !important; }
-/* Setup: a popover over the top bar, like the goal, scrolling inside itself. */
-html[data-board-view="office"] #setup { position: absolute; z-index: 7; bottom: calc(var(--tb-h, 48px) + var(--s4)); left: 0; right: 0; max-width: 820px; margin: 0 auto; max-height: calc(100vh - var(--hdr, 54px) - var(--tb-h, 48px) - 40px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+/* Setup: a popover under the top bar, like the goal, scrolling inside itself. */
+html[data-board-view="office"] #setup { position: absolute; z-index: 7; top: calc(var(--tb-h, 48px) + var(--s4)); left: 0; right: 0; max-width: 820px; margin: 0 auto; max-height: calc(100vh - var(--hdr, 54px) - var(--tb-h, 48px) - 40px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
   background: var(--glass); -webkit-backdrop-filter: blur(8px) saturate(1.15); backdrop-filter: blur(8px) saturate(1.15); box-shadow: 4px 4px 0 rgba(0, 0, 0, .28); }
 html[data-board-view="office"] #setup > .sh { position: sticky; top: 0; z-index: 1; background: var(--panel); }
 html[data-board-view="office"] .centre > * { pointer-events: auto; }
 html[data-board-view="office"] .topbar { position: relative; z-index: 4; }
-html[data-board-view="office"] .centre > .o-goal { left: 50%; translate: -50% 0; top: auto; bottom: calc(var(--tb-h, 48px) + var(--s4)); } /* over the bar at the foot */
-/* The task board: the board's columns (or its table) in a window between the side columns. Its title bar is the
-   board's task bar: Tasks, search, Show and Columns / Table. Expanded (.max, the default), it reaches down to the top
-   bar and covers the room as glass; docked, it's a window at the top; folded, its title bar. */
-.o-tasks { position: absolute; z-index: 3; left: var(--o-cl); right: var(--o-cr); top: var(--o-y); height: var(--o-tasks-h); }
-.o-tasks.max { bottom: var(--o-bar); height: auto; } /* over the top bar at the foot, which stays */
+/* The task board: the board's columns (or its table) in a window under the top bar, between the side columns. Its
+   title bar is the board's task bar: Tasks, search, Show and Columns / Table. Docked (the default), it's a window with
+   the room in view below it; expanded (.max), it reaches down to the foot and covers the room as glass; folded, its
+   title bar. Between docked and expanded only its bottom edge moves. */
+.o-tasks { position: absolute; z-index: 3; left: var(--o-cl); right: var(--o-cr); top: var(--o-top); height: var(--o-tasks-h); }
+.o-tasks.max { bottom: var(--o-bottom); height: auto; }
 .o-tasks > .o-head { padding-left: var(--s4); }
 .o-tasks .taskbar { flex: 1 1 auto; min-width: 0; margin: 0; flex-wrap: nowrap; gap: var(--s4); }
 .o-tasks .taskbar .tabs { margin-left: auto; flex: none; flex-wrap: nowrap; }
@@ -64,7 +64,7 @@ html[data-board-view="office"] .centre > .o-goal { left: 50%; translate: -50% 0;
 .o-tasks.nomatch:not(.folded) { height: auto; }
 .o-tasks.folded .taskbar > #new-task-btn { display: none; }
 .o-tasks.folded .taskbar > :not(h2) { display: none; }
-/* Folded, the task board is just its title bar, across its place at the top (like the folded side panels). */
+/* Folded, the task board is just its title bar, under the top bar (like the folded side panels). */
 .o-tasks.folded { height: auto; }
 .o-tasks.folded > .o-head { gap: var(--s5); }
 .o-tasks.folded #o-tasks-max { display: none; }

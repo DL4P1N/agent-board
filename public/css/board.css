@@ -589,10 +589,9 @@ dialog:not([open]), dialog:not([open])::backdrop { pointer-events: none; }
 /* A theme's swatch (the header's theme button): its panel and accent, split on the diagonal. data-tp="<id>" gives it that theme's tokens. */
 .sw { display: inline-block; width: 14px; height: 14px; flex: 0 0 auto; box-shadow: 0 0 0 2px var(--outline); background: linear-gradient(135deg, var(--panel) 50%, var(--accent) 50%); }
 
-/* ---------- view switch (Board | 3D office) ---------- */
-/* The demo's segmented view switch, in the board's look: a sunken box like the needs badges; pressed buttons like
-   Columns / Table (the current view is ink with an underline). Not on phones (a tiny 3D room is no use there). */
-/* The 3D switch: the live office behind the board, on or off (off: the plain board, nothing on the GPU). */
+/* ---------- the 3D switch ---------- */
+/* The live office behind the board, on or off (off: the plain board, nothing on the GPU). Only on windows wider than
+   1100px, where the board has its three columns (a small 3D room is no use). */
 .o3d { display: inline-flex; align-items: center; gap: var(--s3); font: 700 var(--fs-meta) var(--mono); padding: 0 var(--s3); min-height: var(--ctl-xs); background: var(--sunken); color: var(--muted); border: 2px solid var(--line); box-shadow: none; }
 .o3d:hover { background: var(--sunken); color: var(--ink); }
 .o3d:active { transform: none; box-shadow: none; }
@@ -601,7 +600,7 @@ dialog:not([open]), dialog:not([open])::backdrop { pointer-events: none; }
 .o3d[aria-pressed="true"] { color: var(--ink); }
 .o3d[aria-pressed="true"] .sw { background: var(--accent); box-shadow: inset 0 0 0 2px var(--outline); }
 .o3d[aria-pressed="true"] .sw::after { translate: 10px 0; background: var(--accent-ink); }
-@media (max-width: 760px) { .o3d { display: none !important; } }
+@media (max-width: 1100px) { .o3d { display: none !important; } }
 
 /* ---------- panels: one component for both views ---------- */
 /* The demo's pixel window: a 2px border and a hard shadow (no second ring: in light themes it read as a heavy double frame). Its title bar (.o-head) is the

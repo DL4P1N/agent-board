@@ -129,24 +129,24 @@ Set the demo time in *Setup*. The board counts down.
 
 ### 3D office on the board
 
-With 3D on (the default), the office is live behind the board: the same characters as the Presenter view, drawn from the state the board already loads. The panels float over it as glass:
+With 3D on (the default), the office is live behind the board: the same characters as the Presenter view, drawn from the state the board already loads. The panels float over it as glass, in the same places as with 3D off (the switch moves nothing):
 
-- The top bar across the foot of the screen: goal, demo time, progress, the planner, who merges to main, and *Setup* (its popovers open upward, over the room).
-- *Needs attention* on the left (what to do now, the agents' questions with Answer, what's blocked), and *Agents*, *Activity* and *File locks* on the right. Both columns hang from the top of the screen.
-- The task board between them: the same columns and cards, search, filter, Columns / Table and **+ New task**. A long column scrolls inside it.
+- *Needs attention* on the left (what to do now, the agents' questions with Answer, what's blocked), and *Agents*, *Activity* and *File locks* on the right. Both columns run from the top of the screen to the foot.
+- The top bar at the top, between them: goal, demo time, progress, the planner, who merges to main, and *Setup* (its popovers open under it, over the room).
+- The task board under the top bar: the same columns and cards, search, filter, Columns / Table and **+ New task**. A long column scrolls inside it.
 
-The task board has three states, and its own buttons switch between them:
+The task board has three states, and the two buttons at the right of its title bar switch between them:
 
-- **Expanded** (the default): it covers the room down to the top bar, as glass. The room keeps moving behind it.
-- **Docked**: a window at the top, with the room in view below it. Its bottom edge slides up to get there (**Show the office**, or Esc inside the board), and back down again (**Expand the board**). With reduced motion it switches at once.
-- **Folded**: just its title bar. Folded panels form a row of title bars along the top edge, under the header.
+- **Docked** (the default, and how turning 3D on opens): a window under the top bar, with the room in view below it.
+- **Expanded**: it reaches down to the foot of the screen and covers the room, as glass. The room keeps moving behind it. Its bottom edge slides down to get there (the corners-out button, tooltip *Expand the board*) and back up again (the same button, tooltip *Show the office*, or Esc inside the board). With reduced motion it switches at once. The board remembers which of the two you chose last.
+- **Folded**: just its title bar, under the top bar (the arrow button). Folded side panels are title bars at the top of their columns.
 
 Clicking a character selects its agent in *Agents*; its name tag shows the same status as its row. A link in *What to do now* that leads to the tasks brings the board up over the room.
 
 - The header's **3D** switch turns the office off: the plain board, with no 3D code loaded and nothing drawn (turn it off to save power). The choice is saved in this browser for every board. It's also in the command palette (Ctrl+K): *Turn the 3D office off / on*.
 - `?view=office` turns 3D on for that visit, with the board docked so the room shows; `?view=board` is the plain board for that visit. Neither changes the saved choice.
 - The room stops drawing while the tab is hidden.
-- Not on phones, and without WebGL it's the plain board (with a note only if you asked for 3D).
+- Only on windows wider than 1100px: on a narrower window (or a phone) the switch hides and it's the plain board, without changing the saved choice; 3D comes back when the window is wide again. Without WebGL it's the plain board (with a note only if you asked for 3D).
 
 ### Presenter view
 
@@ -162,8 +162,8 @@ On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/prese
 
 ## On the web board
 
-- **Columns.** Open, In progress, Blocked, Review and Done, in both views. A task an agent has claimed but not started sits in In progress, marked *claimed, not started*; the Table view and the task dialog give the exact status.
-- **Moving cards.** Drag a card to another column, on the plain board or the 3D task board (expanded or docked), or use its **Move…** button (in 3D: *Status* in its dialog). A move to *In progress* asks who it's for, and a task whose dependencies aren't done yet needs **Move anyway**.
+- **Columns.** Open, In progress, Blocked, Review and Done, with 3D on or off. A task an agent has claimed but not started sits in In progress, marked *claimed, not started*; the Table view and the task dialog give the exact status.
+- **Moving cards.** Drag a card to another column, or use its **Move…** button, with 3D on or off. A move to *In progress* asks who it's for, and a task whose dependencies aren't done yet needs **Move anyway**.
 - **Keyboard.**
   - `Ctrl`+`K` (`⌘K` on a Mac) opens the command palette: jump to a task or person, add a task, answer a question, set the demo time, switch the filter or theme.
   - `n` new task, `/` write a message, `?` help, `Esc` closes dialogs.

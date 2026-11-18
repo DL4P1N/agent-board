@@ -43,8 +43,8 @@ const ANYONE = '*'; // settings.integrator: whoever is free merges
 let state = { tasks: [], locks: [], questions: [], events: [], settings: { ...DEFAULT_SETTINGS }, phase: 'needs_goal', presence: [], setup: null };
 let ui = { nf: { open: false, loaded: false, loading: false, url: '', kind: null, events: null, err: '' }, rotateArm: false, filter: store.get('board-filter') || '', tab: store.get('board-tab') || 'all', dm: store.get('board-dm') || null, showAllDone: false, confirmLock: null, dragging: false, steps: {}, editGoal: false, editRepo: false, addrs: false, picked: null, moveMenu: null, doneOpen: store.get('board-done') };
 // Folded panels, the same in both views and remembered per board in this browser: Needs attention and Agents (to chips),
-// Activity, File locks and the 3D Tasks window (to their title bars), the maximised Tasks window. File locks start
-// folded; the Tasks window starts folded on screens up to 900px tall.
+// Activity, File locks and the 3D Tasks window (to their title bars), the expanded Tasks window. File locks start
+// folded; the Tasks window starts open and docked.
 const oUi = (() => { try { const v = JSON.parse(store.get('board-office-ui') || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } })();
 const oSave = () => store.set('board-office-ui', JSON.stringify(oUi));
 let seenMention = Number(store.get('board-seen-mention') || 0);

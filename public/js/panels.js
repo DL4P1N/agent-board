@@ -31,13 +31,13 @@ function officeMount(on) {
     if (!$('o-tasks-b').contains(parts[0])) $('o-tasks-b').append(...parts);
   } else if (oHome.tb) { if (oHome.tb.nextSibling !== tb) oHome.tb.after(tb); if (oHome.body.nextSibling !== parts[0]) oHome.body.after(...parts); }
 }
-// The task board starts expanded over the room (board first) and open; File locks start folded. Folding, expanding or
-// docking one yourself is remembered. ?view=office docks it for that visit.
+// The task board starts open and docked (the room in view below it), and turning 3D on docks it; File locks start
+// folded. Folding, expanding or docking one yourself is remembered. ?view=office docks it for that visit.
 const oTasksOff = () => (typeof oUi.tasks === 'boolean' ? oUi.tasks : false);
-const oMax = () => (office.dockOnce ? false : typeof oUi.max === 'boolean' ? oUi.max : true);
-// Expanded <-> docked: the board's bottom edge slides between the top bar at the foot and the window's place at the
-// top (its glass covering the room below it as it goes, or uncovering it); one element, the columns inside it the same.
-// Instant with reduced motion or when it's folded.
+const oMax = () => (office.dockOnce ? false : typeof oUi.max === 'boolean' ? oUi.max : false);
+// Expanded <-> docked: the board's top stays under the top bar and its bottom edge slides between the foot and the
+// docked window's (its glass covering the room as it goes down, or uncovering it going up); one element, the columns
+// inside it the same. Instant with reduced motion or when it's folded.
 let oSlide = null;
 function oExpand(on) {
   const tw = $('o-tasks'), r0 = tw.getBoundingClientRect(), shown = boardView === 'office' && !oTasksOff() && !!tw.offsetHeight;
@@ -54,8 +54,8 @@ const oLocksOff = () => (typeof oUi.locks === 'boolean' ? oUi.locks : store.get(
 const oOff = (w) => (w === 'tasks' ? oTasksOff() : w === 'locks' ? oLocksOff() : w === 'act' ? !!oUi.actOff : !!oUi[w]);
 // The Tasks window's maximise / restore icons (corners out, corners in).
 const O_MAX = '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>', O_RESTORE = '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M10 2v4h4M14 10h-4v4M2 10h4v4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
-// A top bar popover sits under its chip, inside the window; where there isn't room under it (the top bar at the foot,
-// with 3D on, or low on a phone's screen), it opens over the chip instead.
+// A top bar popover sits under its chip, inside the window; where there isn't room under it (low on a phone's screen),
+// it opens over the chip instead.
 function placePop(id, chipId, wDef = 460) {
   const p = $(id); const c = $(chipId); const r = c?.offsetWidth ? c.getBoundingClientRect() : null; const w = p.offsetWidth || wDef;
   p.style.left = `${Math.max(8, Math.min((r ? r.left : 8), innerWidth - w - 8))}px`;
@@ -92,22 +92,22 @@ function oApply() {
   if (boardView === 'office') $('main').style.setProperty('--tb-h', $('topbar').offsetHeight + 'px');
   oFrame();
 }
-// The room is framed in the part of the view no dock, the top bar (at the foot) or the Tasks window (or its title bar,
-// at the top) covers (the camera is told the insets).
+// The room is framed in the part of the view the docks, the top bar and the Tasks window (or its title bar, under the
+// top bar) leave free: below them, between the side columns (the camera is told the insets).
 function oFrame() {
   if (!office.mod?.setInsets || boardView !== 'office') return;
   const v = $('office-view').getBoundingClientRect(); if (!v.width || !v.height) return;
   const R = (id) => { const e = $(id); return e && !e.hidden && e.offsetWidth ? e.getBoundingClientRect() : null; };
   const l = R('o-left'), r = R('o-right') || R('o-act'), t = R('o-tasks'), top = $('topbar').getBoundingClientRect();
-  // Expanded (or sliding), the board covers the room: it's framed as if docked (the window's CSS height at the top),
-  // so sliding the board up or down doesn't move the camera.
-  const dockBottom = () => v.top + 10 + Math.max(Math.min(Math.max(176, 0.27 * v.height), 270), Math.min(innerHeight * 0.5, 360));
+  // Expanded (or sliding), the board covers the room: it's framed as if docked (the window's CSS height under the top
+  // bar), so sliding the board down or up doesn't move the camera.
+  const dockBottom = () => t.top + Math.max(Math.min(Math.max(176, 0.27 * v.height), 270), Math.min(innerHeight * 0.5, 360));
   const covered = t && ($('o-tasks').classList.contains('max') || !!oSlide);
   office.mod.setInsets({
     left: l ? (l.right - v.left) / v.width : 0,
     right: r ? (v.right - r.left) / v.width : 0,
-    top: t ? Math.max(0, ((covered ? dockBottom() : t.bottom) - v.top) / v.height) : 0,
-    bottom: Math.max(0, (v.bottom - top.top) / v.height),
+    top: Math.max(0, ((t ? (covered ? dockBottom() : t.bottom) : top.bottom) - v.top) / v.height),
+    bottom: 0,
   });
 }
 function oFold(which, folded = !oOff(which)) {

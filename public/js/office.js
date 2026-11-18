@@ -2,7 +2,7 @@
 // the scene's palette per theme (scenePalette), and the state it draws.
 
 import './theme.js';
-import { $, BASE, qs, reduceMotion, state, ui } from './state.js';
+import { $, BASE, oSave, oUi, qs, reduceMotion, state, ui } from './state.js';
 import { announce, toast } from './helpers.js';
 import { stays } from './derived.js';
 import { render } from './render.js';
@@ -12,19 +12,20 @@ import { oApply, oExpand, officeMount, oFold, oFrame, oMax, oSlide, oTasksOff, p
 
 // ---------- the 3D office: on or off ----------
 // With 3D on (the default wherever it can run) the office is always live behind the page: the panels float over it
-// as glass, and the task board is the Tasks window: expanded over the room, docked at the foot (the room above it), or
-// folded to its title bar. With 3D off (the header switch; phones; no WebGL) it's the plain board: no office code and
-// no GPU. The office (three.js and the scene: public/office/embed.js, built from office/src/live/embed.ts by
+// as glass, and the task board is the Tasks window under the top bar: docked (the room in view below it; how 3D opens),
+// expanded down over the room, or folded to its title bar. With 3D off (the header switch; windows up to 1100px wide;
+// no WebGL) it's the plain board: no office code and no GPU. The office (three.js and the scene: public/office/embed.js, built from office/src/live/embed.ts by
 // `npm run build:present`) draws the same /api/state this page loads: it fetches nothing itself.
 // On / off is saved in this browser for every board ('agent-board-3d'); ?view=office (3D on, the board docked) and
-// ?view=board (3D off) set it for this visit only.
+// ?view=board (3D off) set it for this visit only. A narrow window shows the plain board without changing the saved
+// choice, and 3D comes back when it is wide again.
 const office = { mod: null, loading: null, failed: false, dockOnce: false };
 let boardView = 'board'; // 'office' while 3D is on
 const viewParam = ['office', 'board'].includes(qs.get('view')) ? qs.get('view') : '';
 const D3_KEY = 'agent-board-3d';
 const d3Pref = () => { try { return localStorage.getItem(D3_KEY) !== 'off'; } catch { return true; } };
-const phoneMq = matchMedia('(max-width: 760px)');
-const officeAllowed = () => !office.failed && !phoneMq.matches && 'WebGLRenderingContext' in window;
+const narrowMq = matchMedia('(max-width: 1100px)'); // the 3D switch's CSS hides it there too
+const officeAllowed = () => !office.failed && !narrowMq.matches && 'WebGLRenderingContext' in window;
 // Probed before the office loads, so a browser without WebGL never downloads it.
 function webglWorks() {
   try {
@@ -51,6 +52,7 @@ function setBoardView(v, { save = true, quiet = false } = {}) {
   if (v === 'office' && !office.mod && !webglWorks()) return noOffice("This browser can't show the 3D office (WebGL is off or not supported). Showing the plain board.");
   const changed = v !== boardView;
   if (changed) ui.oSetup = false;
+  if (changed && save && v === 'office') { office.dockOnce = false; oUi.max = false; oSave(); } // turned on: the board docked, the room in view
   boardView = v;
   document.documentElement.dataset.boardView = v;
   if (save) { try { localStorage.setItem(D3_KEY, v === 'office' ? 'on' : 'off'); } catch {} }
@@ -94,9 +96,9 @@ addEventListener('storage', (e) => { if (e.key !== 'board-theme') return; setThe
 // Keep the MediaQueryList: a temporary one can be garbage-collected and take its listener with it.
 const darkMq = matchMedia('(prefers-color-scheme: dark)');
 darkMq.addEventListener?.('change', () => office.mod?.setTheme(scenePalette()));
-phoneMq.addEventListener?.('change', () => {
-  if (phoneMq.matches && boardView === 'office') setBoardView('board', { save: false, quiet: true });
-  else if (!phoneMq.matches && boardView !== 'office' && d3Pref() && viewParam !== 'board') setBoardView('office', { save: false, quiet: true });
+narrowMq.addEventListener?.('change', () => {
+  if (narrowMq.matches && boardView === 'office') setBoardView('board', { save: false, quiet: true });
+  else if (!narrowMq.matches && boardView !== 'office' && d3Pref() && viewParam !== 'board') setBoardView('office', { save: false, quiet: true });
   renderViewSwitch();
 });
 $('o3d').addEventListener('click', () => setBoardView(boardView === 'office' ? 'board' : 'office'));

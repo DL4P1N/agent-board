@@ -82,7 +82,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 |---|---|
 | `tests/ui/present.mjs` | The classic (2D) presenter view. |
 | `tests/ui/office-present.mjs` | The 3D presenter view: live overlay and adapted office state, live updates, themes, reduced motion, the WebGL fallback. |
-| `tests/ui/office-toggle.mjs` | The live 3D office behind the board and the header's 3D switch: on by default with the task board expanded, the slide up to docked and back (one board, no copy), folded title bars along the top, the top bar at the foot, frame rates, live state in the scene, answering from it, the agent card, 3D off (nothing loaded), the saved choice and `?view=`, reduced motion, phones, no WebGL, the header staying one row. Other suites open pages with 3D off (the test helper's default; `launchBrowser({ office: true })` keeps it on). |
+| `tests/ui/office-toggle.mjs` | The live 3D office behind the board and the header's 3D switch: on by default with the task board docked (also when the switch turns it on), the top bar at the top between the side columns, the switch moving nothing, the slide down to expanded and back (one board, no copy), folded title bars, frame rates, live state in the scene, answering from it, the agent card, 3D off (nothing loaded), the saved choice and `?view=`, reduced motion, phones and windows up to 1100px wide (the plain board, the saved choice kept), no WebGL, the header staying one row. Other suites open pages with 3D off (the test helper's default; `launchBrowser({ office: true })` keeps it on). |
 
 ## Writing tests
 
