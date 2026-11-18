@@ -3,6 +3,7 @@
 ```
 npm test                 # everything (about 10 minutes on a laptop, 7-8 on CI)
 npm test -- journey      # only suites whose file name contains "journey"
+npm test -- --no-ui      # only the suites in tests/ (no browser needed)
 ```
 
 - Each suite starts its own throwaway board on a free port with an empty data folder, so nothing needs to be running and your real board is never touched. A board counts as started only when its `/health` answers with its own process id, so two test runs at once don't mix up their boards.
@@ -99,5 +100,9 @@ A suite ends with `finish(results)`, which prints `N/N passed`: the runner fails
 ## CI
 
 GitHub Actions runs `npm test` on every push to `main` and on every pull request ([.github/workflows/test.yml](../.github/workflows/test.yml)), and keeps the screenshots as a downloadable artifact.
+
+- The browser suites run on a pinned Chrome (`browser-actions/setup-chrome`, handed to the tests as `BROWSER_PATH`). To move to a newer Chrome, change `chrome-version` in the workflow.
+- `npm test -- --no-ui` also runs on the oldest supported Node (22.13) and on Windows.
+- The workflow only reads the repository (`permissions: contents: read`), a newer push to a pull request cancels its older run, and every action is pinned to a commit SHA (the version is in the comment after it).
 
 It also builds and simulates `office/`, and fails if the committed presenter build (`public/present.html`, `public/office/`) differs from a fresh `npm run build:present`.

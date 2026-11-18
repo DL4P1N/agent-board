@@ -14,6 +14,13 @@ COPY templates ./templates
 COPY hooks ./hooks
 COPY scripts ./scripts
 ENV HOST=:: PORT=4000 BOARD_DATA=/data BOARD_NO_JOIN=1
+# Runs as the image's unprivileged "node" user (uid 1000). /data is created owned by it before VOLUME, so a new named
+# volume starts writable; a bind mount (-v ./data:/data) must be writable by uid 1000 (chown 1000:1000 ./data).
+RUN mkdir -p /data && chown node:node /data
+USER node
 VOLUME /data
 EXPOSE 4000
+# No curl in the slim image: ask /health with node itself.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD ["node", "-e", "fetch('http://localhost:'+(process.env.PORT||4000)+'/health',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 CMD ["node", "src/server.js"]

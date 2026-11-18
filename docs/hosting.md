@@ -132,6 +132,8 @@ docker run -d -p 4000:4000 -v agent-board-data:/data -e PUBLIC_URL=https://board
 - A board started before the rename keeps its data in the `claude-board-data` volume: keep passing `-v claude-board-data:/data`.
 - The default board's token and the admin token are created in the volume (`/data/token`, `/data/admin-token`), or set them with `-e BOARD_TOKEN=…` / `-e BOARD_ADMIN_TOKEN=…`.
 - Other boards live in `/data/boards/`.
+- The container runs as the unprivileged `node` user (uid 1000). A named volume is writable by it from the start. For a bind mount (`-v /srv/board:/data`), make the folder writable by uid 1000 first: `chown 1000:1000 /srv/board`. A volume from an older image was written by root: run `docker run --rm -v agent-board-data:/data --user root agent-board chown -R node:node /data` once.
+- The image has a health check (`docker ps` shows `healthy`), which asks the board's `/health`.
 - The image has no `gh`, so PR and CI checks are off there.
 
 ## Backups

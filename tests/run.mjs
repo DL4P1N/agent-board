@@ -3,6 +3,7 @@
 // Each suite starts its own throwaway board on a free port, so nothing else needs to be running.
 //   npm test                 all suites
 //   npm test -- journey      only suites whose name contains "journey"
+//   npm test -- --no-ui      only the suites in tests/ (no browser needed); can be combined with a name
 // A suite that runs longer than SUITE_TIMEOUT_MS (default 8 minutes) is stopped, with everything it started, and fails.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -10,11 +11,13 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { ROOT, killTree } from './helpers.mjs';
 
-const filter = process.argv[2] || '';
+const args = process.argv.slice(2);
+const noUi = args.includes('--no-ui');
+const filter = args.find((a) => !a.startsWith('--')) || '';
 const TIMEOUT = Number(process.env.SUITE_TIMEOUT_MS) || 8 * 60e3;
 const suites = [
   ...fs.readdirSync(path.join(ROOT, 'tests')).filter((f) => f.endsWith('.mjs') && !['helpers.mjs', 'run.mjs'].includes(f)).sort().map((f) => path.join(ROOT, 'tests', f)),
-  ...fs.readdirSync(path.join(ROOT, 'tests', 'ui')).filter((f) => f.endsWith('.mjs')).sort().map((f) => path.join(ROOT, 'tests', 'ui', f)),
+  ...(noUi ? [] : fs.readdirSync(path.join(ROOT, 'tests', 'ui')).filter((f) => f.endsWith('.mjs')).sort().map((f) => path.join(ROOT, 'tests', 'ui', f))),
 ].filter((f) => path.basename(f).includes(filter));
 
 // Runs one suite; on a timeout, ends its whole process tree (its boards and browsers too). On POSIX the suite gets its
