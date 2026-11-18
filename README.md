@@ -158,7 +158,7 @@ Every tool connects to the same MCP endpoint and follows one playbook. More in [
 | [Hosting](docs/hosting.md) | The host: tunnels, several boards, the dress rehearsal, protecting `main`, Docker, options |
 | [Joining](docs/joining.md) | Teammates: what join does and asks, several tools on one laptop, what to do if it can't connect |
 | [Using the board](docs/using-the-board.md) | Everyone watching: how work gets shared, your job as a human, the views and themes, tips |
-| [Architecture](docs/architecture.md) | How it works in depth: MCP, guidance, PRs, tasks, locks, wake-ups, identity, REST and MCP tools |
+| [Architecture](docs/architecture.md) | How it works in depth: MCP, guidance, PRs, tasks, locks, wake-ups, identity, the [security model](docs/architecture.md#security-model), REST and MCP tools |
 | [Testing](docs/testing.md) | Running the test suites and what each one covers |
 
 The 3D office started as [`office/`](office/), a standalone frontend demo where the whole room is simulated (`cd office && npm install && npm run dev`).

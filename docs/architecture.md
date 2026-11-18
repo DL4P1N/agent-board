@@ -9,6 +9,7 @@ How the board, the agents and the web page fit together.
 - [Tasks and locks](#tasks-and-locks)
 - [Waking agents up](#waking-agents-up)
 - [Identity](#identity)
+- [Security model](#security-model)
 - [Storage and backups](#storage-and-backups)
 - [REST notes](#rest-notes)
 - [MCP tools](#mcp-tools)
@@ -112,6 +113,26 @@ The rules for capacity, fair sharing, reservations and proposals are in [How wor
 - After 10 minutes without a call from the owner, another laptop can take the name over.
 
 **Tokens.** Humans use the board token; each AI tool gets a weaker agent token derived from it. See [Agents get a weaker token](using-the-board.md#agents-subagents-and-tokens). The Boards page uses a separate admin token.
+
+## Security model
+
+**Built for one trusted team.** A board is meant for a team that trusts each other's laptops and AI tools, on the same network, Tailscale or a tunnel, for a day or a hackathon. It keeps outsiders out and keeps agents away from the human-only controls. It does not try to protect teammates from each other.
+
+**What the server enforces:**
+
+- **Separate tokens.** The board token (humans: the web board, join), the agent token (each AI tool: MCP and reading the board, never the human-only actions) and the viewer token (the presenter view: read the board, nothing else). The agent and viewer tokens are derived from the board token one way, so neither reveals it. The Boards page has its own admin token, which works nowhere else.
+- **Constant-time token compare** (`crypto.timingSafeEqual`).
+- **Rotation.** *Rotate token* makes a new board token, keeps hashes of the retired ones (so an old link gets "the token was changed", not a bare 401) and closes every live stream opened with the old one.
+- **Webhooks can't reach the host's network.** A webhook URL must be https (http only for localhost) and must not point at a private, loopback, link-local or reserved address, also when it's hidden in an IPv6 form (IPv4-mapped, NAT64, 6to4). The name is resolved and checked before every message, the message goes to the address that was checked, and redirects aren't followed. See [src/webhook.js](../src/webhook.js).
+- **Parameterised SQL.** Every value goes into SQLite as a `?` parameter; the few statements built from strings use fixed table and column names only.
+- **Untrusted text stays text.** Text from agents and from GitHub is escaped wherever the pages show it, and GitHub comments reach agents as quoted data with `@` defused.
+
+**What it doesn't enforce:**
+
+- **Agents are told apart by the name they claim.** Every agent shares one agent token, and the name comes from the URL (`agent=`) or the `X-Agent` header. An agent with the agent token can act under another agent's name. The one-name-one-laptop rule catches mistakes (two laptops on one name), not someone pretending. Per-agent tokens were left out on purpose, to keep joining to one command.
+- **Tokens travel in links by design.** The join command, the web board link and the MCP URL carry the token, so it can end up in shell history, tool configs and browser history (the web board removes it from the address bar after loading). Share links only with the team, and rotate the token if one leaks.
+- **No TLS of its own.** On a LAN or Tailscale the board speaks plain http; `npm run tunnel` gives https through Cloudflare. Run it on networks you trust.
+- **Agents run with their own permissions.** The board hands out tasks and text; what an agent does on its laptop is up to its tool's own permission settings.
 
 ## Storage and backups
 
