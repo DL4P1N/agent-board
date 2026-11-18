@@ -8,6 +8,7 @@ const out = shotsDir('a11y');
 const results = [];
 const check = (n, ok, x = '') => results.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const until = (page, fn, arg, timeout = 5000) => page.waitForFunction(fn, { timeout, polling: 100 }, arg).then(() => true).catch(() => false);
 const errors = [];
 const browser = await launchBrowser({ headless: true, defaultViewport: { width: 1440, height: 1000 } });
 
@@ -21,6 +22,11 @@ try {
   await page.goto(board.base + '/');
   await page.waitForFunction(() => document.getElementById('conn').classList.contains('live') && document.querySelectorAll('.card').length > 5, { timeout: 8000 });
   await sleep(300);
+  // Every suite runs with a mouse, as on CI, also on a touch-screen laptop and after setViewport (launchBrowser).
+  await page.setViewport({ width: 1400, height: 1000 });
+  const mouse = await page.evaluate(() => matchMedia('(pointer: fine) and (hover: hover)').matches && !matchMedia('(any-pointer: coarse)').matches);
+  await page.setViewport({ width: 1440, height: 1000 });
+  check('the browser has a mouse ((pointer: fine), hover), also after setViewport', mouse && await page.evaluate(() => matchMedia('(pointer: fine) and (hover: hover)').matches));
 
   // ---- A11Y-4: phase track is a labelled list ----
   const ph = await page.evaluate(() => {
@@ -55,7 +61,8 @@ try {
   await page.keyboard.press('Escape'); await sleep(200);
   // The current card survives a live re-render.
   await page.focus(`.card[data-id="${openCol[1]}"]`);
-  await rest(board, 'bob', '/messages', 'POST', { text: 're-render please' }); await sleep(700);
+  await rest(board, 'bob', '/messages', 'POST', { text: 're-render please' });
+  await until(page, () => /re-render please/.test(document.getElementById('feed').innerText));
   check('A11Y-2 current card stays the Tab stop after a live update', await page.$eval(`.card[data-id="${openCol[1]}"]`, (c) => c.tabIndex === 0));
   // Tab walk through the board: one stop per column plus the current card's controls, far fewer than before.
   const walk = await page.evaluate(() => [...document.querySelectorAll('#board [tabindex], #board button, #board a[href]')].filter((e) => e.tabIndex >= 0 && e.offsetParent).length);
@@ -66,13 +73,15 @@ try {
   check('A11Y-1 activity region is polite', await page.$eval('#activity-live', (a) => a.getAttribute('aria-live') === 'polite'));
   check('A11Y-1 history on load is not read out', (await page.$eval('#activity-live', (a) => a.textContent)) === '');
   await page.evaluate(() => { ACT_GAP = 3000; });
-  await rest(board, 'chen', '/messages', 'POST', { text: '@dana the colours are ready' }); await sleep(900);
+  await rest(board, 'chen', '/messages', 'POST', { text: '@dana the colours are ready' });
+  await until(page, () => /chen mentioned you/.test(document.getElementById('activity-live').textContent));
   const a1 = await page.$eval('#activity-live', (a) => a.textContent);
   check('A11Y-1 a mention of me is announced', /chen mentioned you: @dana the colours are ready/.test(a1), a1);
   await rest(board, 'chen', `/tasks/${ids.lb.id}`, 'PATCH', { status: 'blocked' });
-  await rest(board, 'bob', '/messages', 'POST', { text: '@dana one more thing' }); await sleep(900);
+  await rest(board, 'bob', '/messages', 'POST', { text: '@dana one more thing' });
+  await until(page, (id) => /one more thing/.test(document.getElementById('feed').innerText) && !!document.querySelector(`#col-blocked .card[data-id="${id}"]`), ids.lb.id);
   check('A11Y-1 throttled: nothing new within the gap', (await page.$eval('#activity-live', (a) => a.textContent)) === a1);
-  await sleep(2800);
+  await until(page, () => /^2 updates\./.test(document.getElementById('activity-live').textContent), undefined, 6000);
   const a2 = await page.$eval('#activity-live', (a) => a.textContent);
   check('A11Y-1 after the gap, the queued updates are announced together', /^2 updates\./.test(a2) && new RegExp(`#${ids.lb.id} is blocked`).test(a2) && /bob mentioned you/.test(a2), a2);
 
@@ -100,6 +109,19 @@ try {
     .map((e) => ({ e, r: e.getBoundingClientRect() })).filter(({ r }) => r.height < 32)
     .map(({ e, r }) => `${e.className || e.tagName} "${e.textContent.trim().slice(0, 16)}" ${Math.round(r.width)}x${Math.round(r.height)}`));
   check('MO-3 phone: every visible control is at least 32px tall', !small.length, small.slice(0, 8).join(' | '));
+
+  // ---- A desktop-sized touch screen (a tablet in landscape, a touch laptop): the touch sizes, not the phone layout ----
+  // The other suites run with a mouse; this is the touch pass at a desktop width.
+  await page.setViewport({ width: 1440, height: 900, hasTouch: true }); // puppeteer reloads the page for touch
+  await page.waitForFunction(() => document.getElementById('conn').classList.contains('live') && document.querySelectorAll('.card').length > 5, { timeout: 8000 });
+  const tp = await page.evaluate(() => ({ coarse: matchMedia('(hover: none) and (pointer: coarse)').matches, ctl: getComputedStyle(document.documentElement).getPropertyValue('--ctl').trim(), w: innerWidth }));
+  check('touch at 1440px: the touch rules apply (pointer coarse, no hover; --ctl 2.5rem)', tp.coarse && tp.ctl === '2.5rem' && tp.w === 1440, JSON.stringify(tp));
+  const smallT = await page.evaluate(() => [...document.querySelectorAll('#app button, #app a[href], #app select, #app input:not([type="hidden"])')]
+    .filter((e) => e.offsetParent && !e.closest('.vh') && !e.classList.contains('skip'))
+    .map((e) => ({ e, r: e.getBoundingClientRect() })).filter(({ r }) => r.width && r.height < 31.5) // sub-pixel layout: 31.99 is 32
+    .map(({ e, r }) => `${e.id || e.dataset.fk || e.className || e.tagName} "${e.textContent.trim().slice(0, 16)}" ${Math.round(r.width)}x${Math.round(r.height)}`));
+  check('touch at 1440px: every visible control is at least 32px tall', !smallT.length, smallT.slice(0, 8).join(' | '));
+  await page.screenshot({ path: `${out}/touch-1440.png` });
 } catch (e) { results.push('CRASH ' + e.stack); }
 check('no page/console errors or native dialogs', errors.length === 0, errors.join(' | '));
 await finish(results, { browser, board });

@@ -27,6 +27,10 @@ await ana('claim_task', { id: t1.id }); await ana('update_task', { id: t1.id, st
 await ana('ask_human', { question: 'Which login provider?' });
 await ana('post', { text: '@dana the vote API is up' }); // a mention badge in the header too
 await ana('lock_files', { paths: ['package.json'], reason: 'adding deps' }); // a file lock for the File locks panel
+// A realistic team: three more people with three tools each (ten agents; with the two that join later, as many as the
+// room has desks), so the Agents panel is as tall as it gets and a check of how the right column shares its room can't
+// pass on a near-empty panel.
+for (const p of ['maya', 'jon', 'lee']) for (const [tool, client] of [['claude', 'claude-code'], ['codex', 'codex-mcp-client'], ['gemini', 'gemini-cli']]) await (await agent(board, `${p}-${tool}`, client))('board_status');
 
 const browser = await launchBrowser({ headless: true, defaultViewport: { width: 1440, height: 900 }, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const out = shotsDir('office-toggle');
@@ -67,11 +71,36 @@ const foldRun = (page, sel, ids) => page.evaluate(async (sel, ids) => {
   const between = seen.some((h) => h.some((x, i) => (x - h0[i]) * (x - end[i]) < -4)); // a frame part-way for some panel
   return { anims, frames: seen.length, ms: Math.round(performance.now() - t0), between, h0, end, later, snap: end.some((x, i) => Math.abs(x - later[i]) > 1) };
 }, sel, ids);
+// Ctrl+K, a query, then Enter on the result it selects: true if that result is the command labelled `label`.
+const runCmd = async (page, q, label) => {
+  await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control');
+  await until(page, () => document.getElementById('pal-dlg').open);
+  await page.type('#pal-in', q);
+  const ok = await until(page, (l) => document.querySelector('#pal-list [aria-selected="true"] .pl')?.textContent === l, label, 3000);
+  await page.keyboard.press(ok ? 'Enter' : 'Escape');
+  return ok;
+};
+// Opens File locks (folded) and folds it again, each time once the motion has landed: Agents' and Activity's heights
+// before and with File locks open, and whether Agents is tall (over 30% of its column, which a full team makes it).
+const locksOpen = (page) => page.evaluate(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(r));
+  const idle = async () => { await frame(); for (const t0 = performance.now(); document.getAnimations().some((a) => a.id === 'glide') && performance.now() - t0 < 3000;) await frame(); };
+  const h = (i) => Math.round($(i).getBoundingClientRect().height);
+  await idle();
+  const a0 = h('o-right'), c0 = h('o-act'), col = $('o-rcol').getBoundingClientRect().height;
+  $('l-tog').click(); await idle();
+  const r = { tall: a0 > col * 0.3, agents: [a0, h('o-right')], act: [c0, h('o-act')], open: !$('o-locks').classList.contains('folded'), list: $('l-body').offsetHeight > 0 && /package\.json/.test($('locks').innerText) };
+  $('l-tog').click(); await idle();
+  r.closed = $('o-locks').classList.contains('folded') && Math.abs(h('o-right') - a0) < 2;
+  return r;
+});
 
 try {
   // ---- Default (nothing saved in this browser): 3D on, the board docked over the live room ----
   const d0 = await open('/', { setup: () => { try { localStorage.removeItem('agent-board-3d'); } catch {} } });
   const webgl = await d0.page.evaluate(() => { try { return !!document.createElement('canvas').getContext('webgl'); } catch { return false; } });
+  // Without WebGL most of this suite is skipped; CI runs Chrome with SwiftShader, so there it must have it.
+  if (process.env.CI) check('CI: WebGL works in this browser (SwiftShader), so the 3D office checks run', webgl);
   if (webgl) {
     check('by default 3D is on: the office loads with the page and draws behind it', await view(d0.page) === 'office' && await until(d0.page, () => !!document.querySelector('#office-scene canvas') && !document.getElementById('office-view').classList.contains('loading'), null, 20000) && officeReqs(d0.reqs).some((u) => /embed\.js/.test(u)) && await d0.page.$eval('#o3d', (b) => b.getAttribute('aria-pressed') === 'true'));
     const ex = await d0.page.evaluate(() => { const t = $('o-tasks').getBoundingClientRect(), tb = $('topbar').getBoundingClientRect(), l = $('o-left').getBoundingClientRect(), r = $('o-rcol').getBoundingClientRect(), v = $('office-view').getBoundingClientRect(); return { max: $('o-tasks').classList.contains('max'), folded: $('o-tasks').classList.contains('folded'), inWin: $('o-tasks-b').contains($('board')), under: t.top - tb.bottom, room: v.bottom - t.bottom, between: t.left >= l.right && t.right <= r.left, glass: getComputedStyle($('o-tasks')).backgroundColor, fps: office.fps }; });
@@ -103,7 +132,7 @@ try {
   await page.reload(); await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 8000 }); await sleep(300);
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await sleep(300);
   check('the need-you badge hides while What to do now is on screen (in its rail, also with the board scrolled)', await page.$eval('#needs', (n) => n.hidden));
-  await page.setViewport({ width: 1440, height: 900 }); await sleep(200);
+  await page.setViewport({ width: 1440, height: 900 }); await page.evaluate(() => window.scrollTo(0, 0)); await sleep(200);
 
   // ---- PLANNER and MERGES: two top bar chips from 1600px, one ROLES chip below it; each choice made in place ----
   // The top bar's chips, as the eye sees them: label, width, and whether any of them runs past the bar's right edge.
@@ -129,6 +158,16 @@ try {
   check('choosing there saves it (S.planner) and the chip says the name', await until(page, (n) => state.settings.planner === n && document.getElementById('plan-btn').textContent.includes(n || 'first agent'), pick || ''), pick);
   await page.focus('#o-plan-sel'); await page.keyboard.press('Escape');
   check('Esc closes the Planner popover, focus back on the chip', await until(page, () => document.getElementById('o-plan').hidden && document.activeElement?.id === 'plan-btn' && document.getElementById('plan-btn').getAttribute('aria-expanded') === 'false'));
+  // Focus leaving a popover and its chip closes it (a click on a field elsewhere, or Tab); Shift+Tab from its first
+  // control goes back to its chip and closes it.
+  await page.click('#plan-btn'); await until(page, () => !document.getElementById('o-plan').hidden);
+  await page.focus('#tsearch');
+  check('focus moving out of the Planner popover (to the task search) closes it, focus where it went', await until(page, () => document.getElementById('o-plan').hidden && document.getElementById('plan-btn').getAttribute('aria-expanded') === 'false' && document.activeElement?.id === 'tsearch'));
+  if (await page.$eval('#o-plan', (e) => e.hidden)) await page.click('#plan-btn');
+  await until(page, () => !document.getElementById('o-plan').hidden);
+  await page.evaluate(() => [...document.querySelectorAll('#o-plan button, #o-plan select, #o-plan input')].find((e) => !e.disabled && e.offsetWidth).focus());
+  await page.keyboard.down('Shift'); await page.keyboard.press('Tab'); await page.keyboard.up('Shift');
+  check('Shift+Tab from the Planner popover\'s first control: back on its chip, the popover closed', await until(page, () => document.getElementById('o-plan').hidden && document.activeElement?.id === 'plan-btn'), await page.evaluate(() => `${document.activeElement?.id || document.activeElement?.className} open:${!document.getElementById('o-plan').hidden}`));
   await page.click('#plan-btn'); await page.click('#merge-btn');
   check('one top bar popover at a time: opening Merges closes Planner', await page.evaluate(() => $('o-plan').hidden && !$('o-merge').hidden));
   await page.keyboard.press('Escape'); await page.click('#plan-btn'); await page.mouse.click(4, 30);
@@ -205,6 +244,8 @@ try {
   await page.evaluate(() => document.activeElement?.blur()); await page.keyboard.press('/');
   check('"/" with Activity folded: Activity opens, focus in the message box', await until(page, () => !$('o-act').classList.contains('folded') && document.activeElement === $('msg')));
   await page.evaluate(() => document.activeElement?.blur());
+  const lk0 = await locksOpen(page);
+  check('3D off: opening File locks takes its room from Activity, not Agents (with a full team Agents is at its tallest; it keeps its height while Activity has room to give)', lk0.tall && lk0.open && lk0.list && Math.abs(lk0.agents[1] - lk0.agents[0]) < 2 && lk0.act[1] < lk0.act[0] && lk0.act[1] >= 200 && lk0.closed, JSON.stringify(lk0));
   await page.evaluate(() => window.scrollTo(0, 0)); await sleep(100);
   await until(page, () => !document.getAnimations().some((a) => a.playState === 'running' && a.effect?.getComputedTiming().endTime !== Infinity));
   const before = await places();
@@ -336,11 +377,11 @@ try {
     check('progress (x of y done, bar) in the top bar; chat lives in Activity, no separate Chat chip', await page.evaluate(() => $('topbar').contains($('done-count')) && !!$('done-count').querySelector('.mbar') && !$('o-chat-chip')));
     // File locks: the Board view's panel, folded to its title bar with the count, at the foot of the right column.
     check('3D: File locks under Activity, folded, with the count; opening it lists the lock with Release', await page.evaluate(() => $('o-rcol').contains($('o-locks')) && !!$('o-locks').offsetWidth && /1 held/.test($('l-count').textContent) && $('o-locks').classList.contains('folded') && !$('l-body').offsetHeight));
-    const agentsH = await page.evaluate(() => $('o-right').getBoundingClientRect().height);
     await page.click('#l-tog');
     check('3D: the File locks title bar opens the list (package.json, Release)', await page.evaluate(() => !$('o-locks').classList.contains('folded') && $('l-body').offsetHeight > 0 && /package\.json/.test($('locks').innerText) && !!$('locks').querySelector('[data-unlock]')?.offsetWidth));
-    check('3D: opening File locks takes its room from Activity, not Agents (Agents keeps its height while Activity has room to give)', await page.evaluate((h) => Math.abs($('o-right').getBoundingClientRect().height - h) < 2 && $('o-act').getBoundingClientRect().height >= 200, agentsH), agentsH);
     await page.click('#l-tog');
+    const lk1 = await locksOpen(page);
+    check('3D: opening File locks takes its room from Activity, not Agents (with a full team Agents is at its tallest; it keeps its height while Activity has room to give)', lk1.tall && lk1.open && lk1.list && Math.abs(lk1.agents[1] - lk1.agents[0]) < 2 && lk1.act[1] < lk1.act[0] && lk1.act[1] >= 200 && lk1.closed, JSON.stringify(lk1));
     const small = await page.evaluate(() => {
       const out = [];
       for (const b of $('main').querySelectorAll('button, textarea, select')) { const r = b.getBoundingClientRect(); if (r.width && r.height && (r.height < 24 || r.width < 24) && !b.matches('.link')) out.push(`${b.id || b.dataset.fk || b.className || b.textContent} ${Math.round(r.width)}x${Math.round(r.height)}`); }
@@ -545,6 +586,15 @@ try {
     await page.click('#o-left [data-o-fold]');
     await page.click('#o3d');
     check('unfolded in 3D: open on the Board view too', await until(page, () => document.documentElement.dataset.boardView === 'board' && !$('o-left').classList.contains('folded') && $('o-left').getBoundingClientRect().height > 100));
+    // Setup open stays open across the switch, both ways (off -> on with the switch, on -> off with Ctrl+K).
+    const setupNow = () => page.evaluate(() => JSON.stringify({ view: document.documentElement.dataset.boardView, hidden: $('setup').hidden, h: $('setup').offsetHeight }));
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.click('[data-fk="s-open"]'); await until(page, () => !$('setup').hidden);
+    const setup0 = await setupNow();
+    await page.click('#o3d');
+    check('Setup open, 3D turned on: Setup still open, in 3D', await until(page, () => document.documentElement.dataset.boardView === 'office' && !$('setup').hidden && $('setup').offsetHeight > 50), `${setup0} -> ${await setupNow()}`);
+    check('…and back off (Ctrl+K): Setup still open on the Board view', await runCmd(page, '3d office off', 'Turn the 3D office off') && await until(page, () => document.documentElement.dataset.boardView === 'board' && !$('setup').hidden && $('setup').offsetHeight > 50), await setupNow());
+    await page.evaluate(() => $('setup').querySelector('button')?.focus()); await page.keyboard.press('Escape'); await until(page, () => $('setup').hidden);
 
     // Keyboard: the buttons work from the keyboard; the palette has the command.
     await page.focus('#o3d'); await page.keyboard.press('Enter');
@@ -570,6 +620,12 @@ try {
     }, sOpen3);
     s3.gone = await until(page, () => getComputedStyle($('setup')).display === 'none' && !$('setup').innerHTML); s3.emptied = s3.gone;
     check('3D on: Setup closes like the other popovers, a short fade with its content in it, then gone (and emptied)', s3.open && s3.hidden && s3.shown && s3.full && /display,opacity,translate/.test(s3.fade) && s3.gone && s3.emptied, JSON.stringify(s3));
+    // Ctrl+K expands the docked Tasks window and docks it again (one command, its label the button's).
+    await until(page, () => !document.getAnimations().some((a) => a.id === 'glide'));
+    const expLabel = await page.evaluate(() => $('o-tasks-max').getAttribute('aria-label'));
+    check('Ctrl+K: the expand command (the button\'s own words) expands the Tasks window', !(await page.evaluate(() => $('o-tasks').classList.contains('max'))) && await runCmd(page, 'expand tasks', expLabel) && await until(page, () => $('o-tasks').classList.contains('max') && $('o-tasks-max').getAttribute('aria-pressed') === 'true'), expLabel);
+    const dockLabel = await page.evaluate(() => $('o-tasks-max').getAttribute('aria-label'));
+    check('Ctrl+K: the dock command (the button\'s own words) docks it again', dockLabel !== expLabel && await runCmd(page, 'dock tasks', dockLabel) && await until(page, () => !$('o-tasks').classList.contains('max') && $('o-tasks-max').getAttribute('aria-pressed') === 'false'), dockLabel);
 
     // What to do now's links: blocked tasks are listed in the dock (stay); a link to Start here opens the board view.
     await page.click('#now [data-go="blocked"]');
@@ -620,8 +676,11 @@ try {
     check('off is saved in this browser (for every board)', await page.evaluate(() => localStorage.getItem('agent-board-3d') === 'off'));
     await page.click('#o3d');
     check('on is saved too', await page.evaluate(() => localStorage.getItem('agent-board-3d') === 'on'));
+    await until(page, () => !!document.getElementById('o-tasks-max').offsetWidth && !document.getAnimations().some((a) => a.id === 'glide'));
+    await page.click('#o-tasks-max'); await until(page, () => document.getElementById('o-tasks').classList.contains('max'));
     await page.reload(); await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 8000 });
     check('after a reload: still 3D on', await view(page) === 'office' && await until(page, () => !!document.querySelector('#office-scene canvas'), null, 20000));
+    check('after a reload: the Tasks window still expanded (remembered), its button says so', await until(page, () => document.getElementById('o-tasks').classList.contains('max') && document.getElementById('o-tasks-max').getAttribute('aria-pressed') === 'true'));
     await page.goto(board.base + '/?view=board'); await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 8000 });
     check('?view=board: 3D off for this visit (nothing downloaded or drawn), the saved choice untouched', await view(page) === 'board' && !(await page.$('#office-scene canvas')) && await page.evaluate(() => localStorage.getItem('agent-board-3d') === 'on'));
     await page.close();
@@ -647,7 +706,8 @@ try {
     check('Auto follows the OS switching to dark: the Dark room', await until(v2.page, () => office.mod?.palette === 'dark'));
     // A column with more cards than fit says how many more; a helper shows under its agent with its own state; a person
     // whose only agent has their name is one row.
-    for (let i = 0; i < 7; i++) await ana('create_task', { title: `Extra task ${i + 1}`, size: 'S' });
+    // Enough of them that the team's idle agents leave ana the helper's task (the board shares tasks out fairly).
+    for (let i = 0; i < 10; i++) await ana('create_task', { title: `Extra task ${i + 1}`, size: 'S' });
     const helperTask = await ana('create_task', { title: 'Helper task' });
     await ana('claim_task', { id: helperTask.id, as: 'ui-worker' }); await ana('update_task', { id: helperTask.id, status: 'in_progress', as: 'ui-worker' });
     const carol = await agent(board, 'carol'); await carol('board_status');
@@ -680,7 +740,35 @@ try {
     }));
     check('reduced motion: panels fold and open at once (no animation at all)', await rm.page.evaluate(() => { const ok = []; for (const s of ['#o-right [data-o-fold]', '#o-tasks-fold', '#o-left [data-o-fold]']) { document.querySelector(s).click(); ok.push(!document.getAnimations().length); document.querySelector(s).click(); ok.push(!document.getAnimations().length); } return ok.every(Boolean) && !$('o-right').classList.contains('folded'); }));
     check('reduced motion: the board expands and docks at once (no slide)', await rm.page.evaluate(() => { $('o-tasks-max').click(); const a = !$('o-tasks').getAnimations().length && $('o-tasks').classList.contains('max'); $('o-tasks-max').click(); return a && !$('o-tasks').getAnimations().length && !$('o-tasks').classList.contains('max'); }));
+    // The popovers (and the theme chooser) open and close at once: no fade, no travel.
+    const pops = [];
+    for (const [chip, pop] of [['goal-btn', 'o-goal'], ['clock', 'o-dl'], [await rm.page.evaluate(() => (document.getElementById('roles-btn').offsetWidth ? 'roles-btn' : 'plan-btn')), ''], ['theme-btn', 'theme-pop']]) {
+      const p = pop || (chip === 'roles-btn' ? 'o-roles' : 'o-plan');
+      const o = await rm.page.evaluate((c, p) => { document.getElementById(c).click(); const e = document.getElementById(p); return { open: !e.hidden, opacity: getComputedStyle(e).opacity, anims: document.getAnimations().length }; }, chip, p);
+      await rm.page.keyboard.press('Escape');
+      const c = await rm.page.evaluate((p) => ({ closed: document.getElementById(p).hidden, anims: document.getAnimations().length }), p);
+      if (!(o.open && o.opacity === '1' && !o.anims && c.closed && !c.anims)) pops.push(`${p} ${JSON.stringify({ o, c })}`);
+    }
+    check('reduced motion: the Goal, Demo, Roles / Planner popovers and the theme chooser open and close at once (no fade)', !pops.length, pops.join(' | '));
     await rm.page.close();
+
+    // A hidden tab draws nothing: no WebGL draw calls while another tab is in front; back in front, the room draws again.
+    const hd = await open('/', { setup: () => {
+      try { localStorage.setItem('agent-board-3d', 'on'); } catch {}
+      window.__draws = 0;
+      for (const C of [window.WebGLRenderingContext, window.WebGL2RenderingContext]) for (const m of ['drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced']) {
+        const f = C?.prototype[m]; if (f) C.prototype[m] = function (...a) { window.__draws++; return f.apply(this, a); };
+      }
+    } });
+    const drawing = await until(hd.page, () => !!document.querySelector('#office-scene canvas') && window.__draws > 0, null, 20000);
+    const front = await hd.page.browserContext().newPage(); await front.goto('about:blank'); await front.bringToFront();
+    const hidden = await until(hd.page, () => document.hidden, null, 3000);
+    const d0 = await hd.page.evaluate(() => window.__draws); await sleep(600);
+    const d1 = await hd.page.evaluate(() => window.__draws);
+    await hd.page.bringToFront();
+    const again = await until(hd.page, (n) => !document.hidden && window.__draws > n + 2, d1, 5000);
+    check('a hidden tab draws nothing (no WebGL draws while another tab is in front); back in front, the room draws again', drawing && hidden && d1 === d0 && again, JSON.stringify({ drawing, hidden, d0, d1, again }));
+    await front.close(); await hd.page.close();
 
     // The office code can't be fetched (offline): a note, and the board stays.
     const off = await open('/', { errs: [] }); // 3D off, then turned on // the refused request logs an error: expected here

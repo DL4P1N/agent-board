@@ -192,7 +192,7 @@ document.addEventListener('click', (ev) => {
   if (ui.oMerge && !ev.target.closest?.('#o-merge, #merge-btn') && ev.target.isConnected) { ui.oMerge = false; renderDocks(); renderTopbar(setupInfo()); }
   if (ui.oPlan && !ev.target.closest?.('#o-plan, #plan-btn') && ev.target.isConnected) { ui.oPlan = false; renderDocks(); renderTopbar(setupInfo()); }
   if (ui.oRoles && !ev.target.closest?.('#o-roles, #roles-btn') && ev.target.isConnected) { ui.oRoles = false; renderDocks(); renderTopbar(setupInfo()); }
-  if (boardView === 'office' && setupShown() && ev.target.isConnected && !ev.target.closest?.('#setup, [data-fk="s-open"], [data-go^="step-"], [data-act="invite"], dialog, #toasts')) { setupAway(); render(); }
+  if (boardView === 'office' && setupShown() && ev.target.isConnected && !ev.target.closest?.('#setup, [data-fk="s-open"], [data-go^="step-"], [data-act="invite"], #o3d, dialog, #toasts')) { setupAway(); render(); }
 });
 // A popover closes once focus leaves it and its chip (Tab, or a click on something that takes focus), like the theme
 // chooser. Tab past a popover's last control goes on to the chip after its own; Shift+Tab from its first, back to its chip.

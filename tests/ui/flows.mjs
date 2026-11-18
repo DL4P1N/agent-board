@@ -335,6 +335,12 @@ await page.screenshot({ path: `${out}/v2-desktop-light.png` });
     await page.waitForFunction((id) => document.querySelector(`#o-tasks-b .col[data-status="review"] .card[data-id="${id}"]`), { timeout: 5000 }, dragT.id).catch(() => {});
     const dr = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === dragT.id);
     check('3D: dragging a card from Open to Review moves it (the server has it in Review, its card in that column)', dr.status === 'review' && !!(await page.$(`#o-tasks-b .col[data-status="review"] .card[data-id="${dragT.id}"]`)), dr.status);
+    // Move… (the keyboard's way) works in the Tasks window too: back to Open.
+    await domClick(`#o-tasks-b [data-move="${dragT.id}"]`);
+    await domClick(`#o-tasks-b [data-move-to="open"][data-move-id="${dragT.id}"]`);
+    await page.waitForFunction((id) => document.querySelector(`#o-tasks-b .col[data-status="open"] .card[data-id="${id}"]`), { timeout: 5000 }, dragT.id).catch(() => {});
+    const mv = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === dragT.id);
+    check('3D: Move… on a card in the Tasks window moves it (Review to Open: the server and its column agree)', mv.status === 'open' && !!(await page.$(`#o-tasks-b .col[data-status="open"] .card[data-id="${dragT.id}"]`)), mv.status);
     await page.click('#o3d');
     await page.waitForFunction(() => document.documentElement.dataset.boardView === 'board', { timeout: 5000 });
   }

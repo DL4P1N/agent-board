@@ -887,7 +887,7 @@ button.tochat { display: none; } /* phones only (below) */
 
 /* ---------- touch: every control at least 32px tall ---------- */
 @media (hover: none) and (pointer: coarse) {
-  .needs button { min-height: var(--ctl-sm); }
+  .needs button, .step-h { min-height: var(--ctl-sm); }
   /* Names and #ids inside text: a taller hit area that doesn't move the text. */
   #feed button.link, #locks button.link, #questions button.link, #now .link, .o-helpers button.link, #o-blocked button.link { padding: var(--s4) var(--s3); margin: calc(-1 * var(--s4)) calc(-1 * var(--s3)); }
   /* The boxed rows in What to do now are big enough as they are. */
