@@ -4613,7 +4613,7 @@ function viewAnimStart(v) {
 }
 function viewAnim(v, from) {
   const run = vtRun = { anims: [], ghost: from.ghost || null, cancelled: false };
-  const fall = 'cubic-bezier(.55, 0, .85, .35)', land = 'cubic-bezier(.2, .7, .3, 1)';
+  const land = 'cubic-bezier(.2, .7, .3, 1)';
   if (v === 'office') {
     $('main').append(run.ghost);
     // The room's picture stays hidden (at once, no fade out) until it has drawn a fresh frame: a reactivated or resized
@@ -4633,13 +4633,15 @@ function viewAnim(v, from) {
       if (boardView !== 'office') return viewAnimEnd();
       const t = $('o-tasks').getBoundingClientRect();
       const dy = Math.max(40, (t.height ? t.top : innerHeight) - from.top);
-      const drop = run.ghost.animate([{ transform: 'none', opacity: 1 }, { transform: `translateY(${dy * 0.85}px)`, opacity: 1, offset: 0.75 }, { transform: `translateY(${dy}px)`, opacity: 0 }], { duration: 420, easing: fall, fill: 'forwards' });
+      // One motion that eases out as it lands; over its last stretch the copy fades out while the Tasks window fades in
+      // under it, moving the same way (down), so the copy hands over to the window with no gap and no bounce.
+      const D = 460, ease = 'cubic-bezier(.45, 0, .2, 1)';
+      const drop = run.ghost.animate([{ transform: 'none', opacity: 1 }, { opacity: 1, offset: 0.6 }, { transform: `translateY(${dy}px)`, opacity: 0 }], { duration: D, easing: ease, fill: 'forwards' });
       run.anims.push(drop);
+      if (tw) { showTasks(); run.anims.push(tw.animate([{ transform: 'translateY(-14px)', opacity: 0 }, { transform: 'translateY(-14px)', opacity: 0, offset: 0.6 }, { transform: 'none', opacity: 1 }], { duration: D, easing: ease })); }
       drop.finished.then(() => {
         if (run.cancelled) return;
-        run.ghost.remove(); showTasks();
-        // The Tasks window takes the landing: it fades in with a small settle.
-        if (tw) tw.animate([{ transform: 'translateY(8px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 200, easing: land });
+        run.ghost.remove();
         vtRun = null; oFrame();
       }).catch(() => {});
     });
