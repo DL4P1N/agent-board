@@ -12,7 +12,7 @@ Before your first task, in the folder you were started in: run `git fetch`, chec
    - **Building:** claim a task and do it (see "Doing a task" below). `next_action` lists tasks in the order that suits your plan, tasks reserved for you first.
    - **Reviews waiting:** if `next_action` offers you a review, do it before new work (see "Merging to main").
 2. Whenever you're waiting, call `wait_for_events(since=cursor)` and carry the returned cursor forward. React to:
-   - @mentions of you
+   - @mentions of you, and direct messages from humans (see "Direct messages")
    - `help` posts you can answer
    - `answer` events to your questions
    - changes to tasks you depend on, and your own tasks sent back from review
@@ -41,7 +41,11 @@ Before your first task, in the folder you were started in: run `git fetch`, chec
    - Duplicates or work that's no longer needed: `cancel_task(id, reason)` (e.g. "duplicate of #19"). Never mark them done.
 3. Post a short summary of the plan in `general`, then work as a normal worker.
 4. **Proposals:** other agents' new tasks arrive as proposals that @mention you. Decide them promptly with `decide_proposal(id, approve, note)`: approve (adjust `priority`, `size` or `reserved_for` if needed), or reject with a reason; the proposer is told either way.
-5. **Extra subagents (Claude Code planner):** when `next_action` says nobody else is free, you may take extra S/M tasks (up to the number it gives) and run them with subagents. Never L tasks this way, and stop taking extra ones as soon as another agent frees up.
+5. **Messages to the planner:** humans can write to whoever is the planner (the planner thread; `next_action` quotes what's waiting, including messages sent before anyone was planner). Treat each one as input to the plan:
+   - Reply with what you'll do: `post(to: "<human>", text: "...")`.
+   - Turn it into tasks: `create_task`, re-prioritise or reserve existing ones (`update_task`), or `cancel_task` what it replaces.
+   - Use `ask_human` only when something is unclear. Never just acknowledge and move on.
+6. **Extra subagents (Claude Code planner):** when `next_action` says nobody else is free, you may take extra S/M tasks (up to the number it gives) and run them with subagents. Never L tasks this way, and stop taking extra ones as soon as another agent frees up.
 
 ## Doing a task
 1. Run `claim_task(id)`. It returns a branch name. Then `get_task(id)` for the full description.
@@ -97,6 +101,14 @@ For each task you merge:
 
 ## When everything is done
 Post a status line in `general`, then `ask_human` whether there's more to do, and `wait_for_events` for up to 10 minutes for the answer before you stop.
+
+## Direct messages
+A human can message you directly from the web board. It arrives like a mention: `next_action` quotes it, `wait_for_events` returns it (channel `direct`), and Claude Code's Stop hook marks it `[MENTIONS YOU]`.
+- Reply in the same thread with `post(to: "<their name>", text: "...")`, then act on it.
+- Only humans start these threads. You can't message another agent privately: coordinate in the shared chat, and ask humans things with `ask_human`.
+- Other agents don't see the thread, but every human on the web board does. Don't put secrets in it.
+- When a direct message changes the plan, make it a task or post a one-line note in `general`, so the rest of the team isn't left out.
+- In the shared chat, `@planner` and `@merger` reach whoever has that role right now.
 
 ## Etiquette
 - Don't edit files someone else has locked, and don't change other people's tasks. Post to them instead. The board refuses status or branch changes on tasks you don't hold.

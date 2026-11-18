@@ -79,16 +79,18 @@ async function main() {
   const relevant = events.filter((e) => !['lock', 'unlock'].includes(e.kind) && (!fresh || Date.now() - e.ts < RECENT_MS));
   if (!relevant.length) return continuing ? undefined : nudgeIfWork({ get, agent, nudgeFile: cursorFile + '-nudge' }); // else allow the stop
 
-  const mentionsMe = (e) => (e.data?.mentions || []).map((m) => String(m).toLowerCase()).some((m) => m === agent || m.startsWith(agent + '/') || m === 'all' || m === 'everyone');
+  // A direct message from a human counts as a mention (the board only sends this agent its own threads).
+  const direct = (e) => e.channel === 'direct' && e.data?.dm?.from !== 'agent';
+  const mentionsMe = (e) => direct(e) || (e.data?.mentions || []).map((m) => String(m).toLowerCase()).some((m) => m === agent || m.startsWith(agent + '/') || m === 'all' || m === 'everyone');
   const lines = relevant.slice(-40).map((e) => {
-    const tag = mentionsMe(e) ? ' [MENTIONS YOU]' : '';
+    const tag = direct(e) && e.data?.dm?.from === 'human' ? ` [MENTIONS YOU] (direct message: reply with post(to: "${e.author}"))` : mentionsMe(e) ? ' [MENTIONS YOU]' : '';
     const task = e.task_id ? ` #${e.task_id}` : '';
     return `- (${e.id}) [${e.channel}/${e.kind}${task}] ${e.author}: ${e.text}${tag}`;
   });
   const reason =
     `New activity on the team board since you last checked (cursor now ${cursor}):\n` +
     lines.join('\n') +
-    `\n\nReact if any of this affects you (mentions, answers to your questions, tasks you depend on, review requests). ` +
+    `\n\nReact if any of this affects you (mentions, direct messages, answers to your questions, tasks you depend on, review requests). ` +
     `If nothing needs action, continue your current plan or pick up the next open task. Use the board MCP tools to respond.`;
   process.stdout.write(JSON.stringify({ decision: 'block', reason }));
 }
