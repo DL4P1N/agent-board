@@ -82,7 +82,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 |---|---|
 | `tests/ui/present.mjs` | The classic (2D) presenter view. |
 | `tests/ui/office-present.mjs` | The 3D presenter view: live overlay and adapted office state, live updates, themes, reduced motion, the WebGL fallback. |
-| `tests/ui/office-toggle.mjs` | The board's Board / 3D office switch: Board by default with nothing 3D loaded, the office loading on first switch, live state in the scene, answering from it, the agent card, saved choice and `?view=`, phones, no WebGL, the header staying one row. |
+| `tests/ui/office-toggle.mjs` | The board's Board / 3D office switch: Board by default with the office loading in the background (hidden), live state in the scene, answering from it, the agent card, saved choice and `?view=`, phones, no WebGL, the header staying one row. |
 
 ## Writing tests
 

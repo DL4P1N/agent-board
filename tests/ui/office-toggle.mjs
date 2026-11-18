@@ -50,7 +50,7 @@ async function open(url = '/', { phone = false, setup, errs = errors } = {}) {
 const officeReqs = (reqs) => reqs.filter((u) => /\/office\//.test(u));
 
 try {
-  // ---- Default: the board, nothing 3D loaded ----
+  // ---- Default: the board (the 3D view loading in the background) ----
   const { page, reqs } = await open('/');
   const webgl = await page.evaluate(() => { try { return !!document.createElement('canvas').getContext('webgl'); } catch { return false; } });
   check('default view is Board', await view(page) === 'board' && await shown(page, '#board') && !(await shown(page, '#office-view')));
@@ -59,7 +59,8 @@ try {
     const h1 = document.querySelector('#app > header h1').getBoundingClientRect(); const v = g.getBoundingClientRect();
     return !g.hidden && g.closest('header') && v.left - h1.right < 40 && r.length === 2 && r[0].getAttribute('aria-pressed') === 'true' && r[1].getAttribute('aria-pressed') === 'false' && r[1].getAttribute('aria-label') === '3D office' && r[0].tabIndex === -1 && r[1].tabIndex === 0; // one Tab stop: the view to switch to
   }));
-  check('no three.js or office code requested on load', officeReqs(reqs).length === 0 && !(await page.$('canvas')), officeReqs(reqs).join(' '));
+  // The 3D view loads in the background once the board is up (so the first switch doesn't wait), and stays hidden.
+  if (webgl) check('once the board is up, the 3D view loads in the background (code and room) and stays hidden, the board still showing', await until(page, () => !!document.querySelector('#office-scene canvas') && !document.getElementById('office-view').getAttribute('style') && !document.getElementById('office-view').classList.contains('loading'), null, 20000) && officeReqs(reqs).some((u) => /embed\.js/.test(u)) && await view(page) === 'board' && !(await shown(page, '#office-view')) && await page.evaluate(() => !document.getElementById('office-view').getAttribute('style')), officeReqs(reqs).map((u) => u.split('/').pop()).join(' '));
 
   // ---- Header stays on one row with the switch and the theme button (ONB-9 widths), also with the "need attention" badge ----
   // On a laptop What to do now stays in view in its rail, so the badge only shows once it's scrolled out of view (a
@@ -362,11 +363,11 @@ try {
     await page.click('#vseg [data-vset="board"]');
     check('on the Board view the same panels sit in the same places: Needs attention left, the top bar over the board, Agents / Activity / File locks right; the task bar is back over the board', await until(page, () => { const b = $('board').getBoundingClientRect(); return document.documentElement.dataset.boardView === 'board' && $('o-left').getBoundingClientRect().right <= b.left && $('o-rcol').getBoundingClientRect().left >= b.right && $('topbar').getBoundingClientRect().bottom <= b.top && $('boardwrap').contains($('taskbar')) && $('boardwrap').contains($('tasktable')) && $('feed').offsetHeight > 50 && !!$('o-locks').offsetWidth; }));
     check('the selected agent is still selected, with its details', await page.evaluate(() => ui.picked === 'ana-claude' && /Message ana-claude/.test($('o-det')?.innerText || '')));
-    // Folding is the same on both views, and remembered once: Needs attention folds to its chip on the Board view too (the
-    // board gets the width), and stays folded in 3D.
-    const w0 = await page.evaluate(() => $('board').getBoundingClientRect().width);
+    // Folding is the same on both views, and remembered once: Needs attention folds to its title bar on the Board view
+    // too, and stays folded in 3D. The column keeps its width (the title bar across it, not on its side): nothing shifts.
+    const w0 = await page.evaluate(() => [$('board').getBoundingClientRect().left, $('board').getBoundingClientRect().width, $('o-left').getBoundingClientRect().width]);
     await page.click('#o-left [data-o-fold]');
-    check('Board view: Needs attention folds to its chip, the board gets the width, focus on the chip', await until(page, (w) => $('o-left').hidden && !!$('o-left-pill').offsetWidth && document.activeElement === $('o-left-pill') && $('board').getBoundingClientRect().width > w + 100, w0));
+    check('Board view: Needs attention folds to its title bar across the column (as wide as the panel, not turned), the board stays put, focus on it', await until(page, ([l, w, pw]) => { const p = $('o-left-pill').getBoundingClientRect(), b = $('board').getBoundingClientRect(); return $('o-left').hidden && Math.abs(p.width - pw) < 3 && p.height < 60 && getComputedStyle($('o-left-pill')).writingMode === 'horizontal-tb' && Math.abs(b.left - l) < 2 && Math.abs(b.width - w) < 2 && document.activeElement === $('o-left-pill'); }, w0));
     await page.click('#vseg [data-vset="office"]');
     check('3D view: the same fold (one memory for both views)', await until(page, () => document.documentElement.dataset.boardView === 'office' && $('o-left').hidden && !!$('o-left-pill').offsetWidth));
     await page.click('#o-left-pill');

@@ -71,7 +71,7 @@ Tools without hooks keep calling `wait_for_events`, which returns as soon as som
 
 - three.js draws the room at low resolution, scales it up with nearest-neighbour sampling, then applies Bayer dithering, palette quantisation and depth-based outlines.
 - The camera snaps to the pixel grid so nothing shimmers.
-- The 3D code downloads only on the first switch to the 3D view.
+- The 3D view loads in the background once the board is up, so the first switch is instant; it stops drawing whenever it is hidden.
 - The build is deterministic, and CI fails if the committed bundle is out of date.
 
 **A small footprint.**

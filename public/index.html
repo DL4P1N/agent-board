@@ -937,15 +937,18 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
      point the way they fold (Needs attention left, Agents right), their chips the way they open. */
   .chev { display: inline-block; font-family: var(--mono); line-height: 1; transition: rotate var(--t-base) var(--ease); }
   [aria-expanded="false"] > .chev { rotate: 180deg; }
-  #o-left [data-o-fold] .chev, #o-right-pill .chev, .dtog .chev { rotate: 90deg; }
-  #o-right [data-o-fold] .chev, #o-left-pill .chev, .dclose .chev { rotate: -90deg; }
+  #o-left [data-o-fold] .chev, .dtog .chev { rotate: 90deg; }
+  #o-right [data-o-fold] .chev, .dclose .chev { rotate: -90deg; }
   button.link[aria-expanded="false"] > .chev { rotate: -90deg; }
   /* Folded: the demo's pill, a title chip where the panel was. */
   .o-pill { display: inline-flex; align-items: center; gap: var(--s4); min-height: 34px; padding: 0 var(--s5); font-size: var(--fs-sm); }
   .o-pill:hover { background: var(--raised); }
   .o-pill .o-n { color: var(--warn); font: 700 var(--fs-meta) var(--mono); }
   .o-pill .o-n:empty { display: none; }
-  .o-pill .o-ar { color: var(--muted); font-family: var(--mono); }
+  .o-pill .o-ar { color: var(--muted); font-family: var(--mono); margin-left: auto; }
+  /* A folded column keeps its width: its panels fold to title bars across it, nothing turns on its side. */
+  #o-left-pill, #o-right-pill { display: flex; }
+  #o-right-pill .o-ar { order: 9; } /* its arrow at the right edge too, like the title bars under it */
   /* Folded to the title bar (Activity, File locks, the 3D Tasks window): the body hides. */
   .o-panel.folded > .o-body { display: none; }
   .o-panel.folded > .o-head { border-bottom: 0; }
@@ -1135,26 +1138,18 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-locks .panel-hint { margin: 0 0 var(--s3); }
 
   /* ---------- Board view: the panels as three columns ---------- */
-  /* The side columns stick under the header and scroll on their own, so the board never leaves the screen. Folded, a
-     side stands on its edge as a rail (Needs attention its chip; Agents, Activity and File locks once all three are
-     folded), like the folded Done column, and gives the board the width: the same rails in the 3D view. */
-  main { --dock: clamp(272px, 20vw, 340px); --rail: 26px; --top: calc(var(--hdr, 54px) + var(--s4)); isolation: isolate;
+  /* The side columns stick under the header and scroll on their own, so the board never leaves the screen. Folding a
+     panel leaves its title bar across the column, which keeps its width (nothing shifts or turns on its side); the
+     folded panels stack at the top. The same in the 3D view. */
+  main { --dock: clamp(272px, 20vw, 340px); --top: calc(var(--hdr, 54px) + var(--s4)); isolation: isolate;
     display: grid; grid-template-columns: var(--dock-l, var(--dock)) minmax(0, 1fr) var(--dock-r, var(--dock)); grid-template-areas: "left centre right" "left foot right"; grid-template-rows: 1fr auto; gap: 0 var(--s5); align-items: start;
     padding: var(--s4) var(--s5) var(--s5); }
   @media (max-width: 1400px) { main { --dock: clamp(256px, 20vw, 280px); } }
-  @media (min-width: 1101px) {
-    main.l-off { --dock-l: calc(var(--rail) + 4px); }
-    main.r-rail { --dock-r: calc(var(--rail) + 4px); }
-    main.l-off #o-left-pill, main.r-rail #o-right-pill { writing-mode: vertical-rl; width: var(--rail); padding: var(--s4) 0; min-height: 140px; justify-content: flex-start; }
-    main.r-rail .o-rcol > :is(.o-act, .o-locks) { writing-mode: vertical-rl; width: var(--rail); }
-    main.r-rail .o-rcol > :is(.o-act, .o-locks) > .o-head { padding: var(--s4) 0 var(--s2); gap: var(--s3); }
-    main.r-rail #o-act-x { display: none; } /* the latest event needs the width: it shows again when Activity opens */
-  }
   #o-left, #o-left-pill { grid-area: left; } .centre { grid-area: centre; } .o-rcol { grid-area: right; }
   .centre { position: relative; display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
   .office-view { display: none; }
   html:not([data-board-view="office"]) #o-left { position: sticky; top: var(--top); max-height: calc(100vh - var(--top) - var(--s5)); margin: 2px; }
-  html:not([data-board-view="office"]) #o-left-pill { position: sticky; top: var(--top); margin: 2px; justify-self: start; }
+  html:not([data-board-view="office"]) #o-left-pill { position: sticky; top: var(--top); margin: 2px; justify-self: stretch; }
   html:not([data-board-view="office"]) .topbar { margin: 2px; }
   .o-rcol { display: flex; flex-direction: column; gap: calc(var(--gap) + 4px); min-width: 0; min-height: 0; }
   html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top); height: calc(100vh - var(--top) - var(--s5)); padding: 2px 8px 6px 2px; margin-right: -6px; } /* its panels as wide as Needs attention's, 14px from the edge */
@@ -1167,7 +1162,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .o-rcol > .o-act:not(.folded) { min-height: min(250px, 40%); }
   .o-rcol > .o-locks { flex: 0 1 auto; min-height: 0; max-height: 30%; }
   .o-rcol > .o-act.folded, .o-rcol > .o-locks.folded { flex: 0 0 auto; }
-  .o-rcol > #o-right-pill { align-self: flex-end; flex: 0 0 auto; }
+  .o-rcol > #o-right-pill { align-self: stretch; flex: 0 0 auto; }
   /* Short laptop screens: the chat hint is the composer's description (read out, and its tooltip), so the feed keeps
      the room. */
   @media (max-height: 900px) { .o-act :is(#chat-hint, #dm-hint) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
@@ -1225,7 +1220,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   .office-load { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; margin: 0; color: var(--muted); font: var(--fs-sm) var(--mono); }
   .office-view.loading .office-load { display: flex; }
   html[data-board-view="office"] #o-left { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); width: var(--o-w); max-height: calc(100% - var(--o-y) - var(--o-bottom)); } /* as tall as its content, like on the Board view */
-  html[data-board-view="office"] #o-left-pill { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); }
+  html[data-board-view="office"] #o-left-pill { position: absolute; z-index: 3; top: var(--o-y); left: var(--o-x); width: var(--o-w); }
   html[data-board-view="office"] .o-rcol { position: absolute; z-index: 3; top: var(--o-y); bottom: var(--o-bottom); right: var(--o-x); width: calc(var(--dock-r, var(--dock)) - 4px); pointer-events: none; }
   html[data-board-view="office"] .o-rcol > * { pointer-events: auto; }
   /* The centre column keeps only the top bar (and the goal under it), between the docks. */
@@ -1972,6 +1967,8 @@ async function load() {
     if (older.keep && s.events?.length) s.events = await keepOlder(s.events);
     checkOverwrites(s);
     state = s; state.loaded = true; setConn(esOpen ? 'live' : 'connecting'); render();
+    // Once the board shows, load the 3D view in the background when the browser is idle.
+    if (!office.preTimer) office.preTimer = setTimeout(() => (window.requestIdleCallback || ((f) => f()))(officePreload, { timeout: 3000 }), 1200);
   }
   catch (e) { if (e.message !== 'Token rejected') setConn('down', e.message); }
 }
@@ -4859,25 +4856,43 @@ function viewAnim(v, from) {
 }
 // Anything that leads to a part of the board the office view hides (the task columns).
 function needBoard() { if (boardView === 'office') setBoardView('board'); }
-function showOffice() {
-  if (office.mod) { office.mod.setActive(true); if (state) office.mod.update(officeState()); office.mod.select(ui.picked || null); return; }
+// The 3D view loads in the background once the board is up (preload), so the first switch doesn't wait for the
+// download, the scene or the shaders: the room is built off-screen at the view's size, draws its first frames, then
+// pauses (no drawing while the Board view shows). Quietly: if it can't load, the switch says so later.
+function officeParkStyle(on) {
+  const ov = $('office-view');
+  if (!on) { if (office.parked) { office.parked = false; for (const k of ['display', 'position', 'left', 'top', 'width', 'height', 'visibility']) ov.style[k] = ''; ov.removeAttribute('aria-hidden'); } return; }
+  const m = $('main').getBoundingClientRect();
+  office.parked = true; ov.setAttribute('aria-hidden', 'true');
+  Object.assign(ov.style, { display: 'block', position: 'fixed', left: '-30000px', top: '0px', width: `${Math.round(m.width)}px`, height: `${Math.max(300, Math.round(innerHeight - m.top))}px`, visibility: 'hidden' });
+}
+function officePreload() {
+  if (office.mod || office.loading || office.failed || boardView === 'office' || !officeAllowed() || navigator.connection?.saveData) return;
+  officeParkStyle(true); showOffice({ preload: true });
+}
+function showOffice({ preload = false } = {}) {
+  if (!preload) officeParkStyle(false);
+  if (office.mod) { if (preload) return; office.mod.setActive(true); if (state) office.mod.update(officeState()); office.mod.select(ui.picked || null); return; }
   if (office.loading) return;
   const view = $('office-view'); view.classList.add('loading'); view.setAttribute('aria-busy', 'true');
+  const quiet = () => preload && boardView !== 'office'; // a preload nobody is waiting on fails silently
   office.loading = import(BASE + '/office/embed.js').then((m) => {
     const o = m.mount($('office-scene'), { theme: scenePalette(), reducedMotion: reduceMotion(), onPick: pickAgent });
-    if (!o.usable) { o.destroy(); return noOffice("The 3D office couldn't start WebGL in this browser. Staying on the board."); }
+    if (!o.usable) { o.destroy(); return quiet() ? undefined : noOffice("The 3D office couldn't start WebGL in this browser. Staying on the board."); }
     office.mod = o;
     if (state) o.update(state);
     o.select(ui.picked || null);
-    if (boardView !== 'office') o.setActive(false);
+    // A preload draws its first frames (that compiles the shaders), then pauses in finally().
+    if (boardView !== 'office' && !preload) o.setActive(false);
     // The room fades in once its first frame is drawn (it stays hidden while .loading): no empty room first.
     return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   }).catch((e) => {
 
     console.warn('3D office did not load', e);
+    if (quiet()) return;
     if (boardView === 'office') setBoardView('board', { save: false, quiet: true });
     toast("The 3D office didn't load (offline?). Staying on the board.");
-  }).finally(() => { office.loading = null; view.classList.remove('loading'); view.removeAttribute('aria-busy'); });
+  }).finally(() => { office.loading = null; view.classList.remove('loading'); view.removeAttribute('aria-busy'); if (boardView !== 'office') { office.mod?.setActive(false); officeParkStyle(false); } });
 }
 // A copy of what the office draws, for tests and the console (null until it has loaded).
 Object.defineProperty(window, '__officeState', { get: () => office.mod?.snapshot() ?? null, configurable: true });
@@ -4935,7 +4950,6 @@ function oApply() {
     $('o-' + s).hidden = !!oUi[s]; $('o-' + s + '-pill').hidden = !oUi[s];
     m.classList.toggle(s[0] + '-off', !!oUi[s]);
   }
-  m.classList.toggle('r-rail', !!oUi.right && !!oUi.actOff && oLocksOff()); // all three folded: the right side is a rail
   const tOff = oTasksOff();
   $('o-tasks').classList.toggle('max', !!oUi.max && !tOff);
   $('o-tasks-max').setAttribute('aria-pressed', String(!!oUi.max)); $('o-tasks-max').setAttribute('aria-label', oUi.max ? 'Restore the tasks window' : 'Maximise the tasks'); $('o-tasks-max').title = oUi.max ? 'Restore (Esc)' : 'Maximise';
