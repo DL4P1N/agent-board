@@ -11,7 +11,9 @@ import { renderSetup } from './setup.js';
 import { fadeAgents, officeState, renderAgents } from './agents.js';
 import { renderBoard, renderBoardEmpty, renderBoardNote, renderCi, renderFilter } from './tasks.js';
 import { announceActivity, dmUnreadCount, markDmSeen, renderFeed, renderLocks } from './activity.js';
-import { boardView, markMentionsSeen, office, renderDialogLive, renderDocks, renderOffice } from './boot.js';
+import { markMentionsSeen } from './actions.js';
+import { renderDialogLive } from './task-dialog.js';
+import { boardView, office, renderDocks, renderOffice } from './boot.js';
 
 // ---------- render ----------
 let prevQIds = null;

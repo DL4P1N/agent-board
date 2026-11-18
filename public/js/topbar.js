@@ -7,7 +7,7 @@ import { announce, esc, mentionsMe, nameTag, ownerOffline, patch, short, taskByI
 import { agentLimited, dur, outlook, setupShown, timeNow } from './derived.js';
 import { render } from './render.js';
 import { blockedNote, ciPill } from './tasks.js';
-import { focusNow, goCard, goMention, goQuestion } from './boot.js';
+import { focusNow, goCard, goMention, goQuestion } from './actions.js';
 
 let prevFrozen = null;
 function renderClock() {

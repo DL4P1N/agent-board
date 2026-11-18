@@ -9,7 +9,7 @@ import { agentState, approvalWait, capText, clientOf, copilotLaunch, dlSkipped, 
   stepOpen, teamCapacity, timeNow } from './derived.js';
 import { render } from './render.js';
 import { ciPill } from './tasks.js';
-import { copyText } from './boot.js';
+import { copyText } from './actions.js';
 
 // ---------- export: write-up + backup ----------
 async function fetchExport(kind) {

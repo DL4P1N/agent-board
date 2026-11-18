@@ -11,7 +11,8 @@ import { agentInfo, agentLimited, approvalWait, clientOf, colOf, filterRoot, ope
   timeNow } from './derived.js';
 import { render } from './render.js';
 import { exportBtns } from './setup.js';
-import { focusMoveAsk, moveAskHtml, renderOffice } from './boot.js';
+import { focusMoveAsk, moveAskHtml } from './actions.js';
+import { renderOffice } from './boot.js';
 
 function renderBoardEmpty(si) {
   const el = $('board-empty'); const S = state.settings;
