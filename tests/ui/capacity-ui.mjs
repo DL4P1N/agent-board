@@ -9,7 +9,6 @@ const out = shotsDir('capacity-ui');
 const results = [];
 const check = (n, ok, x = '') => results.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const until = (fn, timeout = 5000) => page.waitForFunction(fn, { timeout, polling: 100 }).then(() => true).catch(() => false);
 const human = (p, method = 'GET', body) => rest(board, 'dana', p, method, body);
 
 // An agent connecting the way join configures it: plan + slots in the MCP URL. board_status marks it started.
