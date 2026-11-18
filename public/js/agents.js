@@ -153,7 +153,7 @@ function renderAgents(si, qOpen) {
       + (agents.length ? `<ul class="o-agents" aria-label="${key}'s agents">${agents.map((a) => agentRow(a, p)).join('')}</ul>`
         : `<p class="o-none" title="${esc(lt || '')}">${p.r.humanOnline && p.name !== me ? 'watching · ' : ''}no AI agent</p>`)
       + '</li>';
-  }).join('') : '<li class="muted">Nobody yet. When a teammate\'s AI agent connects, it appears here with what it\'s working on.</li>');
+  }).join('') : '<li class="empty-note">No agents yet. When a teammate\'s AI agent connects, it appears here with what it\'s working on.</li>');
 
 }
 

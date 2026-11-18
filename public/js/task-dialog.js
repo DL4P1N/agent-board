@@ -136,7 +136,7 @@ function renderDialogLive() {
   $('td-deps-hint').innerHTML = deps.length ? `Depends on ${deps.join(', ')}. Dependencies are fixed after creation.` : ''; $('td-deps-hint').classList.remove('vh');
   const h = $('td-history'); const before = h._html;
   const evs = state.events.filter((e) => e.task_id === t.id);
-  patch(h, evs.map((e, i) => evHtml(e, evs[i - 1])).join('') || '<div class="muted empty-note">No activity yet.</div>');
+  patch(h, evs.map((e, i) => evHtml(e, evs[i - 1])).join('') || '<div class="empty-note">No activity yet.</div>');
   if (before !== h._html) h.scrollTop = h.scrollHeight; // newest at the bottom, in view
 }
 // Blocked: the reason first, then the agent's open question with an answer box, then the way back to In progress.

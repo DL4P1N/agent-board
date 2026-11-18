@@ -44,10 +44,11 @@ function renderSetup(si) {
   if (el.hidden) return patch(el, '');
   const body = { invite: stepInvite, goal: stepGoal, start: stepStart, backlog: stepBacklog, integrator: stepIntegrator };
   const all = si.doneCount >= si.steps.length;
-  // The same head as the goal's popover: its name, then x (closes it, focus back on the Setup chip). Once every step is
-  // done, the intro and "steps tick off by themselves" go.
-  patch(el, `<div class="sh"><h2>Setup</h2><span class="muted">${si.doneCount} of ${si.steps.length} done${all ? '' : ' · steps tick off by themselves'}</span><button type="button" class="o-ib sx" data-act="setup-close" data-fk="s-x" aria-label="Close Setup" title="Close (Esc)">×</button></div>
-    ${all ? '' : `<p class="intro">This board coordinates your team's AI coding agents: Claude Code, Codex, GitHub Copilot, Gemini CLI or Cursor (or any MCP tool), mixed however you like. They split the goal into small tasks, claim them, build each one in its own git branch, and ask you here when they need a decision.</p>`}
+  // The panels' title bar: its name, how far along it is, then x (closes it, focus back on the Setup chip). Once every
+  // step is done, the intro and "steps tick off by themselves" go.
+  const sub = `${si.doneCount} of ${si.steps.length} done${all ? '' : ' · steps tick off by themselves'}`;
+  patch(el, `<div class="o-head"><h2 id="setup-h">Setup</h2><span class="o-sub" title="${sub}">${sub}</span><button type="button" class="o-ib" data-act="setup-close" data-fk="s-x" aria-label="Close Setup" title="Close Setup">×</button></div>
+    <div class="o-body">${all ? '' : `<p class="intro">This board coordinates your team's AI coding agents: Claude Code, Codex, GitHub Copilot, Gemini CLI or Cursor (or any MCP tool), mixed however you like. They split the goal into small tasks, claim them, build each one in its own git branch, and ask you here when they need a decision.</p>`}
     <ol class="steps">${si.steps.map((s, i) => {
       const open = stepOpen(s.key, si.cur);
       const tick = s.done;
@@ -56,7 +57,7 @@ function renderSetup(si) {
           <span class="mk" aria-hidden="true">${tick ? '✓' : i + 1}</span><span class="step-t">${esc(s.title)}${tick ? '<span class="vh"> (done)</span>' : ''}</span><span class="step-s">${esc(s.sum)}</span></button>
         ${open ? `<div class="step-b" id="sb-${s.key}">${body[s.key](si)}</div>` : ''}</li>`;
     }).join('')}</ol>
-    <div class="boardsec" id="board-sec">${securityBox()}</div>`);
+    <div class="boardsec" id="board-sec">${securityBox()}</div></div>`);
 }
 // "Team can run 7 tasks at once · 4 running", and a warning when idle agents outnumber the ready tasks.
 function teamCapHtml(long = false) {
@@ -144,7 +145,7 @@ function notifyBox() {
     <p class="hint m0">Gets questions to you when you're away from the laptop: the board posts to your team chat or phone.</p>
     ${n.url && !n.change ? `<div class="sub">Webhook</div>
     <p class="m0" id="nf-saved">Sending to ${esc(NOTIFY_KIND[n.kind] || 'a webhook')}: <code>${esc(n.url)}</code></p>
-    <div class="inl m0"><button type="button" class="ghost" data-act="nf-change" data-fk="nf-change">Change</button><button type="button" class="ghost" data-act="nf-off" data-fk="nf-off">Remove</button></div>`
+    <div class="inl m0"><button type="button" class="ghost" data-act="nf-change" data-fk="nf-change">Edit</button><button type="button" class="ghost" data-act="nf-off" data-fk="nf-off">Remove</button></div>`
     : `<label for="nf-url">${n.url ? 'New webhook URL' : 'Webhook URL: Slack, Discord, ntfy, or any URL that accepts a POST'}</label>
     <input type="url" id="nf-url" data-keep="nf-url" autocomplete="off" spellcheck="false" placeholder="https://hooks.slack.com/services/… or https://ntfy.sh/your-topic" aria-describedby="nf-hint nf-err">
     <p class="hint m0" id="nf-hint">${n.url ? 'Replaces the saved one when you press Save. ' : ''}For a phone: install the ntfy app, subscribe to a hard-to-guess topic, and paste <code>https://ntfy.sh/&lt;topic&gt;</code> here.</p>`}
@@ -216,7 +217,7 @@ function deadlineBlock() {
   const S = state.settings; const t = timeNow();
   if (t.deadline && !ui.editDeadline) {
     return `<div class="repo"><span class="muted">Demo:</span> <b>${esc(when(t.deadline))}</b><span class="muted" aria-hidden="true">·</span><span>${t.fm ? `feature freeze ${esc(when(t.freezeAt))} <span class="muted">(${t.fm} min before)</span>` : 'no feature freeze'}</span>
-      <button type="button" class="ghost sm" data-act="dl-edit" data-fk="dl-edit">Change time</button></div>`;
+      <button type="button" class="ghost sm" data-act="dl-edit" data-fk="dl-edit">Edit time</button></div>`;
   }
   const fm = S.freeze_minutes === '' || S.freeze_minutes == null ? '60' : S.freeze_minutes;
   return `<form class="repo dlform" data-dlform><label for="dl-in">Demo time <span class="muted fw-normal">(optional)</span></label>

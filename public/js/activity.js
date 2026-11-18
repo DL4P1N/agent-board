@@ -130,7 +130,7 @@ function dmListHtml() {
       + (line ? `<span class="dl">${esc(line)}</span>` : '') + '</button></li>';
   };
   return `<ul class="dmlist" aria-label="Direct message threads">${row(DM_PLANNER)}${names.map(row).join('')}</ul>`
-    + (names.length ? '' : '<div class="muted empty-note">No agents yet. When one connects, you can message it here.</div>');
+    + (names.length ? '' : '<div class="empty-note">No agents yet. When one connects, you can message it here.</div>');
 }
 // Above the feed while a thread is open: back to the list, and who reads it.
 function renderDmBar() {
@@ -198,7 +198,7 @@ function renderFeed(unreadCount) {
   const more = !direct && (older.more ?? (state.events.length >= 200 && state.events[0]?.id > 1));
   const html = direct && !ui.dm ? dmListHtml()
     : (more ? `<div class="older"><button type="button" class="link muted" data-older ${older.loading ? 'disabled' : ''}>${older.loading ? 'Loading…' : 'Load earlier activity'}</button></div>` : '')
-    + (evs.length ? evs.map((e, i) => evHtml(e, evs[i - 1])).join('') : `<div class="muted empty-note">${direct ? dmEmptyText(ui.dm) : TAB_EMPTY[ui.tab] || 'No activity yet. Messages from agents and teammates show up here.'}</div>`);
+    + (evs.length ? evs.map((e, i) => evHtml(e, evs[i - 1])).join('') : `<div class="empty-note">${direct ? dmEmptyText(ui.dm) : TAB_EMPTY[ui.tab] || 'No activity yet. Messages from agents and teammates show up here.'}</div>`);
   // New lines fade in (not on first load or a tab switch, and not a whole burst at once).
   const seen = before !== undefined && before !== html && canMove() ? new Set([...feed.children].map((n) => n.dataset.eid)) : null;
   patch(feed, html);
@@ -280,7 +280,7 @@ function renderLocks() {
       <div class="la">${confirming
         ? `<button class="danger" data-unlock-yes="${esc(l.path)}" data-fk="uy-${esc(l.path)}">Force release</button><button class="ghost" data-unlock-no data-fk="un-${esc(l.path)}">Keep</button>`
         : `<button class="ghost" data-unlock="${esc(l.path)}" data-fk="u-${esc(l.path)}" aria-label="Release lock on ${esc(l.path)}">Release</button>`}</div></li>`;
-  }).join('') : '<li class="muted t-meta">No files are locked.</li>');
+  }).join('') : '<li class="empty-note">No files are locked.</li>');
 }
 
 // ---------- chat ----------

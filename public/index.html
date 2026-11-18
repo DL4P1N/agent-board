@@ -131,26 +131,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         <button id="help-btn" class="ghost icon help" title="What does everything mean? (?)" aria-label="Help: what everything on this page means">?</button>
       </span>
     </div>
-    <!-- The demo time and who merges to main, edited in place under their chips in the top bar (both views; fixed, so
-         they sit above every panel). -->
-    <section class="o-panel o-pop o-dl" id="o-dl" aria-labelledby="o-dl-h" hidden>
-      <div class="o-head"><h2 id="o-dl-h">Demo time</h2><button type="button" class="o-ib" data-o-close="dl" aria-label="Close the demo time">×</button></div>
-      <div class="o-body" id="o-dl-b"></div>
-      <div class="o-ph" id="o-dl-ph"></div>
-    </section>
-    <section class="o-panel o-pop o-plan" id="o-plan" aria-labelledby="o-plan-h" hidden>
-      <div class="o-head"><h2 id="o-plan-h">Planner</h2><button type="button" class="o-ib" data-o-close="plan" aria-label="Close planner">×</button></div>
-      <div class="o-body" id="o-plan-b"></div>
-    </section>
-    <section class="o-panel o-pop o-merge" id="o-merge" aria-labelledby="o-merge-h" hidden>
-      <div class="o-head"><h2 id="o-merge-h">Merges to main</h2><button type="button" class="o-ib" data-o-close="merge" aria-label="Close merges to main">×</button></div>
-      <div class="o-body" id="o-merge-b"></div>
-    </section>
-    <!-- Below 1600px Planner and Merges are one Roles chip: both choices in one popover. -->
-    <section class="o-panel o-pop o-roles" id="o-roles" aria-labelledby="o-roles-h" hidden>
-      <div class="o-head"><h2 id="o-roles-h">Roles</h2><button type="button" class="o-ib" data-o-close="roles" aria-label="Close roles">×</button></div>
-      <div class="o-body" id="o-roles-b"></div>
-    </section>
   </header>
   <div id="downbar" class="downbar" role="alert" hidden></div>
   <div id="announcer" class="vh" aria-live="polite"></div>
@@ -180,10 +160,30 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <div class="centre" id="centre">
       <section id="topbar" class="o-panel topbar" aria-label="Goal, demo time, progress and merges"><span class="tb-slot" id="tb-a"></span><button type="button" id="clock" class="tbc clock" data-act="clock" data-fk="tb-clock" aria-expanded="false" aria-controls="o-dl"></button><span class="tb-slot" id="tb-b"></span></section>
       <section class="o-panel o-pop o-goal" id="o-goal" aria-labelledby="o-goal-h" hidden>
-        <div class="o-head"><h2 id="o-goal-h">Goal</h2><button type="button" class="o-ib" data-o-close="goal" aria-label="Close the goal">×</button></div>
+        <div class="o-head"><h2 id="o-goal-h">Goal</h2><button type="button" class="o-ib" data-o-close="goal" aria-label="Close Goal" title="Close Goal">×</button></div>
         <div class="o-body" id="o-goal-b"></div>
       </section>
-      <section id="setup" class="panel setup" aria-label="Setup" hidden></section>
+      <!-- The demo time, the planner and who merges to main (or both, as Roles below 1600px), edited in place under
+           their chips (both views; fixed, so they sit above every panel). Tab out of one goes on to the next chip. -->
+      <section class="o-panel o-pop o-dl" id="o-dl" aria-labelledby="o-dl-h" hidden>
+        <div class="o-head"><h2 id="o-dl-h">Demo time</h2><button type="button" class="o-ib" data-o-close="dl" aria-label="Close Demo time" title="Close Demo time">×</button></div>
+        <div class="o-body" id="o-dl-b"></div>
+        <div class="o-ph" id="o-dl-ph"></div>
+      </section>
+      <section class="o-panel o-pop o-plan" id="o-plan" aria-labelledby="o-plan-h" hidden>
+        <div class="o-head"><h2 id="o-plan-h">Planner</h2><button type="button" class="o-ib" data-o-close="plan" aria-label="Close Planner" title="Close Planner">×</button></div>
+        <div class="o-body" id="o-plan-b"></div>
+      </section>
+      <section class="o-panel o-pop o-merge" id="o-merge" aria-labelledby="o-merge-h" hidden>
+        <div class="o-head"><h2 id="o-merge-h">Merges to main</h2><button type="button" class="o-ib" data-o-close="merge" aria-label="Close Merges to main" title="Close Merges to main">×</button></div>
+        <div class="o-body" id="o-merge-b"></div>
+      </section>
+      <!-- Below 1600px Planner and Merges are one Roles chip: both choices in one popover. -->
+      <section class="o-panel o-pop o-roles" id="o-roles" aria-labelledby="o-roles-h" hidden>
+        <div class="o-head"><h2 id="o-roles-h">Roles</h2><button type="button" class="o-ib" data-o-close="roles" aria-label="Close Roles" title="Close Roles">×</button></div>
+        <div class="o-body" id="o-roles-b"></div>
+      </section>
+      <section id="setup" class="o-panel setup" aria-labelledby="setup-h" hidden></section>
       <section aria-labelledby="b-h" class="boardwrap" id="boardwrap">
         <div class="filterbar" id="filterbar" hidden></div>
         <div class="taskbar" id="taskbar">
@@ -217,7 +217,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         <div class="o-head"><h2 id="o-right-h">Agents</h2><span class="o-sub" id="o-right-sub"></span><button type="button" class="o-ib" data-o-fold="right" aria-expanded="true" aria-controls="o-right" aria-label="Fold Agents to a chip" title="Fold"><span class="chev" aria-hidden="true">▾</span></button></div>
         <div class="o-body" id="o-agents"><p class="psum" id="p-sum"></p><ul class="people" id="people"></ul></div>
       </aside>
-      <button type="button" class="o-pill" id="o-right-pill" data-o-fold="right" aria-expanded="false" aria-controls="o-right" hidden><span class="o-ar chev" aria-hidden="true">▾</span><span class="o-t">Agents</span><span class="o-sub o-n" id="o-right-n"></span></button>
+      <button type="button" class="o-pill" id="o-right-pill" data-o-fold="right" aria-expanded="false" aria-controls="o-right" hidden><span class="o-ar chev" aria-hidden="true">▾</span><span class="o-t">Agents</span><span class="o-sub" id="o-right-n"></span></button>
       <section class="o-panel o-act" id="o-act" aria-labelledby="f-h">
         <div class="o-head"><h2 id="f-h">Activity</h2><span class="o-sub" id="o-act-x"></span><button type="button" class="o-ib" id="o-act-fold" data-o-fold="act" aria-expanded="true" aria-controls="o-act-b" aria-label="Fold Activity to its title bar" title="Fold"><span class="chev" aria-hidden="true">▾</span></button></div>
         <div class="o-body" id="o-act-b">
@@ -235,9 +235,9 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
             <button class="jump" id="jump" hidden>New activity ↓</button>
           </div>
           <form class="composer" id="composer">
-            <select id="chan" aria-label="Channel"><option>general</option><option>help</option><option>review</option><option>humans</option></select>
             <textarea id="msg" rows="1" autocomplete="off" spellcheck="true" aria-label="Message" aria-describedby="chat-hint" title="Agents read this chat: @name for one agent, @all for everyone. Enter sends, Shift+Enter adds a line" placeholder="Message, @ to mention" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="msg-ac"></textarea>
             <ul id="msg-ac" class="ac" role="listbox" aria-label="Names to mention" hidden></ul>
+            <select id="chan" aria-label="Channel"><option>general</option><option>help</option><option>review</option><option>humans</option></select>
             <button type="submit" id="send" class="ghost">Send</button>
           </form>
           <p class="hint" id="chat-hint">Agents read this chat: <code>@alice</code> for alice's agent, <code>@all</code> for everyone. Enter sends, Shift+Enter adds a line<span id="slash-hint"> · press / to focus</span></p>
@@ -247,7 +247,6 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       <section class="o-panel o-locks" id="o-locks" aria-labelledby="l-h">
         <div class="o-head"><h2 id="l-h">File locks</h2><span class="o-sub" id="l-count"></span><button type="button" class="o-ib" id="l-tog" data-o-fold="locks" aria-expanded="false" aria-controls="l-body" aria-label="Show the file locks" title="Show"><span class="chev" aria-hidden="true">▾</span></button></div>
         <div class="o-body" id="l-body" hidden>
-          <p class="panel-hint">"I'm editing this shared file, don't touch it." Agents set these themselves; they expire on their own.</p>
           <ul class="locks" id="locks"></ul>
         </div>
       </section>
@@ -259,7 +258,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 
 <dialog id="task-dlg" aria-labelledby="td-title">
   <form id="task-form" novalidate>
-    <div class="dh"><h2 id="td-title">New task</h2><button type="button" class="x" data-close aria-label="Close">×</button></div>
+    <div class="dh"><h2 id="td-title">New task</h2><button type="button" class="x" data-close aria-label="Close" title="Close">×</button></div>
     <div class="meta" id="td-meta"></div>
     <div class="note" id="td-conflict" role="status" hidden></div>
     <div class="tdblock" id="td-block" hidden></div>
@@ -308,7 +307,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 </dialog>
 
 <dialog id="help-dlg" aria-labelledby="hd-title">
-  <div class="dh"><h2 id="hd-title">What everything means</h2><button type="button" class="x" data-close aria-label="Close">×</button></div>
+  <div class="dh"><h2 id="hd-title">What everything means</h2><button type="button" class="x" data-close aria-label="Close Help" title="Close Help">×</button></div>
   <dl class="gloss">
     <dt>Agent Board</dt>
     <dd>A shared to-do list for a team that builds with AI coding agents. Each teammate's agent takes tasks from here, works on them in its own git branch, and reports back. Humans watch, answer questions and steer from this page.</dd>
@@ -361,7 +360,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dt>Theme</dt>
     <dd>Pick one with the swatch button in the header (or <code>Ctrl</code>+<code>K</code>): it shows each theme on a small copy of the board. <b>Auto</b> follows the device. The 3D office, the presenter views and the Boards page follow it. Saved in this browser.</dd>
     <dt>Keyboard</dt>
-    <dd><code>Ctrl</code>+<code>K</code> (<code>⌘K</code> on a Mac) opens the command palette, even while you type: jump to a task or a person, add a task, answer a question, set the demo time, switch the filter or theme. <code>n</code> new task · <code>/</code> write a message · <code>?</code> this help · <code>Esc</code> closes dialogs. On a focused card: <code>Enter</code> opens it; its <b>Move…</b> button changes its status.
+    <dd><code>Ctrl</code>+<code>K</code> (<code>⌘K</code> on a Mac) opens the command palette, even while you type: jump to a task or a person, add a task, answer a question, edit the goal or the demo time, open Setup, choose the planner or who merges, switch Columns / Table, the filter or the theme. <code>n</code> new task · <code>/</code> write a message · <code>?</code> this help · <code>Esc</code> closes dialogs. On a focused card: <code>Enter</code> opens it; its <b>Move…</b> button changes its status.
       <label class="keys"><input type="checkbox" id="keys-on"> Single-key shortcuts (<code>n</code>, <code>/</code>, <code>?</code>) on</label>
       <span class="hint">Turn them off if you use speech input or they get in your way.</span></dd>
   </dl>

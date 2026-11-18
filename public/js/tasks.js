@@ -157,7 +157,7 @@ function card(t) {
     ${note ? `<div class="bn" title="Latest note when it got blocked">“${esc(short(note, 140))}”</div>` : ''}
     <div class="cm">${t.priority === 1 ? '<span class="pill bad" title="Priority 1: do first (often something other tasks build on)">P1</span>' : t.priority >= 3 ? '<span class="pill" title="Priority 3: low, nice to have">P3</span>' : ''}
       ${size !== 'M' ? `<span class="pill size ${size}" title="${SIZE_TIP[size]}"><span class="vh">size </span>${size}</span>` : ''}
-      ${prop ? `<span class="pill flag" title="Proposed by ${esc(t.created_by)}: nobody can claim it until the planner or a human approves it">proposed by ${esc(t.created_by)}</span>` : ''}
+      ${prop ? `<span class="pill flag cx" title="Proposed by ${esc(t.created_by)}: nobody can claim it until the planner or a human approves it">proposed by ${esc(t.created_by)}</span>` : ''}
       ${rsv ? (() => { const away = ownerOffline({ assignee: t.reserved_for }) || agentLimited(t.reserved_for);
         return away ? `<span class="pill rsv" title="Reserved for ${esc(t.reserved_for)}, who isn't around (offline or out of usage), so any agent may take it">reserved for ${esc(t.reserved_for)} · away, open to anyone</span>`
           : `<span class="pill rsv" title="Reserved: only ${esc(t.reserved_for)} can claim it, and it's listed first for them">reserved for ${esc(t.reserved_for)}</span>`; })() : ''}
@@ -165,9 +165,9 @@ function card(t) {
       ${merging ? `<span class="pill role" title="${esc(t.reviewer)} is reviewing and merging it">merging: ${esc(t.reviewer)}</span>` : ''}
       ${t.assignee ? `<span class="pc" ${hs(t.assignee)} title="Assigned to ${esc(t.assignee)}">${esc(t.assignee)}</span>` : t.status !== 'done' && t.status !== 'open' && !prop ? '<span class="pill warn" title="Nobody holds this task: open it to pick who it is for, or move it back to Open">unassigned</span>' : ''}
       ${t.status === 'claimed' ? '<span title="Claimed: an agent picked it up but hasn’t started yet">claimed, not started</span>' : ''}
-      ${waiting.length ? `<span class="pill flag" title="Depends on other tasks: can't be picked up until these are done">waits on ${waiting.map((d) => '#' + d.id).join(' ')}</span>` : deps.length ? `<span title="Dependencies done">after ${deps.map((d) => '#' + d.id).join(' ')} ✓</span>` : ''}
+      ${waiting.length ? `<span class="pill flag" title="Depends on other tasks: can't be picked up until these are done">waits on ${waiting.map((d) => '#' + d.id).join(' ')}</span>` : deps.length ? `<span class="cx" title="Dependencies done">after ${deps.map((d) => '#' + d.id).join(' ')} ✓</span>` : ''}
       ${stale ? `<span class="pill flag" title="Stale: no update for 15+ minutes. The agent may be stuck: ping it, or release the task back to Open.${off ? ' Its owner is offline, so other agents may take it over.' : ''}">stale</span>` : ''}
-      <span title="Last update ${esc(fullTime(t.updated_at))}">${ago(t.updated_at)}</span>
+      <span class="cx" title="Last update ${esc(fullTime(t.updated_at))}">${ago(t.updated_at)}</span>
       <button type="button" class="mv" data-move="${t.id}" data-fk="mv-${t.id}" aria-expanded="${ui.moveMenu === t.id}" aria-label="Move #${t.id} to another column" title="Change status">Move…</button></div>
     ${q || stale || outU || prop ? `<div class="ca">${propActs}${q ? `<button type="button" class="qb" data-go-q="${q.id}" data-fk="cq-${t.id}" title="${esc(short(q.question, 120))}">question waiting</button>` : ''}${outU ? '<span class="own off">owner out of usage — agents may take it over</span>' : stale && t.assignee ? `<span class="own${off ? ' off' : ''}">${off ? `owner offline — agents may take it over` : `${esc(agentRoot(t.assignee))} is still online: ping it first`}</span>` : ''}${stale || outU ? `<button type="button" class="ghost" data-release="${t.id}" data-fk="rel-${t.id}">Release to Open</button>${t.assignee && !outU ? (pingedAt(t) ? `<span class="muted t-meta" title="You can ping again 10 minutes after the last ping">pinged ${ago(pingedAt(t))}</span>` : `<button type="button" class="ghost" data-ping="${t.id}" data-fk="ping-${t.id}" title="Post a message asking ${esc(t.assignee)} whether it's still on it">Ping @${esc(agentRoot(t.assignee))}</button>`) : ''}` : ''}</div>` : ''}
     ${menu}${ask}</article>`;
@@ -222,7 +222,7 @@ function colSort(list, col) {
 function renderBoard() {
   const visible = state.tasks.filter(taskShown);
   const table = tv.view === 'table';
-  $('viewtog').querySelectorAll('button').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.view === tv.view)); b.tabIndex = b.dataset.view === tv.view ? -1 : 0; });
+  $('viewtog').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === tv.view)));
   $('taskbar').classList.toggle('none', !state.tasks.length);
   // A search that matches nothing: one line with a way out, instead of "no matches" in every column.
   const noMatch = state.tasks.length > 0 && !!tv.q.trim() && !visible.length;
@@ -252,11 +252,11 @@ function renderBoard() {
       more = `<button class="ghost more" data-show-col="${s}" data-fk="more-${s}">${all ? 'Show fewer' : `Show ${items.length - shown.length} more`}</button>`;
       items = shown;
     }
-    const empty = !state.tasks.length ? '' : tv.q.trim() && !total ? 'No matches' : filterRoot() && !total ? `None for ${esc(filterRoot())}` : COL_EMPTY[s];
+    const empty = !state.tasks.length ? '' : tv.q.trim() && !total ? 'No matches' : filterRoot() && !total ? `No tasks for ${esc(filterRoot())}` : COL_EMPTY[s];
     // Feature freeze: Open says what can still start.
     const desc = s === 'open' && frozen ? FROZEN_DESC : COL_DESC[s];
     return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}" role="region" aria-label="${LABEL[s]}, ${plural(total, 'task')}" aria-describedby="cold-${s}"><h3 title="${COL_DESC[s]}"><span id="colh-${s}">${LABEL[s]}</span><span><span id="colc-${s}">${total}</span>${s === 'done' ? '<button type="button" class="dclose" data-act="done-toggle" data-fk="done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse"><span class="chev" aria-hidden="true">▾</span></button>' : ''}</span></h3><p class="cd${desc !== COL_DESC[s] ? ' fz-note' : ''}" id="cold-${s}" title="${desc}">${desc}</p>
-      ${items.length ? `<ul class="cards">${items.map((t) => `<li>${card(t)}</li>`).join('')}</ul>` : empty ? `<div class="empty">${empty}</div>` : ''}${more}</div>`;
+      ${items.length ? `<ul class="cards">${items.map((t) => `<li>${card(t)}</li>`).join('')}</ul>` : empty ? `<div class="empty-note">${empty}</div>` : ''}${more}</div>`;
   }).join('');
   const el = $('board');
   const before = boardDrawn && el._html !== html && canMove() ? cardRects() : null;
@@ -264,8 +264,13 @@ function renderBoard() {
   if (patch(el, html)) roveCards();
   boardDrawn = true;
   if (before) moveCards(before);
+  fadeCards();
 }
 let boardDrawn = false;
+// A column's list cut at its bottom edge (the 3D Tasks window) fades there: more cards below.
+function fadeCards() { for (const l of $('board').querySelectorAll('.cards')) l.classList.toggle('more-below', l.scrollHeight - l.scrollTop - l.clientHeight > 2); }
+$('board').addEventListener('scroll', fadeCards, { capture: true, passive: true });
+if ('ResizeObserver' in window) new ResizeObserver(fadeCards).observe($('board'));
 
 // A change made with a board control (e.g. marking an agent out of usage) is posted as a message so agents
 // read it, but it isn't something the person wrote: show it as a status line, in words for people.
