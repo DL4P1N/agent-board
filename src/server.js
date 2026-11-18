@@ -7,8 +7,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import net from 'node:net';
-import dns from 'node:dns/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { spawn, spawnSync, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +16,7 @@ import { agentTokenFor, viewerTokenFor } from './tokens.js';
 import { Registry, boardToken, adminToken } from './boards.js';
 import QRCode from 'qrcode';
 import { buildMcpServer } from './mcp.js';
+import { checkNotifyUrl, resolveNotifyTarget, sendWebhook } from './webhook.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 4000);
@@ -150,36 +149,7 @@ function maskUrl(url) {
   if (!url) return null;
   try { const u = new URL(url); const tail = (u.pathname + u.search).replace(/\/+$/, '').slice(-4); return `${u.protocol}//${u.host}/…${tail ? '/' + tail : ''}`; } catch { return null; }
 }
-const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]', '::1'];
-function checkNotifyUrl(url) {
-  let u; try { u = new URL(url); } catch { throw new Error('That isn\'t a valid URL. Paste the webhook URL from Slack, Discord or ntfy.'); }
-  const local = LOCAL_HOSTS.includes(u.hostname);
-  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && local)) throw new Error('The webhook URL must start with https:// (http only for localhost).');
-  if (!local && isPrivateAddress(u.hostname.replace(/^\[|\]$/g, ''))) throw new Error('The webhook URL points at a private network address. Use the public webhook URL from Slack, Discord or ntfy.');
-  return u.toString();
-}
-// Private, loopback, link-local and similar addresses: a webhook must not be a way into the host's
-// network (cloud metadata, other services). Exception: localhost itself (testing, a local relay).
-function isPrivateAddress(ip) {
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split('.').map(Number);
-    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
-  }
-  if (net.isIPv6(ip)) {
-    const x = ip.toLowerCase();
-    if (x === '::1' || x === '::') return true;
-    const v4 = x.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/); if (v4) return isPrivateAddress(v4[1]);
-    return /^(fc|fd|fe8|fe9|fea|feb|ff)/.test(x);
-  }
-  return false;
-}
-// Before every delivery: the name must not resolve to a private address (DNS can change after it was saved).
-async function checkNotifyTarget(url) {
-  const u = new URL(checkNotifyUrl(url));
-  if (LOCAL_HOSTS.includes(u.hostname) || net.isIP(u.hostname.replace(/^\[|\]$/g, ''))) return;
-  const addrs = await dns.lookup(u.hostname, { all: true });
-  if (addrs.some((a) => isPrivateAddress(a.address))) throw new Error(`${u.hostname} resolves to a private network address; not sending.`);
-}
+// The webhook URL checks, the private-address list and the pinned delivery live in src/webhook.js.
 // Slack: escape &, <, > so agent text can't produce <!channel>/<!here> pings or links.
 const slackEscape = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -563,9 +533,9 @@ function createBoardRuntime(slug, dir) {
     // Generic webhook: board stays 'claude-board' (its value before the rename to Agent Board) so receivers that filter on it keep working.
     else init = { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, kind, board: 'claude-board', app: 'agent-board', url: link }) };
     try {
-      await checkNotifyTarget(url);
-      // No redirects: a public URL answering 307 to an internal address must not reach it.
-      const r = await fetch(url, { method: 'POST', ...init, redirect: 'manual', signal: AbortSignal.timeout(5000) });
+      // Checked again before every delivery (DNS can change after the URL was saved), and sent to the
+      // address that was checked. No redirects: a public URL answering 307 to an internal address must not reach it.
+      const r = await sendWebhook(url, init);
       if (r.status >= 300 && r.status < 400) throw Object.assign(new Error(`HTTP ${r.status}: the webhook redirects, which isn't allowed`), { status: r.status });
       if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
       return { ok: true, status: r.status };
@@ -617,7 +587,7 @@ function createBoardRuntime(slug, dir) {
     const b = req.body || {};
     if (b.url !== undefined) {
       const url = String(b.url || '').trim();
-      if (url) await checkNotifyTarget(url);
+      if (url) await resolveNotifyTarget(url);
       putSetting('_notify_url', url ? checkNotifyUrl(url) : '');
     }
     if (b.events !== undefined) {

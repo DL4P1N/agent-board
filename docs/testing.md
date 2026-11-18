@@ -35,6 +35,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | `tests/rehearsal.mjs` | A whole day of work in a few seconds, modelled on the Kubecon board: planning, proposals, reviews that bounce, agents going offline or out of usage, role handovers, the freeze and the deadline, with invariants checked after every phase. |
 | `tests/gh.mjs` | The `gh`-backed parts, with a fake `gh`: PR checks and reviewer feedback to the author, main's CI going red and green, the retro report, QR codes. |
 | `tests/ops.mjs` | Webhook notifications (Slack, Discord, ntfy, generic), backups and `npm run restore`, token rotation. |
+| `tests/webhook.mjs` | Webhook safety without a board: private addresses (also IPv4-mapped, NAT64 and 6to4 forms), each name resolved once and checked, the request pinned to the checked address when DNS answers differently later, redirects not followed. |
 | `tests/retro.mjs` | Retro, summary and the freeze webhook: still-blocked time, review credit, plurals, readable statuses, the freeze announced when its time changes. |
 | `tests/token-deadline.mjs` | Token rotation errors (MCP and REST say why), the demo time (no past times; passing it wakes waiting agents), the startup banner and the host-join prompt. |
 | `tests/boards.mjs` | Several boards on one server: separate data and tokens, `/b/<board>/` links, the admin API, archive/restore/default/delete, `npm run boards`. |
