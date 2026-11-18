@@ -37,7 +37,7 @@ try {
   // ---- ONB-4: on first load the goal step is in view, and the strip says it can be set meanwhile ----
   const goalTop = await page.$eval('#step-goal', (e) => e.getBoundingClientRect().top);
   check('ONB-4 first load at 1440×900: step 2 is above the fold', goalTop < 900 - 40, Math.round(goalTop));
-  check('ONB-4 the strip offers the goal meanwhile (one link, no "Also:"), and no lead while Setup shows step 1', /^Write the goal \(step 2\)$/.test(await txt('#now .also')) && !(await page.$('#now .na')), await txt('#now'));
+  check('ONB-4 while Setup is open, Needs attention adds nothing of its own (no lead, no "Write the goal" line)', !(await page.$('#nyou .also')) && !(await page.$('#now .na')) && !/Write the goal/.test(await txt('#nyou')), await txt('#nyou'));
   await page.screenshot({ path: `${out}/h-first-load.png` });
 
   // ---- ONB-3: Rotate token… is out of step 1, under Board security; step 1 links to it ----
@@ -46,20 +46,32 @@ try {
   check('ONB-3 step 1 says nothing about laptops while none is connected, and has no "Link leaked?" line', !/Laptops connected|None yet|Link leaked/.test(await txt('#step-invite')), await txt('#step-invite'));
 
 
-  // ---- ONB-2: after the goal is saved, step 2 stays open on the demo time ----
-  await page.click('#now .also [data-go="step-goal"]'); await sleep(300);
+  // ---- ONB-2 / U5: step 2 is one form (goal, repo, demo time) with one Save ----
+  await page.click('[data-fk="sh-goal"]'); await sleep(300);
+  const form = await page.evaluate(() => { const f = $('goal-in')?.form; return { one: !!f && f === $('repo-in')?.form && f === $('dl-in')?.form && f === $('fz-in')?.form, submits: f ? f.querySelectorAll('button[type=submit]').length : 0, all: document.querySelectorAll('#step-goal button[type=submit]').length, dl: $('dl-in')?.value }; });
+  check('U5 step 2: the goal, the repo and the demo time are one form with one Save (a suggested demo time filled in)', form.one && form.submits === 1 && form.all === 1 && !!form.dl, JSON.stringify(form));
+  await page.type('#repo-in', 'https://github.com/team/vote');
   await page.type('#goal-in', 'A voting app. Demo: submit, vote, leaderboard.');
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(() => /Goal saved/.test(document.getElementById('toasts').innerText), { timeout: 5000 });
-  await sleep(300);
-  check('ONB-2 step 2 stays open with the demo time form', !!(await page.$('#step-goal #dl-in')) && /no demo time yet/.test(await txt('#step-goal .step-s')), await txt('#step-goal .step-s'));
-  check('ONB-2 the strip asks for the demo time', /Set the demo time so agents stop on time/.test(await txt('#now .also')), await txt('#now'));
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.click('#now .also [data-act="clock"]'); await sleep(400);
+  await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); // twice: sent once
+  await page.waitForFunction(() => /^Saved\./m.test(document.getElementById('toasts').innerText), { timeout: 5000 });
+  await sleep(400);
+  const saved = (await rest('dana', '/state')).settings;
+  check('U5 Enter saves the goal, the typed repo and the demo time together', /voting app/.test(saved.goal) && saved.repo === 'https://github.com/team/vote' && Number(saved.deadline) > Date.now(), JSON.stringify({ g: saved.goal, r: saved.repo, d: saved.deadline }));
+  check('J1 Enter twice while saving: one settings change in the feed', await page.evaluate(() => state.events.filter((e) => e.kind === 'settings').length) === 1, await page.evaluate(() => state.events.filter((e) => e.kind === 'settings').map((e) => e.text).join(' | ')));
+  check('U5 saved: step 2 shows the goal, repo and demo time with one Edit', await page.evaluate(() => !$('goal-in') && document.querySelectorAll('#step-goal [data-act="goal-edit"]').length === 1 && /team\/vote/.test($('step-goal').innerText) && /Demo:/.test($('step-goal').innerText)));
+  // No demo time: the field is left empty and Save keeps it that way; with Setup closed the strip then doesn't ask for it.
+  await page.click('[data-act="goal-edit"]'); await sleep(200);
+  await page.click('[data-fk="dl-clear"]');
+  await page.waitForFunction(() => !Number(state.settings.deadline) && !!document.querySelector('[data-fk="dl-skip"]'), { timeout: 5000 });
+  await page.click('[data-fk="dl-skip"]'); await sleep(200);
+  check('ONB-2 "No demo time" empties the field', await page.evaluate(() => $('dl-in').value === ''));
+  await page.click('[data-fk="goal-save"]'); await sleep(500);
+  check('ONB-2 saved without a demo time', !Number((await rest('dana', '/state')).settings.deadline) && /no demo time/.test(await txt('#step-goal')), await txt('#step-goal'));
+  await page.evaluate(() => { localStorage.removeItem('board-dl-skip'); localStorage.setItem('board-setup', 'closed'); ui.forceSetup = false; render(); }); await sleep(200);
+  check('ONB-2 Setup closed, no demo time: the strip asks for it', /Set the demo time so agents stop on time/.test(await txt('#nyou .also')), await txt('#nyou'));
+  await page.click('#nyou .also [data-act="clock"]'); await sleep(400);
   check('ONB-2 the hint opens the demo time under the Demo chip, focus in its field', await page.evaluate(() => document.activeElement?.id === 'o-dl-in' && !$('o-dl').hidden));
   await page.keyboard.press('Escape');
-  await page.click('[data-fk="dl-skip"]'); await sleep(300);
-  check('ONB-2 "No demo time" removes the hint and the "no demo time yet" note', !/Set the demo time/.test(await txt('#now')) && !/no demo time yet/.test(await txt('#step-goal .step-s')), await txt('#now'));
 
   // ---- WB-6: the online count leaves out agents that are out of usage or offline ----
   const ann = await agent('ann'); const bea = await agent('bea'); const cid = await agent('cid');
@@ -79,8 +91,8 @@ try {
   await ann('ask_human', { question: 'Which colour?', task_id: t1.id });
   await reload();
   check('WB-3 approval leads the strip', /^Review the task list \(2 tasks\), then approve it/.test(await txt('#now .na')), await txt('#now'));
-  check('WB-3 the question is the next line', /Answer 1 question/.test(await txt('#now .also')), await txt('#now .also'));
-  check('WB-3 at most three lines', await page.$$eval('#now .also button', (b) => b.length) <= 2);
+  check('WB-3 the question is the next line (under the question cards)', /Answer 1 question/.test(await txt('#nyou .also')) && await page.evaluate(() => !!($('q-panel').compareDocumentPosition($('now-more')) & Node.DOCUMENT_POSITION_FOLLOWING)), await txt('#nyou .also'));
+  check('WB-3 at most three lines', await page.$$eval('#nyou .also button', (b) => b.length) <= 2);
   await page.screenshot({ path: `${out}/h-ranked.png` });
   await rest('dana', '/settings', 'PUT', { plan_approved: true });
 
@@ -89,7 +101,7 @@ try {
   await agent('dup', { laptop: 'bbb' }).then((a) => a('board_status'));
   await reload();
   check('WB-5 name clash leads the strip', /^dup is running on 2 laptops/.test(await txt('#now .na')) && await page.$eval('#now', (e) => e.classList.contains('k-urgent')), await txt('#now'));
-  check('WB-5 the question still shows under Also', /Answer 1 question/.test(await txt('#now .also')), await txt('#now .also'));
+  check('WB-5 the question still shows under Also', /Answer 1 question/.test(await txt('#nyou .also')), await txt('#nyou .also'));
   await page.click('#now [data-go="conflict"]'); await sleep(400);
   check('WB-5 the line opens the person with the clash', await page.evaluate(() => !!document.activeElement?.closest('#people')));
 

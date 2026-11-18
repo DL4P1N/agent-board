@@ -49,7 +49,7 @@ try {
   await page.type('#g-name', 'dana'); await page.keyboard.press('Enter');
   await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 5000 });
   await sleep(400);
-  check('empty: no lead while Setup shows step 1; Needs attention offers the goal meanwhile', !/Connect your first laptop/.test(await now()) && /Write the goal \(step 2\)/.test(await now()), await now());
+  check('U6 empty: while Setup shows step 1, Needs attention adds nothing of its own (no lead, no "Write the goal")', !/Connect your first laptop/.test(await now()) && !/Write the goal/.test(await now()) && /Setup shows what's next/.test(await now()), await now());
   check('empty: setup guide expanded with join cmd', await page.evaluate(() => /npm run join -- --url/.test(document.getElementById('setup').innerText)));
   check('empty: board banner', await page.$eval('#board-empty', (e) => !e.hidden && /No tasks yet/.test(e.innerText)));
   // Nobody connected yet: the phase track leads with Connect, matching the what-to-do line.
@@ -81,9 +81,9 @@ try {
 
   // planner claims
   await alice('claim_role', { role: 'planner' });
-  await nowSays(/alice's agent \(Claude Code\) is writing/);
-  check('board banner names planner', /alice's agent \(Claude Code\), the planner/.test(await page.$eval('#board-empty', (e) => e.innerText)));
-  check('do-now: nothing to do, alice writing', /alice's agent \(Claude Code\) is writing/.test(await now()), await now());
+  await nowSays(/alice \(Claude Code\) is writing/);
+  check('board banner names planner (its agent name, not "alice\'s agent")', /alice \(Claude Code\), the planner/.test(await page.$eval('#board-empty', (e) => e.innerText)));
+  check('do-now: nothing to do, alice writing', /alice \(Claude Code\) is writing/.test(await now()), await now());
   await shots('3-planning', { mobile: true });
 
   // tasks created
@@ -105,12 +105,12 @@ try {
   await bob('ask_human', { question: 'Should votes be anonymous?', task_id: t3.id, as: 'ui-worker' });
   await nowSays(/Answer 1 question/);
   // Ranked by how many agents each blocks (WB-3): picking who merges leads, the question follows under "Also".
-  check('do-now: pick integrator leads, answer question under Also', /^Pick who merges/.test(await page.$eval('#now .na', (e) => e.textContent)) && /Answer 1 question/.test(await page.$eval('#now .also', (e) => e.textContent)), await now());
+  check('do-now: pick integrator leads, answer question under Also', /^Pick who merges/.test(await page.$eval('#now .na', (e) => e.textContent)) && /Answer 1 question/.test(await page.$eval('#nyou .also', (e) => e.textContent)), await now());
   await shots('5-building', { mobile: true });
-  await page.click('#now .also [data-go="questions"]'); await sleep(300);
+  await page.click('#nyou .also [data-go="questions"]'); await sleep(300);
   check('do-now jumps to answer box', await page.evaluate(() => document.activeElement?.matches('.qcard textarea')));
   await page.keyboard.type('Yes, anonymous'); await page.keyboard.press('Enter');
-  await page.waitForFunction(() => !/Answer 1 question/.test(document.getElementById('now').innerText), { timeout: 5000 });
+  await page.waitForFunction(() => !/Answer 1 question/.test(document.getElementById('nyou').innerText), { timeout: 5000 });
   check('do-now: pick integrator', /Pick who merges/.test(await now()), await now());
   await sleep(800); await page.evaluate(() => window.scrollTo(0, 0)); await sleep(200);
   await page.click('#now [data-go]'); await sleep(400);

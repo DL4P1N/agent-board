@@ -1,14 +1,14 @@
 // Talking to the server: api() and act(), the sign-in gate, an unavailable board (archived, moved, token rotated),
-// load() for /api/state, and the live stream (/api/stream) that triggers it.
+// load() for /api/state, and the live stream (/api/stream): a chat message is added to the feed as it comes, anything
+// else fetches the board's state again.
 
 import './helpers.js';
 import { $, BASE, DEFAULT_SETTINGS, me, setMe, setState, setToken, SLUG, state, store, token } from './state.js';
 import { esc, knownPeople, toast } from './helpers.js';
-import { render } from './render.js';
+import { render, renderQuiet } from './render.js';
 import { selfMoves } from './topbar.js';
-import { older } from './activity.js';
+import { dropOlder, older } from './activity.js';
 import { checkOverwrites } from './task-dialog.js';
-import { start } from './boot.js';
 
 // A page that held a working token gets a 401: the host rotated the token or started a fresh board.
 const TOKEN_CHANGED = 'The board\'s link changed. Ask the host for the new link.';
@@ -82,6 +82,7 @@ async function tryRecover() {
   if (kind && kind !== unavailable) unavailableStatus(r.status, body);
 }
 function showGate(err = '') {
+  es?.close(); esOpen = false; clearTimeout(retryT); retryT = 0;
   clearInterval(recoverTimer); unavailable = null; for (const id of UNAVAILABLE) $(id).hidden = true;
   $('app').hidden = true; $('gate').hidden = false;
   $('g-token').value = token; $('g-name').value = me; $('g-err').textContent = err;
@@ -112,23 +113,48 @@ $('gate').addEventListener('submit', async (ev) => {
   if (r.status === 410 || r.status === 409 || r.status === 503) { setToken(t); setMe(n); const body = await r.json().catch(() => ({})); return unavailableStatus(r.status, body); }
   if (r.status === 401) { const b = await r.json().catch(() => ({})); $('g-err').textContent = tokenError(b); return $('g-token').focus(); }
   setToken(t); setMe(n); store.set('board-token', token); store.set('board-name', me);
-  start();
+  signedIn?.();
 });
+// What signing in starts (boot.js's start(), handed over from there: this module doesn't import the entry point).
+let signedIn = null;
+function onSignIn(fn) { signedIn = fn; }
 $('me-btn').onclick = () => showGate();
 
 // ---------- data ----------
+// One /api/state at a time: a load asked for while one is on its way runs once it is back (it fetches what changed
+// meanwhile), so an older answer never replaces a newer one. Resolves true once the page has the board's state.
+let loading = null, again = false;
 async function load() {
+  if (loading) { again = true; return loading; }
+  loading = (async () => { let ok; do { again = false; ok = await loadOnce(); } while (again && !unavailable && !$('app').hidden); return ok; })();
+  try { return await loading; } finally { loading = null; }
+}
+async function loadOnce() {
+  let s;
   try {
-    const s = await api('/state');
+    s = await api('/state');
     s.settings = { ...DEFAULT_SETTINGS, ...(s.settings || {}) };
     s.presence = s.presence || []; s.phase = s.phase || (s.tasks.length ? 'building' : 'needs_goal');
+    dropOlder();
     if (older.keep && s.events?.length) s.events = await keepOlder(s.events);
-    checkOverwrites(s);
-    setState(s); state.loaded = true; setConn(esOpen ? 'live' : 'connecting'); render();
-  }
-  catch (e) { if (e.message !== 'Token rejected') setConn('down', e.message); }
+  } catch (e) { if (e.message !== 'Token rejected') setConn('down', e.message); return false; }
+  checkOverwrites(s);
+  setState(s); state.loaded = true; setConn(esOpen ? 'live' : 'connecting');
+  paint();
+  return true;
 }
 function setLoad(f) { load = f; } // tests stub load out (through window, see boot.js)
+// Draw the page from state. A tab in the background only updates its title, desktop notifications and screen-reader
+// announcements, and draws the rest when it is shown again. A drawing error is logged, never taken for a lost connection.
+let behind = false;
+function paint() {
+  try {
+    if (document.hidden) { behind = true; renderQuiet(); } else { behind = false; render(); }
+  } catch (e) { console.error('The board could not draw itself:', e); }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && behind && state.loaded && !$('app').hidden) paint(); });
+let paintT = 0;
+const schedulePaint = () => { if (!paintT) paintT = setTimeout(() => { paintT = 0; paint(); }, 40); };
 // Earlier pages are loaded (older.keep): put them in front of the latest events. If more events arrived
 // since the last reload than the latest page holds, the events in between are fetched first; if that
 // gap is too long (or can't be fetched), the earlier pages are dropped instead, so the feed never skips.
@@ -147,10 +173,31 @@ async function keepOlder(latest) {
     } catch { closed = false; }
     if (!closed) { older.keep = false; older.more = null; return latest; }
   }
-  return [...state.events.filter((e) => e.id < (gap[0]?.id ?? first)), ...gap, ...latest];
+  const all = [...state.events.filter((e) => e.id < (gap[0]?.id ?? first)), ...gap, ...latest];
+  // Live events past the cap push the oldest out (Load earlier brings them back).
+  if (all.length > OLDER_CAP) { older.more = true; return all.slice(-OLDER_CAP); }
+  return all;
 }
-let reloadTimer;
-const scheduleReload = () => { clearTimeout(reloadTimer); reloadTimer = setTimeout(load, 150); };
+const OLDER_CAP = 1200;
+// A burst of events makes one load (at most one every 150ms, and one at a time).
+let reloadTimer = 0;
+const scheduleReload = () => { if (!reloadTimer) reloadTimer = setTimeout(() => { reloadTimer = 0; load(); }, 150); };
+// A chat message (from an agent or a person, direct ones too) changes only the feed: it is added as it comes, without
+// fetching the board. Anything else (a task, question, lock, setting or presence change, the board's own notices), or a
+// message that doesn't follow the last event this page has (one was missed), loads the board's state.
+function applyEvent(ev) {
+  if (!state.loaded || loading || reloadTimer || !ev || ev.kind !== 'message' || ev.author === 'board' || ev.data?.action || ev.data?.notice) return false;
+  if (!Number.isInteger(ev.id) || ev.id !== Number(state.cursor) + 1) return false;
+  state.cursor = ev.id;
+  if (ev.channel === 'direct') state.direct = [...(state.direct || []), ev];
+  else { state.events = [...state.events, ev]; if (!older.keep && state.events.length > 200) state.events = state.events.slice(-200); }
+  schedulePaint();
+  return true;
+}
+function onStreamEvent(m) {
+  let ev = null; try { ev = JSON.parse(m.data); } catch {}
+  if (!applyEvent(ev)) scheduleReload();
+}
 
 // ---------- live updates ----------
 let es; let esOpen = false; let hadError = false; let connKey = '';
@@ -160,6 +207,7 @@ function setConn(kind, msg) {
   const c = $('conn'); c.className = 'conn ' + kind;
   c.textContent = kind === 'live' ? 'Live' : kind === 'down' ? (msg || 'Disconnected, retrying…') : 'Connecting…';
   c.title = kind === 'live' ? 'Receiving live updates' : 'Live updates paused; the board may be out of date';
+  // The bar only shows it: #conn (a status) is what screen readers hear, once.
   const bar = $('downbar'); bar.hidden = kind !== 'down';
   // The bar sticks just under the header (when the header is sticky), so a scrolled page still sees it.
   const hd = document.querySelector('#app > header'); hd.classList.toggle('down', kind === 'down');
@@ -167,19 +215,25 @@ function setConn(kind, msg) {
   if (kind === 'down') { bar.textContent = 'Lost the connection to the board server. Retrying by itself; what you see may be out of date.'; bar.title = msg || ''; }
 }
 function connect() {
-  es?.close();
+  es?.close(); clearTimeout(retryT); retryT = 0;
   es = new EventSource(BASE + '/api/stream?token=' + encodeURIComponent(token) + '&name=' + encodeURIComponent(me));
-  es.onopen = () => { esOpen = true; setConn('live'); if (hadError) { hadError = false; load(); } };
-  es.onmessage = scheduleReload;
-  // A network blip: the browser retries by itself. An HTTP error (board archived, moved, token
-  // rotated) closes the stream for good: find out why with a normal request, then reconnect if it's fine.
-  es.onerror = () => { esOpen = false; hadError = true; setConn('down', 'Disconnected, retrying…'); if (es.readyState === EventSource.CLOSED) setTimeout(recheck, 800); };
+  es.onopen = () => { esOpen = true; retryMs = 0; setConn('live'); if (hadError) { hadError = false; load(); } };
+  es.onmessage = onStreamEvent;
+  // A network blip: the browser retries by itself. An HTTP error (board archived, moved, token rotated, the server
+  // failing) closes the stream for good: find out why with a normal request and reconnect once that works, waiting
+  // longer after each failure (up to 30s).
+  es.onerror = () => { esOpen = false; hadError = true; setConn('down', 'Disconnected, retrying…'); if (es.readyState === EventSource.CLOSED) retryLater(); };
 }
+let retryT = 0, retryMs = 0;
+function retryLater() { clearTimeout(retryT); retryMs = Math.min(30000, retryMs ? retryMs * 2 : 800); retryT = setTimeout(() => { retryT = 0; recheck(); }, retryMs); }
+const retrying = () => !!retryT;
 async function recheck() {
   if (unavailable || $('app').hidden) return;
-  await load();
-  if (!unavailable && !$('app').hidden && (!es || es.readyState === EventSource.CLOSED)) connect();
+  const ok = await load();
+  if (unavailable || $('app').hidden) return;
+  if (!ok) return retryLater();
+  if (!es || es.readyState === EventSource.CLOSED) connect();
 }
 
-export { act, api, connect, es, esOpen, load, recheck, scheduleReload, setConn, setLoad, showGate, tokenError,
-  unavailable, unavailableStatus };
+export { act, api, connect, es, esOpen, load, onSignIn, paint, recheck, retrying, scheduleReload, setConn, setLoad,
+  showGate, tokenError, unavailable, unavailableStatus };

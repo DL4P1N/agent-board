@@ -8,6 +8,7 @@ import { agentLimited, dur, outlook, setupShown, timeNow } from './derived.js';
 import { render } from './render.js';
 import { blockedNote, ciPill } from './tasks.js';
 import { focusNow, goCard, goMention, goQuestion } from './actions.js';
+import { narrowMq } from './office.js';
 
 let prevFrozen = null;
 function renderClock() {
@@ -17,7 +18,7 @@ function renderClock() {
   if (!t.deadline) {
     prevFrozen = null;
     const h = chip('not set'); if (b._html !== h) { b.innerHTML = h; b._html = h; }
-    b.className = 'tbc clock unset'; b.title = 'No demo time yet: set it so agents stop on time'; b.setAttribute('aria-label', 'Demo time not set. Set it');
+    b.className = 'tbc clock unset'; b.title = 'No demo time yet: set it so agents stop on time'; b.setAttribute('aria-label', 'Demo not set. Set the demo time');
     return;
   }
   const now = Date.now();
@@ -59,10 +60,13 @@ function tickTime() {
 // ---------- desktop notifications (opt-in; only while this tab is in the background) ----------
 let notifyOn = store.get('board-notify') === 'on';
 const hasNotify = () => 'Notification' in window;
+// The browser's permission, read once and kept current by its change event (not read on every redraw).
+let perm = hasNotify() ? Notification.permission : 'denied';
+try { navigator.permissions?.query({ name: 'notifications' }).then((s) => { s.onchange = () => { perm = Notification.permission; renderBell(); }; }).catch(() => {}); } catch {}
 function notifyState() {
   if (!hasNotify()) return 'unsupported';
-  if (Notification.permission === 'denied') return 'denied';
-  return notifyOn && Notification.permission === 'granted' ? 'on' : 'off';
+  if (perm === 'denied') return 'denied';
+  return notifyOn && perm === 'granted' ? 'on' : 'off';
 }
 function renderBell() {
   const b = $('notify-btn'); const st = notifyState();
@@ -76,8 +80,9 @@ async function toggleNotify() {
   if (!hasNotify()) return toast('This browser can\'t show desktop notifications. The tab title still counts what\'s waiting for you.', true);
   if (notifyState() === 'on') { notifyOn = false; store.set('board-notify', 'off'); renderBell(); return toast('Desktop notifications off.'); }
   if (!window.isSecureContext) return toast('Browsers only allow notifications on https or localhost, not on this address. The tab title still counts what\'s waiting for you.', true);
-  let p = Notification.permission;
+  let p = perm = Notification.permission;
   if (p === 'default') { try { p = await Notification.requestPermission(); } catch { p = Notification.permission; } }
+  perm = p;
   if (p !== 'granted') {
     notifyOn = false; store.set('board-notify', 'off'); renderBell();
     return toast(p === 'denied' ? 'Notifications are blocked for this page. Allow them in your browser\'s site settings (the icon left of the address), then press the bell again.' : 'Notifications stay off: the browser didn\'t get a yes.', true);
@@ -129,7 +134,7 @@ if ('ResizeObserver' in window) new ResizeObserver(([e]) => document.documentEle
 
 // The top bar, the same in both views: chips for the goal (opens it in place), the demo time (#clock, renderClock), progress
 // (done of all tasks except proposals), the repo, the planner (chosen in place), who merges to main with main's CI (the merger choice in place), then
-// the way into setup. Below 1600px (CSS) the planner and who merges are one Roles chip: both names, one popover with both choices.
+// the way into setup. Below 1600px (CSS) the planner and who merges are one Roles chip: it shows who merges (the planner in its tooltip and label), one popover with both choices.
 function mergerText() {
   const S = state.settings;
   return S.integrator === ANYONE ? 'whoever is free' : S.integrator || '';
@@ -146,20 +151,20 @@ function renderTopbar(si) {
   const pName = S.planner ? nameTag(S.planner) : '<span class="muted">first agent</span>';
   const mName = m ? (S.integrator === ANYONE ? 'whoever is free' : nameTag(S.integrator)) + (away ? ' <span class="muted">(away)</span>' : '') : '<span class="muted">not picked</span>';
   const pWho = S.planner || 'the first agent that starts'; const mWho = `${m || 'not picked yet'}${away ? ' (away)' : ''}`;
-  patch($('tb-a'), `<button type="button" class="tbc tb-goal" id="goal-btn" data-act="goal" data-fk="tb-goal" aria-expanded="${!!ui.oGoal}" aria-controls="o-goal" title="${esc(goal || 'No goal set yet')}" aria-label="Goal: ${esc(goal ? short(head, 120) : 'not set yet')}. ${ui.oGoal ? 'Close' : 'Show'} the full goal"><span class="tbl">Goal</span><span class="o-x">${goal ? esc(head) : '<span class="muted">not set</span>'}</span><span class="o-ar chev" aria-hidden="true">▾</span></button>`);
-  patch($('tb-b'), `${T.length ? `<span class="tbc stat" id="done-count" title="${done} of ${T.length} tasks merged into main (${pct}%)"><span class="tbl">Done</span><b>${done} of ${T.length}</b><span class="mbar" aria-hidden="true"><i style="width:${pct}%"></i></span></span>` : ''}
+  const a = patch($('tb-a'), `<button type="button" class="tbc tb-goal" id="goal-btn" data-act="goal" data-fk="tb-goal" aria-expanded="${!!ui.oGoal}" aria-controls="o-goal" title="${esc(goal || 'No goal set yet')}" aria-label="Goal ${esc(goal ? head : 'not set')}. ${ui.oGoal ? 'Close' : 'Show'} the full goal"><span class="tbl">Goal</span> <span class="o-x">${goal ? esc(head) : '<span class="muted">not set</span>'}</span><span class="o-ar chev" aria-hidden="true">▾</span></button>`);
+  const b = patch($('tb-b'), `${T.length ? `<span class="tbc stat" id="done-count" title="${done} of ${T.length} tasks merged into main (${pct}%)"><span class="tbl">Done</span><b>${done} of ${T.length}</b><span class="mbar" aria-hidden="true"><i style="width:${pct}%"></i></span></span>` : ''}
       ${S.repo ? `<span class="tbc repo-s" title="Project repo: ${esc(S.repo)}"><span class="tbl">Repo</span><span class="o-x">${esc(S.repo)}</span></span>` : ''}
-      <button type="button" class="tbc tb-roles" id="roles-btn" data-act="roles" data-fk="tb-roles" aria-expanded="${!!ui.oRoles}" aria-controls="o-roles" title="${esc(`Planner: ${pWho} (writes the task list from the goal and approves proposed tasks)\nMerges to main: ${mWho}${away ? ': whoever is free merges meanwhile' : ''}${ci ? ` (${ci.slice(2)})` : ''}`)}" aria-label="${esc(`Roles. Planner: ${pWho}. Merges to main: ${mWho}${ci}.`)} ${ui.oRoles ? 'Close' : 'Choose the planner and who merges'}"><span class="tbl">Roles</span><span class="o-x"><span class="rn">${pName}</span><span class="rs" aria-hidden="true">·</span><span class="rn">${m ? (S.integrator === ANYONE ? 'whoever is free' : nameTag(S.integrator)) : '<span class="muted">not picked</span>'}</span></span>${state.main_ci?.status === 'fail' ? '<span class="ci-dot" aria-hidden="true"></span>' : ''}<span class="o-ar chev" aria-hidden="true">▾</span></button>
-      <button type="button" class="tbc tb-plan" id="plan-btn" data-act="planner" data-fk="tb-plan" aria-expanded="${!!ui.oPlan}" aria-controls="o-plan" title="The agent that writes the task list from the goal and approves proposed tasks${S.planner ? '' : ' (none picked: the first agent that starts plans)'}" aria-label="Planner: ${esc(pWho)}. ${ui.oPlan ? 'Close' : 'Choose the planner'}"><span class="tbl">Planner</span><span class="o-x">${pName}</span><span class="o-ar chev" aria-hidden="true">▾</span></button>
-      <button type="button" class="tbc tb-merge" id="merge-btn" data-act="merge" data-fk="tb-merge" aria-expanded="${!!ui.oMerge}" aria-controls="o-merge" title="The person whose agent merges finished branches into main${away ? ` (${S.integrator} is away: whoever is free merges meanwhile)` : ''}${ci ? ` (${ci.slice(2)})` : ''}" aria-label="Merges to main: ${esc(m || 'not picked yet')}${away ? ' (away)' : ''}${ci}. ${ui.oMerge ? 'Close' : 'Choose who merges'}"><span class="tbl">Merges</span><span class="o-x">${mName}</span>${ciPill()}${state.main_ci?.status === 'fail' ? '<span class="ci-dot" aria-hidden="true"></span>' : ''}<span class="o-ar chev" aria-hidden="true">▾</span></button>
-      <span class="acts"><button type="button" class="tbc tb-act" data-act="${open ? 'setup-close' : 'setup-open'}" data-fk="s-open" aria-expanded="${open}" aria-controls="setup" ${left ? `title="Setup: ${esc(left.left)}" aria-label="${open ? 'Hide' : 'Open'} Setup. Left to do: ${esc(left.left)}"` : ''}><span class="o-x">Setup${left ? `<span class="sl">: ${esc(left.left)}</span>` : ''}</span><span class="o-ar chev" aria-hidden="true">▾</span></button></span>`);
-  tbFit();
+      <button type="button" class="tbc tb-roles" id="roles-btn" data-act="roles" data-fk="tb-roles" aria-expanded="${!!ui.oRoles}" aria-controls="o-roles" title="${esc(`Planner: ${pWho} (writes the task list from the goal and approves proposed tasks)\nMerges to main: ${mWho}${away ? ': whoever is free merges meanwhile' : ''}${ci ? ` (${ci.slice(2)})` : ''}`)}" aria-label="${esc(`Merges ${m || 'not picked'}${away ? ' (away)' : ''}${ci}. Roles: the planner (${pWho}) and who merges.`)} ${ui.oRoles ? 'Close' : 'Choose the planner and who merges'}"><span class="tbl">Merges</span> <span class="o-x"><span class="rn">${mName}</span></span>${state.main_ci?.status === 'fail' ? '<span class="ci-dot" aria-hidden="true"></span>' : ''}<span class="o-ar chev" aria-hidden="true">▾</span></button>
+      <button type="button" class="tbc tb-plan" id="plan-btn" data-act="planner" data-fk="tb-plan" aria-expanded="${!!ui.oPlan}" aria-controls="o-plan" title="The agent that writes the task list from the goal and approves proposed tasks${S.planner ? '' : ' (none picked: the first agent that starts plans)'}" aria-label="Planner ${esc(S.planner || 'first agent')}. ${ui.oPlan ? 'Close' : 'Choose the planner'}"><span class="tbl">Planner</span> <span class="o-x">${pName}</span><span class="o-ar chev" aria-hidden="true">▾</span></button>
+      <button type="button" class="tbc tb-merge" id="merge-btn" data-act="merge" data-fk="tb-merge" aria-expanded="${!!ui.oMerge}" aria-controls="o-merge" title="The person whose agent merges finished branches into main${away ? ` (${S.integrator} is away: whoever is free merges meanwhile)` : ''}${ci ? ` (${ci.slice(2)})` : ''}" aria-label="Merges ${esc(m || 'not picked')}${away ? ' (away)' : ''}${ci}. ${ui.oMerge ? 'Close' : 'Choose who merges to main'}"><span class="tbl">Merges</span> <span class="o-x">${mName}</span>${ciPill()}${state.main_ci?.status === 'fail' ? '<span class="ci-dot" aria-hidden="true"></span>' : ''}<span class="o-ar chev" aria-hidden="true">▾</span></button>
+      <span class="acts"><button type="button" class="tbc tb-act" data-act="${open ? 'setup-close' : 'setup-open'}" data-fk="s-open" aria-expanded="${open}" aria-controls="setup" ${left ? `title="Setup: ${esc(left.left)}" aria-label="Setup: ${esc(left.left)}. ${open ? 'Hide' : 'Open'} Setup"` : ''}><span class="o-x">Setup${left ? `<span class="sl">: ${esc(left.left)}</span>` : ''}</span><span class="o-ar chev" aria-hidden="true">▾</span></button></span>`);
+  if (a || b) tbFit();
 }
 // The top bar's last resort (see the CSS): measured, so it works in any font.
 function tbFit() {
   const tb = $('topbar'); if (!tb) return;
   tb.classList.remove('fit1', 'fit2');
-  if (innerWidth < 1101 || !tb.offsetWidth) return;
+  if (narrowMq.matches || !tb.offsetWidth) return; // one row of chips only in the three-column layout
   const over = () => tb.scrollWidth > tb.clientWidth + 1;
   if (over()) { tb.classList.add('fit1'); if (over()) tb.classList.add('fit2'); }
 }

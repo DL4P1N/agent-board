@@ -5,17 +5,23 @@ import './activity.js';
 import { $, ANYONE, LABEL, seenMention, setSeenMention, smooth, state, store, ui } from './state.js';
 import { agentRoot, ago, announce, clock, esc, glide, mentionsMe, plural, snapCards, taskById, toast, when } from './helpers.js';
 import { act, api, load, scheduleReload } from './data.js';
-import { agentInfoNow, bouncedTasks, cutTasks, dlSkipped, filterRoot, openQuestions, setupInfo, setupOpen, stepOpen,
+import { agentInfoNow, bouncedTasks, cutTasks, filterRoot, openQuestions, setupInfo, setupOpen, stepOpen,
   teamCapacity } from './derived.js';
 import { render } from './render.js';
 import { toggleNotify } from './topbar.js';
-import { exportFile, inviteText, nfEvents, NOTIFY_KIND, rotateToken } from './setup.js';
+import { exportFile, inviteText, nfEvents, NOTIFY_KIND, renderSetup, rotateToken } from './setup.js';
 import { askAgents, doneOpen, moveTask, pingedAt, renderBoard, tv } from './tasks.js';
 import { closeAc, growMsg, openDm } from './activity.js';
 import { openTask } from './task-dialog.js';
 import { boardView, needBoard } from './office.js';
 import { oAct, oDl, oGoal, oMerge, oPlan, oRoles, oSetup, oShow, pickAgent, renderDocks, renderOffice, setupFocus } from './panels.js';
 import { togglePalette } from './palette.js';
+
+// A change that only touches the task board (a card's menu, Done folding, Show more) redraws only the task board.
+function redrawTasks() { renderBoard(); renderOffice(); }
+// One request per form at a time: Enter (or a click) again while one is on its way does nothing.
+const busy = new Set();
+async function once(key, fn) { if (busy.has(key)) return; busy.add(key); try { return await fn(); } finally { busy.delete(key); } }
 
 let keysOn = store.get('board-keys') !== 'off';
 
@@ -78,6 +84,8 @@ function skipTo(where) {
   if (where === 'now') { oShow('left'); $('nyou').scrollIntoView({ block: 'start' }); return focusNow(); }
   if (where === 'chat') { oShow('act'); $('msg').scrollIntoView({ block: 'center' }); return $('msg').focus({ preventScroll: true }); }
   needBoard();
+  // The Table view: its first sort button (the columns are hidden).
+  if (tv.view === 'table' && !$('tasktable').hidden) { $('tasktable').scrollIntoView({ block: 'start' }); return $('tasktable').querySelector('button')?.focus({ preventScroll: true }); }
   const c = $('board').querySelector('.card'); ($('board').hidden || !state.tasks.length ? $('board-empty') : $('board')).scrollIntoView({ block: 'start' });
   if (c) c.focus({ preventScroll: true }); else { $('board').focus({ preventScroll: true }); }
 }
@@ -90,20 +98,20 @@ document.addEventListener('click', (ev) => {
   if (ev.target.closest('.card input, .card label')) return; // typing a reject reason doesn't open the card
   const el = ev.target.closest('button, .card, [data-open-task]');
   // What opens inside a card (its Move… menu, who it's for, the reject reason), Done and a Setup step snap open and
-  // shut, like an agent's details: only cards that change column glide.
-  if (ui.moveMenu && !ev.target.closest('.mvmenu, [data-move]')) { ui.moveMenu = null; snapCards(render); }
-  if (ui.moveAsk && !ev.target.closest('.mvask, [data-move-to]')) { ui.moveAsk = null; snapCards(render); }
+  // shut, like an agent's details: only cards that change column glide. They redraw only the task board.
+  if (ui.moveMenu && !ev.target.closest('.mvmenu, [data-move]')) { ui.moveMenu = null; snapCards(redrawTasks); }
+  if (ui.moveAsk && !ev.target.closest('.mvask, [data-move-to]')) { ui.moveAsk = null; snapCards(redrawTasks); }
   if (!el) return;
   const d = el.dataset;
   if (el.classList.contains('card')) return openTask(Number(d.id));
-  if (d.move) { const id = Number(d.move); ui.moveMenu = ui.moveMenu === id ? null : id; snapCards(render); return (ui.moveMenu ? document.querySelector(`.card[data-id="${id}"] .mvmenu button`) : document.querySelector(`[data-fk="mv-${id}"]`))?.focus({ preventScroll: true }); }
+  if (d.move) { const id = Number(d.move); ui.moveMenu = ui.moveMenu === id ? null : id; snapCards(redrawTasks); return (ui.moveMenu ? document.querySelector(`.card[data-id="${id}"] .mvmenu button`) : document.querySelector(`[data-fk="mv-${id}"]`))?.focus({ preventScroll: true }); }
   if (d.moveTo) { const id = Number(d.moveId); const t = taskById(id); ui.moveMenu = null; if (t && t.status !== d.moveTo) moveTask(t, d.moveTo); render(); return ui.moveAsk?.id === id ? document.querySelector(`.card[data-id="${id}"] .mvask button`)?.focus({ preventScroll: true }) : focusCard(id); }
   if (d.askTo) { const id = Number(d.askId); const t = taskById(id); const { to, force } = ui.moveAsk || {}; ui.moveAsk = null; if (t && to) moveTask(t, to, { force, assignee: d.askTo }); render(); return focusTask(id); }
-  if (d.askCancel) { const id = Number(d.askCancel); ui.moveAsk = null; snapCards(render); return focusTask(id); }
+  if (d.askCancel) { const id = Number(d.askCancel); ui.moveAsk = null; snapCards(redrawTasks); return focusTask(id); }
   if (d.release) { const t = taskById(Number(d.release)); if (t) { moveTask(t, 'open'); render(); } return; }
   if (d.approve) { const id = Number(d.approve); act(api(`/tasks/${id}/decide`, { method: 'POST', body: JSON.stringify({ approve: true }) }), `Approved #${id}: agents can claim it now`).then(() => focusCard(id)).catch(() => {}); return; }
-  if (d.reject) { ui.rejecting = Number(d.reject); snapCards(render); return $('rj-' + d.reject)?.focus(); }
-  if (d.rejectNo) { const id = Number(d.rejectNo); ui.rejecting = null; snapCards(render); return document.querySelector(`[data-fk="rj-b-${id}"]`)?.focus(); }
+  if (d.reject) { ui.rejecting = Number(d.reject); snapCards(redrawTasks); return $('rj-' + d.reject)?.focus(); }
+  if (d.rejectNo) return cancelReject();
   if (d.limit) { ui.limitForm = d.limit; render(); return $('lu-' + d.limit)?.focus(); }
   if (d.limcancel) { const n = d.limcancel; ui.limitForm = null; render(); return document.querySelector(`[data-fk="lm-${CSS.escape(n)}"]`)?.focus(); }
   if (d.unlimit) { const n = d.unlimit; act(api(`/agents/${encodeURIComponent(n)}`, { method: 'PATCH', body: JSON.stringify({ limited: false }) }), `${n} counts as available again`).catch(() => {}); return; }
@@ -118,18 +126,18 @@ document.addEventListener('click', (ev) => {
   }
   if (d.goQ) return goQuestion(Number(d.goQ));
   if (d.copy) return copyText(d.copy, el);
-  if (d.step) { const si = setupInfo(); ui.steps[d.step] = !stepOpen(d.step, si.cur); return render(); }
+  if (d.step) { const si = setupInfo(); ui.steps[d.step] = !stepOpen(d.step, si.cur); return renderSetup(si); }
   if (d.act) return doAct(d.act, el);
   if (d.go && d.go.startsWith('step-')) return goStep(d.go.slice(5));
   if (d.go === 'compose') { oShow('act'); $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); return $('msg').focus({ preventScroll: true }); }
   if (d.openTask) return openTask(Number(d.openTask));
   if (d.dm) return openDm(d.dm);
-  if ('dmBack' in d) { const n = ui.dm; ui.dm = null; store.set('board-dm', ''); $('feed')._html = undefined; render(); return document.querySelector(`[data-fk="dm-${CSS.escape(n || '')}"]`)?.focus({ preventScroll: true }); }
+  if ('dmBack' in d) { const n = ui.dm; ui.dm = null; $('feed')._html = undefined; render(); return document.querySelector(`[data-fk="dm-${CSS.escape(n || '')}"]`)?.focus({ preventScroll: true }); }
   if (d.mention) return mention(d.mention);
   if ('filter' in d && el.id !== 'filter') { setFilter(filterRoot() === d.filter && d.filter ? '' : d.filter); return; }
-  if (d.tab) { ui.tab = d.tab; store.set('board-tab', ui.tab); if (ui.tab === 'me') markMentionsSeen(); if (ui.tab === 'direct') { ui.dm = null; store.set('board-dm', ''); } $('feed')._html = undefined; return render(); }
-  if ('showDone' in d) { ui.showAllDone = !ui.showAllDone; return render(); }
-  if (d.showCol) { const c = (ui.showCols ||= new Set()); c.has(d.showCol) ? c.delete(d.showCol) : c.add(d.showCol); return render(); }
+  if (d.tab) { ui.tab = d.tab; store.set('board-tab', ui.tab); if (ui.tab === 'me') markMentionsSeen(); if (ui.tab === 'direct') ui.dm = null; $('feed')._html = undefined; return render(); }
+  if ('showDone' in d) { ui.showAllDone = !ui.showAllDone; return redrawTasks(); }
+  if (d.showCol) { const c = (ui.showCols ||= new Set()); c.has(d.showCol) ? c.delete(d.showCol) : c.add(d.showCol); return redrawTasks(); }
   if (d.unlock) { ui.confirmLock = d.unlock; render(); return document.querySelector(`[data-fk="un-${CSS.escape(d.unlock)}"]`)?.focus(); }
   if ('unlockNo' in d) { ui.confirmLock = null; return render(); }
   if (d.unlockYes) { const p = d.unlockYes; ui.confirmLock = null; act(api('/locks/release', { method: 'POST', body: JSON.stringify({ paths: [p] }) }), `Released lock on ${p}`).catch(() => {}); return render(); }
@@ -175,7 +183,9 @@ document.addEventListener('keydown', (ev) => {
   if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === 'k') { ev.preventDefault(); return togglePalette(); }
   const card = ev.target.closest?.('.card');
   if (ev.key === 'Escape' && ui.moveAsk && (card || ev.target.closest?.('.mvask'))) { const id = ui.moveAsk.id; ui.moveAsk = null; render(); return focusTask(id); }
-  if (ev.key === 'Escape' && ui.moveMenu && card) { const id = ui.moveMenu; ui.moveMenu = null; render(); return document.querySelector(`[data-fk="mv-${id}"]`)?.focus(); }
+  if (ev.key === 'Escape' && ui.moveMenu && card) { const id = ui.moveMenu; ui.moveMenu = null; redrawTasks(); return document.querySelector(`[data-fk="mv-${id}"]`)?.focus(); }
+  // Esc in a card's Reject form: back to the card's Reject… button, nothing rejected.
+  if (ev.key === 'Escape' && ui.rejecting && ev.target.closest?.('[data-rjform]')) { ev.preventDefault(); return cancelReject(); }
   if (card && ev.target === card && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); return openTask(Number(card.dataset.id)); }
   const typing = ev.target.closest?.('input, textarea, select, dialog');
   if (!keysOn || typing || ev.ctrlKey || ev.metaKey || ev.altKey) return;
@@ -195,11 +205,17 @@ document.addEventListener('input', (ev) => {
   if (['td-name', 'td-deps'].includes(ev.target.id) && ev.target.getAttribute('aria-invalid')) ev.target.removeAttribute('aria-invalid');
   if (['td-prio', 'td-size', 'td-res', 'td-asg'].includes(ev.target.id) && ev.target.getAttribute('aria-invalid')) { ev.target.removeAttribute('aria-invalid'); $('td-err').textContent = ''; }
 });
-document.addEventListener('submit', async (ev) => {
-  const lf = ev.target.closest('[data-limform]');
-  if (lf) {
-    ev.preventDefault();
-    const n = lf.dataset.limform; const tv = $('lu-' + n)?.value || ''; const note = ($('ln-' + n)?.value || '').trim();
+// Every form sends once at a time (once(), keyed by the form): Enter pressed again while it's on its way does nothing.
+document.addEventListener('submit', (ev) => {
+  const f = ev.target.closest('[data-limform], [data-rjform], [data-goalform], [data-dlform], [data-notifyform], [data-qform]');
+  if (!f) return;
+  ev.preventDefault();
+  const key = ['limform', 'rjform', 'goalform', 'dlform', 'notifyform', 'qform'].map((k) => (k in f.dataset ? `${k}:${f.dataset[k]}` : '')).join('');
+  once(key, () => submitForm(f));
+});
+async function submitForm(f) {
+  if ('limform' in f.dataset) {
+    const n = f.dataset.limform; const tv = $('lu-' + n)?.value || ''; const note = ($('ln-' + n)?.value || '').trim();
     let until = null;
     if (tv) { const [h, mi] = tv.split(':').map(Number); const d = new Date(); d.setHours(h, mi, 0, 0); if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1); until = d.getTime(); }
     try {
@@ -209,61 +225,45 @@ document.addEventListener('submit', async (ev) => {
     } catch (e) { toast(e.message, true); }
     return;
   }
-  const rjf = ev.target.closest('[data-rjform]');
-  if (rjf) {
-    ev.preventDefault();
-    const id = Number(rjf.dataset.rjform); const note = (rjf.querySelector('input')?.value || '').trim();
+  if ('rjform' in f.dataset) {
+    const id = Number(f.dataset.rjform); const note = (f.querySelector('input')?.value || '').trim();
     try {
       await api(`/tasks/${id}/decide`, { method: 'POST', body: JSON.stringify({ approve: false, note }) });
+      // Its card goes: focus moves to the card that takes its place in the column (or the column's next one).
+      const next = cardAfter(id);
       ui.rejecting = null; toast(`Rejected proposal #${id}`); scheduleReload();
       state.tasks = state.tasks.filter((t) => t.id !== id); render(); // optimistic: it's gone
+      landAfter(next);
     } catch (e) { toast(e.message, true); }
     return;
   }
-  const gf = ev.target.closest('[data-goalform]');
-  if (gf) {
-    ev.preventDefault();
-    const ta = gf.querySelector('textarea'); const btn = gf.querySelector('button[type=submit]');
-    const goal = ta.value.trim(); const inOffice = gf.dataset.goalform === 'o';
-    if (!goal) { ui.goalErr = 'Write a sentence or two about what you are building first.'; render(); return $(inOffice ? 'o-goal-in' : 'goal-in')?.focus(); }
-    btn.disabled = true;
-    try {
-      state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ goal }) });
-      if (inOffice) { ui.oGoalEdit = false; ui.goalErr = ''; toast('Goal saved. The agents will plan from it.'); render(); scheduleReload(); return document.querySelector('[data-fk="o-goal-edit"]')?.focus({ preventScroll: true }); }
-      ui.editGoal = false; ui.goalErr = ''; ui.steps.goal = !state.settings.repo || (!Number(state.settings.deadline) && !dlSkipped()); toast(Number(state.settings.deadline) || dlSkipped() ? 'Goal saved. The agents will plan from it.' : 'Goal saved. The agents will plan from it. Now set the demo time below.'); render(); scheduleReload();
-      document.querySelector('[data-fk="sh-goal"]')?.focus({ preventScroll: true });
-    } catch (e) { toast(e.message, true); btn.disabled = false; }
-    return;
+  if ('goalform' in f.dataset) {
+    if (f.dataset.goalform === 'o') return saveGoalPopover(f);
+    return saveStepGoal(f);
   }
-  const df = ev.target.closest('[data-dlform]');
-  if (df) {
-    ev.preventDefault();
-    const inOffice = df.dataset.dlform === 'o'; const din = inOffice ? 'o-dl-in' : 'dl-in';
-    const v = $(din).value; const ts = v ? new Date(v).getTime() : NaN;
-    const fm = Math.max(0, Math.min(600, Math.round(Number($(inOffice ? 'o-fz-in' : 'fz-in').value) || 0)));
+  if ('dlform' in f.dataset) {
+    // The Demo popover's form (step 2 saves its demo time with the goal).
+    const v = $('o-dl-in').value; const ts = v ? new Date(v).getTime() : NaN;
+    const fm = Math.max(0, Math.min(600, Math.round(Number($('o-fz-in').value) || 0)));
     ui.dlErr = '';
     if (!Number.isFinite(ts)) ui.dlErr = 'Pick the date and time of the demo.';
     else if (ts <= Date.now()) ui.dlErr = 'That time has already passed. Pick a time later than now.';
-    if (ui.dlErr) { render(); return $(din)?.focus(); }
-    const btn = df.querySelector('button[type=submit]'); btn.disabled = true;
+    if (ui.dlErr) { render(); return $('o-dl-in')?.focus(); }
+    const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
     try {
       state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: ts, freeze_minutes: fm }) });
-      ui.editDeadline = false; ui.dlErr = '';
+      ui.dlErr = '';
       toast(`Demo at ${when(ts)}${fm ? `; feature freeze at ${when(ts - fm * 60e3)}` : ''}. Agents see it too.`);
-      if (inOffice) { ui.oDl = false; render(); scheduleReload(); return $('clock').focus({ preventScroll: true }); }
-      render(); scheduleReload();
-      document.querySelector('[data-fk="dl-edit"]')?.focus({ preventScroll: true });
+      ui.oDl = false; render(); scheduleReload(); return $('clock').focus({ preventScroll: true });
     } catch (e) { toast(e.message, true); btn.disabled = false; }
     return;
   }
-  const nfForm = ev.target.closest('[data-notifyform]');
-  if (nfForm) {
-    ev.preventDefault();
+  if ('notifyform' in f.dataset) {
     const inp = $('nf-url'); const url = inp ? inp.value.trim() : '';
     if (url && !/^https?:\/\//i.test(url)) { ui.nf.err = 'Paste the full webhook address, starting with https://'; render(); return $('nf-url')?.focus(); }
     if (!url && !ui.nf.url) { ui.nf.err = 'Paste a webhook URL first.'; render(); return $('nf-url')?.focus(); }
     const events = [...(ui.nf.events || nfEvents(null))];
-    const btn = nfForm.querySelector('button[type=submit]'); btn.disabled = true;
+    const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
     try {
       const r = await api('/notify', { method: 'PUT', body: JSON.stringify(url ? { url, events } : { events }) });
       Object.assign(ui.nf, { url: r?.url ?? (url || ui.nf.url), kind: r?.kind ?? ui.nf.kind, events: r?.events ? nfEvents(r.events) : new Set(events), err: '', change: false });
@@ -273,20 +273,6 @@ document.addEventListener('submit', async (ev) => {
     } catch (e) { ui.nf.err = e.message; btn.disabled = false; render(); $('nf-url')?.focus(); }
     return;
   }
-  const rf = ev.target.closest('[data-repoform]');
-  if (rf) {
-    ev.preventDefault();
-    const inp = rf.querySelector('input'); const repo = inp.value.trim();
-    if (repo && (/\s/.test(repo) || !/^(https?:\/\/|git@|ssh:\/\/|file:|[\w.-]+\/[\w.-]+)/.test(repo))) { ui.repoErr = 'That doesn\'t look like a git URL. Paste what you\'d put after git clone, e.g. https://github.com/team/project'; render(); return $('repo-in')?.focus(); }
-    try {
-      state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ repo }) });
-      ui.editRepo = false; ui.repoErr = ''; toast(repo ? 'Project repo saved. It\'s in the invite message now.' : 'Project repo cleared.'); render(); scheduleReload();
-      document.querySelector('[data-fk="repo-edit"], [data-fk="repo-save"]')?.focus({ preventScroll: true });
-    } catch (e) { toast(e.message, true); }
-    return;
-  }
-  const f = ev.target.closest('[data-qform]'); if (!f) return;
-  ev.preventDefault();
   const ta = f.querySelector('textarea'); const btn = f.querySelector('button');
   const answer = ta.value.trim();
   const qid = Number(f.dataset.qform);
@@ -306,7 +292,60 @@ document.addEventListener('submit', async (ev) => {
     const b = $('q-' + qid)?.querySelector('button[type=submit]'); if (b) { b.disabled = false; b.textContent = 'Answer'; }
     if (e.message !== 'Token rejected') qErr(`Not sent: ${e.message}`);
   }
-});
+}
+// The goal popover (the top bar's Goal chip): the goal only.
+async function saveGoalPopover(f) {
+  const ta = f.querySelector('textarea'); const btn = f.querySelector('button[type=submit]');
+  const goal = ta.value.trim();
+  if (!goal) { ui.goalErr = 'Write a sentence or two about what you are building first.'; render(); return $('o-goal-in')?.focus(); }
+  btn.disabled = true;
+  try {
+    state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ goal }) });
+    ui.oGoalEdit = false; ui.goalErr = ''; toast('Goal saved. The agents will plan from it.'); render(); scheduleReload();
+    return document.querySelector('[data-fk="o-goal-edit"]')?.focus({ preventScroll: true });
+  } catch (e) { toast(e.message, true); btn.disabled = false; }
+}
+// Setup's step 2: the goal, the project repo and the demo time, checked and saved together.
+async function saveStepGoal(f) {
+  const S = state.settings;
+  const goal = $('goal-in').value.trim(); const repo = ($('repo-in')?.value || '').trim();
+  const v = $('dl-in')?.value || ''; const ts = v ? new Date(v).getTime() : 0;
+  const fm = Math.max(0, Math.min(600, Math.round(Number($('fz-in')?.value) || 0)));
+  ui.goalErr = ''; ui.repoErr = ''; ui.dlErr = '';
+  if (!goal) ui.goalErr = 'Write a sentence or two about what you are building first.';
+  if (repo && (/\s/.test(repo) || !/^(https?:\/\/|git@|ssh:\/\/|file:|[\w.-]+\/[\w.-]+)/.test(repo))) ui.repoErr = 'That doesn\'t look like a git URL. Paste what you\'d put after git clone, e.g. https://github.com/team/project';
+  if (v && !Number.isFinite(ts)) ui.dlErr = 'Pick the date and time of the demo.';
+  else if (ts && ts !== Number(S.deadline) && ts <= Date.now()) ui.dlErr = 'That time has already passed. Pick a time later than now.';
+  const bad = ui.goalErr ? 'goal-in' : ui.repoErr ? 'repo-in' : ui.dlErr ? 'dl-in' : '';
+  if (bad) { render(); return $(bad)?.focus(); }
+  const body = { goal };
+  if (repo !== (S.repo || '')) body.repo = repo;
+  if (ts && (ts !== Number(S.deadline) || String(fm) !== String(S.freeze_minutes))) Object.assign(body, { deadline: ts, freeze_minutes: fm });
+  const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
+  try {
+    state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify(body) });
+    ui.editGoal = false; // the step stays as it was: open (showing what was saved, with Edit) if it was opened
+    toast(`Saved. The agents will plan from the goal${Number(state.settings.deadline) ? `; demo at ${when(Number(state.settings.deadline))}` : ''}.`);
+    render(); scheduleReload();
+    document.querySelector('[data-fk="sh-goal"]')?.focus({ preventScroll: true });
+  } catch (e) {
+    btn.disabled = false;
+    if (/time|deadline/i.test(e.message)) { ui.dlErr = e.message; render(); return $('dl-in')?.focus(); }
+    toast(e.message, true);
+  }
+}
+// The card next to one that is about to go (in its column), and focus on it once the board has redrawn.
+function cardAfter(id) {
+  const c = document.querySelector(`.card[data-id="${id}"]`); const li = c?.closest('li');
+  const n = li?.nextElementSibling?.querySelector('.card') || li?.previousElementSibling?.querySelector('.card');
+  return { id: n?.dataset.id || null, col: c?.closest('.col')?.id || null };
+}
+function landAfter({ id, col }) {
+  const n = (id && document.querySelector(`.card[data-id="${id}"]`)) || (col && $(col)?.querySelector('.card'));
+  if (n?.offsetParent) n.focus({ preventScroll: true }); else if (col && $(col)) { const h = $(col).querySelector('h3'); h.tabIndex = -1; h.focus({ preventScroll: true }); } else $('board').focus({ preventScroll: true });
+}
+// Cancel a card's Reject…: the form goes, focus back on its Reject… button.
+function cancelReject() { const id = ui.rejecting; ui.rejecting = null; snapCards(redrawTasks); document.querySelector(`[data-fk="rj-b-${id}"]`)?.focus(); }
 
 document.addEventListener('change', async (ev) => {
   if (ev.target.id === 'keys-on') { keysOn = ev.target.checked; store.set('board-keys', keysOn ? 'on' : 'off'); return applyKeys(); }
@@ -385,7 +424,14 @@ function doAct(a, el) {
   if (a === 'rotate-no') { ui.rotateArm = false; render(); return document.querySelector('[data-fk="rot"]')?.focus({ preventScroll: true }); }
   if (a === 'rotate-yes') return rotateToken();
   if (a === 'sec-go') { const b = document.querySelector('[data-fk="rot"], [data-fk="rot-no"]'); b?.scrollIntoView({ behavior: smooth(), block: 'center' }); return b?.focus({ preventScroll: true }); }
-  if (a === 'dl-skip') { store.set('board-dl-skip', '1'); ui.steps.goal = false; render(); toast('No demo time: no countdown or feature freeze. Set one any time in step 2.'); return document.querySelector('[data-fk="sh-goal"]')?.focus({ preventScroll: true }); }
+  if (a === 'dl-skip') {
+    store.set('board-dl-skip', '1'); render(); if ($('dl-in')) $('dl-in').value = '';
+    toast('No demo time: no countdown or feature freeze. Set one any time in step 2.');
+    return document.querySelector('[data-fk="goal-save"], [data-fk="sh-goal"]')?.focus({ preventScroll: true });
+  }
+  if (a === 'other-tools') { ui.otherTools = !ui.otherTools; renderSetup(setupInfo()); return document.querySelector('[data-fk="other-tools"]')?.focus({ preventScroll: true }); }
+  // Setup's step 4 points to where the planner is chosen: the Roles chip (the Planner chip from 1600px).
+  if (a === 'pick-planner') return matchMedia('(max-width: 1599px)').matches ? oRoles(true) : oPlan(true);
   if (a === 'qr') { ui.qr = !ui.qr; render(); return document.querySelector('[data-fk="qr-tog"]')?.focus({ preventScroll: true }); }
   if (a === 'clock') return oDl(el?.id === 'clock' ? !ui.oDl : true);
   if (a === 'goal') return oGoal(!ui.oGoal);
@@ -394,14 +440,12 @@ function doAct(a, el) {
   if (a === 'roles') return oRoles(!ui.oRoles);
   if (a === 'o-goal-edit') return oGoal(true, { edit: true });
   if (a === 'o-goal-cancel') { ui.oGoalEdit = false; ui.goalErr = ''; renderDocks(); return document.querySelector('[data-fk="o-goal-edit"]')?.focus(); }
-  if (a === 'dl-edit') { ui.editDeadline = true; render(); return $('dl-in')?.focus(); }
-  if (a === 'dl-cancel') { ui.editDeadline = false; ui.dlErr = ''; render(); return document.querySelector('[data-fk="dl-edit"]')?.focus(); }
   if (a === 'dl-clear') {
     return api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: '' }) }).then((st) => {
-      state.settings = st; ui.editDeadline = false; ui.dlErr = ''; toast('Deadline removed. No countdown or feature freeze.');
+      state.settings = st; ui.dlErr = ''; toast('Demo time removed. No countdown or feature freeze.');
       if (ui.oDl) { ui.oDl = false; render(); scheduleReload(); return $('clock').hidden ? focusNow() : $('clock').focus(); }
       render(); scheduleReload();
-      $('dl-in')?.focus();
+      if ($('dl-in')) { $('dl-in').value = ''; $('dl-in').focus(); }
     }).catch((e) => toast(e.message, true));
   }
   if (a === 'setup-open' || a === 'setup-close') {
@@ -415,11 +459,9 @@ function doAct(a, el) {
   if (a === 'copy-invite') return copyText(inviteText(), document.querySelector('[data-act="copy-invite"]'), 'Invite copied. Paste it in your team chat.');
   if (a === 'addrs') { ui.addrs = !ui.addrs; return render(); }
   if (a === 'goal-edit') { ui.editGoal = true; render(); const t = $('goal-in'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } return; }
-  if (a === 'goal-cancel') { ui.editGoal = false; ui.goalErr = ''; render(); return document.querySelector('[data-fk="goal-edit"]')?.focus(); }
-  if (a === 'repo-edit') { ui.editRepo = true; render(); return $('repo-in')?.focus(); }
-  if (a === 'repo-cancel') { ui.editRepo = false; ui.repoErr = ''; render(); return document.querySelector('[data-fk="repo-edit"]')?.focus(); }
+  if (a === 'goal-cancel') { ui.editGoal = false; ui.goalErr = ''; ui.repoErr = ''; ui.dlErr = ''; render(); return document.querySelector('[data-fk="goal-edit"]')?.focus(); }
   if (a === 'done-toggle') {
-    const open = !doneOpen(); ui.doneOpen = open ? 'open' : 'closed'; store.set('board-done', ui.doneOpen); snapCards(render);
+    const open = !doneOpen(); ui.doneOpen = open ? 'open' : 'closed'; store.set('board-done', ui.doneOpen); snapCards(redrawTasks);
     return document.querySelector(`[data-fk="${open ? 'done-close' : 'done-tog'}"]`)?.focus({ preventScroll: true });
   }
   if (a === 'new-task') return openTask(null);
@@ -435,8 +477,8 @@ function goStep(key, focus) {
   if (opening && boardView !== 'office') glide(show, { move: [$('boardwrap'), document.querySelector('.pagefoot')], open: $('setup') }); else show();
   const li = $('step-' + key); if (!li) return;
   li.scrollIntoView({ behavior: smooth(), block: 'start' });
-  if (focus === 'dl' && !ui.editDeadline) { ui.editDeadline = true; render(); }
-  if (focus === 'dl') { const n = li.querySelector('#dl-in, [data-fk="dl-edit"]'); if (n) { n.scrollIntoView({ behavior: smooth(), block: 'center' }); return n.focus({ preventScroll: true }); } }
+  if (focus === 'dl' && !ui.editGoal && state.settings.goal) { ui.editGoal = true; render(); }
+  if (focus === 'dl') { const n = li.querySelector('#dl-in'); if (n) { n.scrollIntoView({ behavior: smooth(), block: 'center' }); return n.focus({ preventScroll: true }); } }
   (li.querySelector('.step-b [data-act="copy-invite"], .step-b textarea, .step-b select, .step-b [data-copy]') || li.querySelector('.step-h'))?.focus({ preventScroll: true });
 }
 async function copyText(text, btn, okMsg = 'Copied. Paste it in a terminal.') {

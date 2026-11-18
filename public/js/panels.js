@@ -2,9 +2,9 @@
 // docked, folded, maximised: oExpand, oApply, oFrame), the top bar's popovers, the docks, and the 3D room's agent picking.
 
 import './office.js';
-import { $, oSave, oUi, smooth, state, store, ui } from './state.js';
-import { agentRoot, esc, glide, nameTag, patch, short } from './helpers.js';
-import { blockedSplit, openQuestions, setupInfo, setupShown, timeNow } from './derived.js';
+import { $, nsKey, oSave, oUi, smooth, state, store, ui } from './state.js';
+import { agentRoot, esc, glide, nameTag, patch, setText, short } from './helpers.js';
+import { blockedSplit, inPass, openQuestions, setupInfo, setupShown, timeNow } from './derived.js';
 import { render } from './render.js';
 import { syncNeeds } from './needs.js';
 import { renderTopbar } from './topbar.js';
@@ -23,7 +23,11 @@ import { boardView, office, oRate } from './office.js';
 // scroll and focus carry over when 3D goes on or off.
 function officeMount(on) {
   const tw = $('o-tasks'), to = on ? $('office-view') : $('boardwrap');
+  // Moving a node takes focus out of it: whatever had focus inside gets it back (with its caret), where it now is.
+  const had = document.activeElement; const moved = had && had !== document.body && tw.contains(had);
+  let sel = null; try { if (moved && had.selectionStart != null) sel = [had.selectionStart, had.selectionEnd]; } catch {}
   if (tw.parentElement !== to) to.append(tw);
+  if (moved && document.activeElement !== had && had.isConnected) { had.focus({ preventScroll: true }); if (sel) try { had.setSelectionRange(sel[0], sel[1]); } catch {} }
 }
 // The task board starts open and docked (the room in view below it), and turning 3D on docks it; File locks start
 // folded. Folding, expanding or docking one yourself is remembered. ?view=office docks it for that visit.
@@ -70,7 +74,7 @@ function oApply() {
   const tOff = oTasksOff(), max = oMax();
   $('o-tasks').classList.toggle('max', max && !tOff);
   $('o-tasks-max').setAttribute('aria-pressed', String(max)); $('o-tasks-max').setAttribute('aria-label', oMaxLabel()); $('o-tasks-max').title = oMaxLabel();
-  $('o-tasks-max').innerHTML = max ? O_RESTORE : O_MAX;
+  if ($('o-tasks-max')._icon !== max) { $('o-tasks-max').innerHTML = max ? O_RESTORE : O_MAX; $('o-tasks-max')._icon = max; }
   oRate();
   // Every panel folds to its title bar; its button says what it does, with the panel's own name.
   for (const [w, name] of O_PANELS) {
@@ -87,9 +91,14 @@ function oApply() {
   if (ui.oMerge) placePop('o-merge', 'merge-btn');
   if (ui.oDl) placePop('o-dl', 'clock', 400);
   syncNeeds();
-  $('main').style.setProperty('--tb-h', $('topbar').getBoundingClientRect().height + 'px'); // the goal popover and Setup (3D) sit under it
-  oFrame();
+  frameSoon();
 }
+// The top bar's height, for the CSS of what sits under it (the goal popover, and Setup and the Tasks window with 3D on):
+// kept by a ResizeObserver, so nothing measures it while drawing.
+if ('ResizeObserver' in window) new ResizeObserver(([e]) => $('main').style.setProperty('--tb-h', e.target.getBoundingClientRect().height + 'px')).observe($('topbar'));
+// The camera's framing measures the panels: once per frame at most, when the layout is done anyway.
+let frameReq = 0;
+function frameSoon() { if (!frameReq) frameReq = requestAnimationFrame(() => { frameReq = 0; oFrame(); }); }
 // The room is framed in the part of the view the docks, the top bar and the Tasks window (or its title bar, under the
 // top bar) leave free: below them, between the side columns (the camera is told the insets).
 let oDockH = 0;
@@ -121,8 +130,9 @@ function oFold(which, folded = !oOff(which)) {
     oUi[which === 'act' ? 'actOff' : which] = folded; oSave(); renderDocks();
     if (boardView === 'office') renderOffice();
   }, { size: col, pin: [box, body] }).then((r) => { if (boardView === 'office') office.mod?.resize?.(); return r; }));
-  // Focus stays on the control you used; from inside a body that folds away, it moves to the panel's fold button.
-  if (folded && from && body.contains(from)) btn.focus({ preventScroll: true });
+  // Focus stays on the control you used; from inside a body that folds away (or from nowhere: a click on the title bar),
+  // it moves to the panel's fold button.
+  if (folded ? from && body.contains(from) : !from || from === document.body || box.contains(from)) btn.focus({ preventScroll: true });
   if (which === 'act' && !folded) { const f = $('feed'); f.scrollTop = f.scrollHeight; }
 }
 // Open a folded panel (a link led to it).
@@ -147,8 +157,10 @@ function oDl(open) {
   renderDocks();
   if (open) $('o-dl-in')?.focus(); else $('clock').focus({ preventScroll: true });
 }
+// Opening is for this visit (a reload doesn't bring a finished board's Setup back over the tasks); closing is remembered,
+// so an unfinished board's Setup stays closed too.
 function oSetup(open, focus = true) {
-  store.set('board-setup', open ? 'open' : 'closed'); ui.forceSetup = false;
+  store.set('board-setup', open ? '' : 'closed'); ui.forceSetup = open;
   if (open) { ui.oGoal = false; ui.oDl = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; if (ui.themeOpen) themePop(false, false); }
   render();
   if (focus) setupFocus(open);
@@ -190,8 +202,8 @@ document.addEventListener('click', (ev) => {
   if (ui.oGoal && !ev.target.closest?.('#o-goal, #goal-btn') && ev.target.isConnected) { ui.oGoal = false; renderDocks(); }
   if (ui.oDl && !ev.target.closest?.('#o-dl, #clock, [data-act="clock"]') && ev.target.isConnected) { ui.oDl = false; renderDocks(); }
   if (ui.oMerge && !ev.target.closest?.('#o-merge, #merge-btn') && ev.target.isConnected) { ui.oMerge = false; renderDocks(); renderTopbar(setupInfo()); }
-  if (ui.oPlan && !ev.target.closest?.('#o-plan, #plan-btn') && ev.target.isConnected) { ui.oPlan = false; renderDocks(); renderTopbar(setupInfo()); }
-  if (ui.oRoles && !ev.target.closest?.('#o-roles, #roles-btn') && ev.target.isConnected) { ui.oRoles = false; renderDocks(); renderTopbar(setupInfo()); }
+  if (ui.oPlan && !ev.target.closest?.('#o-plan, #plan-btn, [data-act="pick-planner"]') && ev.target.isConnected) { ui.oPlan = false; renderDocks(); renderTopbar(setupInfo()); }
+  if (ui.oRoles && !ev.target.closest?.('#o-roles, #roles-btn, [data-act="pick-planner"]') && ev.target.isConnected) { ui.oRoles = false; renderDocks(); renderTopbar(setupInfo()); }
   if (boardView === 'office' && setupShown() && ev.target.isConnected && !ev.target.closest?.('#setup, [data-fk="s-open"], [data-go^="step-"], [data-act="invite"], #o3d, dialog, #toasts')) { setupAway(); render(); }
 });
 // A popover closes once focus leaves it and its chip (Tab, or a click on something that takes focus), like the theme
@@ -202,6 +214,8 @@ document.addEventListener('focusout', (ev) => {
   // Onto another chip, its own click does the rest (a chip redrawn under the pointer would lose that click).
   const to = ev.relatedTarget; if (!to || to.closest?.('#topbar, dialog')) return;
   for (const [k, [pop, chip]] of Object.entries(POPS)) if (ui[k] && ev.target.closest?.(`#${pop}, #${chip}`) && !to.closest?.('#' + pop)) popAway(k);
+  // With 3D on Setup is a popover too: Tab past it (into the Tasks window under it) closes it.
+  if (boardView === 'office' && setupShown() && ev.target.closest?.('#setup') && !to.closest?.('#setup, #toasts')) { setupAway(); render(); }
 });
 document.addEventListener('keydown', (ev) => {
   if (ev.key !== 'Tab' || ev.defaultPrevented) return;
@@ -225,10 +239,12 @@ function oDlForm() {
 }
 // The panels' own lines: Needs attention's counts (the need-you badge's words), what's blocked and who is out of usage,
 // Activity's latest event when folded, the goal and demo time popovers.
-function renderDocks(qOpen = openQuestions(), si = setupInfo()) {
+// Also called on its own (a fold, a popover): one memo pass, so the per-agent lookups index once.
+function renderDocks(qOpen) { return inPass(() => renderDocksNow(qOpen ?? openQuestions())); }
+function renderDocksNow(qOpen) {
   // Folded, Needs attention's title bar counts what waits on you (the need-you badge's count; its words are the tooltip).
   const needTxt = (ui.needParts || []).join(' · ');
-  $('o-left-n').textContent = oUi.left && ui.needN ? String(ui.needN) : ''; $('o-left-n').title = needTxt;
+  setText($('o-left-n'), oUi.left && ui.needN ? String(ui.needN) : ''); $('o-left-n').title = needTxt;
   // Under the questions: blocked tasks without a question (those are answered above), with why.
   const alone = blockedSplit(qOpen).alone;
   patch($('o-blocked'), (alone.length ? `<section class="o-sec" aria-labelledby="o-bl-h"><h3 id="o-bl-h">Blocked</h3><ul class="o-list">${
@@ -236,7 +252,7 @@ function renderDocks(qOpen = openQuestions(), si = setupInfo()) {
   // Folded Activity: its title bar says the latest event.
   const last = state.events.reduce((m, e) => (!m || e.id > m.id ? e : m), null);
   const lt = last ? `${last.author}: ${last.kind === 'settings' ? settingsText(last) : last.text}` : 'No activity yet';
-  $('o-act-x').textContent = oUi.actOff ? short(lt, 80) : ''; $('o-act-x').title = oUi.actOff ? lt : '';
+  setText($('o-act-x'), oUi.actOff ? short(lt, 80) : ''); $('o-act-x').title = oUi.actOff ? lt : '';
   // The goal popover: the full goal, edited in place.
   const goal = String(state.settings.goal || '').trim();
   patch($('o-goal-b'), ui.oGoalEdit || (ui.oGoal && !goal)
@@ -246,9 +262,9 @@ function renderDocks(qOpen = openQuestions(), si = setupInfo()) {
         <div class="xacts"><span class="sp"></span>${goal ? '<button type="button" class="ghost sm" data-act="o-goal-cancel" data-fk="o-goal-cancel">Cancel</button>' : ''}<button type="submit" class="sm" data-fk="o-goal-save">Save goal</button></div></form>`
     : `<p>${esc(goal)}</p><div class="xacts"><button type="button" class="ghost sm" data-act="o-goal-edit" data-fk="o-goal-edit">Edit the goal</button></div>`);
   if (ui.oDl) patch($('o-dl-b'), oDlForm());
-  if (ui.oMerge) patch($('o-merge-b'), stepIntegrator(null, 'o-integ-sel', 'o-merge-h'));
+  if (ui.oMerge) patch($('o-merge-b'), stepIntegrator('o-integ-sel', 'o-merge-h'));
   if (ui.oPlan) patch($('o-plan-b'), plannerBox('o-', 'o-plan-h'));
-  if (ui.oRoles) patch($('o-roles-b'), `<div class="rl-sec">${plannerBox('r-')}</div><div class="rl-sec">${stepIntegrator(null, 'r-integ-sel')}</div>`);
+  if (ui.oRoles) patch($('o-roles-b'), `<div class="rl-sec">${plannerBox('r-')}</div><div class="rl-sec">${stepIntegrator('r-integ-sel')}</div>`);
   oApply();
 }
 // ---------- 3D view: the room and the Tasks window ----------
@@ -258,8 +274,16 @@ function renderOffice() {
   if (boardView !== 'office') return;
   oFrame();
 }
-const CHEV = '<span class="chev" aria-hidden="true">▾</span>';
-addEventListener('resize', () => oApply());
+let resizeReq = 0;
+addEventListener('resize', () => { if (!resizeReq) resizeReq = requestAnimationFrame(() => { resizeReq = 0; oApply(); }); });
+// Another tab of this board folded or opened a panel: this one follows (one remembered state, not two overwriting
+// each other).
+addEventListener('storage', (e) => {
+  if (e.key !== nsKey('board-office-ui')) return;
+  let v = {}; try { v = JSON.parse(e.newValue || '{}') || {}; } catch {}
+  for (const k of Object.keys(oUi)) if (!(k in v)) delete oUi[k];
+  Object.assign(oUi, v); renderDocks(); if (boardView === 'office') renderOffice();
+});
 // Select an agent (its row, or its character in the room); again: unselect. The selection is the same in both views.
 function pickAgent(id, fromRow = false) {
   ui.picked = id || null; office.mod?.select(ui.picked); render();
@@ -275,7 +299,7 @@ function pickAgent(id, fromRow = false) {
 $('app').addEventListener('click', (ev) => {
   // A folded title bar opens on a click anywhere on it (its own controls do what they do).
   const fh = ev.target.closest('.o-panel.folded > .o-head');
-  if (fh && !ev.target.closest('button, a, input, select, textarea, label')) { const b = fh.querySelector('[data-o-fold]'); if (b) return oFold(b.dataset.oFold, false); }
+  if (fh && !ev.target.closest('button, a, input, select, textarea, label')) { const b = fh.querySelector('[data-o-fold]'); if (b) { oFold(b.dataset.oFold, false); return b.focus({ preventScroll: true }); } }
   const t = ev.target.closest('button'); if (!t) return;
   const d = t.dataset;
   if (d.oFold) return oFold(d.oFold);

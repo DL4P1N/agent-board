@@ -78,6 +78,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
 <link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/board.css">
 <link rel="stylesheet" href="css/office.css">
+<!-- The page's modules, fetched at once instead of in waves as each one's imports are found. -->
+<link rel="modulepreload" href="js/state.js"><link rel="modulepreload" href="js/helpers.js"><link rel="modulepreload" href="js/data.js"><link rel="modulepreload" href="js/derived.js"><link rel="modulepreload" href="js/render.js"><link rel="modulepreload" href="js/needs.js"><link rel="modulepreload" href="js/topbar.js"><link rel="modulepreload" href="js/setup.js"><link rel="modulepreload" href="js/agents.js"><link rel="modulepreload" href="js/tasks.js"><link rel="modulepreload" href="js/activity.js"><link rel="modulepreload" href="js/actions.js"><link rel="modulepreload" href="js/task-dialog.js"><link rel="modulepreload" href="js/theme.js"><link rel="modulepreload" href="js/office.js"><link rel="modulepreload" href="js/panels.js"><link rel="modulepreload" href="js/palette.js"><link rel="modulepreload" href="js/boot.js">
 </head>
 <body>
 <section id="archived" class="gate" hidden aria-labelledby="arch-h">
@@ -132,7 +134,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       </span>
     </div>
   </header>
-  <div id="downbar" class="downbar" role="alert" hidden></div>
+  <div id="downbar" class="downbar" hidden></div>
   <div id="announcer" class="vh" aria-live="polite"></div>
   <div id="activity-live" class="vh" aria-live="polite" aria-atomic="true"></div>
   <main id="main">
@@ -145,12 +147,13 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       <div class="o-head"><h2 id="o-left-h">Needs attention</h2><span class="o-n" id="o-left-n"></span><button type="button" class="o-ib" data-o-fold="left" aria-expanded="true" aria-controls="o-left-b" aria-label="Fold Needs attention" title="Fold Needs attention"><span class="chev" aria-hidden="true">▾</span></button></div>
       <div class="o-body" id="o-left-b">
         <div class="nyou" id="nyou">
-          <section id="now" class="now" aria-labelledby="now-h"></section>
-          <section id="q-panel" class="attn" aria-labelledby="q-h" hidden>
-            <h2 id="q-h" class="vh"></h2>
+          <div id="now" class="now"></div>
+          <div id="q-panel" class="attn" hidden>
+            <h3 id="q-h" class="vh"></h3>
             <div class="qs" id="questions"></div>
             <p class="q-sum" id="q-sum" hidden></p>
-          </section>
+          </div>
+          <div id="now-more" class="now now-more" hidden></div>
         </div>
         <div id="o-blocked"></div>
       </div>
@@ -224,7 +227,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       <section class="o-panel o-act" id="o-act" aria-labelledby="f-h">
         <div class="o-head"><h2 id="f-h">Activity</h2><span class="o-sub" id="o-act-x"></span><button type="button" class="o-ib" id="o-act-fold" data-o-fold="act" aria-expanded="true" aria-controls="o-act-b" aria-label="Fold Activity" title="Fold Activity"><span class="chev" aria-hidden="true">▾</span></button></div>
         <div class="o-body" id="o-act-b">
-          <div class="tabs" id="tabs">
+          <div class="tabs" id="tabs" role="group" aria-label="Show in Activity">
             <button data-tab="all" aria-pressed="true">All</button>
             <button data-tab="chat" aria-pressed="false">Chat</button>
             <button data-tab="me" aria-pressed="false" aria-label="@me">@me</button>
@@ -236,7 +239,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
             <button type="button" class="jump ghost" id="jump" hidden>New activity ↓</button>
           </div>
           <form class="composer" id="composer">
-            <textarea id="msg" rows="1" autocomplete="off" spellcheck="true" aria-label="Message" aria-describedby="chat-hint" title="Agents read this chat: @name for one agent, @all for everyone. Enter sends, Shift+Enter adds a line" placeholder="Message, @ to mention" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="msg-ac"></textarea>
+            <textarea id="msg" rows="1" autocomplete="off" spellcheck="true" aria-label="Message" aria-describedby="chat-hint" title="Agents read this chat: @name for one agent, @all for everyone. Enter sends, Shift+Enter adds a line" placeholder="Message, @ to mention" aria-autocomplete="list" aria-controls="msg-ac"></textarea>
             <ul id="msg-ac" class="ac" role="listbox" aria-label="Names to mention" hidden></ul>
             <select id="chan" aria-label="Channel"><option>general</option><option>help</option><option>review</option><option>humans</option></select>
             <button type="submit" id="send" class="ghost">Send</button>
@@ -345,7 +348,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <dt>Questions (Needs attention)</dt>
     <dd>When an agent needs a human decision it asks here and waits. Its question is waiting for a human answer under <b>Needs attention</b>, on the left: answer it there (or in the task's dialog, if the task is blocked on it); the agent continues as soon as you reply. When Needs attention is out of view or folded, the header's <b>need attention</b> badge (or its folded title bar) counts what's waiting.</dd>
     <dt>Talking to agents</dt>
-    <dd>Agents read the chat in Activity. Write <code>@alice</code> to address alice's agent, <code>@alice/ui-worker</code> for one subagent, or <code>@all</code> for everyone. <code>#12</code> links to task 12.</dd>
+    <dd>Agents read the chat in Activity. Write <code>@alice</code> to address alice's agent, <code>@alice/ui-worker</code> for one subagent, or <code>@all</code> for everyone. <code>#12</code> links to task 12. For one agent only, use <b>Direct</b> in Activity (or <b>Message</b> under a selected agent): a thread with that agent, or with whoever is the planner; other agents don't see it, everyone on this page does.</dd>
     <dt>Demo time &amp; feature freeze</dt>
     <dd>Set when the demo starts in Setup, step 2, or with the <b>Demo</b> chip in the top bar, which counts down to it (and says whether the team is on track). At the <b>feature freeze</b> (60 min before, by default) agents stop claiming new tasks and finish, push and merge what they have, so <code>main</code> works for the demo. Priority-1 tasks (bug fixes) can still be claimed during the freeze. The board posts a reminder 30 minutes before the freeze and at the freeze.</dd>
     <dt>Plan approval</dt>
@@ -371,6 +374,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   <input id="pal-in" type="text" role="combobox" aria-label="Type a command, a task (#id or title) or a person" aria-expanded="true" aria-controls="pal-list" aria-autocomplete="list" aria-activedescendant="" autocomplete="off" spellcheck="false" placeholder="Type a command, a task (#id or title) or a person">
   <ul id="pal-list" role="listbox" aria-label="Results"></ul>
   <p id="pal-empty" hidden>Nothing matches.</p>
+  <p id="pal-count" class="vh" role="status"></p>
   <p class="pal-keys"><code>↑</code> <code>↓</code> choose · <code>Enter</code> run · <code>Esc</code> close</p>
 </dialog>
 

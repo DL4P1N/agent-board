@@ -7,11 +7,11 @@ import { $, COL_DESC, COL_EMPTY, COL_SHOWN, COLS, DONE_SHOWN, FROZEN_DESC, HOLDI
 import { agentRoot, ago, canMove, cardRects, esc, fmt, fullTime, hs, isHttps, isStale, isWebUrl, moveCards, nameTag,
   noteMove, ownerOffline, patch, plural, root, short, taskById, timeEl, toast, when } from './helpers.js';
 import { act, api, scheduleReload } from './data.js';
-import { agentInfo, agentLimited, approvalWait, clientOf, colOf, filterRoot, openQuestions, people, taskVisible,
+import { agentInfo, agentLimited, approvalWait, clientOf, colOf, filterRoot, inPass, people, questionFor, taskVisible,
   timeNow } from './derived.js';
 import { render } from './render.js';
 import { exportBtns } from './setup.js';
-import { focusMoveAsk, moveAskHtml } from './actions.js';
+import { focusMoveAsk, focusTask, moveAskHtml } from './actions.js';
 import { renderOffice } from './panels.js';
 
 function renderBoardEmpty(si) {
@@ -20,7 +20,7 @@ function renderBoardEmpty(si) {
   if (state.tasks.length) return patch(el, '');
   let msg;
   if (!S.goal) msg = '<b>No tasks yet.</b> Once the goal is set (Setup, step 2), the first agent on the board writes the task list. You can also add tasks yourself with <b>+ New task</b>.';
-  else if (S.planner) { const c = clientOf(S.planner); msg = `${nameTag(S.planner)}'s agent${c ? ` (${esc(c)})` : ''}, the planner, is writing the task list<span class="dots"></span> Cards appear here as it creates them.`; }
+  else if (S.planner) { const c = clientOf(S.planner); msg = `${nameTag(S.planner)}${c ? ` (${esc(c)})` : ''}, the planner, is writing the task list<span class="dots"></span> Cards appear here as it creates them.`; }
   else if (si.workingA.length) msg = '<b>No tasks yet.</b> Waiting for an agent to become the planner and write the task list<span class="dots"></span>';
   else if (si.waitingA.length) msg = `<b>No tasks yet.</b> ${plural(si.waitingA.length, 'agent is', 'agents are')} connected but nobody started one: type <code>/board</code> in it (<code>$board</code> in Codex). The first one that starts writes the task list.`;
   else msg = '<b>No tasks yet.</b> The first agent that starts on the board (Setup, step 3) becomes the planner and writes the task list from the goal. Or add tasks yourself with <b>+ New task</b>.';
@@ -133,7 +133,7 @@ function card(t) {
   const waiting = t.status === 'done' ? [] : deps.filter((d) => !d.t || d.t.status !== 'done');
   const stale = isStale(t);
   const note = blockedNote(t);
-  const q = openQuestions().find((x) => x.task_id === t.id);
+  const q = questionFor(t.id);
   const size = ['S', 'L'].includes(t.size) ? t.size : 'M';
   // Reserved: shown until the reserved agent itself holds it.
   const rsv = t.reserved_for && t.status !== 'done' && agentRoot(t.assignee) !== agentRoot(t.reserved_for);
@@ -161,7 +161,7 @@ function card(t) {
       ${rsv ? (() => { const away = ownerOffline({ assignee: t.reserved_for }) || agentLimited(t.reserved_for);
         return away ? `<span class="pill rsv" title="Reserved for ${esc(t.reserved_for)}, who isn't around (offline or out of usage), so any agent may take it">reserved for ${esc(t.reserved_for)} · away, open to anyone</span>`
           : `<span class="pill rsv" title="Reserved: only ${esc(t.reserved_for)} can claim it, and it's listed first for them">reserved for ${esc(t.reserved_for)}</span>`; })() : ''}
-      ${pr ? `<a class="pill ${pr.cls}" href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer" title="${esc(pr.tip)}">PR${pr.text ? ' · ' + esc(pr.text) : ''}</a>` : ''}
+      ${pr ? `<a class="pill ${pr.cls}" href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer" data-fk="pr-${t.id}" title="${esc(pr.tip)}">PR${pr.text ? ' · ' + esc(pr.text) : ''}</a>` : ''}
       ${merging ? `<span class="pill role" title="${esc(t.reviewer)} is reviewing and merging it">merging: ${esc(t.reviewer)}</span>` : ''}
       ${t.assignee ? `<span class="pc" ${hs(t.assignee)} title="Assigned to ${esc(t.assignee)}">${esc(t.assignee)}</span>` : t.status !== 'done' && t.status !== 'open' && !prop ? '<span class="pill warn" title="Nobody holds this task: open it to pick who it is for, or move it back to Open">unassigned</span>' : ''}
       ${t.status === 'claimed' ? '<span title="Claimed: an agent picked it up but hasn’t started yet">claimed, not started</span>' : ''}
@@ -219,7 +219,9 @@ function colSort(list, col) {
   if (col === 'done') return list.sort((a, b) => b.updated_at - a.updated_at);
   return list.sort((a, b) => (col === 'open' && (b.status === 'proposed') - (a.status === 'proposed')) || a.priority - b.priority || a.id - b.id);
 }
-function renderBoard() {
+// Also called on its own (a search, a move, Done): one memo pass, so the per-task lookups (questionFor…) index once.
+function renderBoard() { return inPass(renderBoardNow); }
+function renderBoardNow() {
   const visible = state.tasks.filter(taskShown);
   const table = tv.view === 'table';
   $('viewtog').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === tv.view)));
@@ -236,7 +238,7 @@ function renderBoard() {
     let items = colSort(visible.filter((t) => colOf(t) === s), s);
     const total = items.length;
     if (s === 'done' && !dOpen) {
-      return `<div class="col s-done collapsed" data-status="done" id="col-done" role="region" aria-label="Done, ${plural(total, 'task')}"><button type="button" class="dtog" id="colh-done" data-act="done-toggle" data-fk="done-tog" aria-expanded="false" aria-label="Done, ${plural(total, 'task')}: show the column" title="Show the Done column (tasks merged into main). You can still drop cards here."><span class="ok-mk" aria-hidden="true">✓</span>Done ${total} <span class="chev" aria-hidden="true">▾</span></button></div>`;
+      return `<div class="col s-done collapsed" data-status="done" id="col-done"><button type="button" class="dtog" id="colh-done" data-act="done-toggle" data-fk="done-tog" aria-expanded="false" aria-label="Done, ${plural(total, 'task')}: show the column" title="Show the Done column (tasks merged into main). You can still drop cards here."><span class="ok-mk" aria-hidden="true">✓</span>Done ${total} <span class="chev" aria-hidden="true">▾</span></button></div>`;
     }
     let more = '';
     if (s === 'done') {
@@ -245,7 +247,7 @@ function renderBoard() {
     } else if (items.length > COL_SHOWN + 3) {
       // Long columns: the first COL_SHOWN, plus any card that needs a human (proposed, stale, question, open menu).
       const all = (ui.showCols ||= new Set()).has(s);
-      const keep = (t, i) => all || i < COL_SHOWN || t.status === 'proposed' || isStale(t) || ui.moveMenu === t.id || ui.moveAsk?.id === t.id || openQuestions().some((q) => q.task_id === t.id);
+      const keep = (t, i) => all || i < COL_SHOWN || t.status === 'proposed' || isStale(t) || ui.moveMenu === t.id || ui.moveAsk?.id === t.id || !!questionFor(t.id);
       const shown = items.filter(keep);
       more = `<button class="ghost more" data-show-col="${s}" data-fk="more-${s}">${all ? 'Show fewer' : `Show ${items.length - shown.length} more`}</button>`;
       items = shown;
@@ -253,7 +255,8 @@ function renderBoard() {
     const empty = !state.tasks.length ? '' : tv.q.trim() && !total ? 'No matches' : filterRoot() && !total ? `No tasks for ${esc(filterRoot())}` : COL_EMPTY[s];
     // Feature freeze: Open says what can still start.
     const desc = s === 'open' && frozen ? FROZEN_DESC : COL_DESC[s];
-    return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}" role="region" aria-label="${LABEL[s]}, ${plural(total, 'task')}" aria-describedby="cold-${s}"><h3 title="${COL_DESC[s]}"><span id="colh-${s}">${LABEL[s]}</span><span><span id="colc-${s}">${total}</span>${s === 'done' ? '<button type="button" class="dclose" data-act="done-toggle" data-fk="done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse"><span class="chev" aria-hidden="true">▾</span></button>' : ''}</span></h3><p class="cd${desc !== COL_DESC[s] ? ' fz-note' : ' vh'}" id="cold-${s}" title="${desc}">${desc}</p>
+    // The column's heading reads "Open, 5 tasks" (not "Open5"); the columns aren't landmarks of their own.
+    return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}"><h3 title="${COL_DESC[s]}"><span id="colh-${s}">${LABEL[s]}</span><span><span class="vh">, </span><span id="colc-${s}">${total}</span><span class="vh"> ${total === 1 ? 'task' : 'tasks'}</span>${s === 'done' ? '<button type="button" class="dclose" data-act="done-toggle" data-fk="done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse"><span class="chev" aria-hidden="true">▾</span></button>' : ''}</span></h3><p class="cd${desc !== COL_DESC[s] ? ' fz-note' : ' vh'}" id="cold-${s}" title="${desc}">${desc}</p>
       ${items.length ? `<ul class="cards">${items.map((t) => `<li>${card(t)}</li>`).join('')}</ul>` : empty ? `<div class="empty-note">${empty}</div>` : ''}${more}</div>`;
   }).join('');
   const el = $('board');
@@ -262,10 +265,12 @@ function renderBoard() {
   el.classList.toggle('none', !state.tasks.length);
   el.classList.toggle('done-closed', !dOpen);
   // Roving tabindex only when the board was redrawn (focus moves between cards are handled by roveTo).
-  if (patch(el, html)) roveCards();
+  const drawn = patch(el, html);
+  if (drawn) roveCards();
   boardDrawn = true;
   if (before) moveCards(before);
-  fadeCards();
+  // Measured only when the cards changed (scrolling and resizing re-check it themselves).
+  if (drawn) fadeCards();
 }
 let boardDrawn = false;
 // A column's list cut at its bottom edge (the 3D Tasks window) fades there: more cards below.
@@ -365,11 +370,18 @@ function moveTask(t, to, { force = false, assignee } = {}) {
   }
   t.status = to; t.updated_at = Date.now(); t.stale = false; if (to === 'open') t.assignee = null; if (assignee) t.assignee = assignee; // optimistic
   noteMove(id);
+  const owner = t.assignee || null;
   api(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ status: to, ...(assignee ? { assignee } : {}), ...(force ? { force: true } : {}) }) })
     .then(() => {
       toast(`#${id} moved to ${LABEL[to]}${assignee ? ` for ${assignee}` : ''}${to === 'open' && from !== 'open' && prevAssignee ? ' (unassigned)' : ''}`, false, { label: 'Undo', run: () => {
+        // Undo puts it back as it was, unless it moved on since (an agent claimed, finished or released it): then it
+        // stays, and says so. Focus goes to its card (the toast and its button are gone).
+        const cur = taskById(id);
+        if (!cur || cur.status !== to || (cur.assignee || null) !== owner) return toast(`#${id} changed since you moved it (${cur ? `now ${LABEL[cur.status]}${cur.assignee ? `, ${cur.assignee}` : ''}` : 'gone'}), so it wasn't undone.`, true);
         noteMove(id);
         act(api(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(from === 'open' ? { status: from } : { status: from, assignee: prevAssignee, force: true }) }), `#${id} is back in ${LABEL[from]}`).catch(() => {});
+        cur.status = from; cur.updated_at = Date.now(); cur.assignee = from === 'open' ? null : prevAssignee; // optimistic
+        render(); focusTask(id);
       } });
       scheduleReload();
     })

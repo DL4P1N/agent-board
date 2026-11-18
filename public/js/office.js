@@ -26,8 +26,11 @@ const D3_KEY = 'agent-board-3d';
 const d3Pref = () => { try { return localStorage.getItem(D3_KEY) !== 'off'; } catch { return true; } };
 const narrowMq = matchMedia('(max-width: 1279px)'); // below 1280px: two columns, no room for 3D (the switch's CSS hides it there too)
 const officeAllowed = () => !office.failed && !narrowMq.matches && 'WebGLRenderingContext' in window;
-// Probed before the office loads, so a browser without WebGL never downloads it.
-function webglWorks() {
+// Probed before the office loads, so a browser without WebGL never downloads it. Once: each probe costs a WebGL
+// context, and the answer doesn't change.
+let webgl = null;
+function webglWorks() { if (webgl === null) webgl = probeWebgl(); return webgl; }
+function probeWebgl() {
   try {
     const c = document.createElement('canvas');
     const gl = c.getContext('webgl2') || c.getContext('webgl');
@@ -78,7 +81,7 @@ function showOffice() {
     const o = m.mount($('office-scene'), { theme: scenePalette(), reducedMotion: reduceMotion(), onPick: pickAgent });
     if (!o.usable) { o.destroy(); return noOffice("The 3D office couldn't start WebGL in this browser. Showing the plain board."); }
     office.mod = o;
-    if (state) o.update(state);
+    if (state) o.update(officeState());
     o.select(ui.picked || null);
     oRate(); oFrame();
     // The room fades in once its first frame is drawn (it stays hidden while .loading): no empty room first.
@@ -114,9 +117,13 @@ motionMq.addEventListener?.('change', () => {
     setTimeout(() => old.destroy(), 250);
   }).catch(() => {}).finally(() => { office.loading = null; });
 });
+// Narrower: 3D goes off at once. Wide again: it comes back once the window has stopped changing size for a moment, so
+// dragging a window's edge back and forth (or a zoom passing the width) doesn't build the room again each time.
+let wideT = 0;
 narrowMq.addEventListener?.('change', () => {
+  clearTimeout(wideT);
   if (narrowMq.matches && boardView === 'office') setBoardView('board', { save: false, quiet: true });
-  else if (!narrowMq.matches && boardView !== 'office' && d3Pref() && viewParam !== 'board') setBoardView('office', { save: false, quiet: true });
+  else if (!narrowMq.matches && boardView !== 'office' && d3Pref() && viewParam !== 'board') wideT = setTimeout(() => { if (!narrowMq.matches && boardView !== 'office') setBoardView('office', { save: false, quiet: true }); renderViewSwitch(); }, 300);
   renderViewSwitch();
 });
 $('o3d').addEventListener('click', () => setBoardView(boardView === 'office' ? 'board' : 'office'));
@@ -128,5 +135,5 @@ document.addEventListener('click', (ev) => {
   needBoard();
 }, true);
 
-export { boardView, d3Pref, darkMq, needBoard, office, officeAllowed, oRate, scenePalette, setBoardView, viewParam,
+export { boardView, d3Pref, darkMq, narrowMq, needBoard, office, officeAllowed, oRate, scenePalette, setBoardView, viewParam,
   webglWorks };

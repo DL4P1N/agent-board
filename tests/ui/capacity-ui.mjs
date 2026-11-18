@@ -166,7 +166,8 @@ try {
   await ageTask(board, T[2].id, 20); // cy's task
   await ageTask(board, T[0].id, 20); // ana's task
   await setLastSeen('cy', 30);
-  await human('/messages', 'POST', { text: 'checking on stale tasks' }); // nudges the page to reload
+  // Ageing a task in the database sends no event (the 20s poll would pick it up), so load now.
+  await human('/messages', 'POST', { text: 'checking on stale tasks' }); await page.evaluate(() => load());
   await page.waitForSelector(`[data-release="${T[2].id}"]`, { timeout: 5000 });
   const off = await cardTxt(T[2].id);
   check('stale (20 min) card shows Release + owner offline', /Release to Open/.test(off) && /owner offline — agents may take it over/.test(off), off);

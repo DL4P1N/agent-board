@@ -2,9 +2,9 @@
 // chat composer with @ autocomplete, and the live announcements of activity for screen readers.
 
 import './tasks.js';
-import { $, ANYONE, me, seenMention, setSeenMention, smooth, state, store, ui } from './state.js';
-import { agentRoot, ago, canMove, esc, fmt, hs, isMe, mentionsLite, mentionsMe, patch, plural, reveal, short,
-  taskById, timeEl, toast, who } from './helpers.js';
+import { $, ANYONE, LABEL, me, seenMention, setSeenMention, smooth, state, store, ui } from './state.js';
+import { agentRoot, canMove, esc, fmt, hs, isMe, mentionsLite, mentionsMe, patch, plural, refreshTimes, reveal, setText,
+  short, taskById, timeEl, toast, who } from './helpers.js';
 import { act, api, scheduleReload } from './data.js';
 import { agentInfoNow, isLimited, roster } from './derived.js';
 import { render } from './render.js';
@@ -43,6 +43,7 @@ function flushActivity() {
 
 // evHtml is cached per event: the key holds everything else its HTML depends on. Task titles (#id links),
 // people (mention highlights, colours) and who I am are shared by every line: when they change, the cache is dropped.
+// The time's words ("5m ago") aren't part of it: refreshTimes() moves them on in place.
 const evCache = new Map(); let evShared = { s: null, k: '' };
 function evHtml(e, prev) {
   if (evShared.s !== state) {
@@ -52,7 +53,7 @@ function evHtml(e, prev) {
   }
   const cont = !isChat(e) && !!prev && !isChat(prev) && prev.author === e.author && e.ts - prev.ts < 10 * 60e3;
   const open = e.kind === 'question' && state.questions.some((q) => q.id === e.data?.question_id && !q.answer);
-  const key = `${cont}|${open}|${expandedEv.has(e.id)}|${Date.now() - e.ts < 3600e3 ? ago(e.ts) : ''}`;
+  const key = `${cont}|${open}|${expandedEv.has(e.id)}`;
   const hit = evCache.get(e.id);
   if (hit && hit.key === key && hit.e === e.ts + e.text) return hit.html;
   const html = evHtmlRaw(e, prev);
@@ -64,17 +65,22 @@ function evHtmlRaw(e, prev) {
   if (!isChat(e)) {
     // Consecutive status lines from the same author are grouped: the name shows once.
     const cont = prev && !isChat(prev) && prev.author === e.author && e.ts - prev.ts < 10 * 60e3;
-    return `<div class="ev sys${cont ? ' cont' : ''}${isAction(e) ? ' act' : ''}${isAction(e) && mentionsMe(e) ? ' mention' : ''}" data-eid="${e.id}"><div class="eh"><span class="eb">${cont ? `<span class="vh">${esc(e.author)} </span>` : who(e.author, true) + (isAction(e) ? ' · ' : ' ')}${fmt(noTool(e.kind === 'settings' ? settingsText(e) : isAction(e) ? actionText(e) : e.text), true)}</span>${timeEl(e.ts)}</div></div>`;
+    return `<div class="ev sys${cont ? ' cont' : ''}${isAction(e) ? ' act' : ''}${isAction(e) && mentionsMe(e) ? ' mention' : ''}" data-eid="${e.id}"><div class="eh"><span class="eb">${cont ? `<span class="vh">${esc(e.author)} </span>` : who(e.author, true) + (isAction(e) ? ' · ' : ' ')}${fmt(statusWords(noTool(e.kind === 'settings' ? settingsText(e) : isAction(e) ? actionText(e) : e.text)), true)}</span>${timeEl(e.ts)}</div></div>`;
   }
   const mention = mentionsMe(e); const lite = !mention && mentionsLite(e);
   const tag = e.kind === 'question' ? '<span class="pill warn">asked the humans</span>' : e.kind === 'answer' ? '<span class="pill">answered</span>' : '';
   const open = e.kind === 'question' && state.questions.some((q) => q.id === e.data?.question_id && !q.answer);
   const long = isLong(e.text); const shown = long && expandedEv.has(e.id);
   return `<div class="ev chat ${mention ? 'mention' : lite ? 'mention-lite' : ''} ${open ? 'question' : ''}${long ? ' long' : ''}${shown ? ' open' : ''}" data-eid="${e.id}"><div class="eh">${who(e.author, true)}${tag}${e.channel === 'direct' ? (e.data?.dm?.from === 'agent' && e.data.dm.to && !isMe(e.data.dm.to) ? `<span class="ch">to ${esc(e.data.dm.to)}</span>` : '') : e.channel !== 'general' ? `<span class="ch">#${esc(e.channel)}</span>` : ''}${timeEl(e.ts)}</div>
-    <div class="eb">${fmt(e.text, true)}</div>${long ? `<button type="button" class="link muted evmore" data-more="${e.id}" aria-expanded="${shown}">${shown ? 'Show less' : 'Show more'}</button>` : ''}</div>`;
+    <div class="eb">${fmt(e.text, true)}</div>${long ? `<button type="button" class="link muted evmore" data-more="${e.id}" data-fk="more-${e.id}" aria-expanded="${shown}">${shown ? 'Show less' : 'Show more'}</button>` : ''}</div>`;
 }
 // A status line written for the agents ends with the tool to use, "(decide_proposal)": people don't need it.
 const noTool = (s) => String(s).replace(/\s*\([a-z]+(?:_[a-z]+)+\)(?=\s*(?:$|[.;,]))/g, '');
+// "#4 claimed → in_progress" in the board's words: "#4 Claimed → In progress" (the server's text stays as it is: the
+// filters and the retro read it).
+const STATUS_IDS = Object.keys(LABEL).join('|');
+const STATUS_MOVE = new RegExp(`\\b(${STATUS_IDS}) → (${STATUS_IDS})\\b`, 'g');
+const statusWords = (s) => String(s).replace(STATUS_MOVE, (m, a, b) => `${LABEL[a]} → ${LABEL[b]}`);
 // "planner → alice; integrator → nobody" in plain words.
 function settingsText(e) {
   return String(e.text).split('; ').map((part) => {
@@ -162,12 +168,12 @@ function syncComposer() {
 function openDm(name, focus = true) {
   oShow('act');
   if ($('task-dlg').open) $('task-dlg').close();
-  ui.tab = 'direct'; store.set('board-tab', 'direct'); ui.dm = name; store.set('board-dm', name);
+  ui.tab = 'direct'; store.set('board-tab', 'direct'); ui.dm = name; // the open thread isn't remembered: a reload shows the list
   $('feed')._html = undefined; render();
   if (focus) { const m = $('msg'); m.focus({ preventScroll: true }); m.setSelectionRange(m.value.length, m.value.length); }
 }
 const TAB_EMPTY = { me: 'No mentions of you yet.' };
-function renderFeed(unreadCount) {
+function renderFeed(unreadCount, at = null) {
   // All, Chat, @me and Direct (what's blocked and what's merged are Needs attention's and the columns'). A tab saved
   // from before (Problems, Merges) shows All.
   const tabs = { all: () => true, chat: isChat, me: (e) => mentionsMe(e) };
@@ -184,38 +190,78 @@ function renderFeed(unreadCount) {
   });
   renderDmBar();
   const feed = $('feed');
-  const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 40;
+  const { atBottom, anchor } = at || feedPlace();
   const direct = ui.tab === 'direct';
   const evs = direct ? (ui.dm ? dmThread(ui.dm) : []) : state.events.filter(tabs[ui.tab] || tabs.all);
-  const before = feed._html;
-  // Reading older messages? Remember the first visible line so new/expired events don't move it.
-  let anchor = null;
-  if (!atBottom && before !== undefined) {
-    for (const n of feed.children) if (n.dataset.eid && n.offsetTop + n.offsetHeight > feed.scrollTop) { anchor = { id: n.dataset.eid, off: n.offsetTop - feed.scrollTop }; break; }
+  const first = feed._html === undefined; // first draw, or another tab or thread
+  let changed, fresh = [];
+  if (direct && !ui.dm) { changed = patch(feed, dmListHtml()); feed._items = null; }
+  else {
+    const more = !direct && (older.more ?? (state.events.length >= 200 && state.events[0]?.id > 1));
+    const items = [];
+    if (more) items.push(['older', `<div class="older" data-key="older"><button type="button" class="link muted" data-older data-fk="older" ${older.loading ? 'disabled' : ''}>${older.loading ? 'Loading…' : 'Load earlier activity'}</button></div>`]);
+    evs.forEach((e, i) => items.push([String(e.id), evHtml(e, evs[i - 1])]));
+    if (!evs.length) items.push(['empty', `<div class="empty-note" data-key="empty">${direct ? dmEmptyText(ui.dm) : TAB_EMPTY[ui.tab] || 'No activity yet. Messages from agents and teammates show up here.'}</div>`]);
+    ({ changed, fresh } = patchKeyed(feed, items));
   }
-  const more = !direct && (older.more ?? (state.events.length >= 200 && state.events[0]?.id > 1));
-  const html = direct && !ui.dm ? dmListHtml()
-    : (more ? `<div class="older"><button type="button" class="link muted" data-older ${older.loading ? 'disabled' : ''}>${older.loading ? 'Loading…' : 'Load earlier activity'}</button></div>` : '')
-    + (evs.length ? evs.map((e, i) => evHtml(e, evs[i - 1])).join('') : `<div class="empty-note">${direct ? dmEmptyText(ui.dm) : TAB_EMPTY[ui.tab] || 'No activity yet. Messages from agents and teammates show up here.'}</div>`);
+  refreshTimes(feed);
   // New lines fade in (not on first load or a tab switch, and not a whole burst at once).
-  const seen = before !== undefined && before !== html && canMove() ? new Set([...feed.children].map((n) => n.dataset.eid)) : null;
-  patch(feed, html);
-  if (seen) { const fresh = [...feed.children].filter((n) => n.dataset.eid && !seen.has(n.dataset.eid)); if (fresh.length <= 6) fresh.forEach((n) => reveal(n, 4)); }
+  if (!first && fresh.length <= 6 && canMove()) fresh.forEach((n) => reveal(n, 4));
   // The thread list reads from the top and stays put; a thread or the feed follows its newest line.
-  if (direct && !ui.dm) { if (before === undefined) feed.scrollTop = 0; $('jump').hidden = true; }
-  else if (atBottom || before === undefined) { feed.scrollTop = feed.scrollHeight; $('jump').hidden = true; }
-  else if (before !== feed._html) {
+  if (direct && !ui.dm) { if (first) feed.scrollTop = 0; $('jump').hidden = true; }
+  else if (atBottom || first) { if (changed || first) feed.scrollTop = feed.scrollHeight; $('jump').hidden = true; }
+  else if (changed) {
     const n = anchor?.id && feed.querySelector(`[data-eid="${CSS.escape(anchor.id)}"]`);
     if (n) feed.scrollTop = n.offsetTop - anchor.off;
     if (!older.quiet) $('jump').hidden = false;
   }
   older.quiet = false;
-  requestAnimationFrame(fadeFeed);
-  if (before !== feed._html) observeMentions();
+  if (changed || first) { requestAnimationFrame(fadeFeed); observeMentions(); }
 }
-// The feed starts with the last 200 events; "Load earlier activity" pages back 200 at a time. Once a
-// page is loaded, live reloads keep what's already here (see load()).
+// Where the feed is scrolled: at its newest line, or reading older ones (then the first line in view, so new or
+// expired lines don't move it). Read before render() writes anything.
+function feedPlace() {
+  const feed = $('feed'); if (feed._html === undefined || !feed.offsetParent) return { atBottom: true, anchor: null };
+  const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 40;
+  let anchor = null;
+  if (!atBottom) for (const n of feed.children) if (n.dataset.eid && n.offsetTop + n.offsetHeight > feed.scrollTop) { anchor = { id: n.dataset.eid, off: n.offsetTop - feed.scrollTop }; break; }
+  return { atBottom, anchor };
+}
+// The feed's lines by key (event id): a new event adds its line, one that changed is replaced, one that went is
+// removed, and the rest stay as they are (so a live event costs one line, not the whole feed). Focus stays where it
+// was (data-fk). Another tab or thread (feed._html undefined) draws it whole.
+const tpl = document.createElement('template');
+function patchKeyed(el, items) {
+  const html = () => items.map((x) => x[1]).join('');
+  if (el._html === undefined || !el._items) {
+    const h = html(); const changed = patch(el, h);
+    el._items = new Map(items); el._html = 'keyed';
+    return { changed, fresh: [] };
+  }
+  const old = el._items; const nodes = new Map(); let changed = false; const fresh = [];
+  for (const n of [...el.children]) { const k = n.dataset.eid || n.dataset.key; if (k && !nodes.has(k)) nodes.set(k, n); else { n.remove(); changed = true; } }
+  const want = new Set(items.map((x) => x[0]));
+  for (const [k, n] of nodes) if (!want.has(k)) { n.remove(); nodes.delete(k); changed = true; }
+  const active = document.activeElement; const fk = active && el.contains(active) ? active.dataset.fk || null : null;
+  const make = (h) => { tpl.innerHTML = h; return tpl.content.firstElementChild; };
+  let ref = el.firstElementChild;
+  for (const [k, h] of items) {
+    let n = nodes.get(k);
+    if (n && old.get(k) !== h) { const m = make(h); if (ref === n) ref = m; n.replaceWith(m); n = m; changed = true; }
+    if (!n) { n = make(h); fresh.push(n); changed = true; }
+    if (n === ref) ref = ref.nextElementSibling; else { el.insertBefore(n, ref); changed = true; }
+  }
+  el._items = new Map(items);
+  if (fk && !el.contains(active)) el.querySelector(`[data-fk="${CSS.escape(fk)}"]`)?.focus({ preventScroll: true });
+  return { changed, fresh };
+}
+// The feed starts with the last 200 events; "Load earlier activity" pages back 200 at a time. Once a page is loaded,
+// live reloads keep what's already here (see load()) until the feed is back at its newest line. It pages back to about
+// OLDER_MAX events; live events past that push the oldest out.
 const older = { more: null, loading: false, keep: false, quiet: false };
+const OLDER_MAX = 1000;
+// Back at the newest line: the earlier pages go, the feed is the last 200 again.
+function dropOlder() { if (older.keep && !older.loading && feedPlace().atBottom) { older.keep = false; older.more = null; } }
 async function loadOlder() {
   const first = state.events[0]; if (!first || older.loading) return;
   older.loading = true; older.quiet = true; render();
@@ -224,6 +270,7 @@ async function loadOlder() {
     const have = new Set(state.events.map((e) => e.id));
     state.events = [...got.filter((e) => !have.has(e.id)), ...state.events];
     older.keep = true; older.more = got.length >= 200 && got[0].id > 1;
+    if (state.events.length >= OLDER_MAX) older.more = false; // far enough back: the feed stops offering more
   } catch (e) { toast(`Couldn't load earlier activity: ${e.message}`, true); }
   older.loading = false; older.quiet = true; render();
 }
@@ -268,14 +315,14 @@ function observeMentions() {
 // File locks fold to their title bar (with the count), like the other panels: agents set and clear them, a human only
 // steps in when an owner is gone.
 function renderLocks() {
-  $('l-count').textContent = state.locks.length ? `${state.locks.length} held` : '';
+  setText($('l-count'), state.locks.length ? `${state.locks.length} held` : '');
   patch($('locks'), state.locks.length ? state.locks.map((l) => {
     const mins = Math.max(0, Math.ceil((l.expires_at - Date.now()) / 60000));
     const confirming = ui.confirmLock === l.path;
     // Locks over an hour block teammates for a long time: make them stand out.
     const long = (l.expires_in_s ?? (l.expires_at - Date.now()) / 1000) > 3600;
     return `<li class="lock"><div><code>${esc(l.path)}</code>${long ? ` <span class="pill warn" title="Locked for over an hour by ${esc(l.owner)}. If someone is waiting on it, ask ${esc(agentRoot(l.owner))} to release it, or release it here.">long lock</span>` : ''}
-      <div class="muted mt-1">${who(l.owner, true)}${l.task_id ? ` · <button type="button" class="link tref" data-open-task="${l.task_id}" tabindex="-1">#${l.task_id}</button>` : ''} · expires in ${mins}m${l.reason ? ` · ${esc(l.reason)}` : ''}</div></div>
+      <div class="muted mt-1">${who(l.owner, true)}${l.task_id ? ` · <button type="button" class="link tref" data-open-task="${l.task_id}" data-fk="lt-${esc(l.path)}">#${l.task_id}</button>` : ''} · expires in ${mins}m${l.reason ? ` · ${esc(l.reason)}` : ''}</div></div>
       <div class="la">${confirming
         ? `<button class="danger" data-unlock-yes="${esc(l.path)}" data-fk="uy-${esc(l.path)}">Force release</button><button class="ghost" data-unlock-no data-fk="un-${esc(l.path)}">Keep</button>`
         : `<button class="ghost" data-unlock="${esc(l.path)}" data-fk="u-${esc(l.path)}" aria-label="Release lock on ${esc(l.path)}">Release</button>`}</div></li>`;
@@ -283,13 +330,19 @@ function renderLocks() {
 }
 
 // ---------- chat ----------
+// One message at a time: Enter pressed again while it's on its way doesn't send it twice. The box empties at once, so
+// the next message can be typed meanwhile; if sending fails, the text comes back (when the box is still empty).
+let sending = false;
 $('composer').addEventListener('submit', async (ev) => {
   ev.preventDefault();
-  const text = $('msg').value.trim(); if (!text) return $('msg').focus();
-  $('send').disabled = true; closeAc();
-  const to = composerKey.startsWith('dm:') ? composerKey.slice(3) : null;
-  try { await act(api('/messages', { method: 'POST', body: JSON.stringify(to ? { text, to } : { text, channel: $('chan').value }) })); $('msg').value = ''; growMsg(); $('feed').scrollTop = $('feed').scrollHeight; if (to) scheduleReload(); }
-  catch {} finally { $('send').disabled = false; $('msg').focus(); }
+  if (sending) return;
+  const m = $('msg'); const raw = m.value; const text = raw.trim(); if (!text) return m.focus();
+  const key = composerKey; const to = key.startsWith('dm:') ? key.slice(3) : null;
+  sending = true; $('send').disabled = true; closeAc();
+  m.value = ''; growMsg();
+  try { await act(api('/messages', { method: 'POST', body: JSON.stringify(to ? { text, to } : { text, channel: $('chan').value }) })); $('feed').scrollTop = $('feed').scrollHeight; if (to) scheduleReload(); }
+  catch { if (composerKey === key && !m.value) { m.value = raw; growMsg(); } else if (!drafts[key]) drafts[key] = raw; }
+  finally { sending = false; $('send').disabled = false; m.focus(); }
 });
 // The message box grows with what you type (up to ~8 lines, then it scrolls).
 function growMsg() {
@@ -320,13 +373,13 @@ function acNames() {
 }
 function closeAc() {
   ac.open = false; ac.items = []; const ul = $('msg-ac'); ul.hidden = true; ul.innerHTML = '';
-  const m = $('msg'); m.setAttribute('aria-expanded', 'false'); m.removeAttribute('aria-activedescendant');
+  $('msg').removeAttribute('aria-activedescendant');
 }
 function renderAc() {
   const ul = $('msg-ac'); const m = $('msg');
   ul.innerHTML = ac.items.map((it, i) => `<li role="option" id="ac-${i}" data-ac="${i}" aria-selected="${i === ac.idx}"><span class="pc" ${hs(it.name)}>@${esc(it.name)}</span><span class="ak ${it.online ? 'on' : ''}">${esc(it.sub)}</span></li>`).join('');
   ul.hidden = false; ac.open = true;
-  m.setAttribute('aria-expanded', 'true'); m.setAttribute('aria-activedescendant', 'ac-' + ac.idx);
+  m.setAttribute('aria-activedescendant', 'ac-' + ac.idx);
   ul.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
 }
 function updateAc() {
@@ -370,5 +423,5 @@ $('msg').addEventListener('keydown', (ev) => {
 // mousedown, not click: the textarea keeps focus.
 $('msg-ac').addEventListener('mousedown', (ev) => { const li = ev.target.closest('[data-ac]'); if (!li) return; ev.preventDefault(); pickAc(Number(li.dataset.ac)); });
 
-export { ac, ACT_GAP, announceActivity, closeAc, dmUnreadCount, evHtml, growMsg, markDmSeen, older, openDm,
+export { ac, ACT_GAP, announceActivity, closeAc, dmUnreadCount, dropOlder, evHtml, feedPlace, growMsg, markDmSeen, older, openDm,
   renderFeed, renderLocks, setActGap, settingsText };

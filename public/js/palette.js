@@ -2,7 +2,7 @@
 
 import './panels.js';
 import { $, BASE, LABEL, me, smooth, state, ui } from './state.js';
-import { announce, esc, youTag } from './helpers.js';
+import { esc, youTag } from './helpers.js';
 import { openQuestions, people, setupShown } from './derived.js';
 import { doAct, goQuestion, helpDlg, openHelp, setFilter } from './actions.js';
 import { openTask, setDlgBackTo } from './task-dialog.js';
@@ -14,7 +14,7 @@ import { tv } from './tasks.js';
 // ---------- command palette (Ctrl+K) ----------
 // Every command runs something that already exists in the page: it never does anything new by itself.
 const palDlg = $('pal-dlg'), palIn = $('pal-in'), palList = $('pal-list');
-let palItems = [], palSel = 0, palPrev = null, palNext = null;
+let palItems = [], palSel = 0, palPrev = null, palNext = null, palSay = 0;
 const PAL_MAX = 40;
 function palCommands() {
   const cmds = [];
@@ -33,7 +33,7 @@ function palCommands() {
   const roles = matchMedia('(max-width: 1599px)').matches;
   add('Action', roles ? 'Choose the planner and who merges' : 'Choose the planner', () => doAct(roles ? 'roles' : 'planner'), 'planner roles');
   if (!roles) add('Action', 'Choose who merges', () => doAct('merge'), 'merges to main merger integrator roles');
-  if (state.tasks.length) add('View', tv.view === 'table' ? 'Show Columns' : 'Show Table', () => $('viewtog').querySelector(`[data-view="${tv.view === 'table' ? 'columns' : 'table'}"]`).click(), 'tasks view columns table list');
+  if (state.tasks.length) add('View', tv.view === 'table' ? 'Show Columns' : 'Show Table', () => { const b = $('viewtog').querySelector(`[data-view="${tv.view === 'table' ? 'columns' : 'table'}"]`); b.click(); return b; }, 'tasks view columns table list');
   add('Action', 'Write a message in chat', () => { oShow('act'); $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); $('msg').focus({ preventScroll: true }); }, 'focus chat');
   add('Action', 'Open help', openHelp, 'what everything means keyboard');
   const others = people().map((p) => p.name).filter((n) => n !== me);
@@ -68,7 +68,8 @@ function palRender() {
 
   $('pal-empty').hidden = palItems.length > 0;
   palIn.setAttribute('aria-activedescendant', palItems.length ? 'pal-o-' + palSel : '');
-  announce(palItems.length ? `${palItems.length} result${palItems.length === 1 ? '' : 's'}` : 'Nothing matches');
+  // Said inside the dialog (a modal hides the page's own announcer from screen readers), once the typing settles.
+  clearTimeout(palSay); palSay = setTimeout(() => { $('pal-count').textContent = palItems.length ? `${palItems.length} result${palItems.length === 1 ? '' : 's'}` : 'Nothing matches'; }, 250);
 }
 function palSelect(i) {
   if (!palItems.length) return;
@@ -79,7 +80,7 @@ function palSelect(i) {
 }
 function openPalette() {
   if ($('app').hidden || $('task-dlg').open || palDlg.open) return;
-  palPrev = document.activeElement; palSel = 0; palIn.value = '';
+  palPrev = document.activeElement; palSel = 0; palIn.value = ''; $('pal-count').textContent = '';
   if (helpDlg.open) helpDlg.close();
   palDlg.showModal(); palRender(); palIn.focus();
 }
@@ -95,7 +96,9 @@ palDlg.addEventListener('close', () => {
   if (palPrev?.isConnected) palPrev.focus({ preventScroll: true });
   palPrev = null;
   // ...and once it has faded out: a command that redraws the whole page (the 3D switch, a theme) would freeze its fade.
-  if (run) { const fade = palDlg.getAnimations(); if (fade.length) Promise.all(fade.map((a) => a.finished.catch(() => {}))).then(run); else setTimeout(run); }
+  // A command that hid what had focus (Show Table from a card): focus goes to the control it used, or what it opened.
+  const go = run && (() => { const used = run(); if (document.activeElement === document.body || !document.activeElement?.offsetParent) (used instanceof Element && used.offsetParent ? used : null)?.focus({ preventScroll: true }); });
+  if (go) { const fade = palDlg.getAnimations(); if (fade.length) Promise.all(fade.map((a) => a.finished.catch(() => {}))).then(go); else setTimeout(go); }
 });
 palIn.addEventListener('input', () => { palSel = 0; palRender(); });
 palIn.addEventListener('keydown', (ev) => {

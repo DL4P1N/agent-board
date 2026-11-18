@@ -278,6 +278,10 @@ button.bell.blocked .slash { display: inline; }
 .keys { display: flex; align-items: center; gap: var(--s4); margin-top: var(--s3); font-weight: 400; color: var(--ink); font-size: var(--fs-sm); }
 .goalform { display: flex; gap: var(--s3); align-items: flex-end; margin-top: var(--s2); }
 .goalform textarea { min-height: 56px; }
+/* Setup step 2: the goal, the repo and the demo time in one form, one Save. */
+.stepform { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s2); }
+.stepform textarea { min-height: 56px; }
+.stepform .repo { margin-top: var(--s2); }
 .goaltext { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-body); margin: var(--s2) 0; }
 .tools { list-style: none; margin: var(--s3) 0; padding: 0; border: 2px solid var(--border); border-radius: var(--r-md); }
 .tool-r { display: grid; grid-template-columns: minmax(150px, 210px) minmax(0, 1fr); gap: var(--s1) var(--s5); align-items: center; padding: var(--s4) var(--s5); border-top: 1px solid var(--line); }
@@ -298,8 +302,7 @@ button.bell.blocked .slash { display: inline; }
 .nf fieldset input[type=checkbox] { margin: 0; flex: 0 0 auto; }
 .rot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); margin: var(--s2) 0; }
 .appr-done { color: var(--ok); font-size: var(--fs-meta); }
-.teamcap { display: inline-flex; align-items: center; gap: var(--s3); font-variant-numeric: tabular-nums; }
-.teamcap.low, .capline.low { color: var(--warn); }
+.capline.low { color: var(--warn); }
 .capline { font-size: var(--fs-sm); margin: var(--s3) 0; }
 /* The Done chip's progress bar. */
 .mbar { display: inline-block; width: 48px; height: 8px; background: var(--field); box-shadow: 0 0 0 1px var(--line-strong); }
@@ -362,6 +365,7 @@ html[data-board-view="office"] .pagefoot { display: none; }
 @media (max-width: 760px) { .dtog { writing-mode: horizontal-tb; min-height: var(--ctl-sm); padding: var(--s2); } .col.collapsed { min-height: 0; } }
 .col h3 .dclose { background: none; border: 0; padding: 0 var(--s3); color: var(--muted); font-size: var(--fs-meta); min-height: calc(var(--ctl-xs) - 4px); margin-block: calc(-1 * var(--s3)); } /* keeps the Done heading as tall as the others */
 .col h3 .dclose:hover { background: none; color: var(--ink); }
+.col h3 .dclose { min-width: 24px; min-height: 24px; } /* a 24px target (WCAG 2.5.8) */
 .more { width: 100%; margin-top: var(--s3); min-height: var(--ctl-sm); font-size: var(--fs-meta); }
 /* No tasks yet, or none match the search: one muted line (a way out in it). The notes above the columns (approve the
    plan, main is failing, the write-up) sit on a soft fill, no frame of their own. */
@@ -761,6 +765,7 @@ button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
 .o-det ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
 .o-det .tk { display: flex; gap: var(--s3); align-items: baseline; min-width: 0; }
 .o-det .tk > * { flex: 0 0 auto; white-space: nowrap; }
+.o-det .tk button, .o-helpers .o-hn { min-height: 24px; } /* 24px targets */
 .o-det .tk button { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; text-align: left; }
 .o-det .pcap, .o-det .last, .o-det .doing { font-size: var(--fs-meta); color: var(--muted); }
 .o-det .last, .o-det .doing { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -889,12 +894,12 @@ button.tochat { display: none; } /* phones only (below) */
 @media (hover: none) and (pointer: coarse) {
   .needs button, .step-h { min-height: var(--ctl-sm); }
   /* Names and #ids inside text: a taller hit area that doesn't move the text. */
-  #feed button.link, #locks button.link, #questions button.link, #now .link, .o-helpers button.link, #o-blocked button.link { padding: var(--s4) var(--s3); margin: calc(-1 * var(--s4)) calc(-1 * var(--s3)); }
+  #feed button.link, #locks button.link, #questions button.link, #now .link, #now-more .link, .o-helpers button.link, #o-blocked button.link { padding: var(--s4) var(--s3); margin: calc(-1 * var(--s4)) calc(-1 * var(--s3)); }
   /* The boxed rows in What to do now are big enough as they are. */
-  #now .na.link, #now .also .link { margin: 0; min-height: var(--ctl-sm); }
+  #now .na.link, #now .also .link, #now-more .also .link { margin: 0; min-height: var(--ctl-sm); }
   #now .na.link { padding: var(--s3) 0 var(--s3) 20px; }
   #now .na.link::before { top: calc(var(--s3) + .65em - 4px); }
-  #now .also .link { padding: var(--s2) 0; }
+  #now .also .link, #now-more .also .link { padding: var(--s2) 0; }
 }
 
 /* Narrow phones: the logo stands for the wordmark (still read out), so the header stays one row. */

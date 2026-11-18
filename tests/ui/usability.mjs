@@ -71,6 +71,7 @@ try {
   check('A goal hint: agent may also ask in its terminal', /may also ask you for the goal in its terminal/.test(await txt(page, '#step-goal')));
   await page.type('#goal-in', 'A voting app for hackathon projects. Demo: submit, vote, live leaderboard.');
   await page.keyboard.press('Enter');
+  await page.waitForFunction(() => !!state.settings.goal && !document.getElementById('goal-in'), { timeout: 5000 }).catch(() => {});
   await page.waitForFunction(() => /not started yet/.test(document.getElementById('step-start')?.innerText || ''), { timeout: 5000 }).catch(() => {});
   check('A goal saved, nobody started: Setup step 3 says so, and Needs attention doesn\'t repeat it while Setup is open', /not started yet/.test(await txt(page, '#step-start'))
 
@@ -79,11 +80,12 @@ try {
 
   // Project repo URL
   await openStep(page, 'goal');
+  await page.click('[data-act="goal-edit"]'); await sleep(200);
   await page.type('#repo-in', 'not a url');
-  await page.click('[data-fk="repo-save"]'); await sleep(200);
+  await page.click('[data-fk="goal-save"]'); await sleep(200);
   check('A bad repo URL: inline error + aria-invalid', await page.evaluate(() => $('repo-in')?.getAttribute('aria-invalid') === 'true' && /git URL/.test($('repo-err').textContent)));
   await page.click('#repo-in', { count: 3 }); await page.type('#repo-in', 'https://github.com/team/vote-app');
-  await page.click('[data-fk="repo-save"]'); await sleep(500);
+  await page.click('[data-fk="goal-save"]'); await sleep(500);
   const st1 = await rest('dana', '/state');
   check('A repo saved to settings', st1.settings.repo === 'https://github.com/team/vote-app', st1.settings.repo);
   const invite = await page.evaluate(() => inviteText());
@@ -96,6 +98,9 @@ try {
 
   // Step 3: Copilot CLI gets two commands
   await openStep(page, 'start');
+  // U7: only Claude Code is in use here; the other tools are one click away.
+  check('U7 step 3 shows the tool in use, the others behind "Other tools"', await page.evaluate(() => !document.querySelector('[data-fk="cp-start-copilot-cli"]') && /Other tools \(\d\)/.test($('step-start').innerText)), await txt(page, '#step-start'));
+  await page.click('#step-start [data-act="other-tools"]'); await sleep(200);
   check('A Copilot CLI: launch box + /board box', await page.evaluate(() => /copilot --allow-tool board/.test(document.querySelector('[data-fk="cp-start-copilot-cli-launch"]')?.previousElementSibling?.textContent || '') && !!document.querySelector('[data-fk="cp-start-copilot-cli"]')));
   // ONB-6: one Copilot CLI command everywhere (step 3, invite, help), taken from the server's agent_tools.
   const cpl = st1.setup.agent_tools.find((t) => t.id === 'copilot-cli')?.launch;
@@ -116,7 +121,10 @@ try {
   await erin('board_status');
   await until(page, () => /1 agent started/.test(document.getElementById('step-start')?.innerText || ''));
   check('A step 3 ticks once an agent started', await page.$eval('#step-start', (e) => e.classList.contains('done') && /1 agent started/.test(e.innerText)));
-  check('A low-priority offer: Connect your laptop\'s agent', /Connect your laptop's agent/.test(await txt(page, '#now .na2')) && /Nothing to do yet/.test(await txt(page, '#now .na')), await txt(page, '#now'));
+  check('U6 while Setup is open, Needs attention doesn\'t add its own setup line', !/Connect your laptop's agent/.test(await txt(page, '#nyou')), await txt(page, '#nyou'));
+  await page.evaluate(() => { ui.forceSetup = false; localStorage.setItem('board-setup', 'closed'); render(); }); await sleep(200);
+  check('A low-priority offer (Setup closed): Connect your laptop\'s agent', /Connect your laptop's agent/.test(await txt(page, '#now .na2')) && /Nothing to do yet/.test(await txt(page, '#now .na')), await txt(page, '#now'));
+  await page.evaluate(() => { localStorage.removeItem('board-setup'); ui.forceSetup = true; render(); }); await sleep(200);
 
   // Mentions: only direct ones count; they clear once seen in the feed
   await erin('post', { text: '@all standup in 5' }); await erin('post', { text: '@everyone ship it' });
@@ -146,8 +154,8 @@ try {
   await page.$eval('#feed', (f) => { f.scrollTop = 0; });
   for (const t of [t1, t1b]) await rest('dana', `/tasks/${t.id}`, 'PATCH', { status: 'done' });
   await erin('post', { text: '@dana all merged!' });
-  await until(page, () => /Every task is done/.test(document.querySelector('#now .na')?.innerText || '') && !!document.querySelector('#now .also [data-go="mentions"]'));
-  check('A all-done outranks mentions (the mention follows under Also)', /Every task is done/.test(await txt(page, '#now .na')) && !!(await page.$('#now .also [data-go="mentions"]')), await txt(page, '#now'));
+  await until(page, () => /Every task is done/.test(document.querySelector('#now .na')?.innerText || '') && !!document.querySelector('#nyou .also [data-go="mentions"]'));
+  check('A all-done outranks mentions (the mention follows under Also)', /Every task is done/.test(await txt(page, '#now .na')) && !!(await page.$('#nyou .also [data-go="mentions"]')), await txt(page, '#now'));
   await page.close();
 
   // ================= Part B: busy board =================
@@ -220,7 +228,7 @@ try {
 
   // Kanban semantics
   // Named "<heading>, N tasks" (an aria-label, so no stray space before the comma); cards in lists.
-  check('B columns are regions named after their headings; cards in lists', await p.evaluate(() => [...document.querySelectorAll('.col')].every((c) => { const h = document.getElementById('colh-' + c.dataset.status); return c.getAttribute('role') === 'region' && h && (c.getAttribute('aria-label') || '').startsWith(h.textContent.replace(/[^A-Za-z ]/g, '').trim() + ', ') && /, \d+ tasks?$/.test(c.getAttribute('aria-label')); }) && !!document.querySelector('.col ul.cards > li > .card')));
+  check('B column headings say their name and count ("Review, 2 tasks"); cards in lists', await p.evaluate(() => [...document.querySelectorAll('.col:not(.collapsed)')].every((c) => { const h = c.querySelector('h3'); return !c.getAttribute('role') && /^[A-Za-z ]+, \d+ tasks?/.test(h.textContent); }) && !!document.querySelector('.col ul.cards > li > .card')));
 
   // Stale card: Ping + Release (with Undo)
   const before = (await rest('dana', '/state')).events.length;

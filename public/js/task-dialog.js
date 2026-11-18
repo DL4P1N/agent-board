@@ -3,7 +3,7 @@
 
 import './actions.js';
 import { $, HINT, HOLDING, LABEL, me, state, STATUSES } from './state.js';
-import { ago, esc, fmt, isStale, ownerOffline, patch, taskById, toast, who } from './helpers.js';
+import { ago, esc, fmt, isStale, ownerOffline, patch, refreshTimes, taskById, toast, who } from './helpers.js';
 import { api, scheduleReload } from './data.js';
 import { agentInfo, agentLimited, agentState, capText, limitText, openQuestions } from './derived.js';
 import { render } from './render.js';
@@ -64,9 +64,12 @@ function showFieldError(msg) {
 // Fields the human has changed in the dialog (compared with the task as it was when they started editing it).
 const editedFields = () => (editing ? Object.keys(FIELDS).filter((f) => FIELDS[f]() !== editing[f]) : []);
 const dlgDirty = () => (editing ? editedFields().length > 0 : !!($('td-name').value.trim() || $('td-desc').value.trim() || $('td-deps').value.trim()));
-function openTask(id) {
+function openTask(id, { discard = false } = {}) {
   const t = id ? taskById(id) : null;
   if (id && !t) return toast(`Task #${id} no longer exists`, true);
+  // A #ref clicked inside the open dialog: unsaved edits are asked about first (Discard opens the other task).
+  if (!discard && dlg.open && (editing?.id ?? null) !== (id ?? null) && dlgDirty()) { pendingOpen = id; $('td-discard').hidden = false; $('td-keep').focus(); return; }
+  pendingOpen = undefined;
   editing = t ? JSON.parse(JSON.stringify(t)) : null;
   $('td-title').textContent = t ? `Task #${t.id}` : 'New task';
   $('td-name').value = t?.title || '';
@@ -107,7 +110,7 @@ function openTask(id) {
 }
 function renderDialogLive() {
   const t = editing && taskById(editing.id);
-  if (!editing) { $('td-meta').innerHTML = ''; renderTaskBlock(null); $('td-deps-hint').textContent = 'Task ids that must be done before this can be claimed. Optional.'; $('td-deps-hint').classList.add('vh'); resOptions(); return; }
+  if (!editing) { $('td-meta').innerHTML = ''; $('td-meta')._html = undefined; renderTaskBlock(null); patch($('td-deps-hint'), 'Task ids that must be done before this can be claimed. Optional.'); $('td-deps-hint').classList.add('vh'); resOptions(); return; }
   if (!t) { $('td-conflict').hidden = false; $('td-conflict').textContent = 'This task no longer exists.'; return; }
   // Fields the human didn't touch follow the server; a warning only when one they DID edit changed underneath them.
   const mine = editedFields();
@@ -121,22 +124,23 @@ function renderDialogLive() {
   if (clash.length) $('td-conflict').textContent = `While you were editing, someone else changed the ${clash.map((f) => FNAME[f]).join(' and ')}${clash.includes('status') ? ` (now ${LABEL[t.status]})` : ''}. Saving replaces it with your version.`;
   $('td-mention').hidden = !t.assignee;
   renderTaskBlock(t);
-  const deps = t.depends_on.map((d) => { const x = taskById(d); return `<button type="button" class="link tref" data-open-task="${d}">#${d}</button> ${x ? `(${LABEL[x.status]})` : '(missing)'}`; });
+  const deps = t.depends_on.map((d) => { const x = taskById(d); return `<button type="button" class="link tref" data-open-task="${d}" data-fk="dep-${d}">#${d}</button> ${x ? `(${LABEL[x.status]})` : '(missing)'}`; });
   syncSave();
   // The status and the assignee are the fields below; the meta line says what they don't.
   patch($('td-meta'), [
     t.branch ? `<span>branch <code>${esc(t.branch)}</code></span>` : '',
-    (() => { const pr = prInfo(t); return pr ? `<span>pull request <a href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer">${esc(pr.url.replace(/^https?:\/\/(www\.)?/, ''))}</a>${pr.text ? ` <span class="pill ${pr.cls}">${esc(pr.text)}</span>` : ''}</span>${prFeedback(t)}` : ''; })(),
+    (() => { const pr = prInfo(t); return pr ? `<span>pull request <a href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer" data-fk="td-pr">${esc(pr.url.replace(/^https?:\/\/(www\.)?/, ''))}</a>${pr.text ? ` <span class="pill ${pr.cls}">${esc(pr.text)}</span>` : ''}</span>${prFeedback(t)}` : ''; })(),
     t.status === 'review' && t.reviewer ? `<span>being merged by ${who(t.reviewer)}</span>` : '',
     t.assignee && HOLDING.includes(t.status) && agentLimited(t.assignee) ? '<span class="pill warn">owner out of usage — agents may take it over</span>' : '',
     `<span>created by ${who(t.created_by)} ${ago(t.created_at)}</span>`,
     `<span>updated ${ago(t.updated_at)}</span>`,
     isStale(t) ? `<span class="pill flag">stale: no update for 15+ min${t.assignee && ownerOffline(t) ? ' · owner offline — agents may take it over' : ''}</span>` : '',
   ].join(''));
-  $('td-deps-hint').innerHTML = deps.length ? `Depends on ${deps.join(', ')}. Dependencies are fixed after creation.` : ''; $('td-deps-hint').classList.remove('vh');
+  patch($('td-deps-hint'), deps.length ? `Depends on ${deps.join(', ')}. Dependencies are fixed after creation.` : ''); $('td-deps-hint').classList.remove('vh');
   const h = $('td-history'); const before = h._html;
   const evs = state.events.filter((e) => e.task_id === t.id);
   patch(h, evs.map((e, i) => evHtml(e, evs[i - 1])).join('') || '<div class="empty-note">No activity yet.</div>');
+  refreshTimes(h);
   if (before !== h._html) h.scrollTop = h.scrollHeight; // newest at the bottom, in view
 }
 // Blocked: the reason first, then the agent's open question with an answer box, then the way back to In progress.
@@ -146,7 +150,7 @@ function renderTaskBlock(t) {
   if (!blocked) return patch(el, '');
   const note = blockedNote(t); const q = openQuestions().find((x) => x.task_id === t.id);
   patch(el, `<p class="tb-why"><b>Blocked:</b> ${note ? esc(note) : '<span class="muted">no reason given. Ask in chat with Message assignee.</span>'}</p>
-    ${q ? `<div class="tb-q"><div class="t-meta muted">${who(q.asker, true)} asked ${ago(q.created_at)}</div><div class="qt">${fmt(q.question, true)}</div>
+    ${q ? `<div class="tb-q"><div class="t-meta muted">${who(q.asker, true)} asked ${ago(q.created_at)}</div><div class="qt">${fmt(q.question)}</div>
       <div class="tb-qa"><label class="vh" for="tdqa-${q.id}">Answer to ${esc(q.asker)}</label><textarea id="tdqa-${q.id}" data-keep="tdqa-${q.id}" data-tdq="${q.id}" data-asker="${esc(q.asker)}" rows="1" placeholder="Your answer" title="Enter sends · Shift+Enter adds a new line" aria-describedby="tdqe-${q.id}"></textarea><button type="button" data-td-answer="${q.id}" data-fk="tdqb-${q.id}">Answer</button></div>
       <div class="err" id="tdqe-${q.id}" role="alert"></div></div>` : ''}
     <div class="inl"><button type="button" class="ghost sm" data-td-unblock data-fk="td-unblock" title="${t.assignee ? `Unblocked: ${esc(t.assignee)} carries on` : 'Unblocked: back to work'}">Back to In progress</button></div>`);
@@ -155,6 +159,7 @@ async function answerFromDialog(qid) {
   const ta = $('tdqa-' + qid); const b = document.querySelector(`[data-td-answer="${qid}"]`); if (!ta || !b) return;
   const answer = ta.value.trim(); const err = $('tdqe-' + qid);
   if (!answer) { err.textContent = 'Type an answer first.'; ta.setAttribute('aria-invalid', 'true'); return ta.focus(); }
+  if (b.disabled) return; // on its way already
   b.disabled = true; b.textContent = 'Sending…';
   try { await sendAnswer(qid, ta.dataset.asker, answer); document.querySelector('[data-fk="td-unblock"]')?.focus(); }
   catch (e) { b.disabled = false; b.textContent = 'Answer'; if (e.message !== 'Token rejected') { err.textContent = `Not sent: ${e.message}`; ta.focus(); } }
@@ -172,23 +177,40 @@ $('td-status').addEventListener('change', () => {
   $('td-status-hint').textContent = HINT[s] + '.' + more; $('td-status').title = HINT[s];
   $('td-status-hint').classList.toggle('vh', !more); // shown only when the change does something more than its name says
 });
-// Closing with unsaved edits asks first (inline, no browser popup).
-function requestCloseTask() { if (dlgDirty() && $('td-discard').hidden) { $('td-discard').hidden = false; $('td-keep').focus(); return; } dlg.close(); }
-dlg.addEventListener('cancel', (ev) => { if (dlgDirty() && $('td-discard').hidden) { ev.preventDefault(); requestCloseTask(); } });
-$('td-keep').onclick = () => { $('td-discard').hidden = true; $('td-name').focus(); };
-$('td-drop').onclick = () => dlg.close();
+// Closing with unsaved edits asks first (inline, no browser popup). Esc while it asks means Keep editing.
+let pendingOpen; // a task to open instead once the edits are discarded (a #ref clicked in the dialog)
+function requestCloseTask() { if (dlgDirty() && $('td-discard').hidden) { pendingOpen = undefined; $('td-discard').hidden = false; $('td-keep').focus(); return; } dlg.close(); }
+const keepEditing = () => { pendingOpen = undefined; $('td-discard').hidden = true; $('td-name').focus(); };
+dlg.addEventListener('cancel', (ev) => {
+  if (!$('td-discard').hidden) { ev.preventDefault(); return keepEditing(); }
+  if (dlgDirty()) { ev.preventDefault(); requestCloseTask(); }
+});
+$('td-keep').onclick = keepEditing;
+$('td-drop').onclick = () => { const next = pendingOpen; pendingOpen = undefined; if (next === undefined) return dlg.close(); $('td-discard').hidden = true; openTask(next, { discard: true }); };
 dlg.addEventListener('click', (ev) => { if (ev.target.closest('[data-close]')) return requestCloseTask();
   if (ev.target === dlg) { const r = dlg.getBoundingClientRect(); if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) requestCloseTask(); } });
 // Closed: focus goes back where it was (the browser does that), or to the task's card when that's gone or the task was
 // opened from the palette (dlgBackTo).
 let dlgBackTo = null;
 function setDlgBackTo(id) { dlgBackTo = id; }
+// A task that went with the dialog (rejected, cancelled, deleted): focus goes to the card next to where it was.
+let gone = null, goneNext = null;
+function cardNext(id) {
+  const c = document.querySelector(`.card[data-id="${id}"]`); const li = c?.closest('li');
+  return { id: (li?.nextElementSibling || li?.previousElementSibling)?.querySelector('.card')?.dataset.id || null, col: c?.closest('.col')?.id || null };
+}
 dlg.addEventListener('close', () => {
   const id = editing?.id; const back = dlgBackTo; dlgBackTo = null;
   editing = null; $('td-discard').hidden = true; resetCancel();
-  setTimeout(() => { const a = document.activeElement; if (id && (back === id || !a || a === document.body)) focusTask(id); });
+  const next = gone === id ? goneNext : null; gone = null; goneNext = null;
+  setTimeout(() => {
+    const a = document.activeElement; if (!id || !(back === id || !a || a === document.body)) return;
+    if (!next) return focusTask(id);
+    const n = (next.id && document.querySelector(`.card[data-id="${next.id}"]`)) || (next.col && $(next.col)?.querySelector('.card'));
+    if (n?.offsetParent) n.focus({ preventScroll: true }); else $('board').focus({ preventScroll: true });
+  });
 });
-$('td-desc').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); $('task-form').requestSubmit(); } });
+$('td-desc').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); if (!saving) $('task-form').requestSubmit(); } });
 $('td-mention').onclick = () => { const a = editing?.assignee; const id = editing?.id; if (a) { mention(a); $('msg').value += `re #${id}: `; growMsg(); } };
 // Delete asks for a second click (inline confirm, no browser popup).
 let deleteArmed = null;
@@ -203,7 +225,7 @@ $('td-delete').onclick = async () => {
   resetDelete();
   try {
     await api(`/tasks/${t.id}`, { method: 'DELETE' });
-    dlg.close(); toast(`Deleted #${t.id} ${t.title}`); scheduleReload();
+    goneNext = cardNext(t.id); gone = t.id; dlg.close(); toast(`Deleted #${t.id} ${t.title}`); scheduleReload();
   } catch (e) { $('td-err').textContent = `Couldn't delete: ${e.message}`; }
 };
 // Cancel: like delete it removes the task, but records why in the feed and @-mentions the assignee. Two clicks.
@@ -232,7 +254,7 @@ $('td-cancel').onclick = async () => {
   resetCancel();
   try {
     await api(`/tasks/${t.id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) });
-    dlg.close(); toast(`Cancelled #${t.id} ${t.title}`); scheduleReload();
+    goneNext = cardNext(t.id); gone = t.id; dlg.close(); toast(`Cancelled #${t.id} ${t.title}`); scheduleReload();
   } catch (e) { $('td-err').textContent = `Couldn't cancel: ${e.message}`; }
 };
 // Reject… (a proposal): why, then Reject #id; the proposer is told.
@@ -248,7 +270,7 @@ $('td-reject').onclick = async () => {
   const note = $('td-rej-reason').value.trim();
   try {
     await api(`/tasks/${t.id}/decide`, { method: 'POST', body: JSON.stringify({ approve: false, note }) });
-    dlg.close(); toast(`Rejected proposal #${t.id}`); scheduleReload();
+    goneNext = cardNext(t.id); gone = t.id; dlg.close(); toast(`Rejected proposal #${t.id}`); scheduleReload();
     state.tasks = state.tasks.filter((x) => x.id !== t.id); render(); // optimistic: it's gone
   } catch (e) { $('td-err').textContent = `Couldn't reject: ${e.message}`; }
 };
@@ -259,8 +281,15 @@ $('task-form').addEventListener('input', syncSave); $('task-form').addEventListe
 // Approve (a proposal): any edits are saved first, through the form, then it's approved.
 let approving = false;
 $('td-approve').onclick = () => { approving = true; $('task-form').requestSubmit(); };
+// One save at a time: Ctrl+Enter (or Save) again while it's on its way doesn't create the task twice.
+let saving = false;
 $('task-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
+  if (saving) return;
+  saving = true;
+  try { await saveTask(); } finally { saving = false; }
+});
+async function saveTask() {
   const approve = approving && editing?.status === 'proposed'; approving = false;
   const err = $('td-err'); err.textContent = '';
   const title = $('td-name').value.trim();
@@ -310,7 +339,7 @@ $('task-form').addEventListener('submit', async (ev) => {
     dlg.close();
   } catch (e) { showFieldError(e.message); }
   finally { btn.disabled = false; btn.textContent = btnText; }
-});
+}
 $('new-task-btn').onclick = () => openTask(null);
 // Someone else saves over what I just saved (two people editing one task): tell me, once. Only the text
 // fields: status and assignee change all the time as agents work. Watched for 10 minutes after my save.

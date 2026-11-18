@@ -7,10 +7,38 @@ import { agentRoot, clock, mentionsMe, plural, root, when } from './helpers.js';
 import { settingsText } from './activity.js';
 import './office.js';
 
+// ---------- one drawing pass ----------
+// render() works each of these out once per pass (a big board has hundreds of tasks and cards that ask about them):
+// the agents, the roster, people, the setup steps, the open questions, and who holds which task. Outside a pass (a
+// click handler) each is worked out fresh, so a change made just before is always seen.
+let pass = null, passDepth = 0;
+function inPass(fn) { if (!passDepth++) pass = new Map(); try { return fn(); } finally { if (!--passDepth) pass = null; } }
+const once = (k, fn) => { if (!pass) return fn(); if (!pass.has(k)) pass.set(k, fn()); return pass.get(k); };
+// Tasks by the agent that holds them (its main agent's name, helpers included) and by exact owner, tasks being merged
+// by each agent, and each task's open question (the oldest).
+function taskIndex() {
+  return once('tidx', () => {
+    const byAgent = new Map(), byOwner = new Map(), merging = new Map(), qByTask = new Map();
+    const add = (m, k, v) => { const l = m.get(k); if (l) l.push(v); else m.set(k, [v]); };
+    for (const t of state.tasks) {
+      if (t.assignee) { add(byAgent, agentRoot(t.assignee), t); add(byOwner, String(t.assignee).toLowerCase(), t); }
+      if (t.status === 'review' && t.reviewer) add(merging, agentRoot(t.reviewer), t);
+    }
+    for (const q of openQuestions()) if (q.task_id && !qByTask.has(q.task_id)) qByTask.set(q.task_id, q);
+    return { byAgent, byOwner, merging, qByTask };
+  });
+}
+const NONE = Object.freeze([]);
+const tasksOf = (agent) => taskIndex().byAgent.get(agentRoot(agent)) || NONE;
+const tasksOwnedBy = (name) => taskIndex().byOwner.get(String(name || '').toLowerCase()) || NONE;
+const mergingBy = (agent) => taskIndex().merging.get(agentRoot(agent)) || NONE;
+const questionFor = (taskId) => taskIndex().qByTask.get(taskId) || null;
+
 // ---------- derived ----------
 // Every agent we know of, by agent name ("dana-codex"): from presence, plus things only agents do.
 // online = its tool talked to the board in the last 10 min; started = someone typed /board (it read the board).
-function agentInfo() {
+function agentInfo() { return once('agents', agentInfoFresh); }
+function agentInfoFresh() {
   const m = new Map(); const now = Date.now();
   const skip = (n) => !n || n === 'board' || n === 'anonymous';
   const get = (n) => { n = String(n).toLowerCase(); if (!m.has(n)) m.set(n, { name: n, client: null, model: null, helpers: [], plan: null, slots: 0, base: 0, override: null, active: 0, online: false, started: false, last: 0, busy: false, doing: null, limited: null, reviewing: [] }); return m.get(n); };
@@ -49,11 +77,12 @@ const capTip = (a) => `${a.name}: ${a.client || 'AI tool not reported yet'}${a.p
 // Marked "hit its usage limit" on this page, and the mark hasn't run out yet.
 const isLimited = (a) => !!a?.limited && (!a.limited.until || a.limited.until > Date.now());
 const limitText = (a) => `out of usage${a.limited?.until ? ` · back at ${clock(a.limited.until)}` : ''}`;
-let infoCache = null; // agentInfo() walks every event: compute it once per state
-const agentInfoNow = () => (infoCache?.s === state ? infoCache.m : (infoCache = { s: state, m: agentInfo() }).m);
+let infoCache = null; // agentInfo() walks every event: compute it once per state (a chat message added live is a new events list)
+const agentInfoNow = () => (infoCache?.s === state && infoCache.e === state.events ? infoCache.m : (infoCache = { s: state, e: state.events, m: agentInfo() }).m);
 const agentLimited = (name) => isLimited(agentInfoNow().get(agentRoot(name)));
 // Started, online agents: what the team can run at once, what runs now, who has nothing, and how much is ready to claim.
-function teamCapacity() {
+function teamCapacity() { return once('cap', teamCapacityFresh); }
+function teamCapacityFresh() {
   // Out-of-usage agents don't count: they can't take work right now.
   const all = [...agentInfo().values()].filter((a) => a.started && agentLive(a) && !isLimited(a));
   // Idle = nothing to do: no task, no review, not planning, no recent board work (the server's `busy`).
@@ -72,7 +101,8 @@ const copilotLaunch = () => state.setup?.agent_tools?.find((t) => t.id === 'copi
 const startCmd = (client) => (/codex/i.test(client || '') ? '$board' : client ? '/board' : '/board ($board in Codex)');
 const notStartedText = (a) => `connected · not started — type ${startCmd(a.client)}`;
 
-function people() {
+function people() { return once('people', peopleFresh); }
+function peopleFresh() {
   const map = new Map();
   const get = (id) => {
     const r = root(id);
@@ -103,7 +133,8 @@ function people() {
 }
 
 // Who is connected, per person: their agents (one per AI tool, see agentInfo) and whether they have this page open.
-function roster() {
+function roster() { return once('roster', rosterFresh); }
+function rosterFresh() {
   const map = new Map();
   const get = (n) => { if (!map.has(n)) map.set(n, { name: n, agent: false, agentOnline: false, started: false, working: false, waiting: false, human: false, humanOnline: false, last: 0, client: null, clients: [], agents: [] }); return map.get(n); };
   for (const a of agentInfo().values()) {
@@ -125,11 +156,12 @@ function roster() {
 }
 // Which AI tool a laptop's agent uses ("Codex", "Claude Code", …), or null until it reports it.
 const clientOf = (name) => { const a = agentRoot(name); const pr = state.presence || []; const p = pr.find((x) => x.name === a && x.kind === 'agent') || pr.find((x) => x.kind === 'agent' && root(x.name) === root(a) && x.client); return p?.client ? String(p.client) : null; };
-// "alice's agent (Codex)" / "alice's agent"
-const agentOf = (name) => { const c = clientOf(name); return `${name}'s agent${c ? ` (${c})` : ''}`; };
+// "alice-codex (Codex)": the agent's name and its tool (the name is the agent's own, not its person's: no "'s agent")
+const agentOf = (name) => { const c = clientOf(name); return `${name}${c ? ` (${c})` : ''}`; };
 
 // The five setup steps, driven by live state.
-function setupInfo() {
+function setupInfo() { return once('setup', setupInfoFresh); }
+function setupInfoFresh() {
   const S = state.settings; const ros = roster();
   const agents = ros.filter((r) => r.agent);
   const all = ros.flatMap((r) => r.agents);
@@ -164,7 +196,8 @@ function setupInfo() {
 const agentLive = (a) => { const p = (state.presence || []).find((x) => x.kind === 'agent' && String(x.name).toLowerCase() === a.name); return p ? !!p.online : a.online; };
 // The host chose "No demo time" in step 2 (this browser only).
 const dlSkipped = () => store.get('board-dl-skip') === '1';
-function setupOpen(complete) { if (ui.forceSetup) return true; const p = store.get('board-setup'); return complete ? p === 'open' : p !== 'closed'; }
+// Open until it's done, unless closed (remembered); opened again for this visit only (ui.forceSetup).
+function setupOpen(complete) { if (ui.forceSetup) return true; return !complete && store.get('board-setup') !== 'closed'; }
 // Setup is a panel above the board on the Board view and a popover under the top bar in the 3D view, open or closed
 // the same in both: open until it's done, remembered (a "step" link opens it for this visit). The Setup chip toggles it.
 function setupShown(si = setupInfo()) { return setupOpen(si.complete); }
@@ -174,7 +207,7 @@ function taskVisible(t) {
   const r = filterRoot(); if (!r) return true;
   return t.assignee ? root(t.assignee) === r : root(t.created_by) === r;
 }
-const openQuestions = () => state.questions.filter((q) => !q.answer).sort((a, b) => a.id - b.id);
+const openQuestions = () => once('questions', () => state.questions.filter((q) => !q.answer).sort((a, b) => a.id - b.id));
 const unreadMentions = () => state.events.filter((e) => mentionsMe(e) && e.id > seenMention);
 
 // Demo deadline / feature freeze, computed locally so the countdown moves between server refreshes.
@@ -254,6 +287,7 @@ function cutTasks(tm = timeNow()) {
 }
 
 export { agentInfo, agentInfoNow, agentLimited, agentOf, agentsLine, agentState, approvalWait, blockedSplit,
-  bouncedTasks, capText, capTip, clientOf, colOf, copilotLaunch, cutTasks, dlSkipped, dur, filterRoot, isLimited,
-  limitText, notStartedText, openQuestions, outlook, people, roster, setupInfo, setupOpen, setupShown, startCmd,
-  stays, stepOpen, taskVisible, teamCapacity, timeNow, unreadMentions };
+  bouncedTasks, capText, capTip, clientOf, colOf, copilotLaunch, cutTasks, dlSkipped, dur, filterRoot, inPass,
+  isLimited, limitText, mergingBy, notStartedText, openQuestions, outlook, people, questionFor, roster, setupInfo,
+  setupOpen, setupShown, startCmd, stays, stepOpen, taskVisible, tasksOf, tasksOwnedBy, teamCapacity, timeNow,
+  unreadMentions };

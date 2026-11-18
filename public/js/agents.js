@@ -4,8 +4,8 @@
 import './setup.js';
 import { $, ACTIVE, ANYONE, HOLDING, LABEL, me, state, ui } from './state.js';
 import { agentRoot, ago, esc, hs, isStale, patch, plural, root, short, taskById, youTag } from './helpers.js';
-import { agentInfo, agentsLine, agentState, capText, capTip, isLimited, limitText, notStartedText, openQuestions, people,
-  startCmd, teamCapacity } from './derived.js';
+import { agentInfo, agentsLine, agentState, capText, capTip, isLimited, limitText, mergingBy, notStartedText, openQuestions,
+  people, startCmd, tasksOf, tasksOwnedBy, teamCapacity } from './derived.js';
 import { boardView } from './office.js';
 
 // ---------- Agents: one component for both views ----------
@@ -35,10 +35,10 @@ function oStatus(a, qOpen) {
   if (!a.online) return ['off', 'offline'];
   if (!a.started) return ['off', 'not started'];
   if (qOpen.some((q) => agentRoot(q.asker) === a.name)) return ['question', 'Question', true];
-  const mine = state.tasks.filter((t) => t.assignee && agentRoot(t.assignee) === a.name);
+  const mine = tasksOf(a.name);
   if (mine.some((t) => t.status === 'blocked')) return ['blocked', 'Blocked', true];
   if (mine.some((t) => t.status === 'in_progress')) return ['working', 'working'];
-  if (state.tasks.some((t) => t.status === 'review' && t.reviewer && agentRoot(t.reviewer) === a.name)) return ['review', 'merging'];
+  if (mergingBy(a.name).length) return ['review', 'merging'];
   if (mine.some((t) => t.status === 'claimed')) return ['working', 'working'];
   if (mine.some((t) => t.status === 'review')) return ['review', 'in review'];
   return ['idle', a.busy ? 'working' : 'idle'];
@@ -50,10 +50,10 @@ function subagentsOf(a, qOpen) {
   const by = new Map();
   const add = (n) => { n = String(n).toLowerCase(); if (!by.has(n)) by.set(n, { name: n, full: `${a.name}/${n}`, model: null, active: false, doing: null }); return by.get(n); };
   for (const h of a.helpers || []) { if (!h.task_id && !(h.active && h.doing)) continue; const x = add(h.name); x.model = h.model || null; x.active = !!h.active; x.doing = h.doing || null; }
-  for (const t of state.tasks) if (String(t.assignee || '').includes('/') && agentRoot(t.assignee) === a.name && ACTIVE.includes(t.status)) add(t.assignee.split('/')[1]);
+  for (const t of tasksOf(a.name)) if (String(t.assignee || '').includes('/') && ACTIVE.includes(t.status)) add(t.assignee.split('/')[1]);
   for (const q of qOpen) if (q.asker.includes('/') && agentRoot(q.asker) === a.name) add(q.asker.split('/')[1]);
   return [...by.values()].sort((x, y) => x.name.localeCompare(y.name)).map((h) => {
-    const ts = state.tasks.filter((t) => String(t.assignee || '').toLowerCase() === h.full && ACTIVE.includes(t.status));
+    const ts = tasksOwnedBy(h.full).filter((t) => ACTIVE.includes(t.status));
     const q = qOpen.find((x) => x.asker.toLowerCase() === h.full); const b = ts.find((t) => t.status === 'blocked');
     const [cls, word] = q ? ['question', 'Question'] : b ? ['blocked', 'Blocked'] : ts.some((t) => HOLDING.includes(t.status)) ? ['working', 'working'] : ts.length ? ['review', 'in review'] : h.active ? ['working', 'working'] : ['idle', 'idle'];
     const t = (q?.task_id && taskById(q.task_id)) || b || ts.find((x) => HOLDING.includes(x.status)) || ts[0];
@@ -130,9 +130,9 @@ function renderAgents(si, qOpen) {
   // One line per agent: its tool's dot, its name, its role, the task it is on (or what it waits for), its state.
   const agentRow = (a, p) => {
     const [cls, word, badge] = oStatus(a, qOpen);
-    const own = state.tasks.filter((t) => String(t.assignee || '').toLowerCase() === a.name && ACTIVE.includes(t.status)).sort((x, y) => (HOLDING.includes(y.status) - HOLDING.includes(x.status)) || x.id - y.id);
+    const own = tasksOwnedBy(a.name).filter((t) => ACTIVE.includes(t.status)).sort((x, y) => (HOLDING.includes(y.status) - HOLDING.includes(x.status)) || x.id - y.id);
     const qSelf = qOpen.find((x) => x.asker.toLowerCase() === a.name), qTask = qSelf?.task_id && taskById(qSelf.task_id);
-    const merging = state.tasks.find((t) => t.status === 'review' && t.reviewer && agentRoot(t.reviewer) === a.name);
+    const merging = mergingBy(a.name)[0];
     const subs = subagentsOf(a, qOpen);
     const task = (t) => `#${t.id} ${t.title}`;
     const what = a.conflict ? `on ${a.conflict.laptops || 2} laptops: re-run join with another name`

@@ -43,7 +43,7 @@ function renderSetup(si) {
   el.hidden = !setupShown(si);
   // Closed, it's emptied once it has faded out (3D on: it closes like the top bar's other popovers).
   if (el.hidden) { clearTimeout(el._empty); if (!el._html || !canMove()) return patch(el, ''); el._empty = setTimeout(() => { if (el.hidden) patch(el, ''); }, motion().fast + 20); return; }
-  const body = { invite: stepInvite, goal: stepGoal, start: stepStart, backlog: stepBacklog, integrator: stepIntegrator };
+  const body = { invite: stepInvite, goal: stepGoal, start: stepStart, backlog: stepBacklog, integrator: () => stepIntegrator() };
   const all = si.doneCount >= si.steps.length;
   // The panels' title bar: its name, how far along it is, then x (closes it, focus back on the Setup chip). Once every
   // step is done, the intro and "steps tick off by themselves" go.
@@ -61,12 +61,10 @@ function renderSetup(si) {
     <div class="boardsec" id="board-sec">${securityBox()}</div></div>`);
 }
 // "Team can run 7 tasks at once · 4 running", and a warning when idle agents outnumber the ready tasks.
-function teamCapHtml(long = false) {
+function teamCapHtml() {
   const c = teamCapacity(); if (!c.agents.length) return '';
   const tip = `Started, online agents: ${c.agents.map((a) => `${a.name} (${[a.client, a.plan].filter(Boolean).join(', ') || 'agent'}: ${capText(a)})`).join('; ')}. ${plural(c.ready, 'open task is', 'open tasks are')} ready to claim.`;
   const low = c.short && state.tasks.length && state.phase === 'building';
-  const idleTxt = low ? ` · ${plural(c.idle.length, 'agent')} idle, ${c.forIdle} ready to claim` : '';
-  if (!long) return `<span class="teamcap${low ? ' low' : ''}" title="${esc(tip)}">Team can run ${plural(c.slots, 'task')} at once · ${c.running} running${esc(idleTxt)}</span>`;
   return `<p class="capline${low ? ' low' : ''}" title="${esc(tip)}"><b>Team capacity:</b> ${plural(c.slots, 'task')} at once across ${plural(c.agents.length, 'started agent')} · ${c.running} running · ${plural(c.ready, 'open task', 'open tasks')} ready${low ? `. ${plural(c.idle.length, 'agent has', 'agents have')} nothing to do: add tasks, or ask the planner for more.` : ''}</p>`;
 }
 function chips(si, laptops = false) {
@@ -188,23 +186,35 @@ function statsLine() {
   if (Number.isFinite(rw)) parts.push(`reviews waited ≈ ${Math.round(rw)} min`);
   return parts.length ? `<p class="hint" title="Median time from claim to done, per task size, on this board so far. The planner sees these too.">So far${Number.isFinite(s.done) ? ` (${s.done} done)` : ''}: ${esc(parts.join(' · '))}</p>` : '';
 }
+// Step 2: the goal, the project repo and the demo time, saved together with one Save (one form, one button), or shown
+// with one Edit once the goal is set. Without a demo time yet the form suggests one; "No demo time" leaves it out.
 function stepGoal() {
-  const S = state.settings;
-  const goal = S.goal && !ui.editGoal
-    ? `<p class="goaltext">${esc(S.goal)}</p><button type="button" class="ghost sm" data-act="goal-edit" data-fk="goal-edit">Edit goal</button>`
-    : `<p>In 1–3 sentences: what are you building, and what should the demo show? The agents plan their tasks from this. Your agent may also ask you for the goal in its terminal — either works.</p>
-    <form class="goalform" data-goalform><label class="vh" for="goal-in">Project goal</label>
+  const S = state.settings; const t = timeNow();
+  if (S.goal && !ui.editGoal) {
+    return `<p class="goaltext">${esc(S.goal)}</p>
+      ${S.repo ? `<div class="repo"><span class="muted">Project repo:</span> <code>${esc(S.repo)}</code></div>` : ''}
+      ${t.deadline ? `<div class="repo"><span class="muted">Demo:</span> <b>${esc(when(t.deadline))}</b><span class="muted" aria-hidden="true">·</span><span>${t.fm ? `feature freeze ${esc(when(t.freezeAt))} <span class="muted">(${t.fm} min before)</span>` : 'no feature freeze'}</span></div>`
+        : `<div class="repo"><span class="muted">Demo:</span> <span>no demo time${dlSkipped() ? '' : ' yet'}</span></div>`}
+      <div class="inl mt-2"><button type="button" class="ghost sm" data-act="goal-edit" data-fk="goal-edit">Edit</button></div>`;
+  }
+  const fm = S.freeze_minutes === '' || S.freeze_minutes == null ? '60' : S.freeze_minutes;
+  const dl = t.deadline || (dlSkipped() ? 0 : defaultDeadline());
+  return `<p>In 1–3 sentences: what are you building, and what should the demo show? The agents plan their tasks from this. Your agent may also ask you for the goal in its terminal — either works.</p>
+    <form class="stepform" data-goalform novalidate>
+      <label class="vh" for="goal-in">Project goal</label>
       <textarea id="goal-in" data-keep="goal" rows="2" maxlength="1000" title="Enter saves · Shift+Enter adds a new line" aria-describedby="goal-err" ${ui.goalErr ? 'aria-invalid="true"' : ''} placeholder="e.g. A web app where teams submit their project and everyone votes. The demo shows submitting, voting and a live leaderboard.">${esc(S.goal)}</textarea>
-      <button type="submit" data-fk="goal-save">Save goal</button>${S.goal ? '<button type="button" class="ghost" data-act="goal-cancel" data-fk="goal-cancel">Cancel</button>' : ''}</form>
-    <div class="err" id="goal-err">${esc(ui.goalErr || '')}</div>`;
-  const repo = S.repo && !ui.editRepo
-    ? `<div class="repo"><span class="muted">Project repo:</span> <code>${esc(S.repo)}</code><button type="button" class="ghost sm" data-act="repo-edit" data-fk="repo-edit">Edit repo</button></div>`
-    : `<form class="repo" data-repoform><label for="repo-in">Project repo URL <span class="muted fw-normal">(optional)</span></label>
-      <input id="repo-in" data-keep="repo" value="${esc(S.repo)}" placeholder="https://github.com/your-team/project" autocomplete="off" spellcheck="false" aria-describedby="repo-hint repo-err" ${ui.repoErr ? 'aria-invalid="true"' : ''}>
-      <button type="submit" class="ghost sm" data-fk="repo-save">Save repo</button>${S.repo ? '<button type="button" class="ghost sm" data-act="repo-cancel" data-fk="repo-cancel">Cancel</button>' : ''}
-      <p class="hint row m0" id="repo-hint">The git repo you're all building in. It goes into the invite message, and agents see it too.</p>
-      <div class="err row m0" id="repo-err">${esc(ui.repoErr || '')}</div></form>`;
-  return goal + repo + deadlineBlock();
+      <div class="err m0" id="goal-err" role="alert">${esc(ui.goalErr || '')}</div>
+      <div class="repo m0"><label for="repo-in">Project repo URL <span class="muted fw-normal">(optional)</span></label>
+        <input id="repo-in" data-keep="repo" value="${esc(S.repo)}" placeholder="https://github.com/your-team/project" autocomplete="off" spellcheck="false" aria-describedby="repo-hint repo-err" ${ui.repoErr ? 'aria-invalid="true"' : ''}>
+        <p class="hint row m0" id="repo-hint">The git repo you're all building in. It goes into the invite message, and agents see it too.</p></div>
+      <div class="err m0" id="repo-err" role="alert">${esc(ui.repoErr || '')}</div>
+      <div class="repo dlform m0"><label for="dl-in">Demo time <span class="muted fw-normal">(optional)</span></label>
+        <input id="dl-in" type="datetime-local" data-keep="dl" value="${dl ? esc(localInput(dl)) : ''}" step="60" aria-describedby="dl-hint dl-err" ${ui.dlErr ? 'aria-invalid="true"' : ''}>
+        <label for="fz-in">Feature freeze</label><input id="fz-in" type="number" data-keep="fz" value="${esc(fm)}" min="0" max="600" step="5" inputmode="numeric" aria-describedby="fz-u dl-hint"><span class="u" id="fz-u">min before</span></div>
+      <p class="hint m0" id="dl-hint">${t.deadline ? '' : dl ? '<b>Not set yet:</b> the time shown is a suggestion, saved with the goal (or press No demo time). ' : ''}When the demo starts. The header counts down to it. At the feature freeze agents stop taking new tasks (except priority-1 bug fixes) and get what they have merged, so main works for the demo.</p>
+      <div class="err m0" id="dl-err" role="alert">${esc(ui.dlErr || '')}</div>
+      <div class="inl m0"><button type="submit" data-fk="goal-save">Save</button>${!t.deadline && dl ? '<button type="button" class="ghost" data-act="dl-skip" data-fk="dl-skip">No demo time</button>' : ''}${t.deadline ? '<button type="button" class="ghost" data-act="dl-clear" data-fk="dl-clear">Remove the demo time</button>' : ''}${S.goal ? '<button type="button" class="ghost" data-act="goal-cancel" data-fk="goal-cancel">Cancel</button>' : ''}</div>
+    </form>`;
 }
 // "2026-11-09T17:00" in local time, for <input type="datetime-local">.
 const localInput = (ts) => { const d = new Date(ts); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
@@ -214,36 +224,29 @@ function defaultDeadline() {
   if (d.getTime() - Date.now() < 2 * 3600e3) { const x = new Date(Date.now() + 3 * 3600e3); x.setMinutes(0, 0, 0); return x.getTime(); }
   return d.getTime();
 }
-function deadlineBlock() {
-  const S = state.settings; const t = timeNow();
-  if (t.deadline && !ui.editDeadline) {
-    return `<div class="repo"><span class="muted">Demo:</span> <b>${esc(when(t.deadline))}</b><span class="muted" aria-hidden="true">·</span><span>${t.fm ? `feature freeze ${esc(when(t.freezeAt))} <span class="muted">(${t.fm} min before)</span>` : 'no feature freeze'}</span>
-      <button type="button" class="ghost sm" data-act="dl-edit" data-fk="dl-edit">Edit time</button></div>`;
-  }
-  const fm = S.freeze_minutes === '' || S.freeze_minutes == null ? '60' : S.freeze_minutes;
-  return `<form class="repo dlform" data-dlform><label for="dl-in">Demo time <span class="muted fw-normal">(optional)</span></label>
-      <input id="dl-in" type="datetime-local" data-keep="dl" value="${esc(localInput(t.deadline || defaultDeadline()))}" step="60" aria-describedby="dl-hint dl-err" ${ui.dlErr ? 'aria-invalid="true"' : ''}>
-      <label for="fz-in">Feature freeze</label><input id="fz-in" type="number" data-keep="fz" value="${esc(fm)}" min="0" max="600" step="5" inputmode="numeric" aria-describedby="fz-u dl-hint"><span class="u" id="fz-u">min before</span>
-      <button type="submit" class="ghost sm" data-fk="dl-save">Save time</button>${!t.deadline && !dlSkipped() ? '<button type="button" class="ghost sm" data-act="dl-skip" data-fk="dl-skip">No demo time</button>' : ''}${t.deadline ?'<button type="button" class="ghost sm" data-act="dl-cancel" data-fk="dl-cancel">Cancel</button><button type="button" class="ghost sm" data-act="dl-clear" data-fk="dl-clear">Remove deadline</button>' : ''}
-      <p class="hint row m0" id="dl-hint">${t.deadline ? '' : '<b>Not set yet:</b> the time shown is a suggestion until you press Save time. '}When the demo starts. The header counts down to it. At the feature freeze agents stop taking new tasks (except priority-1 bug fixes) and get what they have merged, so main works for the demo.</p>
-      <div class="err row m0" id="dl-err">${esc(ui.dlErr || '')}</div></form>`;
-}
+// The tool each connected agent reported (its client, as the server names it) -> its entry in state.setup.agent_tools.
+const TOOL_OF = { 'Claude Code': 'claude', Codex: 'codex', 'Copilot (VS Code)': 'copilot-vscode', 'Copilot CLI': 'copilot-cli', 'Gemini CLI': 'gemini', Cursor: 'cursor' };
 function stepStart(si) {
   const tools = state.setup?.agent_tools?.length ? state.setup.agent_tools : [{ id: 'claude', name: 'Claude Code', start: '/board', where: 'Type it in Claude Code, opened in the project repo.' }];
   const label = (a) => { const d = [a.client, a.plan].filter(Boolean).join(' · '); return `${nameTag(a.name)}${d ? ` <span class="muted">(${esc(d)}${a.started ? `, ${a.slots} at once` : ''})</span>` : ''}`; };
-  return `<p>On each laptop, open your AI tool in the project folder and start the board. Find your tool below:</p>
-    <ul class="tools">${tools.map((t) => {
-      // Copilot CLI needs launching with the board tool allowed first: two commands.
-      const launch = t.launch;
-      const cmds = launch
-        ? `<div class="cmds"><div class="sub">1. Launch it with the board allowed:</div>${cmdBox(launch, 'start-' + t.id + '-launch', 'launch command for ' + t.name)}<div class="sub">2. Then type:</div>${cmdBox(t.start, 'start-' + t.id, 'start command for ' + t.name)}</div>`
-        : cmdBox(t.start, 'start-' + t.id, `start command for ${t.name}`);
-      return `<li class="tool-r"><span class="tn">${esc(t.name)}</span>${cmds}<span class="tw">${esc(launch ? 'Run both in the project repo.' : t.where || '')}</span></li>`;
-    }).join('')}</ul>
+  // The tools of the laptops connected so far; the others behind "Other tools" (all of them while none is connected).
+  const used = new Set(si.ros.flatMap((r) => r.agents).map((a) => TOOL_OF[a.client]).filter(Boolean));
+  const shown = used.size ? tools.filter((t) => used.has(t.id)) : tools; const others = used.size ? tools.filter((t) => !used.has(t.id)) : [];
+  const toolRow = (t) => {
+    // Copilot CLI needs launching with the board tool allowed first: two commands.
+    const launch = t.launch;
+    const cmds = launch
+      ? `<div class="cmds"><div class="sub">1. Launch it with the board allowed:</div>${cmdBox(launch, 'start-' + t.id + '-launch', 'launch command for ' + t.name)}<div class="sub">2. Then type:</div>${cmdBox(t.start, 'start-' + t.id, 'start command for ' + t.name)}</div>`
+      : cmdBox(t.start, 'start-' + t.id, `start command for ${t.name}`);
+    return `<li class="tool-r"><span class="tn">${esc(t.name)}</span>${cmds}<span class="tw">${esc(launch ? 'Run both in the project repo.' : t.where || '')}</span></li>`;
+  };
+  return `<p>On each laptop, open your AI tool in the project folder and start the board. ${used.size ? `The ${shown.length > 1 ? 'tools' : 'tool'} your team connected:` : 'Find your tool below:'}</p>
+    <ul class="tools">${shown.map(toolRow).join('')}</ul>
+    ${others.length ? `<button type="button" class="link muted t-meta" data-act="other-tools" data-fk="other-tools" aria-expanded="${!!ui.otherTools}"${ui.otherTools ? ' aria-controls="other-tools"' : ''}><span class="chev" aria-hidden="true">▾</span> Other tools (${others.length})</button>${ui.otherTools ? `<ul class="tools" id="other-tools">${others.map(toolRow).join('')}</ul>` : ''}` : ''}
     <p class="hint">Two tools on one laptop? Start each one in the folder join printed for it.</p>
     <p class="muted">That session becomes the laptop's <b>main agent</b> (the "orchestrator"): it takes tasks from this board and builds each one in its own git branch. Claude Code can also hand tasks to several subagents at once; the other tools work one task at a time. If the tool doesn't know the command or can't see the board, run <code>npm run doctor</code> in the agent-board folder: it checks the connection and says what to fix.</p>
     <p>${si.startedA.length ? `Started: ${si.startedA.map(label).join(', ')}` : 'No agent started yet. It shows up here a few seconds after someone types the start command.'}</p>
-    ${teamCapHtml(true)}
+    ${teamCapHtml()}
     ${si.waitingA.length ? `<p class="ns-txt">Connected but not started: ${si.waitingA.map((a) => `${label(a)} — type <code>${esc(startCmd(a.client))}</code> in it`).join('; ')}</p>` : ''}`;
 }
 function approvalBox() {
@@ -275,16 +278,18 @@ function plannerBox(pre = '', labelledBy = '') {
 }
 function stepBacklog() {
   const S = state.settings; const n = state.tasks.length;
-  const add = '<div class="inl"><span class="muted">You can always add tasks yourself:</span><button type="button" class="ghost sm" data-act="new-task" data-fk="s-new">+ New task</button></div>' + plannerBox() + approvalBox();
-  if (n && approvalWait()) return `<p>${plural(n, 'task')} on the board${S.planner ? `, written by the planner, ${nameTag(S.planner)}` : ''}. Check them below: open a card to edit it, or add what's missing. Agents start claiming once you approve.</p>${add}`;
+  // Who plans is chosen in Roles (or Planner) in the top bar: one line here, pointing there.
+  const planner = `<p class="inl"><span><span class="muted">Planner:</span> ${S.planner ? nameTag(S.planner) : 'the first agent that starts'}</span><button type="button" class="ghost sm" data-act="pick-planner" data-fk="s-planner">Change…</button></p>`;
+  const add = '<div class="inl"><span class="muted">You can always add tasks yourself:</span><button type="button" class="ghost sm" data-act="new-task" data-fk="s-new">+ New task</button></div>' + planner + approvalBox();
+  if (n && approvalWait()) return `<p>${plural(n, 'task')} on the board${S.planner ? `, written by the planner, ${nameTag(S.planner)}` : ''}. Check them on the task board: open a card to edit it, or add what's missing. Agents start claiming once you approve.</p>${add}`;
   if (n) return `<p>${plural(n, 'task')} on the board${S.planner ? `, written by the planner, ${nameTag(S.planner)}` : ''}. Agents claim them on their own, highest priority first.</p>${statsLine()}${add}`;
   if (!S.goal) return `<p>Write the goal first (step 2). Then the first agent that starts on the board (step 3) becomes the <b>planner</b> and writes the task list from it automatically.</p>${add}`;
-  if (S.planner) { const c = clientOf(S.planner); return `<p>${nameTag(S.planner)}'s agent${c ? ` (${esc(c)})` : ''} is the <b>planner</b> and is writing the task list now<span class="dots"></span> Cards appear on the board below as it goes.</p>${add}`; }
+  if (S.planner) { const c = clientOf(S.planner); return `<p>${nameTag(S.planner)}${c ? ` (${esc(c)})` : ''} is the <b>planner</b> and is writing the task list now<span class="dots"></span> Cards appear on the task board as it goes.</p>${add}`; }
   return `<p>The first agent that starts on the board (step 3) becomes the <b>planner</b> and writes the task list from the goal automatically.</p>${add}`;
 }
 // Who merges to main, in the same order as the planner's: label, select (with main's CI), one hint. Setup's step 5,
 // the Roles popover, and the Merges popover (no label there: its heading names the select).
-function stepIntegrator(_si, sel = 'integ-sel', labelledBy = '') {
+function stepIntegrator(sel = 'integ-sel', labelledBy = '') {
   const S = state.settings;
   const review = state.tasks.filter((t) => t.status === 'review').length;
   const names = agentNames([S.integrator]);
@@ -295,4 +300,4 @@ function stepIntegrator(_si, sel = 'integ-sel', labelledBy = '') {
 }
 
 export { defaultDeadline, exportBtns, exportFile, fetchExport, inviteText, localInput, nfEvents, NOTIFY_KIND,
-  plannerBox, renderSetup, rotateToken, stepIntegrator, teamCapHtml };
+  plannerBox, renderSetup, rotateToken, stepIntegrator };

@@ -24,11 +24,30 @@ function renderNeeds(qOpen, unread) {
 // has the count).
 let nowSeen = true;
 function setNowSeen(v) { nowSeen = v; } // tests set it (through window, see boot.js)
-function syncNeeds() { $('needs').hidden = nowSeen || !!oUi.left; }
-if ('IntersectionObserver' in window) new IntersectionObserver(([e]) => { nowSeen = e.isIntersecting; syncNeeds(); }, { rootMargin: '-56px 0px 0px 0px' }).observe($('nyou'));
+let wasFolded = !!oUi.left;
+function syncNeeds() {
+  const folded = !!oUi.left;
+  // Opening the panel: it opens where it was clicked, so What to do now counts as seen (no badge flashing up while the
+  // panel rolls down, until the observer's next callback, which can come late on a busy page), and is watched afresh.
+  if (wasFolded && !folded) { nowSeen = true; watchNow(); }
+  wasFolded = folded;
+  $('needs').hidden = nowSeen || folded;
+}
+// What to do now counts as on screen when some of it shows below the sticky header, measured (not a fixed 56px: the
+// header grows when it wraps), so a line hidden under the header isn't "seen".
+let io = null, ioTop = -1;
+function watchNow(top = ioTop) {
+  if (!('IntersectionObserver' in window)) return;
+  if (io && top === ioTop) io.unobserve($('nyou'));
+  else { io?.disconnect(); ioTop = top; io = new IntersectionObserver((es) => { nowSeen = es[es.length - 1].isIntersecting; syncNeeds(); }, { rootMargin: `-${top}px 0px 0px 0px` }); }
+  io.observe($('nyou'));
+}
+const hdr = document.querySelector('#app > header');
+watchNow(Math.round(hdr?.offsetHeight || 56));
+if ('ResizeObserver' in window && hdr) new ResizeObserver(() => { const h = Math.round(hdr.offsetHeight); if (h !== ioTop) watchNow(h); }).observe(hdr);
 // The single most important thing for this human to do right now (+ at most one low-priority extra).
 function renderNow(qOpen, unread, si) {
-  snapQuestions();
+  snapQuestions(qOpen);
   const S = state.settings; const T = state.tasks.length;
   const review = state.tasks.filter((t) => t.status === 'review').length;
   // A blocked task with an open question is answered by answering it: counted once, with the question.
@@ -51,7 +70,8 @@ function renderNow(qOpen, unread, si) {
   // The feature freeze changes what humans should do, so it comes right after the questions.
   if (tm.frozen && !tm.past && state.phase !== 'all_done') ranked.push({ kind: 'urgent', go: review ? 'review' : 'compose', go2: 'wrapup', text2: 'Write-up for your submission', more: 'Feature freeze: help merge and test',
     text: `Feature freeze: agents won't start new tasks. Help merge and test ${review ? `the ${plural(review, 'task')} in Review` : 'main'}, then rehearse the demo. P1 bug fixes can still be claimed` });
-  if (blocked) ranked.push({ kind: 'urgent', go: 'blocked', more: `Help with ${plural(blocked, 'blocked task')}`, text: `${plural(blocked, 'task is', 'tasks are')} blocked: read why and help` });
+  // Blocked leads when it's the most important thing; it isn't repeated under Also (the Blocked list is right below).
+  if (blocked) ranked.push({ kind: 'urgent', go: 'blocked', more: '', text: `${plural(blocked, 'task is', 'tasks are')} blocked: read why and help` });
   // Tasks that keep coming back from review: the task (or its checks) is probably unclear.
   const bounced = bouncedTasks();
   if (bounced.length) ranked.push({ kind: 'urgent', go: 'rejected', more: bounced.length === 1 ? `#${bounced[0].id} came back from review ${bounced[0].n}×` : `${bounced.length} tasks keep coming back from review`,
@@ -82,6 +102,7 @@ function renderNow(qOpen, unread, si) {
       backlog: !S.goal ? 'Write the goal first, then the agents plan the tasks' : S.planner ? `Nothing to do yet: ${agentOf(S.planner)} is writing the task list` : 'Nothing to do yet: waiting for an agent to start writing the task list (or add tasks yourself)',
     }[si.cur];
     if (si.cur === 'backlog' && S.goal) kind = 'ok';
+    // Setup's own steps lead only while Setup is closed (open, it shows them itself: no lead here, see hideLead).
   }
   else text = 'All good: agents are working. Keep this page open; questions for you will appear here';
   if (kind === 'ok' && me && state.phase !== 'all_done' && !text2) {
@@ -91,18 +112,19 @@ function renderNow(qOpen, unread, si) {
     const cap = teamCapacity();
     // Idle agents first: with nothing to claim, another laptop wouldn't help.
     if (T && state.phase === 'building' && !tm.frozen && cap.short) { go2 = 'idle'; text2 = `${plural(cap.idle.length, 'agent is', 'agents are')} idle: add tasks or ask the planner for more`; }
+    else if (setupShown(si)) { /* Setup is open: it shows the next step */ }
     else if (othersStarted && !mineStarted) { go2 = mine?.agent ? 'step-start' : 'step-invite'; text2 = mine?.waiting ? 'Start your laptop\'s agent' : 'Connect your laptop\'s agent'; }
     else if (!S.integrator && T) { go2 = 'step-integrator'; text2 = 'While you wait: pick who merges to main'; }
   }
   // The next things in line, then setup that can happen meanwhile (at most three lines in all).
-  const more = over ? [] : ranked.slice(1).map((r) => ({ go: r.go, text: r.more, freeze: !!r.go2 }));
+  const more = over ? [] : ranked.slice(1).filter((r) => r.more).map((r) => ({ go: r.go, text: r.more, freeze: !!r.go2 }));
   // Mentions lead only when nothing else does; otherwise they come next, after the freeze (also in the @me tab).
   if (!over && unread.length && go !== 'mentions') more.splice(more[0]?.freeze ? 1 : 0, 0, { go: 'mentions', text: plural(unread.length, 'new mention') });
-  if (!over && S.goal && !tm.deadline && !dlSkipped()) more.push({ act: 'clock', text: 'Set the demo time so agents stop on time' });
-  if (si.cur === 'invite' && !S.goal) more.push({ go: 'step-goal', text: 'Write the goal (step 2)' });
-  const lv = () => '';
+  // While Setup is open it says what's next in setting up: Needs attention doesn't add its own setup lines.
+  const setupOpenNow = setupShown(si);
+  if (!over && S.goal && !tm.deadline && !dlSkipped() && !setupOpenNow) more.push({ act: 'clock', text: 'Set the demo time so agents stop on time' });
   // "Also:" only before two of them; one is just the link.
-  const moreHtml = more.length ? `<div class="also">${more.length > 1 ? '<span class="n">Also:</span>' : ''}${more.slice(0, 2).map((m, i) => `<button type="button" class="link" ${m.act ? `data-act="${m.act}"` : `data-go="${m.go}"${lv(m.go)}`} data-fk="now-more-${i}">${esc(m.text)} <span aria-hidden="true">→</span></button>`).join('')}</div>` : '';
+  const moreHtml = more.length ? `<div class="also">${more.length > 1 ? '<span class="n">Also:</span>' : ''}${more.slice(0, 2).map((m, i) => `<button type="button" class="link" ${m.act ? `data-act="${m.act}"` : `data-go="${m.go}"`} data-fk="now-more-${i}">${esc(m.text)} <span aria-hidden="true">→</span></button>`).join('')}</div>` : '';
   const cutHtml = ui.showCut && cut?.list.length && !over ? `<ul class="cut-list" id="cut-list" aria-label="P3 tasks that probably won't make it"><li class="n">Probably won't make it:</li>${cut.list.map((t) => `<li><button type="button" class="link" data-open-task="${t.id}" data-fk="cut-${t.id}">#${t.id} ${esc(short(t.title, 48))}</button></li>`).join('')}</ul>` : '';
   const el = $('now'); el.className = 'now k-' + kind;
   // No lead where it would repeat what's right there: the question cards under it (what they block is a muted line
@@ -112,7 +134,7 @@ function renderNow(qOpen, unread, si) {
   const lead = qLead ? ''
     : hideLead ? (more.length || text2 ? '' : '<p class="na-sub">Nothing needs attention yet: Setup shows what\'s next.</p>') : go
 
-      ? `<button type="button" class="link na" data-go="${go}"${lv(go)} data-fk="now-go">${esc(text)} <span class="go" aria-hidden="true">→</span></button>`
+      ? `<button type="button" class="link na" data-go="${go}" data-fk="now-go">${esc(text)} <span class="go" aria-hidden="true">→</span></button>`
       : `<span class="na">${esc(text)}</span>`;
   el.classList.toggle('no-lead', !!hideLead);
   // Where the team is (connect → goal → tasks → build → done): under the demo time, in the Demo popover. "Connect" leads
@@ -123,42 +145,50 @@ function renderNow(qOpen, unread, si) {
   // A list, so screen readers hear "Phase: Build, step 5 of 6" and each step as a list item.
   patch($('o-dl-ph'), `<div class="phases" title="Where the team is: connect laptops → set a goal → the planner writes tasks${track !== ALL_PHASES ? ' → humans approve them' : ''} → agents build → everything merged"><span class="ph-l" aria-hidden="true">Phase</span><ol role="list" aria-label="${ci < 0 ? 'Phase' : `Phase: ${track[ci][1]}, step ${ci + 1} of ${track.length}`}">${track.map(([k, l], i) =>
     `<li>${i ? '<span class="arr" aria-hidden="true">›</span>' : ''}<span class="p ${k === curP ? 'cur' : i < ci ? 'past' : ''}" ${k === curP ? 'aria-current="step"' : ''}>${l}</span></li>`).join('')}</ol></div>`);
-  patch(el, `<h2 class="nl vh" id="now-h">What to do now</h2>${lead}${appr ? '<button type="button" class="appr" data-act="approve" data-fk="now-appr">Approve plan &amp; start</button>' : ''}${text2 ? `<button type="button" class="link na2" data-go="${go2}"${lv(go2)} data-fk="now-go2">${esc(text2)} <span aria-hidden="true">→</span></button>` : ''}${cutHtml}${moreHtml}`);
+  patch(el, `<h3 class="nl vh" id="now-h">What to do now</h3>${lead}${appr ? '<button type="button" class="appr" data-act="approve" data-fk="now-appr">Approve plan &amp; start</button>' : ''}${text2 ? `<button type="button" class="link na2" data-go="${go2}" data-fk="now-go2">${esc(text2)} <span aria-hidden="true">→</span></button>` : ''}${cutHtml}`);
   // Nothing under the questions' own cards: no empty band above them.
-  el.hidden = !!hideLead && !lead && !appr && !text2 && !cutHtml && !moreHtml;
+  el.hidden = !!hideLead && !lead && !appr && !text2 && !cutHtml;
+  // The next things in line come after the question cards (the cards are what to do first).
+  const mo = $('now-more'); patch(mo, moreHtml); mo.hidden = !moreHtml;
 
 }
 
 // A new question fades in, an answered one fades out where it was, the others glide to their places, and Needs
 // attention grows or shrinks to fit in step (what is under it moves with it). Measured before What to do now changes
 // (renderNow, just above the cards, calls this first), so the cards glide from where they were on screen.
-let qWas = null;
-function snapQuestions() {
-  const box = $('questions'), ny = $('nyou');
-  qWas = box._html !== undefined && canMove() && ny.offsetHeight ? { h: ny.getBoundingClientRect().height,
-    cards: new Map([...box.children].filter((c) => c.id && !c.classList.contains('leaving')).map((c) => [c.id, { el: c, r: c.getBoundingClientRect() }])) } : null;
-}
-function renderQuestions(qOpen) {
-  const box = $('questions'), ny = $('nyou');
-  const was = qWas; qWas = null;
-  for (const a of ny.getAnimations()) if (a.id === 'glide') a.cancel(); // a second change starts from where it is
-  const gone = was && !qOpen.length && was.cards.size;
-  $('q-panel').hidden = !qOpen.length && !gone;
-  // Screen readers only: the cards say it.
-  patch($('q-h'), qOpen.length ? `${qOpen.length === 1 ? 'An agent is' : `${qOpen.length} agents are`} waiting for a human answer` : '');
-  const changed = patch(box, qOpen.map((q) => {
+let qWas = null, qHtml = null;
+// The question cards, built once per render: snapQuestions() compares them with what's drawn, renderQuestions() draws them.
+function questionsHtml(qOpen) {
+  return qOpen.map((q) => {
     const t = q.task_id && taskById(q.task_id);
     const old = Date.now() - q.created_at > 30 * 60e3; // muted text; amber only once it has waited half an hour
     return `<article class="qcard" id="q-${q.id}" aria-label="Question from ${esc(q.asker)}">
-      <div class="qh">${who(q.asker, true)}${t ? `<span class="muted">on</span> <button type="button" class="link tref" data-open-task="${t.id}">#${t.id} ${esc(short(t.title, 40))}</button>` : ''}
+      <div class="qh">${who(q.asker, true)}${t ? `<span class="muted">on</span> <button type="button" class="link tref" data-open-task="${t.id}" data-fk="qt-${q.id}">#${t.id} ${esc(short(t.title, 40))}</button>` : ''}
         <span class="${old ? 'pill warn' : 'muted'}" title="${esc(fullTime(q.created_at))}">asked ${ago(q.created_at)}</span></div>
-      <div class="qt">${fmt(q.question, true)}</div>
+      <div class="qt">${fmt(q.question)}</div>
       <form data-qform="${q.id}" data-asker="${esc(q.asker)}">
         <label class="vh" for="qa-${q.id}">Answer to ${esc(q.asker)}</label>
         <textarea id="qa-${q.id}" data-keep="qa-${q.id}" rows="1" placeholder="Your answer" title="Enter sends · Shift+Enter adds a new line" aria-describedby="qe-${q.id}" ${ui.qErr?.[q.id] ? 'aria-invalid="true"' : ''}></textarea>
         <button type="submit" data-fk="qb-${q.id}">Answer</button>
       </form><div class="err" id="qe-${q.id}" role="alert">${esc(ui.qErr?.[q.id] || '')}</div></article>`;
-  }).join(''));
+  }).join('');
+}
+function snapQuestions(qOpen) {
+  const box = $('questions'), ny = $('nyou');
+  qHtml = questionsHtml(qOpen);
+  // Measured only when the cards change (a pass that changes nothing doesn't lay the page out).
+  qWas = box._html !== undefined && box._html !== qHtml && canMove() && ny.offsetHeight ? { h: ny.getBoundingClientRect().height,
+    cards: new Map([...box.children].filter((c) => c.id && !c.classList.contains('leaving')).map((c) => [c.id, { el: c, r: c.getBoundingClientRect() }])) } : null;
+}
+function renderQuestions(qOpen) {
+  const box = $('questions'), ny = $('nyou');
+  const was = qWas, html = qHtml ?? questionsHtml(qOpen); qWas = null; qHtml = null;
+  for (const a of ny.getAnimations()) if (a.id === 'glide') a.cancel(); // a second change starts from where it is
+  const gone = was && !qOpen.length && was.cards.size;
+  $('q-panel').hidden = !qOpen.length && !gone;
+  // Screen readers only: the cards say it.
+  patch($('q-h'), qOpen.length ? `${qOpen.length === 1 ? 'An agent is' : `${qOpen.length} agents are`} waiting for a human answer` : '');
+  const changed = patch(box, html);
   // Under the cards, muted: what answering them unblocks (each card's task says "question waiting").
   const nb = blockedSplit(qOpen).asked.length;
   $('q-sum').hidden = !nb;

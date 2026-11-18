@@ -49,7 +49,6 @@ const hue = (name) => HUES[nameHash(root(name)) % HUES.length];
 const hs = (name) => `style="--h:${hue(name)}"`;
 // A name that @mentions on click. inline=true (feed, question headers): clickable but no Tab stop of its own.
 const who = (a, inline = false) => `<button type="button" class="link pc" ${hs(a)} data-mention="${esc(a)}" title="Click to @mention ${esc(a)} in chat"${inline ? ' tabindex="-1"' : ''}>${esc(a)}</button>`;
-const FUNNEL = '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3h12l-4.5 5.5V13l-3 1.5V8.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>';
 function ago(ts) {
   const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
   if (s < 45) return 'just now';
@@ -58,10 +57,22 @@ function ago(ts) {
   return s < 6 * 86400 ? when(ts) : new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 // One time format everywhere: "4:00 PM" (or "16:00", by locale) today, "Tue 4:00 PM" on another day; full date only in tooltips.
-const clock = (ts) => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-const when = (ts) => new Date(ts).toDateString() === new Date().toDateString() ? clock(ts) : `${new Date(ts).toLocaleDateString([], { weekday: 'short' })} ${clock(ts)}`;
-const fullTime = (ts) => new Date(ts).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-const timeEl = (ts) => `<time datetime="${new Date(ts).toISOString()}" title="${esc(fullTime(ts))}">${Date.now() - ts < 3600e3 ? ago(ts) : clock(ts)}</time>`;
+// The locale formatting is slow and a feed shows hundreds of times: each string is made once per timestamp.
+const memoTs = (f) => { const m = new Map(); return (ts) => { let v = m.get(ts); if (v === undefined) { if (m.size > 4000) m.clear(); v = f(ts); m.set(ts, v); } return v; }; };
+const clock = memoTs((ts) => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+const weekday = memoTs((ts) => new Date(ts).toLocaleDateString([], { weekday: 'short' }));
+let today = { at: 0, start: 0 };
+const todayStart = () => { const n = Date.now(); if (n - today.at > 30e3) { const d = new Date(n); d.setHours(0, 0, 0, 0); today = { at: n, start: d.getTime() }; } return today.start; };
+const when = (ts) => { const d = todayStart(); return ts >= d && ts < d + 86400e3 ? clock(ts) : `${weekday(ts)} ${clock(ts)}`; };
+const fullTime = memoTs((ts) => new Date(ts).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
+// "5m ago" within the hour, the clock time after. A <time> keeps its timestamp (data-ts), so refreshTimes() can move
+// its words on in place instead of drawing the line again.
+const timeText = (ts) => (Date.now() - ts < 3600e3 ? ago(ts) : clock(ts));
+const timeOpen = memoTs((ts) => `<time datetime="${new Date(ts).toISOString()}" data-ts="${ts}" title="${esc(fullTime(ts))}">`);
+const timeEl = (ts) => `${timeOpen(ts)}${timeText(ts)}</time>`;
+function refreshTimes(root) { for (const t of root.querySelectorAll('time[data-ts]')) { const s = timeText(Number(t.dataset.ts)); if (t.textContent !== s) t.textContent = s; } }
+// Set an element's text only when it changes (a same-value write still makes the browser lay the page out again).
+const setText = (el, s) => { s = String(s ?? ''); if (el && el.textContent !== s) el.textContent = s; };
 const isStale = (t) => ['claimed', 'in_progress'].includes(t.status) && (typeof t.stale === 'boolean' ? t.stale : Date.now() - t.updated_at > STALE_MS);
 // The agent (laptop session) behind a task's owner is offline: other agents may take a stale task over.
 const ownerOffline = (t) => { const n = agentRoot(t.assignee); if (!n) return false; const p = (state.presence || []).find((x) => x.kind === 'agent' && x.name === n); return !p || !p.online; };
@@ -74,8 +85,10 @@ const mentionsMe = (e) => !sameTeam(e.author, me) && (e.data?.mentions || []).so
 const mentionsLite = (e) => !sameTeam(e.author, me) && !mentionsMe(e) && (e.data?.mentions || []).some((m) => BROADCAST.includes(m) || root(m) === root(me));
 const short = (s, n = 90) => { s = String(s || '').replace(/\s+/g, ' '); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
-// Escape-then-format: split raw text into tokens, escape each, linkify #ids and @names.
-// inline=true: links get no Tab stop of their own (the feed would otherwise be dozens of stops).
+// Escape-then-format: split raw text into tokens, escape each, linkify #ids and @names. A pull request's address
+// reads "PR #49" (the address is its tooltip).
+// inline=true (the feed): its #id links get no Tab stop of their own (the feed would otherwise be dozens of stops);
+// web links always do.
 function fmt(text, inline = false) {
   return String(text ?? '').split(/(https?:\/\/[^\s<>"']+|#\d+\b|@[\w.\-/]+)/g).map((p, i, all) => {
     if (i % 2 === 0) return esc(p);
@@ -83,7 +96,8 @@ function fmt(text, inline = false) {
     if (p[0] === '#' && /(?:\bPRs?|\bpull(?:\s+request)?|\bissues?|!)\s?$/i.test(all[i - 1] || '')) return esc(p);
     if (/^https?:/i.test(p)) {
       const url = p.replace(/[.,;:!?)\]]+$/, ''); const trail = p.slice(url.length);
-      return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer"${inline ? ' tabindex="-1"' : ''}>${esc(url)}</a>${esc(trail)}`;
+      const pr = /^https?:\/\/[^/]+\/[^/]+\/[^/]+\/pull\/(\d+)(?:[/?#].*)?$/i.exec(url);
+      return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer"${pr ? ` title="${esc(url)}"` : ''}>${pr ? `PR #${pr[1]}` : esc(url)}</a>${esc(trail)}`;
     }
     if (p[0] === '#') { const t = taskById(Number(p.slice(1))); return t ? `<button type="button" class="link tref" data-open-task="${t.id}" title="${esc(t.title)}"${inline ? ' tabindex="-1"' : ''}>${esc(p)}</button>` : esc(p); }
     const name = p.slice(1);
@@ -277,7 +291,17 @@ function toast(msg, bad = false, action = null) {
   toastsShift(() => $('toasts').append(d));
   const shown = [...$('toasts').children].filter((t) => !t.classList.contains('out'));
   shown.slice(0, Math.max(0, shown.length - 3)).forEach(toastOut);
-  setTimeout(() => toastOut(d), bad ? 7000 : action ? 8000 : 3500);
+  // A toast with a button (Undo) waits while the pointer or focus is on it, then gets its time again.
+  const ms = bad ? 7000 : action ? 8000 : 3500;
+  let t = setTimeout(() => toastOut(d), ms);
+  if (action) {
+    const hold = () => clearTimeout(t), go = () => { clearTimeout(t); if (!d.matches(':hover, :focus-within')) t = setTimeout(() => toastOut(d), ms); };
+    d.addEventListener('mouseenter', hold); d.addEventListener('focusin', hold);
+    d.addEventListener('mouseleave', go); d.addEventListener('focusout', () => setTimeout(go));
+  }
+  // A modal dialog (Help, a task) hides the page's live regions from screen readers: say it inside the dialog too.
+  const dlg = [...document.querySelectorAll('dialog[open]')].pop();
+  if (dlg) { let l = dlg.querySelector(':scope > .dlg-live'); if (!l) { l = document.createElement('div'); l.className = 'vh dlg-live'; l.setAttribute('aria-live', bad ? 'assertive' : 'polite'); dlg.append(l); } l.textContent = ''; setTimeout(() => { l.textContent = msg; }, 60); }
 }
 function announce(msg) { const a = $('announcer'); a.textContent = ''; setTimeout(() => { a.textContent = msg; }, 60); }
 
@@ -287,7 +311,7 @@ const nameTag = (n) => `<b class="pc" ${hs(n)}>${esc(n)}</b>`;
 // " (you)" after my own name, unless my name already says it.
 const youTag = (n) => (n === me && String(n).toLowerCase() !== 'you' ? ' (you)' : '');
 
-export { agentRoot, ago, announce, canMove, cardRects, clock, cmdBox, easeHeight, esc, fmt, fullTime, FUNNEL, glide, hs,
-  hue, instantly, isHttps, isMe, isStale, isWebUrl, knownPeople, leave, mentionsLite, mentionsMe, motion, moveCards,
-  nameHash, nameTag, noteMove, ownerOffline, patch, plural, reveal, root, short, snapCards, taskById, timeEl, toast, when,
-  who, youTag };
+export { agentRoot, ago, announce, canMove, cardRects, clock, cmdBox, easeHeight, esc, fmt, fullTime, glide, hs, hue,
+  instantly, isHttps, isMe, isStale, isWebUrl, knownPeople, leave, mentionsLite, mentionsMe, motion, moveCards, nameHash,
+  nameTag, noteMove, ownerOffline, patch, plural, refreshTimes, reveal, root, setText, short, snapCards, taskById, timeEl,
+  toast, when, who, youTag };

@@ -18,7 +18,7 @@ You don't choose roles or modes: the board tells each agent what to do next.
 1. If the team has no goal yet, the first agent asks you what you're building.
 2. The first agent to see the goal becomes the **planner** and writes the task list.
 3. Each agent then claims tasks and builds each one on its own git branch. Claude Code runs up to 3 tasks at once with subagents. Codex and Copilot do one at a time.
-4. Finished branches go to **review**, with their pull request linked on the card. One agent merges them into `main` and marks them done (an agent can't mark its own work done while someone else could review it). In the top bar's **Merges to main** (or **Roles**) you can pick that agent, or let **whoever is free** merge: any agent with a free slot takes the next review with `claim_review` (never its own work). If you pick nothing, the first agent with finished work takes the role.
+4. Finished branches go to **review**, with their pull request linked on the card. One agent merges them into `main` and marks them done (an agent can't mark its own work done while someone else could review it). In the top bar's **Merges** chip you can pick that agent, or let **whoever is free** merge: any agent with a free slot takes the next review with `claim_review` (never its own work). If you pick nothing, the first agent with finished work takes the role.
 
 **Want to check the plan first?** Turn on *Review the task list before agents start*. The planner writes the tasks. You edit, add or delete them, then press **Approve plan & start**.
 
@@ -81,7 +81,7 @@ Post a message with an @mention, e.g. `@alice skip OAuth, use a fake login`.
 - `@planner` and `@merger` reach the planner and whoever merges to `main` right now. The message shows who that was, e.g. "@planner (maya-claude)", and stays with that agent if the role changes later.
 - `@` inside a word or a package name isn't a mention (`hit@3`, `@fastify/x`, `@2.0.2`), and `PR #78` in a message doesn't link to task #78.
 
-**Direct messages.** The *Direct* tab in Activity (with 3D on or off) has one thread per agent. An agent's *Message* button in the Agents panel opens its thread.
+**Direct messages.** The *Direct* tab in Activity (with 3D on or off) has one thread per agent. An agent's *Message* button in the Agents panel opens its thread. A reload opens the list of threads, not the last one you had open.
 
 - The agent gets your message like a mention: its `next_action` quotes it, `wait_for_events` wakes it, and Claude Code's Stop hook marks it `[MENTIONS YOU]`. It answers in the same thread.
 - The **Planner** thread is pinned at the top. Its messages go to whoever is the planner at the time; if nobody is yet, they wait for the first agent that becomes planner. The planner treats them as input to the plan: it replies with what it will do and turns it into tasks.
@@ -117,7 +117,7 @@ When it's fixed, the board says "main is green again".
 
 ## Demo time and feature freeze
 
-Set the demo time in *Setup*. The board counts down.
+Set the demo time in *Setup* step 2 (the goal, the project repo and the demo time are saved together, with one *Save*) or from the top bar's *Demo* chip. The board counts down.
 
 - A **feature freeze** starts 60 minutes before the demo (you can change that).
 - 30 minutes before the freeze, and again when it starts (also when it starts at the demo time itself), the board tells every agent.
@@ -173,7 +173,7 @@ On a big screen, open the **Presenter view** (help dialog `?` or Ctrl+K, `/prese
   - On a focused card, `Enter` opens it, the arrow keys move between cards and columns, and `Home`/`End` jump to the first or last card.
   - You can turn the single-key shortcuts off in the Help dialog (useful with speech input).
 - **The feed** starts with the latest 200 events. **Load earlier activity** pages back 200 at a time.
-- **Top bar.** Goal, demo time with the verdict (*on track*, *tight*, *behind by ~N*), progress, the **planner** (click it to pick the agent that writes the task list, or leave it to the first agent that starts), who merges to `main`, and **Setup**, which opens the setup steps (Esc or × closes them). On screens narrower than 1600px the planner and who merges share one **Roles** chip, which opens both choices.
+- **Top bar.** Goal, demo time with the verdict (*on track*, *tight*, *behind by ~N*), progress, the **planner** (click it to pick the agent that writes the task list, or leave it to the first agent that starts), who merges to `main`, and **Setup**, which opens the setup steps (Esc or × closes them). On screens narrower than 1600px one chip shows who merges (the planner is in its tooltip) and opens both choices.
 - **Task dialog.** **Cancel task…** asks for a reason, keeps the history and tells the assignee; its confirmation also offers **Delete task** to remove it without a note.
 - **Find tasks.** **+ New task** sits in the task bar. The search box filters by title, `#id` or person; *Columns* / *Table* switches the view (the table sorts by any column). Activity has *All*, *Chat*, *@me* and *Direct* tabs.
 - **On a phone**, the chat icon in the header jumps down to the chat's message box.

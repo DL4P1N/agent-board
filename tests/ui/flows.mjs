@@ -54,6 +54,11 @@ check('header need-attention badge when scrolled: questions and the mention, the
 await page.click('#needs button');
 // A smooth scroll: wait for it (slower on CI's software renderer) rather than a fixed time.
 check('the badge goes back up to What to do now', await page.waitForFunction(() => !!document.activeElement?.closest('#now') && $('needs').hidden, { timeout: 5000, polling: 100 }).then(() => true).catch(() => false));
+// U18: opening Needs attention from its title bar doesn't flash the badge while the panel rolls down (the observer's
+// "not on screen" from while it was folded is stale).
+await page.evaluate(() => window.scrollTo(0, 0)); await page.click('[data-o-fold="left"]'); await sleep(500);
+const u18 = await page.evaluate(() => new Promise((res) => { document.querySelector('[data-o-fold="left"]').click(); const seen = [$('needs').hidden]; requestAnimationFrame(() => { seen.push($('needs').hidden); setTimeout(() => { seen.push($('needs').hidden); res(seen); }, 400); }); }));
+check('U18 opening Needs attention: no need-you badge at any point while it opens', u18.every(Boolean), JSON.stringify(u18));
 await page.setViewport({ width: 1440, height: 1000 });
 await page.evaluate(() => window.scrollTo(0, 0));
 check('XSS text rendered as text', await page.evaluate(() => [...document.querySelectorAll('.ev .eb')].some((e) => e.textContent.includes('<script>alert(1)</script>'))));
@@ -86,7 +91,7 @@ check('feedback toast after answer', /Answer sent/.test(toastTxt), toastTxt);
 // mentions
 const mBadge = await page.$eval('[data-tab="me"]', (e) => e.innerText);
 check('@me tab shows unread count', /\d/.test(mBadge), mBadge);
-await domClick('#now [data-go="mentions"]'); // mentions follow the lead under "Also"
+await domClick('#nyou [data-go="mentions"]'); // mentions follow the lead under "Also"
 await sleep(200);
 const meFeed = await page.$$eval('#feed .ev', (e) => e.length);
 const mBadge2 = await page.$eval('[data-tab="me"]', (e) => e.innerText);
@@ -247,7 +252,7 @@ check('DLG-1 dialog Status Claimed + Assign to bob: claimed for bob, no question
 check('a claimed task sits in In progress, marked "claimed, not started"', await page.evaluate((id) => /claimed, not started/.test(document.querySelector(`#col-in_progress .card[data-id="${id}"]`)?.innerText || '') && !document.getElementById('col-claimed'), dlgT.id));
 
 // WB-19: column names read "Open, 3 tasks" (no stray space before the comma)
-check('WB-19 column region names', await page.evaluate(() => { const c = document.getElementById('col-open'); const n = c.getAttribute('aria-label') || ''; return /^Open, \d+ tasks?$/.test(n) ? true : n; }) === true);
+check('WB-19 / A12 a column heading reads "Open, N tasks" (not "Open5"); columns are not landmarks of their own', await page.evaluate(() => { const c = document.getElementById('col-open'); const n = c.querySelector('h3').textContent; return /^Open, \d+ tasks?$/.test(n) && !c.getAttribute('role') ? true : `${n} ${c.getAttribute('role')}`; }) === true);
 // WB-16: the PR pill is a Tab stop
 const ciId = findT('CI pipeline with tests on PRs').id;
 await rest('dana', `/tasks/${ciId}`, 'PATCH', { pr_url: 'https://github.com/o/r/pull/5' });
@@ -274,9 +279,10 @@ const push = await page.evaluate(async () => {
 check('a new toast pushes the older one up in step (from where it was, a frame part-way), not in one frame', Math.abs(push.first - push.y0) <= 1 && push.end < push.y0 - 10 && push.between, JSON.stringify(push));
 // WB-14: a long column shows 12 cards, then "Show N more"
 for (let i = 0; i < 20; i++) await rest('dana', '/tasks', 'POST', { title: `Filler task ${i}` });
-await page.waitForSelector('[data-show-col="open"]', { timeout: 5000 });
-const capN = await page.$$eval('#col-open .card', (c) => c.length);
 const allOpen = (await rest('dana', '/state', 'GET')).tasks.filter((t) => t.status === 'open' || t.status === 'proposed').length;
+// The page loads while the tasks arrive: wait for the last of them.
+await page.waitForFunction((n) => state.tasks.filter((t) => t.status === 'open' || t.status === 'proposed').length === n && !!document.querySelector('[data-show-col="open"]'), { timeout: 5000 }, allOpen);
+const capN = await page.$$eval('#col-open .card', (c) => c.length);
 const moreTxt = await page.$eval('[data-show-col="open"]', (b) => b.textContent);
 check('WB-14 Open column is capped with "Show N more"', capN < allOpen && capN >= 12 && moreTxt === `Show ${allOpen - capN} more`, `${capN}/${allOpen} "${moreTxt}"`);
 await page.click('[data-show-col="open"]'); await sleep(200);

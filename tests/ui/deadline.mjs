@@ -63,11 +63,11 @@ try {
   }));
   // Past time is refused inline.
   await page.evaluate(() => { $('dl-in').value = localInput(Date.now() - 3600e3); });
-  await page.click('[data-fk="dl-save"]'); await sleep(200);
+  await page.click('[data-fk="goal-save"]'); await sleep(200);
   check('past demo time: inline error + aria-invalid', await page.evaluate(() => $('dl-in').getAttribute('aria-invalid') === 'true' && /already passed/.test($('dl-err').textContent)));
   const target = Date.now() + (3 * 60 + 12.5) * 60e3;
   await page.evaluate((ts) => { $('dl-in').value = localInput(ts); $('fz-in').value = '60'; }, target);
-  await page.click('[data-fk="dl-save"]');
+  await page.click('[data-fk="goal-save"]');
   await until(page, () => !document.getElementById('clock').classList.contains('unset'));
   const clock1 = await page.$eval('#clock', (e) => e.querySelector('.o-x').textContent.replace(/\s+/g, ' ').trim());
   check('countdown in the top bar\'s Demo chip: "in 3h 1Xm · freeze HH:MM"', /^in 3h 1[123]m · freeze (?:\w{3} )?\d\d?:\d\d(?: ?[AP]M)?$/.test(clock1), clock1);
@@ -75,7 +75,7 @@ try {
   check('deadline saved on the server', Math.abs(Number(s1.settings.deadline) - Math.floor(target / 60e3) * 60e3) < 60e3 && s1.settings.freeze_minutes === '60' && s1.time.deadline > 0, JSON.stringify(s1.settings));
   const dlEv = (s1.events || []).find((e) => /set the demo deadline to/.test(e.text || ''))?.text || '';
   check('ONB-10 feed: deadline time has no seconds or full numeric date', !!dlEv && !/\d:\d\d:\d\d/.test(dlEv) && !/\d\/\d+\/\d{4}/.test(dlEv), dlEv);
-  check('step 2 shows the demo time and a Change button', /Demo: (?:\w{3} )?\d\d?:\d\d(?: ?[AP]M)? · feature freeze (?:\w{3} )?\d\d?:\d\d(?: ?[AP]M)? \(60 min before\)/.test(await txt(page, '#step-goal')) && !!(await page.$('[data-fk="dl-edit"]')), await txt(page, '#step-goal'));
+  check('step 2 shows the demo time and one Edit button', /Demo: (?:\w{3} )?\d\d?:\d\d(?: ?[AP]M)? · feature freeze (?:\w{3} )?\d\d?:\d\d(?: ?[AP]M)? \(60 min before\)/.test(await txt(page, '#step-goal')) && (await page.$$('#step-goal [data-act="goal-edit"]')).length === 1, await txt(page, '#step-goal'));
   check('clock is not warning-coloured 2h before the freeze', await page.$eval('#clock', (e) => !e.classList.contains('warn') && !e.classList.contains('frozen')));
   // Typing elsewhere survives the 30s tick re-render.
   await page.click('#msg'); await page.type('#msg', 'half-typed');

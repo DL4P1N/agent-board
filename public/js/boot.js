@@ -6,7 +6,8 @@
 import './palette.js';
 import { $, HUES, me, nsKey, oSave, oUi, qs, SLUG, state, store, token, ui } from './state.js';
 import { ago, clock, fullTime, hue, knownPeople, nameHash, taskById, toast, when } from './helpers.js';
-import { connect, es, esOpen, load, recheck, setConn, setLoad, showGate, unavailable, unavailableStatus } from './data.js';
+import { connect, es, esOpen, load, onSignIn, paint, recheck, retrying, setConn, setLoad, showGate, unavailable,
+  unavailableStatus } from './data.js';
 import { agentsLine, outlook, setupInfo, teamCapacity } from './derived.js';
 import { render } from './render.js';
 import { nowSeen, setNowSeen, syncNeeds } from './needs.js';
@@ -42,8 +43,13 @@ async function start() {
   await load(); if (!unavailable && !$('app').hidden) connect();
   if (!started) {
     started = true;
-    // Keep timers fresh (agents coming online don't emit events), and notice a live stream that closed for good.
-    setInterval(() => { if (unavailable || $('app').hidden) return; if (es && es.readyState === EventSource.CLOSED) return recheck(); return esOpen ? load() : render(); }, 20000);
+    // Keep timers fresh (an agent going offline emits no event), and notice a live stream that closed for good (unless
+    // a retry is already waiting). A tab in the background catches up when it is shown.
+    setInterval(() => {
+      if (unavailable || $('app').hidden || document.hidden) return;
+      if (es && es.readyState === EventSource.CLOSED) return retrying() ? undefined : recheck();
+      return esOpen ? load() : paint();
+    }, 20000);
     setInterval(tickTime, 30000);
   }
 }
@@ -65,6 +71,7 @@ const onWindowRw = { ACT_GAP: [() => ACT_GAP, setActGap], load: [() => load, set
 for (const [k, get] of Object.entries(onWindow)) Object.defineProperty(window, k, { get, configurable: true });
 for (const [k, [get, set]] of Object.entries(onWindowRw)) Object.defineProperty(window, k, { get, set, configurable: true });
 
+onSignIn(start);
 start();
 
 export { start };

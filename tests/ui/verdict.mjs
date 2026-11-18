@@ -142,10 +142,10 @@ try {
   // Usage limit: alice is out.
   await human('/agents/alice', 'PATCH', { limited: true });
   await reload();
-  now = await txt('#now');
+  now = await txt('#nyou');
   check('review backlog of 4 is listed', /4 tasks waiting in Review/.test(now), now);
   check('an agent out of usage is not a to-do (Agents and its cards show it)', !/out of usage/.test(now), now);
-  await page.click('#now [data-go="review"]'); await sleep(400);
+  await page.click('#nyou [data-go="review"]'); await sleep(400);
   check('the review item jumps to the Review column', await page.evaluate(() => !!document.activeElement?.closest('#col-review')));
   await page.screenshot({ path: `${out}/signals-now.png`, clip: { x: 0, y: 0, width: 1440, height: 260 } });
 
