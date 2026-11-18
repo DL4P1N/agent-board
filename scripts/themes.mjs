@@ -4,8 +4,8 @@
 // soft fills, hovers, Review, mentions, toasts...) is derived from them by derive() below, the same way for every
 // theme. Dusk, Day, Night and Terminal keep their hand-tuned values (the office demo's four palettes).
 //
-// This script writes the generated blocks into the pages that carry theme tokens, between "themes:start" and
-// "themes:end" markers (CSS and JS), plus office/src/themes.ts:
+// This script writes the generated blocks into the pages that carry theme tokens (the board's are in
+// public/css/tokens.css), between "themes:start" and "themes:end" markers (CSS and JS), plus office/src/themes.ts:
 //   node scripts/themes.mjs           rewrite them
 //   node scripts/themes.mjs --check   exit 1 when a page is out of date, a base text colour is under 4.5:1
 //                                     or an accent is within 30 degrees of hue of its theme's warn or bad
@@ -187,9 +187,9 @@ function cssBlocks(tokensOf, ind = '  ') {
   }
   return out.join('\n');
 }
-const boardCss = () => cssBlocks((id) => pick(TOKENS[id], BOARD_KEYS))
+const boardCss = (ind = '  ') => cssBlocks((id) => pick(TOKENS[id], BOARD_KEYS), ind)
   // The header swatch for Auto: Light and Dark, split on the diagonal.
-  + `\n  .sw[data-tp="auto"] { background: linear-gradient(135deg, ${TOKENS[AUTO.light].panel} 50%, ${TOKENS[AUTO.dark].panel} 50%); }`;
+  + `\n${ind}.sw[data-tp="auto"] { background: linear-gradient(135deg, ${TOKENS[AUTO.light].panel} 50%, ${TOKENS[AUTO.dark].panel} 50%); }`;
 const boardsCss = () => cssBlocks((id) => pick(TOKENS[id], BOARDS_KEYS));
 const presenterCss = (ind) => cssBlocks(presenterTokens, ind);
 // office/present.html: the page colour before the stylesheet loads.
@@ -234,7 +234,7 @@ export const themeOf = (t: string | null | undefined): ThemeId | null => (t && O
 
 // [file, marker style, content]: CSS markers are /* themes:start */ ... /* themes:end */, JS ones // themes:start ...
 const TARGETS = [
-  ['public/index.html', 'css', () => boardCss()],
+  ['public/css/tokens.css', 'css', () => boardCss('')],
   ['public/index.html', 'js', () => themesJs('', 'window.THEMES')],
   ['public/boards.html', 'css', () => boardsCss()],
   ['public/boards.html', 'js', () => themesJs('  ', 'var THEMES')],
