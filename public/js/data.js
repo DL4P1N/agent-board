@@ -6,7 +6,8 @@ import { $, BASE, DEFAULT_SETTINGS, me, setMe, setState, setToken, SLUG, state, 
 import { esc, knownPeople, toast } from './helpers.js';
 import { render } from './render.js';
 import { selfMoves } from './topbar.js';
-import { checkOverwrites, older, start } from './boot.js';
+import { older } from './activity.js';
+import { checkOverwrites, start } from './boot.js';
 
 // A page that held a working token gets a 401: the host rotated the token or started a fresh board.
 const TOKEN_CHANGED = 'The board\'s link changed. Ask the host for the new link.';

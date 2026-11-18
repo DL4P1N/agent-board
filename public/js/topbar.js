@@ -6,7 +6,8 @@ import { $, ANYONE, state, store, ui } from './state.js';
 import { announce, esc, mentionsMe, nameTag, ownerOffline, patch, short, taskById, toast, when } from './helpers.js';
 import { agentLimited, dur, outlook, setupShown, timeNow } from './derived.js';
 import { render } from './render.js';
-import { blockedNote, ciPill, focusNow, goCard, goMention, goQuestion } from './boot.js';
+import { blockedNote, ciPill } from './tasks.js';
+import { focusNow, goCard, goMention, goQuestion } from './boot.js';
 
 let prevFrozen = null;
 function renderClock() {

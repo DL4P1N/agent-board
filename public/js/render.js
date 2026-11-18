@@ -8,9 +8,10 @@ import { openQuestions, setupInfo, unreadMentions } from './derived.js';
 import { renderNeeds, renderNow, renderQuestions } from './needs.js';
 import { checkNotify, renderBell, renderClock, renderTopbar } from './topbar.js';
 import { renderSetup } from './setup.js';
-import { announceActivity, boardView, dmUnreadCount, fadeAgents, markDmSeen, markMentionsSeen, office, officeState,
-  renderAgents, renderBoard, renderBoardEmpty, renderBoardNote, renderCi, renderDialogLive, renderDocks, renderFeed,
-  renderFilter, renderLocks, renderOffice } from './boot.js';
+import { fadeAgents, officeState, renderAgents } from './agents.js';
+import { renderBoard, renderBoardEmpty, renderBoardNote, renderCi, renderFilter } from './tasks.js';
+import { announceActivity, dmUnreadCount, markDmSeen, renderFeed, renderLocks } from './activity.js';
+import { boardView, markMentionsSeen, office, renderDialogLive, renderDocks, renderOffice } from './boot.js';
 
 // ---------- render ----------
 let prevQIds = null;
