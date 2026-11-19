@@ -83,6 +83,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | `tests/ui/hostile.mjs` | Hostile text: HTML, script tags, attribute breakouts and `javascript:` links in every field an agent controls (titles, descriptions, notes, branch, PR link, chat and channel, questions, activity, tool and model, subagent names, locks, limits, the goal). Nothing runs or renders as HTML in the plain board, the 3D office, the classic and the 3D presenter. The security headers (CSP). |
 | `tests/ui/a11y.mjs` | Accessibility and phone checks: live announcements, one Tab stop per column, 12px minimum text, no header badge row on a phone, the header's Chat button on a phone, 32px touch targets on a phone and on a desktop-sized touch screen (the touch pass: every other suite has a mouse). |
 | `tests/ui/boards.mjs` | The Boards page and a board served under `/b/<board>/` in a real browser. |
+| `tests/ui/snapshots.mjs` | Visual snapshots: seven whole screens of a fixed board (Board view at 1440×900 Dark and Light and at 1280×800, the Table view, the task dialog, the 3D view with the Tasks window docked, a phone) compared pixel by pixel with `tests/ui/snapshots/*.png`. See [Visual snapshots](#visual-snapshots). |
 
 ### Presenter and 3D office (browser)
 
@@ -92,6 +93,26 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | `tests/ui/recap.mjs` | The session recap page: linked from the help and Ctrl+K with the viewer token, every panel rendered with no console errors, hostile text as text, several themes, a phone, print. |
 | `tests/ui/office-present.mjs` | The 3D presenter view: live overlay and adapted office state, live updates, themes, reduced motion, the WebGL fallback. |
 | `tests/ui/office-toggle.mjs` | The live 3D office behind the board and the header's 3D switch: on by default with the task board docked (also when the switch turns it on), the top bar at the top between the side columns, the switch moving nothing (one Tasks panel, its columns in the same place in both views, one `--edge` and one `--gutter` in both views, both side columns ending at the same height, Setup with the panels' title bar), the top bar's popovers as glass, Tab through them, Shift+Tab back to the chip and closing when focus leaves them (and at once with reduced motion), focus rings inside scrolling lists, `/` with Activity folded, Columns and Table both Tab stops, the slide down to expanded and back (one board, no copy; Ctrl+K's expand and dock; expanded remembered across a reload), File locks taking its room from Activity, not Agents, in both views (on a board with a full team), Setup staying open across the switch, folded title bars (every panel folding and opening as one motion, the others in its column in step, no snap at the end, a click on the title opens it, instant with reduced motion), the switch's one-frame change (no fade), frame rates, no drawing while the tab is hidden, live state in the scene, answering from it, the agent card, 3D off (nothing loaded), the saved choice and `?view=`, reduced motion, phones and windows under 1280px wide (the plain board in two columns, the saved choice kept), no WebGL (on CI, where Chrome has SwiftShader, missing WebGL fails the suite instead of skipping the 3D checks), the header staying one row. Other suites open pages with 3D off (the test helper's default; `launchBrowser({ office: true })` keeps it on). |
+
+## Visual snapshots
+
+`tests/ui/snapshots.mjs` renders the same screens the same way every run: the board seeded by `seed()`, the server on a fixed clock (`tests/fixtures/fixed-clock.mjs`, loaded through `NODE_OPTIONS`) and the page's `Date` frozen a few minutes later, UTC and en-US, reduced motion, a fixed viewport at device scale 1, no text caret, and the 3D room's canvas hidden (WebGL drawing isn't pixel-stable; the glass panels over it are still checked). Two runs on one machine give identical pixels.
+
+The page itself compares the PNGs (no image library): it decodes the baseline and the new screen onto canvases and counts the pixels where a colour channel differs by more than 24; a screen fails when more than 0.2% of its pixels differ.
+
+Fonts and text rendering differ between systems, so the baselines are made on CI (Linux, the pinned Chrome in the workflow):
+
+- **On CI** (`CI` is set) every screen is compared with its baseline, and a missing baseline fails.
+- **Anywhere else** the screens are rendered and saved but not compared. `COMPARE_SNAPSHOTS=1` compares anyway (on Linux with the CI Chrome, or against baselines made on this machine).
+- `UPDATE_SNAPSHOTS=1` writes the screens as the new baselines; `SNAPSHOT_DIR=<dir>` keeps baselines in another folder (default `tests/ui/snapshots`).
+
+Every screen is saved as `tests/ui/shots/snapshots/<name>.png`, which is in CI's `ui-screenshots` artifact; a failed comparison also draws the screen faded with the differing pixels in red as `tests/ui/shots/snapshots/diff/<name>.png`.
+
+To update the baselines after a deliberate change to the page (or to add the first ones):
+
+1. Push. The snapshot checks fail on CI (or say a baseline is missing).
+2. Download the `ui-screenshots` artifact of that run (`gh run download <run id> -n ui-screenshots -D shots`), look at `snapshots/diff/` and the new screens, and copy `snapshots/*.png` (not `diff/`) to `tests/ui/snapshots/`.
+3. Commit them. Or, on Linux with the same Chrome: `UPDATE_SNAPSHOTS=1 BROWSER_PATH=/path/to/chrome node tests/ui/snapshots.mjs`.
 
 ## Writing tests
 
