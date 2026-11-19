@@ -3,8 +3,10 @@
 // Run all suites with: npm test
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { startBoard, finish, agent, rest } from './helpers.mjs';
+import { startBoard, finish, agent, rest, tempDir } from './helpers.mjs';
 import { agentTokenFor } from '../src/tokens.js';
+import { Board } from '../src/board.js';
+import { recap } from '../src/recap.js';
 
 const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' && !ok ? ' — ' + x : ''}`);
@@ -107,4 +109,28 @@ try {
 } catch (e) {
   check('recap suite ran', false, e.stack);
 }
+
+// The first claim is the first move to claimed / in progress, whoever made it: a task a human assigned (or moved
+// with an owner) counts from then, like one an agent claimed. (In process, on a board of its own.)
+const hb = new Board(tempDir());
+try {
+  const ids = ['assigned by a human', 'moved by a human', 'claimed by an agent'].map((title) => hb.createTask('dana', { title, size: 'S' }, { human: true }).id);
+  const marksB = [];
+  const mark = (min) => marksB.push([hb.latestEventId(), min]);
+  mark(0);
+  hb.updateTask('dana', ids[0], { assignee: 'carl' }, { human: true }); mark(10);
+  hb.updateTask('dana', ids[1], { status: 'in_progress', assignee: 'carl' }, { human: true }); mark(20);
+  hb.claimTask('eve', ids[2]); mark(30);
+  for (const id of ids) hb.updateTask('dana', id, { status: 'done' }, { human: true });
+  mark(60);
+  let prev = 0;
+  for (const [id, min] of marksB) { hb.db.prepare('UPDATE events SET ts = ? WHERE id > ? AND id <= ?').run(M(min), prev, id); prev = id; }
+  const xs = recap(hb, { since: M(-1) }).slowest;
+  const mins = Object.fromEntries(xs.map((s) => [s.id, s.ms / 60e3]));
+  check('recap slowest: human-assigned and human-moved tasks count from their first claim', mins[ids[0]] === 50 && mins[ids[1]] === 40 && mins[ids[2]] === 30, JSON.stringify(xs));
+  const stats = hb.computeTaskStats();
+  check('task stats (S minutes) count every first claim, not only claim_task', stats?.minutes?.S === 40, JSON.stringify(stats));
+} catch (e) {
+  check('first-claim checks ran', false, e.stack);
+} finally { hb.close(); }
 await finish(R, { board });

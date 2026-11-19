@@ -225,7 +225,9 @@ check('dee takes the planner role', !err(await dee('claim_role', { role: 'planne
 // ana's work while it's away: the seed task (held by its helper) — reviewed by dee? No: it's ana's, in progress.
 // A human assigns a task directly to cy.
 await must('cy finishes the OTel task', cy('update_task', { id: T.otel.id, status: 'review', note: 'https://github.com/team/conf-companion/pull/4' }));
-await must('a human assigns the SLO task to cy', human(`/tasks/${T.slo.id}`, 'PATCH', { assignee: 'cy-codex' }));
+// It waits on the OTel task (in review): assigning is a move to claimed, so that's refused unless forced ("Move anyway").
+check('assigning the SLO task while its dependency is in review is refused', /waits on #\d+, which isn't done yet/.test(err(await human(`/tasks/${T.slo.id}`, 'PATCH', { assignee: 'cy-codex' }))));
+await must('a human assigns the SLO task to cy anyway', human(`/tasks/${T.slo.id}`, 'PATCH', { assignee: 'cy-codex', force: true }));
 st = await state();
 check('assigned task is claimed for cy and cy is @mentioned', st.tasks.find((t) => t.id === T.slo.id)?.status === 'claimed' && st.events.some((e) => e.task_id === T.slo.id && (e.data?.mentions || []).includes('cy-codex')));
 await invariants('role hand-overs and assignment');

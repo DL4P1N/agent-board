@@ -8,7 +8,7 @@ import { agentTokenFor, viewerTokenFor, newBoardToken, writeTokenFile } from './
 import { boardToken } from './boards.js';
 import { tokenFrom, safeEq } from './http-util.js';
 
-const TOKEN_ROTATED = "The board's token was changed. Ask the host for the new link, then re-run the join command from the web board.";
+export const TOKEN_ROTATED = "The board's token was changed. Ask the host for the new link, then re-run the join command from the web board.";
 
 // envToken: the token from BOARD_TOKEN when it belongs to this board (then it can't be rotated), else null.
 export function createAuth({ dir, envToken }) {
@@ -55,6 +55,10 @@ export function createAuth({ dir, envToken }) {
   // Humans only, even for reading: the URL is a secret that lets anyone post to your channel.
   const humanToken = (req, res, next) => (req.role === 'human' ? next() : res.status(403).json({ error: 'This needs the board token (humans on the web board), not an agent token.' }));
 
+  // The request's token is still one of this board's tokens (not retired by a rotation since it came in):
+  // checked again after a long wait, so a wait opened with the old token never returns what came after.
+  const current = (req) => { const t = tokenFrom(req); return !!t && [TOKEN, AGENT_TOKEN, VIEW_TOKEN].some((x) => safeEq(t, x)); };
+
   // A new board token (the old ones are retired). Returns it; the caller announces it and closes live streams.
   function rotate() {
     const t = newBoardToken();
@@ -66,7 +70,7 @@ export function createAuth({ dir, envToken }) {
   }
 
   return {
-    auth, viewerLimits, humanOnly, humanToken, rotate, envToken,
+    auth, viewerLimits, humanOnly, humanToken, rotate, current, envToken,
     get token() { return TOKEN; },
     get agentToken() { return AGENT_TOKEN; },
     get viewerToken() { return VIEW_TOKEN; },

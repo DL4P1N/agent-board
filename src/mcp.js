@@ -3,6 +3,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { normName } from './board.js';
+import { TOKEN_ROTATED } from './auth.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +16,8 @@ const MAX_TEXT = 10000;
 const PLAYBOOK_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'playbook.md');
 const playbook = () => fs.readFileSync(PLAYBOOK_PATH, 'utf8');
 
-export function buildMcpServer(board, baseAgent) {
+// tokenCurrent(): the call's token is still valid (false once a rotation retired it).
+export function buildMcpServer(board, baseAgent, { tokenCurrent = () => true } = {}) {
   baseAgent = normName(baseAgent);
   const server = new McpServer(
     { name: 'agent-board', version: '1.0.0' },
@@ -177,6 +179,8 @@ export function buildMcpServer(board, baseAgent) {
         Math.min(timeout_s, MAX_WAIT_S) * 1000,
         extra?.signal
       );
+      // The token was rotated while this waited (that ends every wait): nothing that came after is for it.
+      if (!tokenCurrent()) throw new Error(TOKEN_ROTATED);
       return { events, cursor: events.length ? events.at(-1).id : cursor0, timed_out: events.length === 0 };
     })
   );

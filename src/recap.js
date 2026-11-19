@@ -86,7 +86,7 @@ export function recap(board, { since } = {}) {
     st.set(e.task_id, s);
     let status = s.status; let owner = s.owner;
     if (e.kind === 'task_deleted') status = null;
-    else if (e.kind === 'task_claimed') { status = 'claimed'; owner = normName(agentRootOf(e.author)); if (!s.firstClaim) s.firstClaim = e.ts; }
+    else if (e.kind === 'task_claimed') { status = 'claimed'; owner = normName(agentRootOf(e.author)); }
     else {
       try { status = JSON.parse(e.data || '{}').status || status; } catch {}
       const to = String(e.text).match(/assigned to @([\w.-]+)/);
@@ -95,6 +95,8 @@ export function recap(board, { since } = {}) {
       if (/review → in_progress/.test(e.text)) s.bounces++;
       if (/review → done/.test(e.text) && inSpan(e.ts)) merges.push(e.task_id);
     }
+    // The first claim: the first move to claimed / in progress, by a claim or a human assigning or moving it.
+    if (!s.firstClaim && ['claimed', 'in_progress'].includes(status)) s.firstClaim = e.ts;
     if (status !== s.status || owner !== s.owner) {
       spans.push({ task: e.task_id, status: s.status, owner: s.owner, a: s.at, b: e.ts, end: e });
       if (status === 'done' && s.status !== 'done') s.doneAt = e.ts;

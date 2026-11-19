@@ -5,9 +5,9 @@ import fs from 'node:fs';
 import http from 'node:http';
 import zlib from 'node:zlib';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
-import { startBoard, finish, agent, ROOT } from './helpers.mjs';
+import { startBoard, finish, agent, ROOT, tempDir, freePort, killTree, exited } from './helpers.mjs';
 import { agentTokenFor, newBoardToken } from '../src/tokens.js';
 import { internalError } from '../src/http-util.js';
 
@@ -150,6 +150,22 @@ check('an unknown backup name is refused', rs.status === 1 && /No backup called/
   rs = restore(junk);
   check('a non-SQLite file is refused and the board is untouched', rs.status === 1 && /isn't a SQLite database/.test(rs.stderr) && fs.statSync(path.join(board.dataDir, 'board.db')).size === before, rs.stdout + rs.stderr);
   check('no half-done restore files are left behind', !fs.readdirSync(board.dataDir).some((f) => /restoring-/.test(f)));
+  // A boards.json entry whose folder isn't boards/<slug> (hand-edited "../../x"): refused, like the server does.
+  const d = tempDir('restore-dir-');
+  fs.writeFileSync(path.join(d, 'boards.json'), JSON.stringify({ default: 'main', boards: [{ slug: 'main', name: 'Main', dir: '.', status: 'live' }, { slug: 'away', name: 'Away', dir: '../../elsewhere', status: 'live' }] }));
+  const bad = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'restore.mjs'), path.join(bdir, latestBackup), '--board', 'away'], { encoding: 'utf8', env: { ...process.env, BOARD_DATA: d, PORT: String(board.port) } });
+  // An explicit backup file whose latest rows are still in its write-ahead log: the restore has them too.
+  const w = tempDir('restore-wal-');
+  const live = new DatabaseSync(path.join(w, 'src.db'));
+  live.exec('PRAGMA journal_mode = WAL; PRAGMA wal_autocheckpoint = 0; CREATE TABLE t (x); INSERT INTO t VALUES (1), (2), (3);');
+  fs.copyFileSync(path.join(w, 'src.db'), path.join(w, 'wal-backup.db')); fs.copyFileSync(path.join(w, 'src.db-wal'), path.join(w, 'wal-backup.db-wal'));
+  live.close();
+  const wd = tempDir('restore-wal-data-');
+  const rw = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'restore.mjs'), path.join(w, 'wal-backup.db')], { encoding: 'utf8', env: { ...process.env, BOARD_DATA: wd, PORT: String(board.port) } });
+  let walRows = -1;
+  try { const x = new DatabaseSync(path.join(wd, 'board.db'), { readOnly: true }); walRows = x.prepare('SELECT COUNT(*) AS n FROM t').get().n; x.close(); } catch {}
+  check('restoring a backup with rows still in its write-ahead log keeps them', rw.status === 0 && walRows === 3, `${walRows} ${rw.stdout}${rw.stderr}`);
+  check('restore refuses a board whose folder is outside boards/<slug>', bad.status === 1 && /can't be restored: its folder "\.\.\/\.\.\/elsewhere"/.test(bad.stderr) && !fs.existsSync(path.resolve(d, '../../elsewhere')), bad.stdout + bad.stderr);
 }
 await board.relaunch();
 const after = await call('/state');
@@ -241,6 +257,25 @@ check('everyone is told to re-run join', st2.body.events.some((e) => /token was 
     rq.on('error', () => resolve(false));
   });
   check('rotating the token closes open live streams', streamEnded);
+  // Rotating also ends pending long polls opened with the old token (the Stop hook's REST wait, an agent's
+  // wait_for_events): they answer "the token was changed" and never get what is posted after the rotation.
+  {
+    const cur = fs.readFileSync(path.join(b2.dataDir, 'token'), 'utf8').trim();
+    const AGo = agentTokenFor(cur);
+    const bob = await agent({ base: b2.base, token: AGo }, 'bob-rot');
+    await bob('board_status');
+    const cursor = (await c2('/cursor', 'GET', undefined, cur)).body.cursor;
+    const t0 = Date.now();
+    const restWait = fetch(`${b2.base}/api/events?since=${cursor}&exclude=bob-rot&wait=20`, { headers: { Authorization: `Bearer ${AGo}`, 'X-Agent': 'bob-rot' } })
+      .then(async (x) => ({ status: x.status, body: await x.json().catch(() => null), ms: Date.now() - t0 }));
+    const mcpWait = bob('wait_for_events', { since: cursor, timeout_s: 20, channel: 'direct' }).then((x) => ({ x, ms: Date.now() - t0 }));
+    await sleep(600); // both are waiting
+    const rot = await c2('/token/rotate', 'POST', undefined, cur);
+    const dm = await c2('/messages', 'POST', { text: 'posted after the rotation', to: 'bob-rot' }, rot.body?.token);
+    const [rw, mw] = await Promise.all([restWait, mcpWait]);
+    check('rotating ends a pending REST long poll of the old token: 401 token_rotated, not what came after', rot.status === 200 && dm.status === 200 && rw.status === 401 && rw.body?.reason === 'token_rotated' && rw.ms < 10e3 && !JSON.stringify(rw.body).includes('after the rotation'), JSON.stringify(rw).slice(0, 300));
+    check('…and a pending MCP wait_for_events: "the token was changed", not the later direct message', typeof mw.x === 'string' && /token was changed/.test(mw.x) && mw.ms < 10e3, JSON.stringify(mw).slice(0, 300));
+  }
 }
 // ================= tokens, compression and caching =================
 // An empty token file gets a new token: an empty one used to let in any request that sent no token.
@@ -308,6 +343,27 @@ check('a malformed request: 400 without internal details', r.status === 400 && /
   fs.writeFileSync(pf, JSON.stringify({ pid: process.pid, port: b2.port + 1, started: new Date(Date.now() - 5 * 60e3).toISOString() }));
   await b2.relaunch();
   check('a stale board.pid whose pid now belongs to another program is replaced', JSON.parse(fs.readFileSync(pf, 'utf8')).pid === b2.child.pid);
+}
+// Two servers started at the same moment on one data folder: exactly one gets it (board.pid is created only
+// when there is none), the other refuses and exits.
+{
+  const data = tempDir('race-');
+  const up = (p) => fetch(`http://localhost:${p}/health`, { signal: AbortSignal.timeout(1500) }).then((x) => x.ok).catch(() => false);
+  let good = 0; const seen = [];
+  for (let round = 0; round < 3; round++) {
+    fs.rmSync(path.join(data, 'board.pid'), { force: true });
+    const ports = [await freePort(), await freePort()];
+    const kids = ports.map((p) => spawn(process.execPath, [path.join(ROOT, 'src', 'server.js')], { env: { ...process.env, PORT: String(p), BOARD_DATA: data, BOARD_NO_JOIN: '1', BOARD_TOKEN: 'racetok', BOARD_BACKUP_MINUTES: '0' }, stdio: 'ignore' }));
+    const codes = [null, null];
+    kids.forEach((k, i) => k.on('exit', (c) => { codes[i] = c; }));
+    await until(async () => codes.some((c) => c !== null) && (await Promise.all(ports.map(up))).some(Boolean), 20e3);
+    await sleep(500);
+    const ups = await Promise.all(ports.map(up));
+    seen.push(`${ups.join('/')} exit ${codes.join('/')}`);
+    if (ups.filter(Boolean).length === 1 && codes.filter((c) => c === 1).length === 1) good++;
+    for (const k of kids) { try { k.kill(); } catch {} if (!(await exited(k, 3000))) killTree(k); }
+  }
+  check('two servers started at once on one data folder: exactly one stays up, every time', good === 3, seen.join('; '));
 }
 await b2.stop();
 // A clean stop removes board.pid. On Windows the test's stop kills the process outright (no exit

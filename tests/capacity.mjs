@@ -99,6 +99,26 @@ check('file inside a locked folder conflicts', c1.ok === false);
 await max('lock_files', { paths: ['package.json'] });
 check('/Package.json conflicts with package.json', (await pro('lock_files', { paths: ['/Package.json'] })).ok === false);
 
+// ---- a task in review holds no slot, so taking it back needs a free one (like unblocking) ----
+{
+  const eve = await agent('eve', { plan: 'Claude Pro', slots: 1 });
+  const r1 = await human('/tasks', 'POST', { title: 'review then back', size: 'S' });
+  const r2 = await human('/tasks', 'POST', { title: 'next while in review', size: 'S' });
+  await eve('claim_task', { id: r1.id }); await eve('update_task', { id: r1.id, status: 'in_progress' });
+  await eve('update_task', { id: r1.id, status: 'review' });
+  const c2 = await eve('claim_task', { id: r2.id });
+  check('with its task in review, a 1-slot agent can claim another', c2.assignee === 'eve', err(c2));
+  const back = await eve('update_task', { id: r1.id, status: 'in_progress' });
+  const active = (await human('/state')).tasks.filter((t) => t.assignee === 'eve' && ['claimed', 'in_progress'].includes(t.status)).map((t) => t.id);
+  check('…but can\'t take the reviewed one back to in progress past its slots', /finish or release one before taking back/.test(err(back)) && active.join() === String(r2.id), `${err(back)} ${active}`);
+  // The merger sending it back for fixes is not the owner taking a slot.
+  await human('/settings', 'PUT', { integrator: 'ana' });
+  const sent = await max('update_task', { id: r1.id, status: 'in_progress', note: 'tests fail' });
+  check('the merger can still send it back for fixes', sent.status === 'in_progress', err(sent));
+  await human('/settings', 'PUT', { integrator: '' });
+  for (const t of [r1, r2]) await human(`/tasks/${t.id}`, 'DELETE');
+}
+
 // ---- freeze: priority-1 still claimable ----
 const p1 = await max('create_task', { title: 'fix crash', priority: 1, size: 'S' });
 const feat = await max('create_task', { title: 'new feature', priority: 2, size: 'S' });

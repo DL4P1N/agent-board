@@ -140,6 +140,20 @@ await ben('post', { text: 'note from ben' });
 h = await runHook([]);
 check('hook: its own subagents\' posts don\'t wake it, a teammate\'s does', /note from ben/.test(h.out) && !/note from my own subagent/.test(h.out), h.out);
 check('hook: entries unused for 30 days are dropped, newer ones kept', !hookState['0123456789abcdef|old-agent'] && !!hookState['0123456789abcdef|recent-agent'] && !!hookState[anaKey], Object.keys(hookState).join(','));
+// More than the last 40 events at once: a mention, a direct message and an answer to its question are never
+// left out (the cursor moves past all of them); the rest says how many earlier ones aren't shown.
+{
+  await runHook([]); // the cursor is now at the newest event
+  const q = await ana('ask_human', { question: 'Hook test: which port?' });
+  await human('/messages', 'POST', { text: '@ana EARLY MENTION, look at this' });
+  await human('/messages', 'POST', { text: 'EARLY DIRECT message for ana', to: 'ana' });
+  await human(`/questions/${q.question_id}/answer`, 'POST', { answer: 'EARLY ANSWER 8080' });
+  for (let i = 0; i < 50; i++) await ben('post', { text: `chatter ${i}` });
+  h = await runHook([]);
+  const shownChatter = (h.out.match(/chatter \d+/g) || []).length;
+  check('hook: early mentions, direct messages and answers are shown even past the last 40 events', ['EARLY MENTION', 'EARLY DIRECT', 'EARLY ANSWER'].every((s) => h.out.includes(s)) && shownChatter === 37 && /chatter 49/.test(h.out) && !/chatter 12\b/.test(h.out), h.out.slice(0, 300));
+  check('hook: …and says how many earlier events it left out', /\(13 earlier events not shown\)/.test(h.out), h.out.slice(0, 300));
+}
 
 // ================= 2b. hook: only Claude Code's own notice, only as the last assistant entry =================
 // Review finding: ordinary work text used to match ("rate limit", "resets 3 …", "usage limit banner").

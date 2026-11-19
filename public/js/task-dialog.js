@@ -310,7 +310,9 @@ async function saveTask() {
       if (priority !== o.priority) body.priority = priority;
       if (size !== o.size) body.size = size;
       if (reserved_for !== o.reserved_for) body.reserved_for = reserved_for || '';
-      const assignee = $('td-asg').value || null; const to = $('td-status').value;
+      const assignee = $('td-asg').value || null; let to = $('td-status').value;
+      // Assigning an open task claims it for that agent: that's a move to Claimed (with "Move anyway" below).
+      if (to === 'open' && o.status === 'open' && assignee && assignee !== o.assignee && !approve) to = 'claimed';
       // A status change goes through moveTask, like Move… and drag: it asks who a Claimed / In progress
       // task is for (unless Assign to is set here) and offers "Move anyway" past unfinished dependencies.
       const move = to !== o.status && !approve;

@@ -530,6 +530,37 @@ mvr = await http(`/tasks/${mv2.id}`, 'PATCH', { status: 'claimed', force: true }
 check('force: true moves it anyway', mvr.status === 200 && mvr.body.status === 'claimed' && !mvr.body.assignee, JSON.stringify(mvr.body));
 mvr = await http(`/tasks/${mv2.id}`, 'PATCH', { status: 'open' });
 check('moving back to open needs no owner', mvr.status === 200 && mvr.body.status === 'open', JSON.stringify(mvr.body));
+// Assigning an open task claims it, so it goes through the same checks as a move to claimed.
+mvr = await http(`/tasks/${mv2.id}`, 'PATCH', { assignee: 'k2' });
+check('assigning (only) an open task whose dependency isn\'t done is refused like the move', mvr.status === 400 && new RegExp(`waits on #${mv1.id}, which isn't done yet`).test(err(mvr.body)) && (await state()).tasks.find((t) => t.id === mv2.id)?.status === 'open', JSON.stringify(mvr.body));
+mvr = await http(`/tasks/${mv2.id}`, 'PATCH', { assignee: 'k2', force: true });
+check('…and force: true assigns it anyway (claimed, with a branch)', mvr.status === 200 && mvr.body.status === 'claimed' && mvr.body.assignee === 'k2' && /^task\//.test(mvr.body.branch || ''), JSON.stringify(mvr.body));
+// Taking the owner off an active task puts it back to open and frees its locks: no "claimed by nobody".
+await k2('lock_files', { paths: ['src/unassign-me.js'], task_id: mv2.id });
+mvr = await http(`/tasks/${mv2.id}`, 'PATCH', { assignee: '' });
+check('clearing the assignee of a claimed task moves it to open and frees its locks', mvr.status === 200 && mvr.body.status === 'open' && !mvr.body.assignee && !(await state()).locks.some((l) => l.path === 'src/unassign-me.js'), JSON.stringify(mvr.body));
+
+// Settings are saved whole or not at all: a bad deadline next to a good goal saves neither.
+const goalBefore = (await state()).settings.goal;
+const nSettings = (await state()).events.filter((e) => e.kind === 'settings').length;
+mvr = await http('/settings', 'PUT', { goal: 'A goal that must not be saved', deadline: 'not a date' });
+st = await state();
+check('PUT /settings with one invalid field saves nothing (no partial goal, no settings event)', mvr.status === 400 && st.settings.goal === goalBefore && st.events.filter((e) => e.kind === 'settings').length === nSettings, `${mvr.status} ${st.settings.goal}`);
+
+// list_tasks' assignee filter is literal: "a_b" doesn't match "axb" (LIKE wildcards are escaped).
+const lk1 = await newTask('for axb'); await http(`/tasks/${lk1.id}`, 'PATCH', { assignee: 'axb/helper', force: true });
+const lk2 = await newTask('for a_b'); await http(`/tasks/${lk2.id}`, 'PATCH', { assignee: 'a_b', force: true });
+const byAb = await k1('list_tasks', { assignee: 'a_b' });
+check('the assignee filter matches the name literally (a_b, not axb/helper)', Array.isArray(byAb) && byAb.map((t) => t.id).join() === String(lk2.id), JSON.stringify(byAb).slice(0, 200));
+for (const t of [lk1, lk2]) await http(`/tasks/${t.id}`, 'PATCH', { status: 'open' });
+
+// Lock paths are one spelling: src/./x and src/sub/../x are src/x; a path outside the repo is refused.
+const lp = await k1('lock_files', { paths: ['src/norm/config.js'] });
+const lpDot = await k2('lock_files', { paths: ['src/norm/./config.js'] });
+const lpUp = await k2('lock_files', { paths: ['src/norm/sub/../config.js'] });
+check('lock paths are normalised (. and .. parts): the same file conflicts', lp.ok === true && lpDot.ok === false && lpUp.ok === false && lpUp.conflicts?.[0]?.path === 'src/norm/config.js', JSON.stringify([lpDot, lpUp]).slice(0, 300));
+check('a lock path outside the repo is refused', /outside it/.test(err(await k2('lock_files', { paths: ['../other-repo/x.js'] }))) && /outside it/.test(err(await k2('lock_files', { paths: ['src/../../x.js'] }))));
+await k1('unlock_files', { paths: ['src/norm/config.js'] });
 
 // a blocked task doesn't hold a slot
 const k7 = await codex('k7');

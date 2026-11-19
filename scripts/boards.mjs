@@ -15,6 +15,7 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { Registry, boardToken, checkSlug, slugify } from '../src/boards.js';
+import { writeTokenFile } from '../src/tokens.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'));
@@ -114,7 +115,7 @@ if (cmd === 'list') {
   // Two boards must never share a token: one board's links and agents could act on the other.
   const old = fs.existsSync(srcToken) ? fs.readFileSync(srcToken, 'utf8').trim() : '';
   const twin = old && usedTokens(b.slug).find((x) => x.token === old);
-  if (old && !twin) fs.writeFileSync(path.join(reg.dirOf(b), 'token'), old);
+  if (old && !twin) writeTokenFile(path.join(reg.dirOf(b), 'token'), old); // readable by this user only
   else boardToken(reg.dirOf(b));
   ok(`Imported ${src} as "${b.name}" (${b.slug}). It's served at ${urlFor(b)} when the server starts.`);
   if (twin) console.log(`  The imported board gets a new token; the old one stays with "${twin.slug}".`);

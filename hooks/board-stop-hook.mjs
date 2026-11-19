@@ -103,13 +103,20 @@ async function main() {
   // A direct message from a human counts as a mention (the board only sends this agent its own threads).
   const direct = (e) => e.channel === 'direct' && e.data?.dm?.from !== 'agent';
   const mentionsMe = (e) => direct(e) || (e.data?.mentions || []).map((m) => String(m).toLowerCase()).some((m) => m === agent || m.startsWith(agent + '/') || m === 'all' || m === 'everyone');
-  const lines = relevant.slice(-40).map((e) => {
+  // The last 40 events, plus every one for this agent (mentions, direct messages, answers to its questions)
+  // however early: the cursor moves past all of them, so one left out would never be seen.
+  const others = relevant.filter((e) => !mentionsMe(e));
+  const room = Math.max(0, 40 - (relevant.length - others.length));
+  const shownOthers = new Set(others.slice(others.length - Math.min(room, others.length)));
+  const hidden = others.length - shownOthers.size;
+  const lines = relevant.filter((e) => mentionsMe(e) || shownOthers.has(e)).map((e) => {
     const tag = direct(e) && e.data?.dm?.from === 'human' ? ` [MENTIONS YOU] (direct message: reply with post(to: "${e.author}"))` : mentionsMe(e) ? ' [MENTIONS YOU]' : '';
     const task = e.task_id ? ` #${e.task_id}` : '';
     return `- (${e.id}) [${e.channel}/${e.kind}${task}] ${e.author}: ${e.text}${tag}`;
   });
   const reason =
     `New activity on the team board since you last checked (cursor now ${cursor}):\n` +
+    (hidden ? `(${hidden} earlier event${hidden === 1 ? '' : 's'} not shown)\n` : '') +
     lines.join('\n') +
     `\n\nReact if any of this affects you (mentions, direct messages, answers to your questions, tasks you depend on, review requests). ` +
     `If nothing needs action, continue your current plan or pick up the next open task. Use the board MCP tools to respond.`;

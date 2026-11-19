@@ -76,10 +76,11 @@ function agentChangeRefusal(c, changingStatus) {
   if (task.status === 'proposed' && changingStatus) return `task #${id} is a proposal: the planner approves or rejects it with decide_proposal.`;
   // The merger may move a task out of review: done, back to in_progress for fixes, or blocked (can't test it).
   const merger = task.status === 'review' && ['done', 'in_progress', 'blocked'].includes(status) && canMerge;
-  // Blocked and done tasks don't hold a slot, so unblocking or reopening one has to fit within the slots again.
-  if (owner && ['blocked', 'done'].includes(task.status) && ['claimed', 'in_progress'].includes(status)) {
+  // Blocked, review and done tasks don't hold a slot, so unblocking, reopening or taking one back from review
+  // has to fit within the slots again. (The merger sending it back for fixes isn't the owner taking a slot.)
+  if (owner && !merger && ['blocked', 'review', 'done'].includes(task.status) && ['claimed', 'in_progress'].includes(status)) {
     const cap = c.capacity();
-    if (cap.active >= cap.slots) return `You hold ${cap.active} of ${cap.slots} task(s) at once: finish or release one before ${task.status === 'done' ? 'reopening' : 'unblocking'} #${id}.`;
+    if (cap.active >= cap.slots) return `You hold ${cap.active} of ${cap.slots} task(s) at once: finish or release one before ${task.status === 'done' ? 'reopening' : task.status === 'review' ? 'taking back' : 'unblocking'} #${id}.`;
   }
   // Done means merged: only whoever merges moves a task to done, and only from review. Without anyone to
   // review it (no integrator yet, or no other agent online) the owner may mark its own work done.

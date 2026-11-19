@@ -475,12 +475,18 @@ export class Board {
     }
   }
 
+  // Settle every pending long-poll now (with what it may read so far; [] once closed). After a token
+  // rotation, so waits opened with the old token end (their handlers then answer "the token was changed").
+  endWaits() {
+    for (const finish of [...this.waiters]) { try { finish(); } catch {} }
+    this.waiters.clear();
+  }
+
   // Stop for good (the board was archived): settle every pending long-poll with [], then close the file.
   close() {
     if (this.closed) return;
     this.closed = true;
-    for (const finish of [...this.waiters]) { try { finish(); } catch {} }
-    this.waiters.clear();
+    this.endWaits();
     try { this.db.close(); } catch {}
   }
 
@@ -507,7 +513,7 @@ export class Board {
       sql += ` AND status IN (${list.map(() => '?').join(',')})`;
       args.push(...list);
     }
-    if (assignee) { assignee = normName(assignee); sql += ' AND (assignee = ? OR assignee LIKE ?)'; args.push(assignee, assignee + '/%'); }
+    if (assignee) { assignee = normName(assignee); sql += " AND (assignee = ? OR assignee LIKE ? ESCAPE '\\')"; args.push(assignee, likeEscape(assignee) + '/%'); }
     sql += ' ORDER BY CASE status WHEN \'done\' THEN 1 ELSE 0 END, priority ASC, id ASC';
     return this.db.prepare(sql).all(...args).map((r) => this.withPr(rowToTask(r)));
   }
@@ -532,14 +538,17 @@ export class Board {
     if (reserve && !human && !isPlanner) throw new Error('Only the planner and humans can reserve tasks for an agent.');
     const proposed = !human && !!s.planner && !isPlanner && this.isAvailable(s.planner);
     const now = Date.now();
-    const r = this.db
-      .prepare('INSERT INTO tasks (title, description, status, priority, depends_on, size, reserved_for, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
-      .run(title, description, proposed ? 'proposed' : 'open', priority, JSON.stringify(deps), size, reserve, author, now, now);
-    const task = this.getTask(Number(r.lastInsertRowid));
-    this.emit(proposed
-      ? { author, kind: 'task_created', channel: 'tasks', task_id: task.id, text: `proposed #${task.id} ${task.title} — @${s.planner} please approve or reject it (decide_proposal)`, data: { status: 'proposed' } }
-      : { author, kind: 'task_created', channel: 'tasks', task_id: task.id, text: `#${task.id} ${task.title}${reserve ? ` (reserved for @${reserve})` : ''}` });
-    return task;
+    // The row and its event as one transaction (like every task change).
+    return this.tx(() => {
+      const r = this.db
+        .prepare('INSERT INTO tasks (title, description, status, priority, depends_on, size, reserved_for, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+        .run(title, description, proposed ? 'proposed' : 'open', priority, JSON.stringify(deps), size, reserve, author, now, now);
+      const task = this.getTask(Number(r.lastInsertRowid));
+      this.emit(proposed
+        ? { author, kind: 'task_created', channel: 'tasks', task_id: task.id, text: `proposed #${task.id} ${task.title} — @${s.planner} please approve or reject it (decide_proposal)`, data: { status: 'proposed' } }
+        : { author, kind: 'task_created', channel: 'tasks', task_id: task.id, text: `#${task.id} ${task.title}${reserve ? ` (reserved for @${reserve})` : ''}` });
+      return task;
+    });
   }
 
   // The planner (or a human) approves a proposed task (it becomes open; edits allowed) or rejects it (deleted).
@@ -551,8 +560,10 @@ export class Board {
     if (!human && !(s.planner && sameTeam(author, s.planner))) throw new Error(`Only the planner (${s.planner || 'nobody yet'}) or a human can decide on proposed tasks.`);
     note = String(note || '').trim();
     if (!approve) {
-      this.removeTask(id);
-      this.emit({ author, kind: 'task_deleted', channel: 'tasks', task_id: id, text: `rejected proposal #${id} ${task.title}${note ? `: ${note}` : ''} @${agentRootOf(task.created_by)}` });
+      this.tx(() => {
+        this.removeTask(id);
+        this.emit({ author, kind: 'task_deleted', channel: 'tasks', task_id: id, text: `rejected proposal #${id} ${task.title}${note ? `: ${note}` : ''} @${agentRootOf(task.created_by)}` });
+      });
       return { rejected: id };
     }
     return this.updateTask(author, id, { status: 'open', priority, size, title, description, reserved_for, note: `approved${note ? `: ${note}` : ''} @${agentRootOf(task.created_by)}` }, { human: true });
@@ -583,13 +594,15 @@ export class Board {
     });
     if (refusal) throw new Error(refusal);
     const branch = task.branch || `task/${id}-${slug(task.title)}`;
-    const r = this.db
-      .prepare("UPDATE tasks SET status='claimed', assignee=?, branch=?, updated_at=? WHERE id=? AND status='open'")
-      .run(author, branch, Date.now(), id);
-    if (r.changes === 0) {
-      throw new Error(`task #${id} is not open (status=${task.status}, assignee=${task.assignee || 'none'}). Pick another task.`);
-    }
-    this.emit({ author, kind: 'task_claimed', channel: 'tasks', task_id: id, text: `claimed #${id} ${task.title} → branch ${branch}` });
+    this.tx(() => {
+      const r = this.db
+        .prepare("UPDATE tasks SET status='claimed', assignee=?, branch=?, updated_at=? WHERE id=? AND status='open'")
+        .run(author, branch, Date.now(), id);
+      if (r.changes === 0) {
+        throw new Error(`task #${id} is not open (status=${task.status}, assignee=${task.assignee || 'none'}). Pick another task.`);
+      }
+      this.emit({ author, kind: 'task_claimed', channel: 'tasks', task_id: id, text: `claimed #${id} ${task.title} → branch ${branch}` });
+    });
     // Most review rounds at Kubecon were CI or the review bot catching what a local run would have.
     return { ...this.getTask(id), before_review: "Before moving it to review: run the repo's checks locally (lint, typecheck, tests, build — see package.json scripts and .github/workflows) and fix what fails, so it passes review the first time." };
   }
@@ -602,8 +615,14 @@ export class Board {
     const s = this.getSettings();
     // Whoever merges it: the integrator, or (integrator = whoever is free) the agent that took the review.
     const canMerge = (!!s.integrator && s.integrator !== ANYONE && sameTeam(author, s.integrator)) || (!!task.reviewer && sameTeam(author, task.reviewer));
+    // A human changing only the owner moves the task too: handing an open task to an agent claims it for them
+    // (with the same checks as a move to claimed, force included), and taking the owner off an active task
+    // puts it back to open (its locks freed).
+    const moveTo = status ?? (!human || assignee === undefined ? undefined
+      : assignee ? (task.status === 'open' ? 'claimed' : undefined)
+        : (['claimed', 'in_progress'].includes(task.status) ? 'open' : undefined));
     const refusal = updateRefusal({
-      id, task, status, branch, assignee, reserved_for, pr_url, force, human, owner, canMerge,
+      id, task, status: moveTo, branch, assignee, reserved_for, pr_url, force, human, owner, canMerge,
       isPlanner: !!s.planner && sameTeam(author, s.planner), integrator: s.integrator, anyone: s.integrator === ANYONE,
       capacity: () => this.capacity(author),
       waitingOn: () => task.depends_on.filter((d) => { const x = this.getTask(d); return x && x.status !== 'done'; }),
@@ -617,7 +636,7 @@ export class Board {
     const pr = pr_url !== undefined ? String(pr_url || '').trim().slice(0, 300) || null : fromNote || task.pr_url;
     if (pr && !/^https?:\/\//i.test(pr)) throw new Error('pr_url must be an http(s) link to the pull request');
     const next = {
-      status: status ?? task.status,
+      status: moveTo ?? task.status,
       branch: branch ?? task.branch,
       title: title !== undefined ? String(title).trim().slice(0, 200) || task.title : task.title,
       description: description !== undefined ? String(description).slice(0, 10000) : task.description,
@@ -627,8 +646,7 @@ export class Board {
       reserved_for: reserved_for !== undefined ? normName(reserved_for).split('/')[0] || null : task.reserved_for,
     };
     if (assignee !== undefined) next.assignee = assignee ? normName(assignee) : null;
-    // A human hands an open task to an agent: it's claimed for it (with a branch), and the agent is told.
-    if (human && assignee && status === undefined && task.status === 'open') { next.status = 'claimed'; next.branch = task.branch || `task/${id}-${slug(task.title)}`; }
+    // A human hands a task to an agent: it gets a branch, and the agent is told (the event's @mention).
     if (human && assignee && ['claimed', 'in_progress'].includes(next.status) && !next.branch) next.branch = `task/${id}-${slug(task.title)}`;
     if (next.status === 'open' || next.status === 'proposed') next.assignee = null;
     // The review claim ends when the task leaves review.
@@ -688,18 +706,22 @@ export class Board {
     if (task.assignee && sameTeam(author, task.assignee) && others.length) throw new Error(`#${id} is your own work: someone else should review it (${others.join(', ')} are online).`);
     const mine = this.listTasks({ status: 'review' }).filter((t) => t.id !== id && t.reviewer && sameTeam(author, t.reviewer));
     if (mine.length) throw new Error(`Finish your review of #${mine[0].id} first (merge it, or send it back with update_task status in_progress).`);
-    const r = this.db.prepare("UPDATE tasks SET reviewer = ?, updated_at = ? WHERE id = ? AND status = 'review' AND (reviewer IS NULL OR reviewer = ?)").run(agentRootOf(author), Date.now(), id, task.reviewer);
-    if (!r.changes) throw new Error(`#${id} was just taken by someone else. Pick another.`);
-    this.emit({ author, kind: 'task_updated', channel: 'tasks', task_id: id, text: `#${id} reviewing to merge${task.pr_url ? ` (${task.pr_url})` : ''}`, data: { status: 'review' } });
-    return this.getTask(id);
+    return this.tx(() => {
+      const r = this.db.prepare("UPDATE tasks SET reviewer = ?, updated_at = ? WHERE id = ? AND status = 'review' AND (reviewer IS NULL OR reviewer = ?)").run(agentRootOf(author), Date.now(), id, task.reviewer);
+      if (!r.changes) throw new Error(`#${id} was just taken by someone else. Pick another.`);
+      this.emit({ author, kind: 'task_updated', channel: 'tasks', task_id: id, text: `#${id} reviewing to merge${task.pr_url ? ` (${task.pr_url})` : ''}`, data: { status: 'review' } });
+      return this.getTask(id);
+    });
   }
 
   // Humans only (web board): remove a task, its locks, and references to it from other tasks' depends_on.
   deleteTask(author, id) {
     const task = this.getTask(id);
     if (!task) throw new Error(`task #${id} not found`);
-    this.removeTask(id);
-    this.emit({ author, kind: 'task_deleted', channel: 'tasks', task_id: id, text: `deleted #${id} ${task.title}${task.assignee ? ` (was ${task.status}, ${task.assignee})` : ''}` });
+    this.tx(() => {
+      this.removeTask(id);
+      this.emit({ author, kind: 'task_deleted', channel: 'tasks', task_id: id, text: `deleted #${id} ${task.title}${task.assignee ? ` (was ${task.status}, ${task.assignee})` : ''}` });
+    });
     return { deleted: id };
   }
 
@@ -813,9 +835,10 @@ export class Board {
   }
 
   // human=true: web UI (may overwrite anything). Agents may only fill an empty goal.
+  // The whole patch is checked first, then saved with its event in one transaction: a bad field saves nothing.
   setSettings(author, patch, { human = false } = {}) {
     const cur = this.getSettings();
-    const changes = [];
+    const writes = [];
     for (const key of SETTING_KEYS) {
       if (patch[key] === undefined) continue;
       let val = String(patch[key] ?? '').trim();
@@ -834,10 +857,15 @@ export class Board {
       if (key === 'require_approval' || key === 'plan_approved') val = /^(1|true|yes|on)$/i.test(val) ? '1' : '';
       if (val === cur[key]) continue;
       if (!human && key === 'goal' && cur.goal) throw new Error(`The goal is already set: "${cur.goal}". Only humans can change it (on the web board).`);
-      this.db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, val);
-      changes.push(describeSetting(key, val, cur));
+      writes.push([key, val]);
     }
-    if (changes.length) this.emit({ author, kind: 'settings', channel: 'general', text: changes.join('; ') });
+    if (writes.length) {
+      this.tx(() => {
+        const put = this.db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+        for (const [key, val] of writes) put.run(key, val);
+        this.emit({ author, kind: 'settings', channel: 'general', text: writes.map(([key, val]) => describeSetting(key, val, cur)).join('; ') });
+      });
+    }
     const now = this.getSettings();
     if (now.planner && now.planner !== cur.planner) this.handPlannerThread(now.planner);
     return now;
@@ -1039,7 +1067,7 @@ export class Board {
     if (!row || row.via !== 'agent') return false;
     if (Date.now() - row.seen_at < NAME_LEASE_MS) return true;
     return !!this.db.prepare("SELECT 1 FROM tasks WHERE status IN ('claimed', 'in_progress', 'review') AND (assignee = ? OR assignee LIKE ? ESCAPE '\\') LIMIT 1")
-      .get(row.name, row.name.replace(/[\\%_]/g, (c) => '\\' + c) + '/%');
+      .get(row.name, likeEscape(row.name) + '/%');
   }
   // A Stop-hook poll (/api/next, /api/events) from `laptop`: refreshes the name's lease if that laptop owns it.
   seenName(name, laptop) {
@@ -1603,12 +1631,13 @@ export class Board {
       const claimers = new Set(); let released = 0;
       for (const e of evs) {
         let next = null;
-        if (e.kind === 'task_claimed') { next = 'claimed'; claimers.add(agentRootOf(e.author)); if (!firstClaim) firstClaim = e.ts; }
+        if (e.kind === 'task_claimed') { next = 'claimed'; claimers.add(agentRootOf(e.author)); }
         else if (e.kind === 'task_updated' && e.data?.status) next = e.data.status;
         if (/review → in_progress/.test(e.text)) bounces++;
         if (e.kind === 'task_updated' && next === 'open' && status && !['open', 'proposed'].includes(status)) released++;
         if (['claimed', 'in_progress'].includes(status) && lastAct && e.ts - lastAct > STALE_MS) stale++;
         if (['task_claimed', 'task_updated'].includes(e.kind)) lastAct = e.ts;
+        if (!firstClaim && ['claimed', 'in_progress'].includes(next)) firstClaim = e.ts;
         if (next && next !== status) {
           if (status === 'blocked') blocked += e.ts - since;
           status = next; since = e.ts;
@@ -1711,7 +1740,8 @@ export class Board {
     for (const t of done) {
       const list = by.get(t.id) || [];
       const status = (e) => { try { return JSON.parse(e.data || '{}').status; } catch { return null; } };
-      const claim = list.find((e) => e.kind === 'task_claimed');
+      // The first claim: a claim, or the first move to claimed / in progress (a human assigning or moving it).
+      const claim = list.find((e) => e.kind === 'task_claimed' || ['claimed', 'in_progress'].includes(status(e)));
       const doneEv = [...list].reverse().find((e) => status(e) === 'done');
       if (claim && doneEv && doneEv.ts > claim.ts) mins[t.size in mins ? t.size : 'M'].push((doneEv.ts - claim.ts) / 60e3);
       if (list.some((e) => /review → in_progress/.test(e.text))) bounced++;
@@ -1861,9 +1891,18 @@ export function guessPerson(name, known = new Set()) {
   return root;
 }
 
+// A lock path as one spelling: forward slashes, relative to the repo root, without . and .. parts
+// (src/./a.js and src/sub/../a.js are src/a.js). A path outside the repo is refused.
 function normPath(p) {
-  return String(p ?? '').trim().replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^(\.\/|\/)+/, '');
+  const raw = String(p ?? '').trim().replace(/\\/g, '/');
+  if (!raw) return '';
+  const n = path.posix.normalize(raw).replace(/^(\.\/|\/)+/, '');
+  if (n === '..' || n.startsWith('../')) throw new Error(`lock paths are relative to the repo root: ${raw} is outside it`);
+  return n === '.' ? '' : n;
 }
+
+// A LIKE pattern that matches s literally (with ESCAPE '\').
+const likeEscape = (s) => s.replace(/[\\%_]/g, (c) => '\\' + c);
 
 function checkPriority(p) {
   const n = Number(p);

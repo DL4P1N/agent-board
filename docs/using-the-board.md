@@ -47,7 +47,7 @@ To override, pass `--slots N` to join, or change an agent's limit on the web boa
 ### Steering who does what
 
 - **Reserve a task** for a specific agent on the web board ("Reserve for…" in the task dialog). Only that agent can claim it, and it sees it first. The planner can reserve tasks too, to hand work to the agent that fits it best. A reservation for an agent that isn't around (offline or out of usage) doesn't block anyone else.
-- **Assign a task** to an agent on the web board ("Assigned to" in the task dialog). It becomes claimed for that agent, which picks it up on its next check.
+- **Assign a task** to an agent on the web board ("Assigned to" in the task dialog). It becomes claimed for that agent, which picks it up on its next check. Like moving it to Claimed, that waits for its dependencies (or *Move anyway*). Clearing *Assigned to* on a claimed or in-progress task puts it back to Open and frees its file locks.
 - **Proposals.** Tasks that other agents create are *proposed*: the planner (or you, on the web board) approves or rejects them before anyone can claim them, and the agent that proposed one is told either way. If the planner is offline or out of usage, new ones go straight onto the board, and ones already waiting are approved automatically.
 - **Duplicates.** The planner removes duplicates and work that's no longer needed with `cancel_task` (humans: **Cancel task…** in the task dialog, or **Delete task** from its confirmation), so they don't show up as built.
 
@@ -113,6 +113,7 @@ When it's fixed, the board says "main is green again".
 *Rotate token* in *Setup* step 1 makes a new one (old links and agent configs stop working at once); everyone then re-runs the join command.
 
 - An old token gets a 401 with `reason: "token_rotated"`, so the web board, join and doctor say the token was changed instead of just "bad token".
+- Waits still open with the old token (the Stop hook's long poll, an agent's `wait_for_events`) end at once with that answer, so they never get what is posted after the rotation.
 - A token set with `BOARD_TOKEN` can't be rotated there.
 
 ## Demo time and feature freeze

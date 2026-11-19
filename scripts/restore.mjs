@@ -10,6 +10,7 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { boardEntryProblem } from '../src/boards.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'));
@@ -37,6 +38,8 @@ if (!arg) {
   const shown = boardArg ? boardsList.filter((b) => b.slug === boardArg) : boardsList;
   if (boardArg && !shown.length) fail(`No board called "${boardArg}". Boards: ${boardsList.map((b) => b.slug).join(', ')}.`);
   for (const b of shown) {
+    const problem = boardEntryProblem(b);
+    if (problem) { console.log(`Board ${b.slug}: skipped, ${problem}.`); continue; }
     const dir = backupsOf(b); const files = listIn(dir);
     const label = `${b.slug}${b.slug === defaultSlug ? ' (default)' : ''}${b.status === 'archived' ? ' (archived)' : ''}`;
     if (!files.length) { console.log(`Board ${label}. No backups yet in ${dir}. A board makes one every 10 minutes while it runs.`); continue; }
@@ -50,6 +53,9 @@ if (!arg) {
 
 const board = boardsList.find((b) => b.slug === (boardArg || defaultSlug));
 if (!board) fail(`No board called "${boardArg}". Boards: ${boardsList.map((b) => b.slug).join(', ')}.`);
+// Never act on a folder outside the data folder (a hand-edited boards.json): the same rule as the server's.
+const problem = boardEntryProblem(board);
+if (problem) fail(`Board "${board.slug}" can't be restored: ${problem}. Fix data/boards.json first.`);
 const BOARD_DIR = path.resolve(DATA_DIR, board.dir || '.');
 const BACKUPS = backupsOf(board);
 const all = listIn(BACKUPS);
@@ -89,18 +95,23 @@ fs.mkdirSync(BOARD_DIR, { recursive: true });
 const db = path.join(BOARD_DIR, 'board.db');
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const tmp = path.join(BOARD_DIR, `board.db.restoring-${stamp}`);
-fs.copyFileSync(src, tmp);
+// A consistent copy, including anything still in the backup's write-ahead log (a file copy would miss that).
+try {
+  const from = new DatabaseSync(src, { readOnly: true });
+  try { from.exec(`VACUUM INTO '${tmp.replace(/'/g, "''")}'`); } finally { from.close(); }
+} catch (e) { try { fs.rmSync(tmp, { force: true }); } catch {} fail(`Can't copy ${path.basename(src)}: ${e.message}`); }
 let kept = null;
+const moved = []; // [from, to]: the current board's files, put back if the swap fails
 try {
   if (fs.existsSync(db)) {
     kept = `${db}.before-restore-${stamp}`;
-    fs.renameSync(db, kept);
-    for (const ext of ['-wal', '-shm']) if (fs.existsSync(db + ext)) fs.renameSync(db + ext, kept + ext);
+    for (const ext of ['', '-wal', '-shm']) if (fs.existsSync(db + ext)) { fs.renameSync(db + ext, kept + ext); moved.push([db + ext, kept + ext]); }
   }
   fs.renameSync(tmp, db);
 } catch (e) {
-  // Put the old board back if it was moved, and leave the copy for a manual fix.
-  if (kept && !fs.existsSync(db)) { try { fs.renameSync(kept, db); } catch {} }
+  // Put the old board back as it was (its write-ahead log too: it may hold its latest changes), and leave
+  // the copy for a manual fix.
+  if (!fs.existsSync(db)) for (const [from, to] of moved.reverse()) { try { fs.renameSync(to, from); } catch {} }
   fail(`Restore failed: ${e.message}. The backup copy is at ${tmp}.`);
 }
 console.log(`✓ Restored board "${board.slug}" from ${path.basename(src)} (${when(path.basename(src))}).`);

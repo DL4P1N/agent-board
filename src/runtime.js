@@ -42,7 +42,7 @@ export function createBoardRuntime(slug, dir, { registry, envTokenSlug }) {
   router.use('/api', ipLimit(false));
 
   // ---------- MCP (stateless streamable HTTP) ----------
-  mountMcp(router, { board, auth: tokens.auth, agentLimit, holdSlot, presence });
+  mountMcp(router, { board, auth: tokens.auth, tokenCurrent: tokens.current, agentLimit, holdSlot, presence });
 
   // ---------- REST API ----------
   const api = express.Router();

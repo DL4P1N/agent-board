@@ -18,7 +18,7 @@ function clientLabel(info) {
   return String(info.name).slice(0, 40);
 }
 
-export function mountMcp(router, { board, auth, agentLimit, holdSlot, presence }) {
+export function mountMcp(router, { board, auth, tokenCurrent, agentLimit, holdSlot, presence }) {
   // ---------- MCP (stateless streamable HTTP) ----------
   router.post('/mcp', auth, async (req, res) => {
     if (req.role === 'viewer') return res.status(403).json({ jsonrpc: '2.0', error: { code: -32001, message: 'The viewer token is read-only.' }, id: null });
@@ -47,7 +47,7 @@ export function mountMcp(router, { board, auth, agentLimit, holdSlot, presence }
     // Which person this agent belongs to (join sends ?person=), to group a laptop's tools under one person.
     const personChanged = mine && req.query.person && board.setPerson(agentFrom(req), req.query.person, 'join');
     if (cameOnline || clientChanged || planChanged || personChanged || laptopChanged) presence();
-    const server = buildMcpServer(board, agentFrom(req));
+    const server = buildMcpServer(board, agentFrom(req), { tokenCurrent: () => tokenCurrent(req) });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => {
       transport.close();

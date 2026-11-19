@@ -137,12 +137,18 @@ check('cli list works while the server runs', cli('list').status === 0);
 // 1. Archiving while a long-poll waits must not crash the server.
 await admin('/boards', 'POST', { name: 'Poll' });
 const pollTok = (await admin('/boards/poll/open')).body.token;
-const pending = fetch(`${board.base}/b/poll/api/events?since=999999&wait=5`, { headers: { Authorization: `Bearer ${pollTok}` } }).then((r) => r.status).catch((e) => `error ${e.message}`);
-await new Promise((r) => setTimeout(r, 300));
+// The polls must really be waiting on the server when it's archived: one agent may hold WAITS open waits, so
+// once WAITS polls are open a further one is refused (429), and that proves they are all registered.
+const WAITS = Number(process.env.BOARD_WAITS_AGENT || 20);
+const poll = (wait) => fetch(`${board.base}/b/poll/api/events?since=999999&wait=${wait}`, { headers: { Authorization: `Bearer ${pollTok}`, 'X-Agent': 'poller' } });
+const polls = Array.from({ length: WAITS }, () => poll(20).then((r) => ({ status: r.status, at: Date.now() })).catch((e) => ({ status: `error ${e.message}`, at: Date.now() })));
+let allWaiting = false;
+for (const t0 = Date.now(); !allWaiting && Date.now() - t0 < 10e3;) allWaiting = (await poll(1).then((r) => r.status).catch(() => 0)) === 429;
+const archivedAt = Date.now();
 const archPoll = await admin("/boards/poll/archive", "POST");
-const pollStatus = await pending;
+const ended = await Promise.all(polls);
 const health = await fetch(`${board.base}/health`).then((r) => r.json()).catch(() => null);
-check('archiving a board with a pending long-poll: the poll ends, the server stays up', archPoll.status === 200 && [200, 410].includes(pollStatus) && health?.ok === true, `archive ${archPoll.status}, poll ${pollStatus}, health ${JSON.stringify(health)}`);
+check('archiving a board with pending long-polls: they end at once with 410, the server stays up', allWaiting && archPoll.status === 200 && ended.every((p) => p.status === 410 && p.at >= archivedAt && p.at - archivedAt < 5e3) && health?.ok === true, `waiting ${allWaiting}, archive ${archPoll.status}, polls ${[...new Set(ended.map((p) => `${p.status} after ${p.at - archivedAt}ms`))].join(', ')}, health ${JSON.stringify(health)}`);
 check('... and the other boards keep working', (await rest(board, 'dana', '/state')).board?.slug === 'main');
 
 // 2. BOARD_TOKEN stays with its board across a default switch + restart.

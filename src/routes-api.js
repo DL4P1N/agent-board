@@ -6,6 +6,7 @@ import { timeInfo, normName, callerLaptop } from './board.js';
 import { agentFrom, h, laptopParam, internalError, wantsGzip, GZIP_VARY } from './http-util.js';
 import { clientIp } from './request-limits.js';
 import { recap } from './recap.js';
+import { TOKEN_ROTATED } from './auth.js';
 
 // How long a built /api/state answer may be reused while nothing happens on the board.
 const STATE_TTL_MS = 1000;
@@ -145,7 +146,7 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     const who = normName(req.get('x-agent') || req.query.agent || req.query.exclude || '').split('/')[0];
     if (holdSlot(req, res, who ? `wait:${who}` : `ip:${clientIp(req)}`, who || 'this address', false)) next();
   };
-  api.get('/events', eventsSlot, h(async (req) => {
+  api.get('/events', eventsSlot, h(async (req, res) => {
     const since = Number(req.query.since || 0);
     const before = Math.max(0, Number(req.query.before) || 0) || undefined;
     if (before) return { events: board.events({ before, limit: 200 }) };
@@ -159,6 +160,8 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     const events = wait > 0 ? await board.waitForEvents(filter, wait * 1000, ac.signal) : board.events(filter);
     // Archived while waiting: the database is closed now.
     if (board.closed) { const e = new Error('This board is archived.'); e.status = 410; throw e; }
+    // The token was rotated while this waited (that ends every wait): nothing that came after is for it.
+    if (wait > 0 && !tokens.current(req)) { res.status(401); return { error: TOKEN_ROTATED, reason: 'token_rotated' }; }
     return { events, cursor: events.length ? events.at(-1).id : Math.max(since, board.latestEventId()) };
   }));
   api.get('/cursor', h(() => ({ cursor: board.latestEventId() })));
@@ -167,6 +170,8 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
   api.post('/token/rotate', humanToken, h((req, res) => {
     if (envToken) { res.status(400); return { error: 'The token comes from BOARD_TOKEN; change it there and restart the board.' }; }
     const t = tokens.rotate();
+    // Long polls opened with the old token end now, and answer "the token was changed".
+    board.endWaits();
     board.emit({ author: 'board', kind: 'message', channel: 'general', text: '@all The board token was rotated: everyone re-runs the join command from the web board.' });
     // Live streams were authorised with the old token: close them all (open pages reconnect with the new one).
     later(closeStreams, 50);

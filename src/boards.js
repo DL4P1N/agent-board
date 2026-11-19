@@ -20,6 +20,15 @@ export function checkSlug(slug) {
   return s;
 }
 
+// Why a boards-list entry can't be acted on ('' when it's fine): its folder must be "boards/<slug>" (or "."
+// for the original board), so a hand-edited "dir": "../../x" can't make delete/restore move or overwrite
+// folders outside the data folder. Used by the registry and by `npm run restore` (which reads boards.json itself).
+export function boardEntryProblem(b) {
+  try { checkSlug(b?.slug); } catch (e) { return e.message; }
+  if (b.dir !== '.' && String(b.dir).split('\\').join('/') !== `boards/${b.slug}`) return `its folder "${b.dir}" isn't "boards/${b.slug}" (or "." for the original board)`;
+  return '';
+}
+
 // "KubeCon 2026!" -> "kubecon-2026"
 export function slugify(name) {
   return String(name ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '') || 'board';
@@ -57,9 +66,7 @@ export class Registry {
     // otherwise let delete/restore move or overwrite folders outside the data folder.
     this.invalid = new Map();
     for (const b of this.data.boards) {
-      let why = '';
-      try { checkSlug(b.slug); } catch (e) { why = e.message; }
-      if (!why && b.dir !== '.' && String(b.dir).split('\\').join('/') !== `boards/${b.slug}`) why = `its folder "${b.dir}" isn't "boards/${b.slug}" (or "." for the original board)`;
+      const why = boardEntryProblem(b);
       if (why) this.invalid.set(b.slug, why);
     }
     if (!this.data.boards.some((b) => b.slug === this.data.default && b.status === 'live')) {
