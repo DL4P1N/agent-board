@@ -58,7 +58,8 @@ async function crash(e) {
   process.exitCode = 1;
   if (crashed) return;
   crashed = true;
-  console.log(`CRASH ${e?.stack || e}`);
+  // On one line (the runner shows CRASH lines only), with the cause: "fetch failed" alone doesn't say why.
+  console.log(`CRASH ${e}${e?.cause ? ` (cause: ${[e.cause.code, e.cause.message || e.cause].filter(Boolean).join(' ')})` : ''}\n${e?.stack || ''}`);
   await stopAll().catch(() => {});
   cleanTemps();
   process.exit(1);
