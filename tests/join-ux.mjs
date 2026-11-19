@@ -200,5 +200,32 @@ git('-C', oddRepo, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', 
 const odd = run(envFor('oddpath', { PATH: l10.env.PATH }).env, ['--url', board.base, '--token', TOKEN, '--name', 'kit', '--tool', 'claude,other', '--plan', 'claude=pro', '--repo', oddRepo, '--wait', '0']);
 check('a repo path with spaces, & and $(…) works and runs nothing', /connected Claude Code to the board/.test(odd.out) && /created its own worktree/.test(odd.out) && fs.existsSync(`${oddRepo}-other`) && !fs.existsSync(path.join(ROOT, 'PWNED')) && !fs.existsSync(path.join(tmp, 'PWNED')) && !fs.existsSync(path.join(oddRepo, 'PWNED')), odd.out.slice(-500));
 
+// The sibling folder for a second tool: its own checkout of the same repo is reused, but an unrelated git repo that
+// happens to have that name is not (it would get this agent's token and hooks).
+const sameAgain = run(envFor('oddagain', { PATH: l10.env.PATH }).env, ['--url', board.base, '--token', TOKEN, '--name', 'kit', '--tool', 'claude,other', '--plan', 'claude=pro', '--repo', oddRepo, '--wait', '0']);
+check('join: the generated sibling folder that is a checkout of the same repo is reused', /using existing worktree/.test(sameAgain.out) && !/different git repo/.test(sameAgain.out), sameAgain.out.slice(-400));
+const twinRepo = path.join(tmp, 'twin');
+git('init', '-q', twinRepo);
+git('-C', twinRepo, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'init');
+const strangerRepo = `${twinRepo}-other`;
+git('init', '-q', strangerRepo);
+git('-C', strangerRepo, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'other project');
+const siblingClash = run(envFor('twin', { PATH: l10.env.PATH }).env, ['--url', board.base, '--token', TOKEN, '--name', 'lou', '--tool', 'claude,other', '--plan', 'claude=pro', '--repo', twinRepo, '--wait', '0']);
+check('join: a sibling folder that is an unrelated git repo is refused, not adopted', /already exists but is a checkout of a different git repo/.test(siblingClash.out) && !/using existing worktree/.test(siblingClash.out) && siblingClash.status === 1, siblingClash.out.slice(-500));
+
+// Windows: a .cmd that isn't an npm shim runs through cmd.exe, which replaces %NAME% even inside quotes. An argument
+// that would pick up a variable is refused; a URL's %C3%A9 (no such variable) still passes. Elsewhere nothing is parsed.
+const cmdBin = path.join(tmp, 'cmdbin'); fs.mkdirSync(cmdBin);
+fs.writeFileSync(path.join(cmdBin, 'fakecli.cmd'), '@echo %*\r\n');
+const viaRun = (arg) => spawnSync(process.execPath, ['--input-type=module', '-e',
+  `import { runSync } from ${JSON.stringify(new URL('../scripts/lib/run.mjs', import.meta.url).href)};\ntry { const r = runSync('fakecli', [process.env.ARG]); process.stdout.write('RAN:' + r.stdout); } catch (e) { process.stdout.write('ERR:' + e.message); }`],
+  { env: { ...process.env, PATH: `${cmdBin}${path.delimiter}${process.env.PATH || process.env.Path || ''}`, ARG: arg, SECRET_VALUE_X: 'leaked' }, encoding: 'utf8', windowsHide: true });
+if (process.platform === 'win32') {
+  const expand = viaRun('http://h/%SECRET_VALUE_X%/mcp').stdout;
+  const plain = viaRun('http://h/?name=Jos%C3%A9&p=%25').stdout;
+  check('a .cmd tool run through cmd.exe: an argument that would expand %NAME% is refused, not expanded', /^ERR:.*%SECRET_VALUE_X%/.test(expand) && !/leaked/.test(expand), expand);
+  check('a .cmd tool run through cmd.exe: a URL with %C3%A9 and %25 still goes through unchanged', /^RAN:.*Jos%C3%A9&p=%25/.test(plain), plain);
+}
+
 try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
 await finish(R, { board });

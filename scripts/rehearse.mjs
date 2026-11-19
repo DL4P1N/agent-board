@@ -11,13 +11,13 @@
 // Spends a little of your subscription quota (a real run).
 import fs from 'node:fs';
 import os from 'node:os';
-import net from 'node:net';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { command } from './lib/run.mjs';
+import { startBoard } from './lib/board.mjs';
 import { agentTokenFor, newBoardToken } from '../src/tokens.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -52,11 +52,6 @@ function killTree(c) {
 process.on('SIGINT', () => { cleanup(); process.exit(130); });
 process.on('exit', () => { for (const c of children) killTree(c); });
 
-const freePort = () => new Promise((resolve, reject) => {
-  const s = net.createServer(); s.unref(); s.on('error', reject);
-  s.listen(0, () => { const { port } = s.address(); s.close(() => resolve(port)); });
-});
-
 // ---------- scratch project ----------
 function makeProject(dir) {
   const origin = path.join(dir, 'origin.git');
@@ -77,20 +72,17 @@ function makeProject(dir) {
 }
 
 // ---------- board ----------
-async function startBoard(dir, port, token) {
-  const data = path.join(dir, 'board-data');
-  const c = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js')], {
-    cwd: ROOT, env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', BOARD_TOKEN: token, BOARD_DATA: data, BOARD_NO_JOIN: '1' }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
-  });
-  children.add(c);
+// lib/board.mjs starts the server and counts it as up only when /health comes from that child (its pid, with a
+// timeout): another program answering on the port first can't pass for this board, and a taken port moves to another.
+async function startRehearsalBoard(dir, token) {
   const out = boardLog = fs.createWriteStream(path.join(dir, 'board.log'));
-  c.stdout.pipe(out); c.stderr.pipe(out);
-  const base = `http://localhost:${port}`;
-  for (let i = 0; i < 100; i++) {
-    try { if ((await fetch(`${base}/health`)).ok) return { base, child: c }; } catch {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  throw new Error('the board did not start (see board.log in the temp folder)');
+  const board = await startBoard({
+    token,
+    env: { HOST: '127.0.0.1' },
+    newDataDir: () => path.join(dir, 'board-data'),
+    onChild: (c) => { children.add(c); c.stderr.pipe(out, { end: false }); },
+  });
+  return { base: board.base, child: board.child };
 }
 const api = (b, token, p, method = 'GET', body) => fetch(`${b}/api${p}`, {
   method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Agent': 'rehearsal' }, body: body && JSON.stringify(body),
@@ -174,10 +166,9 @@ async function main() {
   log(`  temp folder: ${tmp}`);
   log("  uses your existing ~/.claude and ~/.codex settings (nothing is written to them); the board's Stop hook isn't installed, so it isn't tested here");
   const proj = makeProject(tmp);
-  const port = await freePort();
   const token = newBoardToken();
   const agentToken = agentTokenFor(token);
-  const board = await startBoard(tmp, port, token);
+  const board = await startRehearsalBoard(tmp, token);
   // Tokens are only shown on a real run (a throwaway board on 127.0.0.1, but dry-run output gets pasted around).
   const mask = (t) => (DRY ? `${String(t).slice(0, 6)}…` : t);
   log(`  ${DRY ? 'the board would run at' : 'board'}: ${board.base}/?token=${mask(token)}`);

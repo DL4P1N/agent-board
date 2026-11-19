@@ -356,11 +356,26 @@ console.log(`
 if (problems) process.exitCode = 1;
 
 // ======================================================================
+// The shared .git folder of a checkout (the main repo's and all its worktrees' are the same one), as a comparable
+// path: absolute, links resolved, and on Windows without case or slash differences. '' when dir isn't a git checkout.
+function commonGitDir(dir) {
+  const r = run('git', ['-C', dir, 'rev-parse', '--git-common-dir'], true);
+  if (r.status !== 0) return '';
+  let p = path.resolve(dir, r.stdout.trim());
+  try { p = fs.realpathSync.native(p); } catch {}
+  return process.platform === 'win32' ? p.replaceAll('\\', '/').toLowerCase() : p;
+}
+
 // A separate checkout of the same repo, so two tools on one laptop never edit the same folder.
 function ensureWorktree(dir) {
   if (fs.existsSync(dir)) {
     const top = run('git', ['-C', dir, 'rev-parse', '--show-toplevel'], true);
     if (top.status === 0 && path.resolve(top.stdout.trim()) === path.resolve(dir)) {
+      // A folder with the right name but another project's repo would get this agent's token and hooks: only a
+      // checkout of the same repo (same common git dir as the selected repo) counts.
+      if (commonGitDir(dir) !== commonGitDir(repo)) {
+        throw new Error(`${dir} already exists but is a checkout of a different git repo than ${repo}. Move it away and re-run join.`);
+      }
       ok(`using existing worktree ${dir}`);
       return;
     }

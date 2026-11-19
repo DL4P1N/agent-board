@@ -319,6 +319,15 @@ check("retro counts the demo task's two bounces", new RegExp(`^- #${T.demo.id} [
   check('dry run leaves no temp folder behind', leftovers().length === 0, leftovers().join(', '));
   r = dry(['--keep']);
   check('dry run with --keep keeps the temp folder and says where', r.status === 0 && leftovers().length === 1 && /temp folder is kept: .*agent-board-rehearsal-/.test(r.stdout), `${r.stdout}${r.stderr}`.slice(-300));
+  // Another program takes the board's port first and answers /health: that isn't this board. The rehearsal must
+  // move to another port and use its own board, not carry on with the stranger's.
+  const squatFile = path.join(scratch, 'squatted-port');
+  const squat = spawnSync(process.execPath, ['--require', fileURLToPath(new URL('./fixtures/squat-port.cjs', import.meta.url)), script, '--dry-run', '--tools', 'claude'],
+    { env: { ...env, SQUAT_FILE: squatFile }, encoding: 'utf8', timeout: 60e3, windowsHide: true });
+  const sq = `${squat.stdout}${squat.stderr}`;
+  const squatted = fs.existsSync(squatFile) ? fs.readFileSync(squatFile, 'utf8') : '';
+  const used = sq.match(/the board would run at: http:\/\/localhost:(\d+)\//)?.[1];
+  check('rehearse: a stranger answering /health on the board\'s port is not taken for the board', squat.status === 0 && !!squatted && !!used && used !== squatted, `squatted ${squatted}, used ${used}\n${sq.slice(-400)}`);
   try { fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {}
 }
 
