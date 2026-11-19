@@ -15,10 +15,14 @@ const args = process.argv.slice(2);
 const noUi = args.includes('--no-ui');
 const filter = args.find((a) => !a.startsWith('--')) || '';
 const TIMEOUT = Number(process.env.SUITE_TIMEOUT_MS) || 8 * 60e3;
+// A name ("journey") matches file names; a path (tests/ui/flows.mjs) matches that one file.
+const asPath = /[\\/]/.test(filter) ? path.resolve(ROOT, filter) : null;
 const suites = [
   ...fs.readdirSync(path.join(ROOT, 'tests')).filter((f) => f.endsWith('.mjs') && !['helpers.mjs', 'run.mjs'].includes(f)).sort().map((f) => path.join(ROOT, 'tests', f)),
   ...(noUi ? [] : fs.readdirSync(path.join(ROOT, 'tests', 'ui')).filter((f) => f.endsWith('.mjs')).sort().map((f) => path.join(ROOT, 'tests', 'ui', f))),
-].filter((f) => path.basename(f).includes(filter));
+].filter((f) => (asPath ? f === asPath : path.basename(f).includes(filter)));
+// Nothing to run is a failure, not "All suites passed".
+if (!suites.length) { console.error(`No test suite matches "${filter}".`); process.exit(1); }
 
 // Runs one suite; on a timeout, ends its whole process tree (its boards and browsers too). On POSIX the suite gets its
 // own process group (detached), so killing the group reaches everything it started; Ctrl+C on the runner, which no
