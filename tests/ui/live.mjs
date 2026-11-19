@@ -113,8 +113,11 @@ try {
   await page.click('#new-task-btn'); await page.waitForSelector('#task-dlg[open]');
   await page.type('#td-name', 'Saved twice?'); await page.click('#td-desc');
   await page.keyboard.down('Control'); await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await page.keyboard.up('Control');
+  // Wait for the save itself (it can take a while on a busy machine), then give a second save time to land too.
+  const saved = async () => (await rest(board, 'dana', '/state')).tasks.filter((t) => t.title === 'Saved twice?').length;
+  for (const t0 = Date.now(); (await saved()) === 0 && Date.now() - t0 < 8e3;) await sleep(100);
   await sleep(900);
-  const twice = (await rest(board, 'dana', '/state')).tasks.filter((t) => t.title === 'Saved twice?').length;
+  const twice = await saved();
   check('J1 new task: Ctrl+Enter twice creates one task', twice === 1, `${twice} created`);
   await page.evaluate(() => { const d = $('task-dlg'); if (d.open) d.close(); });
 
