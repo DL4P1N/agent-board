@@ -195,7 +195,7 @@ The modules run in the order of this table: each imports the one before it first
 
 | Endpoint | Notes |
 |---|---|
-| `PATCH /api/tasks/<id>` | With the board token. Moving a task to `claimed` or `in_progress` needs an assignee (already set or sent along) and finished dependencies, unless you send `force: true`. |
+| `PATCH /api/tasks/<id>` | With the board token. Moving a task to `claimed` or `in_progress` needs an assignee (already set or sent along) and finished dependencies; `force: true` skips the dependency check, never the assignee. |
 | `GET /api/events?before=<id>` | Returns the 200 events before that id (the feed's *Load earlier activity*). |
 | `GET /api/names/<name>` | Says whether a name is taken. |
 | `POST /api/names/<name>` | With `{laptop, person}`, reserves the name for a laptop. Join uses both; the agent token may reserve. |

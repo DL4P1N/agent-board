@@ -518,7 +518,7 @@ check('human assigning an open task claims it for that agent', asgT?.status === 
 const aev = [...st.events].reverse().find((e) => e.task_id === asg.id && e.kind === 'task_updated');
 check('the assigned agent is told (@mention in the event)', (aev?.data?.mentions || []).includes('k2'), aev?.text);
 
-// a human move to claimed / in progress needs an owner and finished dependencies (unless force)
+// a human move to claimed / in progress needs an owner, and finished dependencies (unless force)
 const mv1 = await newTask('move me'); const mv2 = await newTask('after move me', { depends_on: [mv1.id] });
 let mvr = await http(`/tasks/${mv1.id}`, 'PATCH', { status: 'in_progress' });
 check('moving to in progress without an owner is refused', mvr.status === 400 && /^Pick who #\d+ is for first\.$/.test(err(mvr.body)) && !/force/.test(err(mvr.body)), JSON.stringify(mvr.body));
@@ -528,8 +528,11 @@ mvr = await http(`/tasks/${mv2.id}`, 'PATCH', { status: 'in_progress', assignee:
 check('moving a task whose dependency isn\'t done is refused', mvr.status === 400 && new RegExp(`waits on #${mv1.id}, which isn't done yet`).test(err(mvr.body)) && !/force/.test(err(mvr.body)), JSON.stringify(mvr.body));
 mvr = await http(`/tasks/${mv1.id}`, 'PATCH', { status: 'in_progress', assignee: 'k2' });
 check('moving with an assignee works and gets a branch', mvr.status === 200 && mvr.body.assignee === 'k2' && mvr.body.status === 'in_progress' && /^task\//.test(mvr.body.branch || ''), JSON.stringify(mvr.body));
+// force ("Move anyway") skips the dependency check only: an active task always needs an owner.
 mvr = await http(`/tasks/${mv2.id}`, 'PATCH', { status: 'claimed', force: true });
-check('force: true moves it anyway', mvr.status === 200 && mvr.body.status === 'claimed' && !mvr.body.assignee, JSON.stringify(mvr.body));
+check('force: true without an owner is still refused', mvr.status === 400 && /^Pick who #\d+ is for first\.$/.test(err(mvr.body)) && (await state()).tasks.find((t) => t.id === mv2.id)?.status === 'open', JSON.stringify(mvr.body));
+mvr = await http(`/tasks/${mv2.id}`, 'PATCH', { status: 'claimed', assignee: 'k2', force: true });
+check('force: true with an owner moves it anyway', mvr.status === 200 && mvr.body.status === 'claimed' && mvr.body.assignee === 'k2', JSON.stringify(mvr.body));
 mvr = await http(`/tasks/${mv2.id}`, 'PATCH', { status: 'open' });
 check('moving back to open needs no owner', mvr.status === 200 && mvr.body.status === 'open', JSON.stringify(mvr.body));
 // Assigning an open task claims it, so it goes through the same checks as a move to claimed.

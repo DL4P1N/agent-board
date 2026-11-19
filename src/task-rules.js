@@ -55,15 +55,15 @@ export function updateRefusal(c) {
     || (c.pr_url !== undefined && !human && !c.owner && !c.canMerge ? `Only ${task.assignee || 'the task owner'}, whoever merges it, or a human can set #${id}'s PR link.` : null);
 }
 
-// A human moving a card to claimed / in progress: it needs an owner, and its dependencies done
-// (otherwise nobody holds it and no agent can claim it). API callers can send force: true to move it
-// anyway; the messages are for people on the web board, so they don't mention it.
+// A human moving a card to claimed / in progress: it needs an owner (otherwise nobody holds it and no agent
+// can claim it), and its dependencies done. force: true ("Move anyway") skips the dependency check only; the
+// messages are for people on the web board, so they don't mention it.
 // The owner check runs on every change of status or owner that leaves the task claimed or in progress (a claimed
 // task whose owner is cleared while its status is sent unchanged, too). `assignee` arrives normalised: null for none.
 function humanMoveRefusal({ id, task, status, assignee, force, waitingOn }, changingStatus) {
-  if (force || !['claimed', 'in_progress'].includes(status ?? task.status) || !(changingStatus || assignee !== undefined)) return null;
+  if (!['claimed', 'in_progress'].includes(status ?? task.status) || !(changingStatus || assignee !== undefined)) return null;
   if (!(assignee !== undefined ? assignee : task.assignee)) return `Pick who #${id} is for first.`;
-  if (!changingStatus) return null;
+  if (!changingStatus || force) return null;
   const waiting = ['claimed', 'in_progress'].includes(task.status) ? [] : waitingOn();
   if (!waiting.length) return null;
   const list = waiting.map((d) => '#' + d);
