@@ -213,6 +213,16 @@ try {
   await page.keyboard.press('?'); await page.waitForSelector('#help-dlg[open]');
   await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.getElementById('help-dlg').open);
   check('? opens help; Esc closes it and focus is back on the card', await page.evaluate((id) => document.activeElement.dataset?.id === id, cardId));
+  // A live update that redraws the board while the palette or help is open: focus still comes back to that card.
+  const redraw = () => page.evaluate(() => { $('board')._html = undefined; render(); });
+  const swapped = async () => page.evaluate((id) => !!document.querySelector(`.card[data-id="${id}"]`) && document.activeElement.dataset?.id === id, cardId);
+  await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control');
+  await page.waitForSelector('#pal-dlg[open]'); await redraw();
+  await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.getElementById('pal-dlg').open);
+  check('the board redrawn while Ctrl+K is open: closing it, focus is back on the same card', await swapped());
+  await page.keyboard.press('?'); await page.waitForSelector('#help-dlg[open]'); await redraw();
+  await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.getElementById('help-dlg').open);
+  check('the board redrawn while help is open: closing it, focus is back on the same card', await swapped(), await page.evaluate((id) => id + ' vs ' + document.activeElement?.outerHTML.slice(0, 70), cardId));
 
   // ---- other commands ----
   const run = async (q) => { await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control'); await page.waitForSelector('#pal-dlg[open]'); await page.keyboard.type(q); await page.keyboard.press('Enter'); await page.waitForFunction(() => !document.getElementById('pal-dlg').open); await sleep(250); };

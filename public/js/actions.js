@@ -3,7 +3,7 @@
 
 import './activity.js';
 import { $, ANYONE, LABEL, seenMention, setSeenMention, smooth, state, store, ui } from './state.js';
-import { agentRoot, ago, announce, clock, esc, glide, mentionsMe, plural, snapCards, taskById, toast, when } from './helpers.js';
+import { agentRoot, ago, announce, clock, esc, focusMark, glide, refocusAfter, mentionsMe, plural, snapCards, taskById, toast, when } from './helpers.js';
 import { act, api, load, scheduleReload } from './data.js';
 import { agentInfoNow, bouncedTasks, cutTasks, filterRoot, openQuestions, setupInfo, setupOpen, stepOpen,
   teamCapacity } from './derived.js';
@@ -498,7 +498,10 @@ async function copyText(text, btn, okMsg = 'Copied. Paste it in a terminal.') {
 }
 $('notify-btn').onclick = toggleNotify;
 const helpDlg = $('help-dlg');
-function openHelp() { if (!helpDlg.open) helpDlg.showModal(); helpDlg.querySelector('.x').focus(); }
+// Closed: focus goes back where it was (the same card if a live update redrew it meanwhile).
+let helpBack = null;
+function openHelp() { if (!helpDlg.open) { helpBack = focusMark(); helpDlg.showModal(); } helpDlg.querySelector('.x').focus(); }
+helpDlg.addEventListener('close', () => { const back = helpBack; helpBack = null; refocusAfter(helpDlg, back); });
 $('help-btn').onclick = openHelp;
 helpDlg.addEventListener('click', (ev) => { if (ev.target.closest('[data-close]')) return helpDlg.close();
   if (ev.target === helpDlg) { const r = helpDlg.getBoundingClientRect(); if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) helpDlg.close(); } });

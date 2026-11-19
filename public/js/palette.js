@@ -2,7 +2,7 @@
 
 import './panels.js';
 import { $, BASE, LABEL, me, smooth, state, ui } from './state.js';
-import { esc, youTag } from './helpers.js';
+import { esc, focusMark, refocusAfter, youTag } from './helpers.js';
 import { openQuestions, people, setupShown } from './derived.js';
 import { doAct, goQuestion, helpDlg, openHelp, setFilter } from './actions.js';
 import { openTask, setDlgBackTo } from './task-dialog.js';
@@ -81,7 +81,7 @@ function palSelect(i) {
 }
 function openPalette() {
   if ($('app').hidden || $('task-dlg').open || palDlg.open) return;
-  palPrev = document.activeElement; palSel = 0; palIn.value = ''; $('pal-count').textContent = '';
+  palPrev = focusMark(); palSel = 0; palIn.value = ''; $('pal-count').textContent = '';
   if (helpDlg.open) helpDlg.close();
   palDlg.showModal(); palRender(); palIn.focus();
 }
@@ -94,8 +94,8 @@ function palRun(i) {
 // Closed: focus goes back where it was first, so a command that opens something (help, a task) hands focus back there.
 palDlg.addEventListener('close', () => {
   const run = palNext; palNext = null;
-  if (palPrev?.isConnected) palPrev.focus({ preventScroll: true });
-  palPrev = null;
+  const back = palPrev; palPrev = null;
+  if (run) back?.(); else refocusAfter(palDlg, back);
   // ...and once it has faded out: a command that redraws the whole page (the 3D switch, a theme) would freeze its fade.
   // A command that hid what had focus (Show Table from a card): focus goes to the control it used, or what it opened.
   const go = run && (() => { const used = run(); if (document.activeElement === document.body || !document.activeElement?.offsetParent) (used instanceof Element && used.offsetParent ? used : null)?.focus({ preventScroll: true }); });

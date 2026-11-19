@@ -310,8 +310,26 @@ const cmdBox = (text, key, what) => `<div class="cmd"><code>${esc(text)}</code><
 const nameTag = (n) => `<b class="pc" ${hs(n)}>${esc(n)}</b>`;
 // " (you)" after my own name, unless my name already says it.
 const youTag = (n) => (n === me && String(n).toLowerCase() !== 'you' ? ' (you)' : '');
+// Where focus is now, to come back to after a dialog: that element, or the same card when a live update redrew it
+// meanwhile (the old element is gone, and focus would otherwise land on the page).
+function focusMark() {
+  const a = document.activeElement; const id = a?.closest?.('.card[data-id]')?.dataset.id;
+  return () => {
+    if (a?.isConnected) return a.focus({ preventScroll: true });
+    if (id) document.querySelector(`.card[data-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+  };
+}
+// After a dialog closed: focus back now, and again once its fade has finished if it is still on the page or in the
+// fading dialog (while it fades, what's behind it can't always take focus).
+function refocusAfter(dlg, back) {
+  if (!back) return;
+  back();
+  const again = () => { const a = document.activeElement; if (!a || a === document.body || dlg.contains(a)) back(); };
+  const fade = dlg.getAnimations();
+  if (fade.length) Promise.all(fade.map((x) => x.finished.catch(() => {}))).then(again); else setTimeout(again);
+}
 
-export { agentRoot, ago, announce, canMove, cardRects, clock, cmdBox, easeHeight, esc, fmt, fullTime, glide, hs, hue,
+export { agentRoot, ago, announce, canMove, cardRects, clock, cmdBox, easeHeight, esc, fmt, focusMark, fullTime, glide, hs, hue,
   instantly, isHttps, isMe, isStale, isWebUrl, knownPeople, leave, mentionsLite, mentionsMe, motion, moveCards, nameHash,
-  nameTag, noteMove, ownerOffline, patch, plural, refreshTimes, reveal, root, setText, short, snapCards, taskById, timeEl,
+  nameTag, noteMove, ownerOffline, patch, plural, refocusAfter, refreshTimes, reveal, root, setText, short, snapCards, taskById, timeEl,
   toast, when, who, youTag };
