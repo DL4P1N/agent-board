@@ -18,6 +18,16 @@ export class Overlay {
   private message: string | null = 'Loading the board…';
   private html = { top: '', bottom: '', msg: '' };
 
+  // The room Needs attention has changes with the window, the top row (the clock card gaining or losing its countdown
+  // and verdict) and the Progress card above it: its card is watched, and fitted again (once a frame) when its size
+  // isn't the one it was fitted at.
+  private fitted = '';
+  private frame = 0;
+  private ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
+    cancelAnimationFrame(this.frame);
+    this.frame = requestAnimationFrame(() => { if (this.needsSize() !== this.fitted) this.refit(); });
+  });
+
   constructor(private els: OverlayEls, private simpleHref: () => string, private slug: string) { this.render(); }
 
   setState(s: BoardState): void { this.state = s; this.render(); }
@@ -40,13 +50,17 @@ export class Overlay {
     if (sub && sub.textContent !== cd.sub) sub.textContent = cd.sub;
   }
 
-  /** The window changed size: Needs attention is fitted again (rows it had no room for may fit now). */
+  /** Its room changed: Needs attention is built again in full and fitted (rows it had no room for may fit now). */
   refit(): void { this.html.bottom = ''; this.render(); }
 
   /** A short screen: Needs attention keeps the rows that fit and counts the rest in its "and N more" line, so no row
-   *  (and never that line) is cut off at the card's bottom edge. The questions line always stays. */
+   *  (and never that line) is cut off at the card's bottom edge. The questions line always stays: if even that doesn't
+   *  fit, the card scrolls. */
   private fitNeeds(): void {
     const card = this.els.bottom.querySelector<HTMLElement>('.needs'); const ul = card?.querySelector('ul');
+    this.ro?.disconnect();
+    if (card) this.ro?.observe(card);
+    this.fitted = this.needsSize();
     if (!card || !ul) return;
     let more = ul.querySelector<HTMLElement>('li.more');
     const rows = [...ul.querySelectorAll('li.b, li.s')];
@@ -55,6 +69,13 @@ export class Overlay {
       if (!more) { more = document.createElement('li'); more.className = 'more'; ul.append(more); }
       const n = Number(more.dataset.n || 0) + 1; more.dataset.n = String(n); more.textContent = `and ${n} more`;
     }
+    card.classList.toggle('scroll', card.scrollHeight > card.clientHeight + 1);
+  }
+
+  // The card's outer size (a scrollbar of its own doesn't change it).
+  private needsSize(): string {
+    const card = this.els.bottom.querySelector<HTMLElement>('.needs');
+    return card ? `${card.offsetWidth}x${card.offsetHeight}` : '';
   }
 
   private put(k: 'top' | 'bottom' | 'msg', html: string): boolean {

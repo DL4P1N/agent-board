@@ -171,6 +171,30 @@ try {
     });
     const short = await fitAt();
     check('1366×600, 6 blocked tasks: Needs attention shows the rows that fit, "and N more" counts the rest, nothing cut off', !short.cut && short.rows + short.more === 6 && short.more > 0 && short.last === 'more', JSON.stringify(short));
+    // The top row growing takes room from Needs attention without a resize (here the clock card: no demo time, then a
+    // countdown with its verdict; the goal is two lines at most, never taller than that card): fitted again, as a fresh
+    // fit would, and the rows come back when the top row is short again.
+    const topH = () => page.$eval('#top', (t) => t.offsetHeight);
+    const settings = async (body) => { await human('/settings', 'PUT', body); await sleep(800); };
+    let height = 600;
+    const freshFit = async () => { await page.setViewport({ width: 1366, height: height + 1 }); await sleep(300); await page.setViewport({ width: 1366, height }); await sleep(600); return fitAt(); };
+    await settings({ deadline: '', goal: 'A voting app for hackathon projects, with live results on the big screen for everyone' });
+    // A height that leaves only a few pixels under the last row, so the top row growing must cost a row.
+    const room = await page.evaluate(() => {
+      const card = document.querySelector('#bottom .needs'); const rows = [...card.querySelectorAll('li.b, li.s')]; const ul = card.querySelector('ul');
+      const left = card.getBoundingClientRect().top + card.clientTop + card.clientHeight - parseFloat(getComputedStyle(card).paddingBottom) - ul.getBoundingClientRect().bottom;
+      return { left, step: rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top };
+    });
+    height += Math.ceil(room.step - room.left) + 3;
+    const low = await freshFit(); const lowTop = await topH();
+    await settings({ deadline: Date.now() + 2 * 3600e3 });
+    const high = await fitAt(); const highTop = await topH();
+    const highFresh = await freshFit();
+    check('1366×600: a taller top row (the demo time set) refits Needs attention (fewer rows, as a fresh fit, nothing cut off)', highTop > lowTop && highFresh.rows < low.rows && !high.cut && high.rows === highFresh.rows && high.rows + high.more === 6, `top ${lowTop}→${highTop} ${JSON.stringify({ low, high, highFresh })}`);
+    await settings({ deadline: '' });
+    const back = await fitAt();
+    check('…and shorter again, the rows it had no room for come back', !back.cut && back.rows === low.rows && back.rows + back.more === 6, JSON.stringify({ low, back }));
+    await settings({ goal: 'A voting app for hackathon projects <b>live</b>' });
     await page.setViewport({ width: 1920, height: 1080 }); await sleep(600);
     const tall = await fitAt();
     check('1920×1080: the rows that fit come back (still none cut off)', !tall.cut && tall.rows > short.rows && tall.rows + tall.more === 6, JSON.stringify(tall));
