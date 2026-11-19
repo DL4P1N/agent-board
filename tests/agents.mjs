@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { startBoard, finish, rest, ROOT, Client, StreamableHTTPClientTransport, tempDir } from './helpers.mjs';
 import { agentTokenFor } from '../src/tokens.js';
@@ -68,11 +69,11 @@ check('a bad reset time is refused', r.status === 400 && /until must be a time/.
 // ================= 2. the Stop hook sees the limit in the transcript =================
 const tmp = tempDir('board-hook-');
 const line = (o) => JSON.stringify({ timestamp: new Date().toISOString(), ...o });
-function runHook(transcript, agentName = 'ana', extra = {}) {
+function runHook(transcript, agentName = 'ana', extra = {}, nodeArgs = []) {
   const tp = path.join(tmp, `t-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`);
   fs.writeFileSync(tp, transcript.join('\n') + '\n');
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [path.join(ROOT, 'hooks', 'board-stop-hook.mjs')], {
+    const child = spawn(process.execPath, [...nodeArgs, path.join(ROOT, 'hooks', 'board-stop-hook.mjs')], {
       // HOME pointed at an empty folder: the hook must use the env config, not a real ~/.agent-board.json.
       env: { ...process.env, HOME: tmp, USERPROFILE: tmp, TMPDIR: tmp, TEMP: tmp, TMP: tmp, BOARD_URL: board.base, BOARD_TOKEN: AGENT_TOKEN, BOARD_AGENT: agentName, BOARD_HOOK_WAIT: '0', ...extra },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -153,6 +154,70 @@ check('hook: entries unused for 30 days are dropped, newer ones kept', !hookStat
   const shownChatter = (h.out.match(/chatter \d+/g) || []).length;
   check('hook: early mentions, direct messages and answers are shown even past the last 40 events', ['EARLY MENTION', 'EARLY DIRECT', 'EARLY ANSWER'].every((s) => h.out.includes(s)) && shownChatter === 37 && /chatter 49/.test(h.out) && !/chatter 12\b/.test(h.out), h.out.slice(0, 300));
   check('hook: …and says how many earlier events it left out', /\(13 earlier events not shown\)/.test(h.out), h.out.slice(0, 300));
+}
+// An answer reaches its asker even when that name can never be an @mention (one starting with a digit).
+{
+  const bot = await agent('2bot');
+  await runHook([], '2bot');
+  const q = await bot('ask_human', { question: 'Hook test: which database?' });
+  await human(`/questions/${q.question_id}/answer`, 'POST', { answer: 'DIGIT ANSWER sqlite' });
+  for (let i = 0; i < 45; i++) await ben('post', { text: `noise ${i}` });
+  h = await runHook([], '2bot');
+  check('hook: an answer to an agent whose name starts with a digit is kept past the last 40 events, marked for it',
+    /DIGIT ANSWER sqlite[^\n]*\[MENTIONS YOU\]/.test(h.out) && /noise 44/.test(h.out), h.out.slice(0, 300));
+}
+// Several hooks for one board share ~/.agent-board-hook.json. One that waited while another saved must not undo
+// that save: its agent's cursor never goes back, fields it didn't change and other entries are kept.
+{
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const readState = () => JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+  const latest = async () => (await human('/cursor')).cursor;
+  await runHook([]); // the cursor is now at the newest event
+  const waiting = runHook([], 'ana', { BOARD_HOOK_WAIT: '15' });
+  await sleep(2500); // it has read its state and is waiting for events
+  const s = readState();
+  const ahead = s[anaKey].cursor + 1000;
+  s[anaKey] = { ...s[anaKey], cursor: ahead, nudge: 12345 };
+  s['0123456789abcdef|other-session'] = { cursor: 3, seen: Date.now() };
+  fs.writeFileSync(stateFile, JSON.stringify(s));
+  await ben('post', { text: 'wakes the waiting hook' });
+  h = await waiting;
+  let after = readState();
+  check('hook: a save made meanwhile by another hook is merged (cursor never goes back, its fields and entries kept)',
+    /wakes the waiting hook/.test(h.out) && after[anaKey].cursor === ahead && after[anaKey].nudge === 12345 && after['0123456789abcdef|other-session']?.cursor === 3,
+    `${JSON.stringify(after[anaKey])} ${h.out.slice(0, 200)}`);
+  // That cursor is past the board's newest event (as after a fresh board): the next stop still starts over.
+  await runHook([]);
+  after = readState();
+  const now = await latest();
+  check('hook: a cursor past the board\'s newest event is still reset', after[anaKey].cursor <= now, `${after[anaKey].cursor} > ${now}`);
+  // The short lock around the save: a stale one (left by a crashed hook) is cleared, a held one is waited for briefly, never hung on.
+  const lock = `${stateFile}.lock`;
+  fs.writeFileSync(lock, '');
+  fs.utimesSync(lock, new Date(Date.now() - 60e3), new Date(Date.now() - 60e3));
+  await ben('post', { text: 'after a stale lock' });
+  h = await runHook([]);
+  check('hook: a stale state lock is cleared and the save goes through', /after a stale lock/.test(h.out) && !fs.existsSync(lock) && readState()[anaKey].cursor === await latest(), h.out.slice(0, 200));
+  fs.writeFileSync(lock, '');
+  await ben('post', { text: 'while the lock is held' });
+  const t0 = Date.now();
+  h = await runHook([]);
+  const took = Date.now() - t0;
+  check('hook: a held state lock doesn\'t hold it up: it saves anyway and leaves the lock to its owner',
+    /while the lock is held/.test(h.out) && took < 5000 && fs.existsSync(lock) && readState()[anaKey].cursor === await latest(), `${took}ms ${h.out.slice(0, 200)}`);
+  fs.rmSync(lock, { force: true });
+}
+// The transcript is read from its end (a bounded tail), never whole: a transcript too big for one string (simulated
+// here: reading it whole throws) still has its usage-limit notice found, after megabytes of earlier entries.
+{
+  const preload = path.join(tmp, 'no-whole-transcript.mjs');
+  fs.writeFileSync(preload, "import fs from 'node:fs'; const o = fs.readFileSync; fs.readFileSync = function (p, ...a) { if (typeof p === 'string' && p.endsWith('.jsonl')) throw new RangeError('Cannot create a string longer than 0x1fffffe8 characters'); return o.call(this, p, ...a); };\n");
+  const filler = line({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'é'.repeat(20000) }] } });
+  const big = [...Array(300).fill(filler), userLine, line({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: "You've hit your usage limit · resets 3pm" }] } })];
+  h = await runHook(big, 'ana', {}, ['--import', pathToFileURL(preload).href]);
+  pa = await agentP('ana');
+  check('hook: a big transcript is read from its end (the notice after ~12 MB is found, the file is never read whole)', h.code === 0 && pa.limited?.by === 'agent', `${h.out.slice(0, 200)} ${JSON.stringify(pa.limited)}`);
+  await unmark('ana');
 }
 
 // ================= 2b. hook: only Claude Code's own notice, only as the last assistant entry =================

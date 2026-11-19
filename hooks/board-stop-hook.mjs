@@ -34,19 +34,45 @@ const NUDGE_EVERY_MS = 3 * 60e3;
 const STATE_FILE = path.join(os.homedir(), '.agent-board-hook.json');
 const KEEP_MS = 30 * 24 * 3600e3;
 
-// The hook's memory for one board + agent: read once, saved with save(patch).
+// Several hooks (agents, sessions) save to that one file: a short lock keeps their read-merge-write steps apart.
+// Best effort and never a hang: a lock older than LOCK_STALE_MS (a crashed hook's) is removed, and after LOCK_WAIT_MS
+// the hook saves without it (the merge below still keeps the other entries).
+const LOCK_FILE = `${STATE_FILE}.lock`;
+const LOCK_WAIT_MS = 300;
+const LOCK_STALE_MS = 5e3;
+function lockState() {
+  const until = Date.now() + LOCK_WAIT_MS;
+  for (let first = true; ; first = false) {
+    if (!first && Date.now() > until) return false;
+    try { fs.closeSync(fs.openSync(LOCK_FILE, 'wx')); return true; } catch (e) { if (e.code !== 'EEXIST') return false; }
+    try { if (Date.now() - fs.statSync(LOCK_FILE).mtimeMs > LOCK_STALE_MS) { fs.unlinkSync(LOCK_FILE); continue; } } catch { continue; }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+  }
+}
+
+// The hook's memory for one board + agent: read once, saved with save(patch). reset: the cursor may go back
+// (the board was started fresh); otherwise a cursor or nudge time saved meanwhile by another hook of this agent
+// (one that didn't wait as long) is kept when it's further along.
 function hookState(key) {
   const read = () => { try { const a = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); return a && typeof a === 'object' && !Array.isArray(a) ? a : {}; } catch { return {}; } };
   const entry = { ...(read()[key] || {}) };
-  const save = (patch) => {
-    Object.assign(entry, patch);
-    // Read again just before writing: another session's hook may have saved its own entry meanwhile.
-    const all = read();
-    const now = Date.now();
-    all[key] = { ...entry, seen: now };
-    for (const k of Object.keys(all)) if (!(now - (all[k]?.seen || 0) < KEEP_MS)) delete all[k];
+  const save = (patch, { reset = false } = {}) => {
+    const locked = lockState();
     const tmp = `${STATE_FILE}.${process.pid}.tmp`;
-    try { fs.writeFileSync(tmp, JSON.stringify(all)); fs.renameSync(tmp, STATE_FILE); } catch { try { fs.unlinkSync(tmp); } catch {} }
+    try {
+      // Read again just before writing, and change only what this hook changed: other hooks may have saved meanwhile.
+      const all = read();
+      const now = Date.now();
+      const disk = all[key] && typeof all[key] === 'object' ? all[key] : {};
+      const merged = { ...disk, ...patch, seen: now };
+      for (const f of ['cursor', 'nudge']) if (f in patch && !(reset && f === 'cursor') && Number(disk[f]) > Number(patch[f])) merged[f] = disk[f];
+      all[key] = merged;
+      Object.assign(entry, merged);
+      for (const k of Object.keys(all)) if (!(now - (all[k]?.seen || 0) < KEEP_MS)) delete all[k];
+      fs.writeFileSync(tmp, JSON.stringify(all));
+      fs.renameSync(tmp, STATE_FILE);
+    } catch { try { fs.unlinkSync(tmp); } catch {} }
+    finally { if (locked) try { fs.unlinkSync(LOCK_FILE); } catch {} }
   };
   return { entry, save };
 }
@@ -93,7 +119,7 @@ async function main() {
   if (fresh) since = Math.max(0, latest - 50);
 
   const { events, cursor } = await get(`/api/events?since=${since}&exclude=${encodeURIComponent(agent)}&wait=${wait}`);
-  state.save({ cursor });
+  state.save({ cursor }, { reset: fresh });
 
   // The board leaves out this agent's own events; its own subagents' (<agent>/<name>) are left out here.
   const own = (e) => String(e.author || '').toLowerCase().startsWith(agent + '/');
@@ -102,7 +128,11 @@ async function main() {
 
   // A direct message from a human counts as a mention (the board only sends this agent its own threads).
   const direct = (e) => e.channel === 'direct' && e.data?.dm?.from !== 'agent';
-  const mentionsMe = (e) => direct(e) || (e.data?.mentions || []).map((m) => String(m).toLowerCase()).some((m) => m === agent || m.startsWith(agent + '/') || m === 'all' || m === 'everyone');
+  const mine = (n) => n === agent || n.startsWith(agent + '/');
+  // An answer to a question this agent (or one of its subagents) asked. The board writes it as `@<asker> re "…": …`;
+  // matched here because not every name can be an @mention (one starting with a digit never is).
+  const answerToMe = (e) => e.kind === 'answer' && mine(String(e.data?.asker ?? /^@([\w.\-/]+) re "/.exec(String(e.text || ''))?.[1] ?? '').toLowerCase());
+  const mentionsMe = (e) => direct(e) || answerToMe(e) || (e.data?.mentions || []).map((m) => String(m).toLowerCase()).some((m) => mine(m) || m === 'all' || m === 'everyone');
   // The last 40 events, plus every one for this agent (mentions, direct messages, answers to its questions)
   // however early: the cursor moves past all of them, so one left out would never be seen.
   const others = relevant.filter((e) => !mentionsMe(e));
@@ -134,10 +164,25 @@ const NOTICE_RE = [
   /^Your limit will reset at\b/i,
 ];
 const FLAGGED_RE = /usage limit reached|hit your [\w -]*limit|limit will reset/i;
+// Transcripts grow to many megabytes: only their last TAIL_BYTES are read (the first, cut line is dropped).
+const TAIL_BYTES = 2 * 1024 * 1024;
+function tailLines(file) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const size = fs.fstatSync(fd).size;
+    const len = Math.min(size, TAIL_BYTES);
+    const buf = Buffer.alloc(len);
+    let got = 0;
+    for (let n; got < len && (n = fs.readSync(fd, buf, got, len - got, size - len + got)); ) got += n;
+    let text = buf.toString('utf8', 0, got);
+    if (len < size) text = text.slice(text.indexOf('\n') + 1);
+    return text.trim().split(/\r?\n/).slice(-200);
+  } finally { fs.closeSync(fd); }
+}
 function limitNotice(transcriptPath) {
   if (!transcriptPath) return null;
   let lines;
-  try { lines = fs.readFileSync(transcriptPath, 'utf8').trim().split(/\r?\n/).slice(-200); } catch { return null; }
+  try { lines = tailLines(transcriptPath); } catch { return null; }
   for (let i = lines.length - 1; i >= 0; i--) {
     let e; try { e = JSON.parse(lines[i]); } catch { continue; }
     if (e?.type !== 'assistant') continue;
