@@ -5,9 +5,8 @@ import { EventEmitter } from 'node:events';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
+import { STATUSES, countOf, slotText, claimRefusal, updateRefusal } from './task-rules.js';
 
-// 'proposed': suggested by a non-planner agent, waiting for the planner (or a human) to approve it.
-const STATUSES = ['proposed', 'open', 'claimed', 'in_progress', 'blocked', 'review', 'done'];
 const STALE_MS = 15 * 60 * 1000;
 const AGENT_ONLINE_MS = 10 * 60 * 1000;
 // A helper (subagent, "<agent>/<as>") with no call for this long counts as gone; BOARD_HELPER_IDLE_MS lets tests shorten it.
@@ -39,10 +38,6 @@ const PR_RE = /https?:\/\/\S+?\/(?:pull|pulls|merge_requests)\/\d+/i;
 // Board calls outside a request (REST, tests) have none, so the name checks below don't apply to them.
 export const callerLaptop = new AsyncLocalStorage();
 
-// "1 task", "2 tasks": for guidance and refusal texts.
-const countOf = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
-// An agent's task limit as the web board shows it, with the planner's extra slots said separately.
-const slotText = (cap) => cap.extra ? `${cap.base} at once (+${cap.extra} extra as planner while others are busy)` : `${cap.slots} at once`;
 // Same time format as the web board: "4:00 PM", with the weekday when it isn't today. No seconds.
 const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 const stamp = (ms) => (new Date(ms).toDateString() === new Date().toDateString() ? clock(ms) : `${new Date(ms).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} ${clock(ms)}`);
@@ -578,32 +573,15 @@ export class Board {
     if (!task) throw new Error(`task #${id} not found`);
     const gate = this.claimGate(task);
     if (gate) throw new Error(gate);
-    if (task.status === 'proposed') throw new Error(`task #${id} is only proposed: the planner hasn't approved it yet. Pick another task.`);
-    if (task.reserved_for && !sameTeam(author, task.reserved_for) && this.isAvailable(task.reserved_for)) {
-      throw new Error(`task #${id} is reserved for ${task.reserved_for}. Pick another task.`);
-    }
-    // Unfinished dependencies are named in every refusal: they're usually the reason that matters.
-    const waits = task.depends_on.map((d) => this.getTask(d)).filter((d) => d && d.status !== 'done');
-    const alsoWaits = waits.length ? ` Also, #${id} waits on ${waits.map((b) => `#${b.id} (${b.status})`).join(', ')}.` : '';
-    if (task.status === 'open') {
-      const cap = this.capacity(author);
-      if (cap.active >= cap.slots) {
-        throw new Error(`You already hold ${countOf(cap.active, 'active task')} and may hold ${slotText(cap)} (${cap.plan || 'no plan given'}${cap.override ? ', set on the web board' : ''}). Finish or release one first.${alsoWaits}`);
-      }
-      // Extra planner slots (nobody else free) are for small and medium work only.
-      if (cap.extra && cap.active >= cap.base && task.size === 'L') {
-        throw new Error(`You're using the planner's extra slots (nobody else is free); those are for S/M tasks only. #${id} is size L: leave it for an agent with room.${alsoWaits}`);
-      }
-      const idle = this.idleAgents(author);
-      const free = this.claimableFor(null).filter((t) => !t.reserved_for).length;
-      if (cap.active >= 1 && idle.length && free <= idle.length) {
-        throw new Error(`Leave this for an idle teammate: ${idle.join(', ')} have no task and there are only ${countOf(free, 'unreserved task')} to go around. Keep working on yours and wait_for_events.${alsoWaits}`);
-      }
-    }
-    const blockers = task.depends_on.map((d) => this.getTask(d)).filter((d) => d && d.status !== 'done');
-    if (blockers.length) {
-      throw new Error(`task #${id} depends on unfinished task(s): ${blockers.map((b) => `#${b.id} (${b.status})`).join(', ')}`);
-    }
+    const refusal = claimRefusal({
+      id, task,
+      reservedElsewhere: () => !!task.reserved_for && !sameTeam(author, task.reserved_for) && this.isAvailable(task.reserved_for),
+      waits: task.depends_on.map((d) => this.getTask(d)).filter((d) => d && d.status !== 'done'),
+      capacity: () => this.capacity(author),
+      idle: () => this.idleAgents(author),
+      free: () => this.claimableFor(null).filter((t) => !t.reserved_for).length,
+    });
+    if (refusal) throw new Error(refusal);
     const branch = task.branch || `task/${id}-${slug(task.title)}`;
     const r = this.db
       .prepare("UPDATE tasks SET status='claimed', assignee=?, branch=?, updated_at=? WHERE id=? AND status='open'")
@@ -620,66 +598,21 @@ export class Board {
     if (!human) this.assertOwnName(author);
     const task = this.getTask(id);
     if (!task) throw new Error(`task #${id} not found`);
-    if (status !== undefined && !STATUSES.includes(status)) throw new Error(`status must be one of ${STATUSES.join(', ')}`);
-    const changingStatus = status !== undefined && status !== task.status;
-    // A human moving a card to claimed / in progress: it needs an owner, and its dependencies done
-    // (otherwise nobody holds it and no agent can claim it). API callers can send force: true to move it
-    // anyway; the messages are for people on the web board, so they don't mention it.
-    if (human && !force && changingStatus && ['claimed', 'in_progress'].includes(status)) {
-      if (!(assignee !== undefined ? assignee : task.assignee)) throw new Error(`Pick who #${id} is for first.`);
-      const waiting = ['claimed', 'in_progress'].includes(task.status) ? [] : task.depends_on.filter((d) => { const x = this.getTask(d); return x && x.status !== 'done'; });
-      if (waiting.length) {
-        const list = waiting.map((d) => '#' + d);
-        const names = list.length === 1 ? list[0] : `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
-        throw new Error(`#${id} waits on ${names}, which ${list.length === 1 ? "isn't" : "aren't"} done yet.`);
-      }
-    }
     const owner = !!task.assignee && sameTeam(author, task.assignee);
     const s = this.getSettings();
     // Whoever merges it: the integrator, or (integrator = whoever is free) the agent that took the review.
     const canMerge = (!!s.integrator && s.integrator !== ANYONE && sameTeam(author, s.integrator)) || (!!task.reviewer && sameTeam(author, task.reviewer));
-    if (!human) {
-      const isPlanner = !!s.planner && sameTeam(author, s.planner);
-      if (assignee !== undefined) throw new Error('Only humans can assign tasks (on the web board). The planner can reserve one for an agent with reserved_for.');
-      if (reserved_for !== undefined && !isPlanner) throw new Error('Only the planner and humans can reserve tasks for an agent.');
-      if (status === 'proposed') throw new Error('status "proposed" is set by the board when a non-planner creates a task.');
-      if (task.status === 'proposed' && changingStatus) throw new Error(`task #${id} is a proposal: the planner approves or rejects it with decide_proposal.`);
-      // The merger may move a task out of review: done, back to in_progress for fixes, or blocked (can't test it).
-      const merger = task.status === 'review' && ['done', 'in_progress', 'blocked'].includes(status) && canMerge;
-      // Blocked and done tasks don't hold a slot, so unblocking or reopening one has to fit within the slots again.
-      if (owner && ['blocked', 'done'].includes(task.status) && ['claimed', 'in_progress'].includes(status)) {
-        const cap = this.capacity(author);
-        if (cap.active >= cap.slots) throw new Error(`You hold ${cap.active} of ${cap.slots} task(s) at once: finish or release one before ${task.status === 'done' ? 'reopening' : 'unblocking'} #${id}.`);
-      }
-      // Done means merged: only whoever merges moves a task to done, and only from review. Without anyone to
-      // review it (no integrator yet, or no other agent online) the owner may mark its own work done.
-      // (Someone else's task: the ownership check below refuses it.)
-      if (owner && changingStatus && status === 'done' && !(task.status === 'review' && canMerge) && s.integrator && this.onlineAgents().some((n) => !sameTeam(n, author))) {
-        if (task.status !== 'review') {
-          throw new Error(canMerge
-            ? `Move #${id} to review first (update_task status "review"), then merge it and mark it done.`
-            : `Move #${id} to review first (update_task status "review", with pr_url if you opened a PR): ${s.integrator === ANYONE ? 'another agent takes it with claim_review' : `${s.integrator} reviews it`} and marks it done once it's merged.`);
-        }
-        throw new Error(s.integrator === ANYONE
-          ? `#${id} is waiting for review: another agent takes it with claim_review and merges it. Carry on with other work.`
-          : `#${id} is waiting for ${s.integrator} to review and merge it. Carry on with other work.`);
-      }
-      // A crashed agent's task, or one whose owner hit its usage limit: anyone may put it back to open.
-      const takeover = status === 'open' && ((task.stale && !this.isOnline(task.assignee)) || (task.assignee && this.isLimited(task.assignee)));
-      if (!task.assignee && (changingStatus || branch !== undefined)) {
-        throw new Error(`task #${id} isn't claimed by anyone. Claim it first (claim_task).`);
-      }
-      if (task.assignee && !owner && (changingStatus || branch !== undefined) && !merger && !takeover) {
-        throw new Error(task.stale
-          ? `task #${id} belongs to ${task.assignee}. It's stale but they're still online: post to @${task.assignee} first.`
-          : task.status === 'review' && s.integrator === ANYONE
-            ? `task #${id} is in review. Take the review first with claim_review(${id}), then you can merge it or send it back.`
-            : `task #${id} is assigned to ${task.assignee}; post a message to them instead of changing it.`);
-      }
-    }
+    const refusal = updateRefusal({
+      id, task, status, branch, assignee, reserved_for, pr_url, force, human, owner, canMerge,
+      isPlanner: !!s.planner && sameTeam(author, s.planner), integrator: s.integrator, anyone: s.integrator === ANYONE,
+      capacity: () => this.capacity(author),
+      waitingOn: () => task.depends_on.filter((d) => { const x = this.getTask(d); return x && x.status !== 'done'; }),
+      othersOnline: () => this.onlineAgents().some((n) => !sameTeam(n, author)),
+      ownerAway: () => (task.stale && !this.isOnline(task.assignee)) || (task.assignee && this.isLimited(task.assignee)),
+    });
+    if (refusal) throw new Error(refusal);
     // A pull request link: given directly (owner, merger or a human), or the first PR URL in the owner's
     // note while the task has none yet (a reviewer's note mentioning another PR must not replace it).
-    if (pr_url !== undefined && !human && !owner && !canMerge) throw new Error(`Only ${task.assignee || 'the task owner'}, whoever merges it, or a human can set #${id}'s PR link.`);
     const fromNote = (human || owner) && !task.pr_url ? String(note || '').match(PR_RE)?.[0] : null;
     const pr = pr_url !== undefined ? String(pr_url || '').trim().slice(0, 300) || null : fromNote || task.pr_url;
     if (pr && !/^https?:\/\//i.test(pr)) throw new Error('pr_url must be an http(s) link to the pull request');

@@ -125,6 +125,7 @@ The rules for capacity, fair sharing, reservations and proposals are in [How wor
 | File | What it holds |
 |---|---|
 | `board.js` | The coordination engine: tasks, locks, events, `next_action`, SQLite. No HTTP. |
+| `task-rules.js` | Who may move a task where: claiming, status moves by the owner, the merger, a takeover or a human, done only through review, reopening within the slots. Pure checks that return the refusal text; `board.js` does the writes and events. |
 | `mcp.js` | The MCP tools an agent calls. |
 | `boards.js` | The boards list (`boards.json`), board and admin tokens on disk. |
 | `runtime.js` | One running board: wires the modules below together and stops them on `close()`. |
