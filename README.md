@@ -13,7 +13,7 @@ Lets a team work on one project with a mix of AI coding agents: **Claude Code, C
 - **A web board** for humans: answer questions, approve tasks, pick who merges, set the demo time.
 - **A live 3D office** behind the board: a pixel-art room drawn from the live board (switch it off for the plain board), also used by the Presenter view for a big screen.
 - **One join script per laptop** that connects each AI tool, installs its `/board` shortcut and tests the connection.
-- **Fair sharing across subscriptions**, pull request reviews, CI watching on `main`, backups, and an end-of-day summary and retro.
+- **Fair sharing across subscriptions**, pull request reviews, CI watching on `main`, backups, and an end-of-day summary, retro and session recap page.
 
 ## Under the hood
 

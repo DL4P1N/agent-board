@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark" id="m-scheme">
+<meta name="theme-color" content="#f1f2f4" media="(prefers-color-scheme: light)" id="m-tc-light">
+<meta name="theme-color" content="#060607" media="(prefers-color-scheme: dark)" id="m-tc-dark">
+<title>Session recap</title>
+<meta name="description" content="Read-only recap of the board session: goal, tasks done, merges, per agent and per human, the slowest tasks and the longest blocks">
+<link rel="icon" id="m-icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2032%2032'%3E%3Cstyle%3E.ma%7Bfill%3A%232b5bcc%7D.mi%7Bfill%3A%231b1d21%7D.me%7Bfill%3A%23ffffff%7D%40media%20(prefers-color-scheme%3Adark)%7B.ma%7Bfill%3A%237aa7ff%7D.mi%7Bfill%3A%23e6e7ea%7D.me%7Bfill%3A%230c0d0f%7D%7D%3C%2Fstyle%3E%3Crect%20class%3D'me'%20width%3D'32'%20height%3D'32'%20rx%3D'7'%2F%3E%3Cg%20transform%3D'translate(2%202.4)%20scale(.875)'%3E%3Cg%20transform%3D'translate(-.5%203.5)%20scale(.53)'%3E%3Crect%20x%3D'12'%20width%3D'2.6'%20height%3D'6'%20rx%3D'1.3'%20class%3D'ma'%2F%3E%3Ccircle%20cx%3D'13.3'%20cy%3D'1.6'%20r%3D'2.4'%20class%3D'ma'%2F%3E%3Crect%20y%3D'7'%20width%3D'26'%20height%3D'21'%20rx%3D'8'%20class%3D'ma'%2F%3E%3Crect%20x%3D'6'%20y%3D'14'%20width%3D'4'%20height%3D'7'%20rx%3D'2'%20class%3D'me'%2F%3E%3Crect%20x%3D'16'%20y%3D'14'%20width%3D'4'%20height%3D'7'%20rx%3D'2'%20class%3D'me'%2F%3E%3C%2Fg%3E%3Cg%20transform%3D'translate(18.7%203.5)%20scale(.53)'%3E%3Crect%20x%3D'12'%20width%3D'2.6'%20height%3D'6'%20rx%3D'1.3'%20class%3D'ma'%2F%3E%3Ccircle%20cx%3D'13.3'%20cy%3D'1.6'%20r%3D'2.4'%20class%3D'ma'%2F%3E%3Crect%20y%3D'7'%20width%3D'26'%20height%3D'21'%20rx%3D'8'%20class%3D'ma'%2F%3E%3Crect%20x%3D'6'%20y%3D'14'%20width%3D'4'%20height%3D'7'%20rx%3D'2'%20class%3D'me'%2F%3E%3Crect%20x%3D'16'%20y%3D'14'%20width%3D'4'%20height%3D'7'%20rx%3D'2'%20class%3D'me'%2F%3E%3C%2Fg%3E%3Cg%20transform%3D'translate(6.1%206.8)%20scale(.76)'%3E%3Crect%20x%3D'12'%20width%3D'2.6'%20height%3D'6'%20rx%3D'1.3'%20class%3D'mi'%2F%3E%3Ccircle%20cx%3D'13.3'%20cy%3D'1.6'%20r%3D'2.4'%20class%3D'ma'%2F%3E%3Crect%20y%3D'7'%20width%3D'26'%20height%3D'21'%20rx%3D'8'%20class%3D'mi'%2F%3E%3Crect%20x%3D'6'%20y%3D'14'%20width%3D'4'%20height%3D'7'%20rx%3D'2'%20class%3D'me'%2F%3E%3Crect%20x%3D'16'%20y%3D'14'%20width%3D'4'%20height%3D'7'%20rx%3D'2'%20class%3D'me'%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E">
+<script>
+// The board's theme choice (one of its fifteen themes, or Auto, per browser), like the board and the 3D presenter.
+// Auto leaves html[data-theme] off and follows the OS (Dark or Light). Unknown values read as Auto.
+(function () {
+  // themes:start
+  var THEMES = {
+    dark: ["Dark", '#060607'],
+    light: ["Light", '#f1f2f4', 1],
+    dusk: ["Dusk", '#1b1530'],
+    day: ["Day", '#efe4cf', 1],
+    night: ["Night", '#080c1a'],
+    terminal: ["Terminal", '#020a04'],
+    contrast: ["High Contrast", '#000000'],
+    paper: ["Paper", '#e9e4d8', 1],
+    synthwave: ["Synthwave", '#130824'],
+    ocean: ["Ocean", '#04161f'],
+    sticky: ["Sticky Note", '#ffe066', 1],
+    coral: ["Coral", '#ffd3c2', 1],
+    candy: ["Cotton Candy", '#e4efff', 1],
+    sunset: ["Sunset", '#1c0d14'],
+    forest: ["Forest", '#0e1912']
+  };
+  // The favicon's colours per theme: accent, text, panel.
+  var THEME_ICON = {
+    dark: ['#7aa7ff', '#e6e7ea', '#0c0d0f'],
+    light: ['#2b5bcc', '#1b1d21', '#ffffff'],
+    dusk: ['#ff9466', '#f1e9ff', '#241c40'],
+    day: ['#9a4a14', '#2c2114', '#fff7e8'],
+    night: ['#ff9466', '#dce7ff', '#0f1730'],
+    terminal: ['#4de0ff', '#a4ffb5', '#04140a'],
+    contrast: ['#ff70ff', '#ffffff', '#0b0b0b'],
+    paper: ['#1d4ea3', '#1d1b18', '#faf8f2'],
+    synthwave: ['#ff4fa8', '#fbeeff', '#1e0e37'],
+    ocean: ['#ff8a65', '#e2f4f8', '#0a2230'],
+    sticky: ['#6b2bb5', '#2b1d05', '#fff7cc'],
+    coral: ['#6a32c9', '#2e0f08', '#fff3ee'],
+    candy: ['#c4127a', '#2a1640', '#fff4fa'],
+    sunset: ['#ff80d0', '#ffeee8', '#28131d'],
+    forest: ['#c9a7ff', '#e8f1e3', '#15251a']
+  };
+  window.themeIcon = function (t) {
+    var I = THEME_ICON, c = function (id) { return '.ma{fill:' + I[id][0] + '}.mi{fill:' + I[id][1] + '}.me{fill:' + I[id][2] + '}'; };
+    var h = function (k) { return "<rect x='12' width='2.6' height='6' rx='1.3' class='" + k + "'/><circle cx='13.3' cy='1.6' r='2.4' class='ma'/><rect y='7' width='26' height='21' rx='8' class='" + k + "'/><rect x='6' y='14' width='4' height='7' rx='2' class='me'/><rect x='16' y='14' width='4' height='7' rx='2' class='me'/>"; };
+    var css = Object.prototype.hasOwnProperty.call(I, t) ? c(t) : c('light') + '@media (prefers-color-scheme:dark){' + c('dark') + '}';
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><style>" + css + "</style><rect class='me' width='32' height='32' rx='7'/><g transform='translate(2 2.4) scale(.875)'><g transform='translate(-.5 3.5) scale(.53)'>" + h('ma') + "</g><g transform='translate(18.7 3.5) scale(.53)'>" + h('ma') + "</g><g transform='translate(6.1 6.8) scale(.76)'>" + h('mi') + '</g></g></svg>';
+    var l = document.getElementById('m-icon');
+    if (l) l.setAttribute('href', 'data:image/svg+xml,' + encodeURIComponent(svg));
+  };
+  // themes:end
+  function themeOf(t) { return Object.prototype.hasOwnProperty.call(THEMES, t) ? t : 'auto'; }
+  function apply(t) {
+    var d = document.documentElement, g = function (i) { return document.getElementById(i); };
+    t = themeOf(t);
+    var auto = t === 'auto', light = !auto && !!THEMES[t][2];
+    if (auto) d.removeAttribute('data-theme'); else d.setAttribute('data-theme', t);
+    g('m-scheme').setAttribute('content', auto ? 'light dark' : light ? 'light' : 'dark');
+    g('m-tc-light').setAttribute('media', auto ? '(prefers-color-scheme: light)' : light ? 'all' : 'not all');
+    g('m-tc-light').setAttribute('content', THEMES[light ? t : 'light'][1]);
+    g('m-tc-dark').setAttribute('media', auto ? '(prefers-color-scheme: dark)' : light ? 'not all' : 'all');
+    g('m-tc-dark').setAttribute('content', THEMES[auto || light ? 'dark' : t][1]);
+    window.themeIcon(t);
+  }
+  try { apply(localStorage.getItem('board-theme')); } catch (e) {}
+  // Changed on the board in another tab of this browser: follow it.
+  addEventListener('storage', function (e) { if (e.key === 'board-theme') apply(e.newValue); });
+})();
+</script>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/board.css">
+<style>
+  /* The session recap: the board's panels and type (tokens.css, board.css) on one read-only page, for a screen
+     after the session or for print. Two columns from 900px, one on phones. Data: GET <board>/api/recap (src/recap.js). */
+  .rc-h h1 { font-family: var(--mono); text-transform: uppercase; letter-spacing: .12em; font-size: var(--fs-meta); color: var(--muted); text-shadow: var(--shade); }
+  .rc-h .rc-span { font: var(--fs-meta) var(--mono); color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+  .rc { display: grid; grid-template: none / minmax(0, 1fr); gap: var(--gutter); align-items: start; padding: var(--edge); max-width: 1280px; margin: 0 auto; } /* not the board's main grid */
+  @media (min-width: 900px) { .rc { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rc .wide { grid-column: 1 / -1; } }
+  .rc .o-body { overflow: visible; }
+  .rc-goal { font-size: var(--fs-lead); font-weight: 600; line-height: var(--lh-tight); overflow-wrap: anywhere; white-space: pre-line; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+  .rc-facts { display: flex; flex-wrap: wrap; gap: var(--s5) var(--s7); margin: var(--s5) 0 0; padding: 0; list-style: none; }
+  .rc-facts li { display: flex; flex-direction: column; gap: var(--s1); }
+  .rc-facts b { font: 700 var(--fs-title)/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+  .rc-facts span { font-size: var(--fs-meta); color: var(--muted); }
+  .rc-chart { display: block; width: 100%; height: 120px; }
+  .rc-chart .ax { stroke: var(--line-strong); stroke-width: 1; }
+  .rc-chart .ln { fill: none; stroke: var(--ok); stroke-width: 2; }
+  .rc-chart .ar { fill: var(--ok); opacity: .12; }
+  .rc-axis { display: flex; justify-content: space-between; gap: var(--s4); font: var(--fs-meta) var(--mono); color: var(--muted); margin-top: var(--s2); }
+  .rc table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+  .rc th { font: 700 var(--fs-micro)/1.2 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); text-align: right; padding: 0 0 var(--s3) var(--s4); white-space: nowrap; }
+  .rc td { padding: var(--s3) 0 var(--s3) var(--s4); text-align: right; border-top: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+  .rc :is(th, td):first-child { text-align: left; padding-left: 0; white-space: normal; }
+  .rc .who { display: inline-flex; align-items: center; gap: var(--s3); min-width: 0; overflow-wrap: anywhere; }
+  /* Working vs waiting: one thin bar per agent under its name, its length the agent's share of the longest. */
+  .rc .tm { display: flex; height: 4px; margin-top: var(--s2); background: transparent; max-width: 240px; }
+  .rc .tm i { display: block; height: 100%; }
+  .rc .tm .w { background: var(--info); } .rc .tm .x { background: var(--line-strong); }
+  .rc .key { font: var(--fs-meta) var(--mono); color: var(--muted); }
+  .rc .key i { display: inline-block; width: 8px; height: 8px; margin: 0 var(--s2) 0 var(--s4); vertical-align: 0; }
+  .rc .key .w { background: var(--info); } .rc .key .x { background: var(--line-strong); }
+  .rc ol { margin: 0; padding: 0; list-style: none; }
+  .rc ol li { padding: var(--s3) 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+  .rc ol li:first-child { border-top: 0; padding-top: 0; }
+  .rc .lt { display: flex; gap: var(--s4); align-items: baseline; font-size: var(--fs-sm); font-weight: 600; }
+  .rc .lt .id { flex: none; color: var(--muted); font: 400 var(--fs-meta) var(--mono); }
+  .rc .lt .d { margin-left: auto; font: 700 var(--fs-sm) var(--mono); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .rc .lm { font-size: var(--fs-meta); color: var(--muted); margin-top: var(--s1); }
+  .rc .lm q { color: var(--ink); }
+  .rc .still { color: var(--bad); }
+  .msg { padding: var(--s8) var(--edge); text-align: center; color: var(--muted); }
+  @media print {
+    /* Paper: the Light theme's colours whatever the screen shows, no shadows, no sticky header, no buttons. */
+    :root:root:root { color-scheme: light; --bg: #fff; --panel: #fff; --raised: #fff; --ink: #111; --muted: #444; --border: #999; --line: #ccc; --line-strong: #888; --info: #08647f; --ok: #1b6b37; --bad: #b2261e; --outline: #303236; --shade: none; --dl: 48%; }
+    header { position: static; border-bottom: 1px solid var(--border); }
+    .rc-print { display: none; }
+    .rc { max-width: none; padding: var(--s4) 0; }
+    .o-panel { box-shadow: none; border-width: 1px; break-inside: avoid; }
+    .o-head { border-bottom-width: 1px; }
+  }
+</style>
+</head>
+<body>
+<header class="rc-h">
+  <h1>Session recap</h1>
+  <span class="rc-span" id="span"></span>
+  <span class="sp"></span>
+  <button type="button" class="ghost sm rc-print" id="print">Print</button>
+</header>
+<main id="recap" class="rc" aria-live="polite"><p class="msg">Loading the recap…</p></main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Several boards can share a server: /b/<slug>/ has its own API under /b/<slug>/api. The default board is at the root.
+const BASE = (location.pathname.match(/^\/b\/[^/]+/) || [''])[0];
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+// The read-only viewer token, as for the presenter view (the same key): the board's link carries it once, then it's kept
+// in this browser and taken out of the address bar. ?since=<ms or ISO date> stays: it picks the span's start.
+const qs = new URLSearchParams(location.search);
+const VIEW_KEY = 'board-view-token' + (BASE ? '@' + BASE : '');
+const token = qs.get('token') || store.get(VIEW_KEY) || '';
+if (qs.get('token')) { store.set(VIEW_KEY, token); qs.delete('token'); history.replaceState(null, '', location.pathname + (qs.toString() ? '?' + qs : '')); }
+const since = qs.get('since') || '';
+
+const HUES = [45, 75, 110, 145, 175, 200, 222, 245, 270, 295, 320];
+const person = (n) => String(n || '').split('/')[0].replace(/-(claude|codex|copilot|copilotcli|copilot-vscode|copilot-cli)\d*$/, '');
+const nameHash = (n) => { let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
+const hue = (n) => HUES[nameHash(person(n).toLowerCase()) % HUES.length];
+const who = (n) => `<span class="who"><span class="pdot" style="--h:${hue(n)}" aria-hidden="true"></span>${esc(n)}</span>`;
+const plural = (n, w, ws = w + 's') => `${n} ${n === 1 ? w : ws}`;
+const dur = (ms) => { const m = Math.round(ms / 60e3); if (!m) return ms > 0 ? '<1m' : '0m'; const h = Math.floor(m / 60); return h ? `${h}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`; };
+const clock = (ts) => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const day = (ts) => new Date(ts).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+const at = (ts, ref) => (new Date(ts).toDateString() === new Date(ref).toDateString() ? clock(ts) : `${day(ts)} ${clock(ts)}`);
+const STATUS = { in_progress: 'in progress', claimed: 'claimed', open: 'open', review: 'review', done: 'done', deleted: 'deleted' };
+const panel = (title, body, { wide = false, sub = '' } = {}) => `<section class="o-panel${wide ? ' wide' : ''}" aria-label="${esc(title)}"><div class="o-head"><h2>${esc(title)}</h2>${sub ? `<span class="o-sub">${sub}</span>` : ''}</div><div class="o-body">${body}</div></section>`;
+const none = (t) => `<p class="empty-note">${esc(t)}</p>`;
+
+// Tasks done over time: a step line from the span's start to its end, up to the number of tasks in scope.
+function chart(r) {
+  const W = 600, H = 120, t0 = r.since, t1 = Math.max(r.until, t0 + 1), top = Math.max(1, r.tasks.total);
+  const x = (t) => ((t - t0) / (t1 - t0)) * W, y = (n) => H - 2 - (n / top) * (H - 4);
+  let d = `M0 ${y(0)}`, n = 0;
+  for (const t of r.done_at) { d += ` H${x(t).toFixed(1)} V${y(++n).toFixed(1)}`; }
+  d += ` H${W}`;
+  const label = `${plural(r.done_at.length, 'task')} done between ${at(t0, t0)} and ${at(t1, t0)}`;
+  return `<svg class="rc-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(label)}">
+    <line class="ax" x1="0" y1="${H - 1}" x2="${W}" y2="${H - 1}" vector-effect="non-scaling-stroke"/>
+    <path class="ar" d="${d} V${H} H0 Z"/><path class="ln" d="${d}" vector-effect="non-scaling-stroke"/></svg>
+    <div class="rc-axis"><span>${esc(at(t0, t0))}</span><span>${n} of ${r.tasks.total} done</span><span>${esc(at(t1, t0))}</span></div>`;
+}
+
+function agentsTable(rows) {
+  if (!rows.length) return none('No agent worked on a task in this span.');
+  const max = Math.max(1, ...rows.map((a) => a.working_ms + a.waiting_ms));
+  return `<table><thead><tr><th scope="col">Agent</th><th scope="col">Done</th><th scope="col">Working</th><th scope="col">Waiting</th><th scope="col">Questions</th></tr></thead><tbody>${rows.map((a) =>
+    `<tr><td>${who(a.name)}<div class="tm" aria-hidden="true"><i class="w" style="width:${(a.working_ms / max) * 100}%"></i><i class="x" style="width:${(a.waiting_ms / max) * 100}%"></i></div></td><td>${a.done}</td><td>${dur(a.working_ms)}</td><td>${dur(a.waiting_ms)}</td><td>${a.questions}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function humansTable(rows) {
+  if (!rows.length) return none('No questions answered or approvals in this span.');
+  return `<table><thead><tr><th scope="col">Human</th><th scope="col">Answered</th><th scope="col">Approvals</th></tr></thead><tbody>${rows.map((h) =>
+    `<tr><td>${who(h.name)}</td><td>${h.answered}</td><td>${h.approvals}</td></tr>`).join('')}</tbody></table>`;
+}
+
+const taskLine = (x) => `<div class="lt"><span class="id">#${x.id}</span><span>${esc(x.title || 'Deleted task')}</span><span class="d">${dur(x.ms)}</span></div>`;
+function slowList(rows) {
+  if (!rows.length) return none('No task was finished in this span.');
+  return `<ol>${rows.map((x) => `<li>${taskLine(x)}<div class="lm">${[x.owner ? esc(x.owner) : '', x.bounces ? `sent back from review ${x.bounces}×` : ''].filter(Boolean).join(' · ') || '&nbsp;'}</div></li>`).join('')}</ol>`;
+}
+function blockList(rows) {
+  if (!rows.length) return none('Nothing was blocked.');
+  return `<ol>${rows.map((x) => {
+    const how = x.still ? '<span class="still">still blocked</span>'
+      : `unblocked by ${esc(x.by)}${x.to && x.to !== 'in_progress' ? ` (${esc(STATUS[x.to] || x.to)})` : ''}${x.note ? `: <q>${esc(x.note)}</q>` : ''}`;
+    const ans = x.answered_by ? ` · after ${esc(x.answered_by)} answered <q>${esc(x.question)}</q>` : '';
+    return `<li>${taskLine(x)}<div class="lm">${x.owner ? `${esc(x.owner)} · ` : ''}${how}${ans}</div></li>`;
+  }).join('')}</ol>`;
+}
+
+let last = '';
+function render(r) {
+  const key = JSON.stringify(r);
+  if (key === last) return;
+  last = key;
+  const length = r.until - r.since;
+  $('span').textContent = `${at(r.since, Date.now())} – ${at(r.until, r.since)} · ${dur(length)}${r.default_span ? '' : ' (from ?since)'}`;
+  const facts = [[`${r.tasks.done} of ${r.tasks.total}`, 'tasks done'], [r.merges, 'merged to main'], [`${r.questions.answered} of ${r.questions.asked}`, 'questions answered'], [dur(length), 'session']];
+  $('recap').innerHTML = [
+    panel('Session', `${r.goal ? `<p class="rc-goal">${esc(r.goal)}</p>` : '<p class="empty-note">No goal set.</p>'}<ul class="rc-facts">${facts.map(([v, l]) => `<li><b>${esc(v)}</b><span>${esc(l)}</span></li>`).join('')}</ul>`, { wide: true }),
+    panel('Done over time', chart(r), { wide: true }),
+    panel('Agents', agentsTable(r.agents), { sub: '<span class="key"><i class="w"></i>working<i class="x"></i>waiting or blocked</span>' }),
+    panel('Humans', humansTable(r.humans)),
+    panel('Slowest tasks', slowList(r.slowest), { sub: 'claimed → done' }),
+    panel('Longest blocks', blockList(r.blocks)),
+  ].join('');
+}
+function showMsg(html) { last = ''; $('recap').innerHTML = `<p class="msg">${html}</p>`; }
+
+let stopped = false;
+async function load() {
+  if (!token) return showMsg('Open this from the board: <b>Session recap</b> in its help (<b>?</b>) or Ctrl+K.');
+  try {
+    const r = await fetch(BASE + '/api/recap' + (since ? '?since=' + encodeURIComponent(since) : ''), { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } });
+    if (r.status === 401 || r.status === 403) { stopped = true; try { localStorage.removeItem(VIEW_KEY); } catch {} return showMsg('This recap link has expired: open a new one from the board (<b>Session recap</b> in its help, <b>?</b>, or Ctrl+K).'); }
+    if (r.status === 410) return showMsg('This board is archived.');
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) return showMsg(esc(body.error || r.statusText || 'The recap could not be loaded.'));
+    render(body);
+  } catch { if (!last) showMsg('Can\'t reach the board server; retrying…'); }
+}
+$('print').addEventListener('click', () => print());
+load();
+// On a screen during the session it keeps up by itself: a quiet reload every 30 s while the tab is visible.
+setInterval(() => { if (!stopped && document.visibilityState === 'visible') load(); }, 30e3);
+</script>
+</body>
+</html>

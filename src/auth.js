@@ -18,7 +18,8 @@ export function createAuth({ dir, envToken }) {
   // (derived from it, written into each AI tool's config by join) can use MCP and read the API, but
   // can't do human-only things like approving the plan, setting the deadline or deleting tasks.
   let AGENT_TOKEN = agentTokenFor(TOKEN);
-  // A third, read-only key for the presenter view: GET /api/state (nothing secret) and the live stream only.
+  // A third, read-only key for the presenter view and the recap page: GET /api/state (nothing secret), the live
+  // stream and GET /api/recap only.
   let VIEW_TOKEN = viewerTokenFor(TOKEN);
   // Tokens retired by a rotation (hashed, kept in the board's folder), so an old link or agent config
   // gets "the token was changed" instead of a bare "bad token". reason: 'token_rotated' is for the web page.
@@ -40,7 +41,7 @@ export function createAuth({ dir, envToken }) {
   }
   function viewerLimits(req, res, next) {
     if (req.role !== 'viewer') return next();
-    if (req.method === 'GET' && (req.path === '/state' || req.path === '/stream')) return next();
+    if (req.method === 'GET' && (req.path === '/state' || req.path === '/stream' || req.path === '/recap')) return next();
     return res.status(403).json({ error: 'This is the read-only viewer token (presenter view).' });
   }
   function humanOnly(req, res, next) {

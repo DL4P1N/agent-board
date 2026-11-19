@@ -26,6 +26,7 @@ function palCommands() {
   if (boardView === 'office' && !oTasksOff()) add('View', oMaxLabel(), () => oExpand(!oMax()), 'view office board tasks expand dock show the office slide');
   const vt = state.setup?.viewer_token;
   if (vt) add('Action', 'Open the presenter view (new tab)', () => window.open(BASE + '/present.html?token=' + encodeURIComponent(vt), '_blank', 'noopener'), 'projector big screen present 3d office');
+  if (vt) add('Action', 'Open the session recap (new tab)', () => window.open(BASE + '/recap.html?token=' + encodeURIComponent(vt), '_blank', 'noopener'), 'recap retro summary report after session stats print');
   add('Action', state.settings?.deadline ? 'Edit the demo time' : 'Set the demo time', () => doAct('clock'), 'deadline clock countdown freeze');
   // The top bar's chips and the task bar's switch, in the words their own buttons use.
   add('Action', state.settings?.goal ? 'Edit the goal' : 'Set the goal', () => oGoal(true, { edit: true }), 'goal building demo');

@@ -241,6 +241,7 @@ const TARGETS = [
   ['public/boards.html', 'js', () => themesJs('  ', 'var THEMES')],
   ['public/present-classic.html', 'css', () => presenterCss('  ')],
   ['public/present-classic.html', 'js', () => themesJs('  ', 'var THEMES')],
+  ['public/recap.html', 'js', () => themesJs('  ', 'var THEMES')],
   ['office/src/live/present.css', 'css', () => presenterCss('')],
   ['office/present.html', 'css', () => presentBg()],
   ['office/present.html', 'js', () => themesJs('  ', 'var THEMES')],

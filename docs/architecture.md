@@ -126,6 +126,7 @@ The rules for capacity, fair sharing, reservations and proposals are in [How wor
 |---|---|
 | `board.js` | The coordination engine: tasks, locks, events, `next_action`, SQLite. No HTTP. |
 | `task-rules.js` | Who may move a task where: claiming, status moves by the owner, the merger, a takeover or a human, done only through review, reopening within the slots. Pure checks that return the refusal text; `board.js` does the writes and events. |
+| `recap.js` | The session recap (`GET /api/recap`, `public/recap.html`): per-agent and per-human numbers, the slowest tasks and the longest blocks for a span of time, from the tasks, the questions and the event log. Read-only. |
 | `mcp.js` | The MCP tools an agent calls. |
 | `boards.js` | The boards list (`boards.json`), board and admin tokens on disk. |
 | `runtime.js` | One running board: wires the modules below together and stops them on `close()`. |
@@ -165,7 +166,7 @@ The modules run in the order of this table: each imports the one before it first
 
 **What the server enforces:**
 
-- **Separate tokens.** The board token (humans: the web board, join), the agent token (each AI tool: MCP and reading the board, never the human-only actions) and the viewer token (the presenter view: read the board, nothing else). The agent and viewer tokens are derived from the board token one way, so neither reveals it. The Boards page has its own admin token, which works nowhere else.
+- **Separate tokens.** The board token (humans: the web board, join), the agent token (each AI tool: MCP and reading the board, never the human-only actions) and the viewer token (the presenter view and the session recap: read the board and its recap, nothing else). The agent and viewer tokens are derived from the board token one way, so neither reveals it. The Boards page has its own admin token, which works nowhere else.
 - **Constant-time token compare** (`crypto.timingSafeEqual`). No token, or an empty one, never matches: an empty `token` file gets a new token. Token files are written through a temp file and a rename.
 - **Rotation.** *Rotate token* makes a new board token, keeps hashes of the retired ones (so an old link gets "the token was changed", not a bare 401) and closes every live stream opened with the old one.
 - **Webhooks can't reach the host's network.** A webhook URL must be https and must not point at this computer (localhost; a relay on the host needs `BOARD_WEBHOOK_LOCALHOST=1`, and may then use http) or at a private, loopback, link-local or reserved address, also when it's hidden in an IPv6 form (IPv4-mapped, NAT64, 6to4). The name is resolved and checked before every message, the message goes to the address that was checked, and redirects aren't followed. See [src/webhook.js](../src/webhook.js) (the address checks) and [src/notify.js](../src/notify.js) (the delivery glue).

@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import { timeInfo, normName, callerLaptop } from './board.js';
 import { agentFrom, h, laptopParam, internalError, wantsGzip, GZIP_VARY } from './http-util.js';
 import { clientIp } from './request-limits.js';
+import { recap } from './recap.js';
 
 // How long a built /api/state answer may be reused while nothing happens on the board.
 const STATE_TTL_MS = 1000;
@@ -182,6 +183,16 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
 
   // After the event: what slowed the team down (time per task, review bounces, blocked time, …).
   api.get('/retro', (_req, res) => res.type('text/markdown; charset=utf-8').send(board.retro()));
+
+  // The session recap (src/recap.js), for humans and the viewer token (the recap page on a screen), not agents.
+  // since=<ms or ISO date>: the span's start; without it, the current session (since the current goal was set).
+  api.get('/recap', h((req, res) => {
+    if (req.role === 'agent') { res.status(403); throw new Error('The recap is for humans on the web board (or the viewer link).'); }
+    const raw = req.query.since;
+    const since = raw === undefined || raw === '' ? 0 : /^\d+$/.test(String(raw)) ? Number(raw) : Date.parse(String(raw));
+    if (!Number.isFinite(since) || since < 0) { res.status(400); throw new Error('since must be a time (milliseconds or an ISO date).'); }
+    return recap(board, { since });
+  }));
 
   // End-of-day write-up (markdown) and a full JSON backup of the board.
   // Direct messages are in both for humans only.

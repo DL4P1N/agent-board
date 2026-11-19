@@ -25,6 +25,8 @@ function renderPass() {
   setText($('me'), me); $('me-btn').setAttribute('aria-label', `You: ${me}. Change your name`);
   // Presenter view opens with the read-only viewer token, never the board token; hidden until the server gives one.
   { const vt = state.setup?.viewer_token; const pl = $('present-link'); pl.hidden = !vt; $('present-row').hidden = !vt; if (vt) { const h = BASE + '/present.html?token=' + encodeURIComponent(vt); if (pl.getAttribute('href') !== h) pl.href = h; } }
+  // The session recap too (read-only, the same viewer token).
+  { const vt = state.setup?.viewer_token; $('recap-row').hidden = !vt; if (vt) { const h = BASE + '/recap.html?token=' + encodeURIComponent(vt); if ($('recap-link').getAttribute('href') !== h) $('recap-link').href = h; } }
   const { qOpen, unread } = renderTitle();
   if (ui.tab === 'me' && unread.length) { markMentionsSeen(); return render(); }
   // The open thread is read while it's on screen.
