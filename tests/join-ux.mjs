@@ -225,6 +225,10 @@ if (process.platform === 'win32') {
   const plain = viaRun('http://h/?name=Jos%C3%A9&p=%25').stdout;
   check('a .cmd tool run through cmd.exe: an argument that would expand %NAME% is refused, not expanded', /^ERR:.*%SECRET_VALUE_X%/.test(expand) && !/leaked/.test(expand), expand);
   check('a .cmd tool run through cmd.exe: a URL with %C3%A9 and %25 still goes through unchanged', /^RAN:.*Jos%C3%A9&p=%25/.test(plain), plain);
+  // cmd's dynamic variables aren't in the environment but expand all the same (any case).
+  const dynamic = ['%CD%', '%date%', '%Time%', '%RANDOM%', '%ERRORLEVEL%', '%CMDEXTVERSION%', '%CMDCMDLINE%', '%HIGHESTNUMANODENUMBER%', '%__CD__%', '%__appdir__%', '%random:~0,2%']
+    .map((v) => [v, viaRun(`http://h/${v}/mcp`).stdout]).filter(([v, out]) => !(out.startsWith('ERR:') && out.includes(v.split(':')[0].replace(/%$/, '') + '%')));
+  check('a .cmd tool run through cmd.exe: the dynamic variables (%CD%, %DATE%, %RANDOM%, %__APPDIR__%…) are refused too', !dynamic.length, JSON.stringify(dynamic));
 }
 
 try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}

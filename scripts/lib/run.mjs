@@ -18,6 +18,9 @@ export function whereIs(bin) {
 }
 export const onPath = (bin) => whereIs(bin).length > 0;
 
+// Variables cmd.exe makes up on the spot (not in the environment), expanded like any other.
+const CMD_DYNAMIC = new Set(['CD', 'DATE', 'TIME', 'RANDOM', 'ERRORLEVEL', 'CMDEXTVERSION', 'CMDCMDLINE', 'HIGHESTNUMANODENUMBER', '__CD__', '__APPDIR__']);
+
 // [file, args, options] to hand to spawn or spawnSync for `bin argv…`, or null when bin isn't on PATH.
 export function command(bin, argv) {
   const hits = whereIs(bin);
@@ -33,9 +36,10 @@ export function command(bin, argv) {
     if (js && fs.existsSync(js)) return [process.execPath, [js, ...argv], {}];
   }
   for (const a of argv.map(String)) {
-    // Every % starts a candidate (cmd re-scans after an unknown name); a URL's %C3%A9 only counts if C3 is a variable.
-    const name = [...a.matchAll(/(?=%([^%"]+)%)/g)].map((m) => m[1].split(':')[0]).find((n) => process.env[n] !== undefined);
-    if (name) throw new Error(`${bin} runs through cmd.exe here, which would replace %${name}% in an argument with that environment variable's value. Remove the %…% from the address or path, or install ${bin} so it runs without cmd.exe.`);
+    // Every % starts a candidate (cmd re-scans after an unknown name); a URL's %C3%A9 only counts if C3 is a variable
+    // (set, or one of cmd's dynamic ones).
+    const name = [...a.matchAll(/(?=%([^%"]+)%)/g)].map((m) => m[1].split(':')[0]).find((n) => process.env[n] !== undefined || CMD_DYNAMIC.has(n.toUpperCase()));
+    if (name) throw new Error(`${bin} runs through cmd.exe here, which would replace %${name}% in an argument with that variable's value. Remove the %…% from the address or path, or install ${bin} so it runs without cmd.exe.`);
   }
   return [[bin, ...argv].map((a) => `"${String(a).replace(/"/g, '""')}"`).join(' '), [], { shell: true }];
 }
