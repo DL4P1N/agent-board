@@ -358,19 +358,23 @@ if (problems) process.exitCode = 1;
 // ======================================================================
 // The shared .git folder of a checkout (the main repo's and all its worktrees' are the same one), as a comparable
 // path: absolute, links resolved, and on Windows without case or slash differences. '' when dir isn't a git checkout.
-function commonGitDir(dir) {
-  const r = run('git', ['-C', dir, 'rev-parse', '--git-common-dir'], true);
-  if (r.status !== 0) return '';
-  let p = path.resolve(dir, r.stdout.trim());
+// A path in one comparable spelling: real (links and Windows short names like RUNNER~1 resolved), and on Windows
+// with forward slashes and one case, since git prints the long form of a folder that may have been given short.
+function canonPath(p) {
+  p = path.resolve(p);
   try { p = fs.realpathSync.native(p); } catch {}
   return process.platform === 'win32' ? p.replaceAll('\\', '/').toLowerCase() : p;
+}
+function commonGitDir(dir) {
+  const r = run('git', ['-C', dir, 'rev-parse', '--git-common-dir'], true);
+  return r.status === 0 ? canonPath(path.resolve(dir, r.stdout.trim())) : '';
 }
 
 // A separate checkout of the same repo, so two tools on one laptop never edit the same folder.
 function ensureWorktree(dir) {
   if (fs.existsSync(dir)) {
     const top = run('git', ['-C', dir, 'rev-parse', '--show-toplevel'], true);
-    if (top.status === 0 && path.resolve(top.stdout.trim()) === path.resolve(dir)) {
+    if (top.status === 0 && canonPath(top.stdout.trim()) === canonPath(dir)) {
       // A folder with the right name but another project's repo would get this agent's token and hooks: only a
       // checkout of the same repo (same common git dir as the selected repo) counts.
       if (commonGitDir(dir) !== commonGitDir(repo)) {
