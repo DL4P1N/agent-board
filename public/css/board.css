@@ -759,7 +759,7 @@ button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
 .o-st.question, .o-st.limited { color: var(--warn); } .o-st.blocked { color: var(--bad); }
 .o-helpers { list-style: none; margin: var(--s1) 0 var(--s1) var(--s6); padding: 0 0 0 var(--s4); border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: var(--s1); font-size: var(--fs-meta); }
 .o-helpers li { display: flex; gap: var(--s3); align-items: baseline; min-width: 0; color: var(--muted); }
-.o-helpers .o-hn { color: var(--ink); flex: 0 1 auto; min-width: 4ch; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-meta); }
+.o-helpers .o-hn { color: var(--ink); flex: 0 0 auto; min-width: 4ch; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-meta); }
 .o-helpers .o-hs { flex: 0 0 auto; font-family: var(--mono); }
 .o-helpers .o-hs.question { color: var(--warn); font-weight: 700; } .o-helpers .o-hs.blocked { color: var(--bad); font-weight: 700; }
 .o-helpers .o-tk { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

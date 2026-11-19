@@ -55,7 +55,7 @@ function goCard(id) {
 }
 function goMention(eid) {
   oShow('act');
-  ui.tab = 'me'; store.set('board-tab', 'me'); markMentionsSeen(); $('feed')._html = undefined; render();
+  ui.tab = 'me'; store.set('board-tab', 'me'); $('feed')._html = undefined; render();
   const n = $('feed').querySelector(`[data-eid="${eid}"]`);
   $('feed').scrollIntoView({ behavior: smooth(), block: 'center' });
   if (n) $('feed').scrollTop = n.offsetTop - 8;
@@ -135,14 +135,14 @@ document.addEventListener('click', (ev) => {
   if ('dmBack' in d) { const n = ui.dm; ui.dm = null; $('feed')._html = undefined; render(); return document.querySelector(`[data-fk="dm-${CSS.escape(n || '')}"]`)?.focus({ preventScroll: true }); }
   if (d.mention) return mention(d.mention);
   if ('filter' in d && el.id !== 'filter') { setFilter(filterRoot() === d.filter && d.filter ? '' : d.filter); return; }
-  if (d.tab) { ui.tab = d.tab; store.set('board-tab', ui.tab); if (ui.tab === 'me') markMentionsSeen(); if (ui.tab === 'direct') ui.dm = null; $('feed')._html = undefined; return render(); }
+  if (d.tab) { ui.tab = d.tab; store.set('board-tab', ui.tab); if (ui.tab === 'direct') ui.dm = null; $('feed')._html = undefined; return render(); }
   if ('showDone' in d) { ui.showAllDone = !ui.showAllDone; return redrawTasks(); }
   if (d.showCol) { const c = (ui.showCols ||= new Set()); c.has(d.showCol) ? c.delete(d.showCol) : c.add(d.showCol); return redrawTasks(); }
   if (d.unlock) { ui.confirmLock = d.unlock; render(); return document.querySelector(`[data-fk="un-${CSS.escape(d.unlock)}"]`)?.focus(); }
   if ('unlockNo' in d) { ui.confirmLock = null; return render(); }
   if (d.unlockYes) { const p = d.unlockYes; ui.confirmLock = null; act(api('/locks/release', { method: 'POST', body: JSON.stringify({ paths: [p] }) }), `Released lock on ${p}`).catch(() => {}); return render(); }
   if (d.go === 'questions') { oShow('left'); $('q-panel').scrollIntoView({ behavior: smooth(), block: 'start' }); return $('questions').querySelector('textarea')?.focus({ preventScroll: true }); }
-  if (d.go === 'mentions') { ui.tab = 'me'; store.set('board-tab', 'me'); markMentionsSeen(); $('feed')._html = undefined; render(); return oAct(); }
+  if (d.go === 'mentions') { ui.tab = 'me'; store.set('board-tab', 'me'); $('feed')._html = undefined; render(); return oAct(); }
   if (d.go === 'blocked') {
     // The Blocked list under the questions in Needs attention, with why.
     oShow('left');
@@ -182,8 +182,8 @@ document.addEventListener('click', (ev) => {
 document.addEventListener('keydown', (ev) => {
   if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === 'k') { ev.preventDefault(); return togglePalette(); }
   const card = ev.target.closest?.('.card');
-  if (ev.key === 'Escape' && ui.moveAsk && (card || ev.target.closest?.('.mvask'))) { const id = ui.moveAsk.id; ui.moveAsk = null; render(); return focusTask(id); }
-  if (ev.key === 'Escape' && ui.moveMenu && card) { const id = ui.moveMenu; ui.moveMenu = null; redrawTasks(); return document.querySelector(`[data-fk="mv-${id}"]`)?.focus(); }
+  if (ev.key === 'Escape' && ui.moveAsk && (card || ev.target.closest?.('.mvask'))) { ev.preventDefault(); const id = ui.moveAsk.id; ui.moveAsk = null; render(); return focusTask(id); }
+  if (ev.key === 'Escape' && ui.moveMenu && card) { ev.preventDefault(); const id = ui.moveMenu; ui.moveMenu = null; redrawTasks(); return document.querySelector(`[data-fk="mv-${id}"]`)?.focus(); }
   // Esc in a card's Reject form: back to the card's Reject… button, nothing rejected.
   if (ev.key === 'Escape' && ui.rejecting && ev.target.closest?.('[data-rjform]')) { ev.preventDefault(); return cancelReject(); }
   if (card && ev.target === card && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); return openTask(Number(card.dataset.id)); }
@@ -508,10 +508,6 @@ helpDlg.addEventListener('click', (ev) => { if (ev.target.closest('[data-close]'
 
 function setFilter(v) { ui.filter = v; store.set('board-filter', v); render(); }
 $('filter').addEventListener('change', (e) => setFilter(e.target.value));
-function markMentionsSeen() {
-  const max = Math.max(seenMention, ...state.events.filter(mentionsMe).map((e) => e.id));
-  if (max !== seenMention) { setSeenMention(max); store.set('board-seen-mention', String(max)); }
-}
 function mention(name) {
   oShow('act');
   if ($('task-dlg').open) $('task-dlg').close();
@@ -522,4 +518,4 @@ function mention(name) {
 }
 
 export { applyKeys, copyText, doAct, focusMoveAsk, focusNow, focusTask, goCard, goMention, goQuestion, goStep,
-  helpDlg, markMentionsSeen, mention, moveAskHtml, openHelp, sendAnswer, setFilter };
+  helpDlg, mention, moveAskHtml, openHelp, sendAnswer, setFilter };

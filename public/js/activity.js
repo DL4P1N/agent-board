@@ -142,7 +142,7 @@ function renderDmBar() {
   syncComposer();
   if (!on) return;
   const r = dmReader(ui.dm);
-  const note = ui.dm === DM_PLANNER ? (r ? `to ${r}` : 'waits for a planner') : 'hidden from other agents';
+  const note = ui.dm === DM_PLANNER ? (r ? `to ${r}` : 'waits for a planner') : `only people on this board and ${r || 'the agent'} see this`;
   patch(bar, `<button type="button" class="link" data-dm-back data-fk="dm-back" aria-label="Back to all threads">← Threads</button><span class="dmt">${esc(dmTitle(ui.dm))}</span><span class="muted" title="${esc(`Among the agents, only ${r || 'the planner'} reads this thread. Everyone on this web board can read it.`)}">${esc(note)}</span>`);
 }
 // The message box keeps a draft per place (the shared chat, each thread), so a chat draft never lands in a thread.

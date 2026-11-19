@@ -96,6 +96,7 @@
   .rc-chart .ln { fill: none; stroke: var(--ok); stroke-width: 2; }
   .rc-chart .ar { fill: var(--ok); opacity: .12; }
   .rc-axis { display: flex; justify-content: space-between; gap: var(--s4); font: var(--fs-meta) var(--mono); color: var(--muted); margin-top: var(--s2); }
+  .rc .tw { overflow-x: auto; }
   .rc table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
   .rc th { font: 700 var(--fs-micro)/1.2 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); text-align: right; padding: 0 0 var(--s3) var(--s4); white-space: nowrap; }
   .rc td { padding: var(--s3) 0 var(--s3) var(--s4); text-align: right; border-top: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
@@ -123,6 +124,8 @@
     :root:root:root { color-scheme: light; --bg: #fff; --panel: #fff; --raised: #fff; --ink: #111; --muted: #444; --border: #999; --line: #ccc; --line-strong: #888; --info: #08647f; --ok: #1b6b37; --bad: #b2261e; --outline: #303236; --shade: none; --dl: 48%; }
     header { position: static; border-bottom: 1px solid var(--border); }
     .rc-print { display: none; }
+    .rc-goal { display: block; overflow: visible; -webkit-line-clamp: none; line-clamp: none; }
+    .rc .tw { overflow: visible; }
     .rc { max-width: none; padding: var(--s4) 0; }
     .o-panel { box-shadow: none; border-width: 1px; break-inside: avoid; }
     .o-head { border-bottom-width: 1px; }
@@ -136,7 +139,8 @@
   <span class="sp"></span>
   <button type="button" class="ghost sm rc-print" id="print">Print</button>
 </header>
-<main id="recap" class="rc" aria-live="polite"><p class="msg">Loading the recap…</p></main>
+<p id="rc-status" class="msg" role="status">Loading the recap…</p>
+<main id="recap" class="rc"></main>
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -182,14 +186,14 @@ function chart(r) {
 function agentsTable(rows) {
   if (!rows.length) return none('No agent worked on a task in this span.');
   const max = Math.max(1, ...rows.map((a) => a.working_ms + a.waiting_ms));
-  return `<table><thead><tr><th scope="col">Agent</th><th scope="col">Done</th><th scope="col">Working</th><th scope="col">Waiting</th><th scope="col">Questions</th></tr></thead><tbody>${rows.map((a) =>
-    `<tr><td>${who(a.name)}<div class="tm" aria-hidden="true"><i class="w" style="width:${(a.working_ms / max) * 100}%"></i><i class="x" style="width:${(a.waiting_ms / max) * 100}%"></i></div></td><td>${a.done}</td><td>${dur(a.working_ms)}</td><td>${dur(a.waiting_ms)}</td><td>${a.questions}</td></tr>`).join('')}</tbody></table>`;
+  return `<div class="tw"><table><thead><tr><th scope="col">Agent</th><th scope="col">Done</th><th scope="col">Working</th><th scope="col">Waiting</th><th scope="col">Questions</th></tr></thead><tbody>${rows.map((a) =>
+    `<tr><td>${who(a.name)}<div class="tm" aria-hidden="true"><i class="w" style="width:${(a.working_ms / max) * 100}%"></i><i class="x" style="width:${(a.waiting_ms / max) * 100}%"></i></div></td><td>${a.done}</td><td>${dur(a.working_ms)}</td><td>${dur(a.waiting_ms)}</td><td>${a.questions}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function humansTable(rows) {
   if (!rows.length) return none('No questions answered or approvals in this span.');
-  return `<table><thead><tr><th scope="col">Human</th><th scope="col">Answered</th><th scope="col">Approvals</th></tr></thead><tbody>${rows.map((h) =>
-    `<tr><td>${who(h.name)}</td><td>${h.answered}</td><td>${h.approvals}</td></tr>`).join('')}</tbody></table>`;
+  return `<div class="tw"><table><thead><tr><th scope="col">Human</th><th scope="col">Answered</th><th scope="col">Approvals</th></tr></thead><tbody>${rows.map((h) =>
+    `<tr><td>${who(h.name)}</td><td>${h.answered}</td><td>${h.approvals}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 const taskLine = (x) => `<div class="lt"><span class="id">#${x.id}</span><span>${esc(x.title || 'Deleted task')}</span><span class="d">${dur(x.ms)}</span></div>`;
@@ -215,6 +219,7 @@ function render(r) {
   const length = r.until - r.since;
   $('span').textContent = `${at(r.since, Date.now())} – ${at(r.until, r.since)} · ${dur(length)}${r.default_span ? '' : ' (from ?since)'}`;
   const facts = [[`${r.tasks.done} of ${r.tasks.total}`, 'tasks done'], [r.merges, 'merged to main'], [`${r.questions.answered} of ${r.questions.asked}`, 'questions answered'], [dur(length), 'session']];
+  $('rc-status').hidden = true;
   $('recap').innerHTML = [
     panel('Session', `${r.goal ? `<p class="rc-goal">${esc(r.goal)}</p>` : '<p class="empty-note">No goal set.</p>'}<ul class="rc-facts">${facts.map(([v, l]) => `<li><b>${esc(v)}</b><span>${esc(l)}</span></li>`).join('')}</ul>`, { wide: true }),
     panel('Done over time', chart(r), { wide: true }),
@@ -224,7 +229,7 @@ function render(r) {
     panel('Longest blocks', blockList(r.blocks)),
   ].join('');
 }
-function showMsg(html) { last = ''; $('recap').innerHTML = `<p class="msg">${html}</p>`; }
+function showMsg(html) { last = ''; $('recap').innerHTML = ''; $('rc-status').innerHTML = html; $('rc-status').hidden = false; }
 
 let stopped = false;
 async function load() {

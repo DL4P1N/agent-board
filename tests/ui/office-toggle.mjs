@@ -145,7 +145,7 @@ try {
   for (const w of [1280, 1440, 1920]) {
     await page.setViewport({ width: w, height: 900 }); await sleep(250);
     const tb = await topbar();
-    const want = w < 1600 ? 'Goal,Demo,Done,Merges,Setup' : 'Goal,Demo,Done,Planner,Merges,Setup';
+    const want = w < 1600 ? 'Goal,Demo,Done,Roles,Setup' : 'Goal,Demo,Done,Planner,Merges,Setup';
     // About 20 characters of the goal at least (16ch of this font is ~115px); a goal that fits isn't cut at all.
     check(`${w}px: the top bar is one row, nothing past its right edge, the goal readable (${w < 1600 ? 'one Roles chip' : 'Planner and Merges chips'})`, tb.h < 56 && tb.row && !tb.over.length && tb.sw && tb.chips === want && (tb.goalPx >= 115 || !tb.goalCut), JSON.stringify(tb));
   }
@@ -174,16 +174,16 @@ try {
   check('a click elsewhere closes the Planner popover', await page.evaluate(() => $('o-plan').hidden && $('plan-btn').getAttribute('aria-expanded') === 'false'));
   // ROLES (below 1600px): the planner's and the merger's names in one chip, both choices in one popover.
   await page.setViewport({ width: 1440, height: 900 }); await sleep(250);
-  check('1440px: one Roles chip (U15: it shows who merges; the planner is in its tooltip and label) where Planner and Merges were', await page.evaluate(() => { const r = $('roles-btn'); return !!r.offsetWidth && !$('plan-btn').offsetWidth && !$('merge-btn').offsetWidth && r.nextElementSibling === $('plan-btn') && r.querySelector('.tbl').textContent === 'Merges' && r.querySelectorAll('.rn').length === 1 && !r.textContent.includes(state.settings.planner || 'first agent') && r.title.includes('Planner: ') && r.title.includes('Merges to main: ') && /^Merges .+\. Roles: the planner \(.+\) and who merges\. Choose the planner and who merges$/.test(r.getAttribute('aria-label')) && r.getAttribute('aria-expanded') === 'false' && r.getAttribute('aria-controls') === 'o-roles'; }), await page.$eval('#roles-btn', (r) => r.getAttribute('aria-label')));
+  check('1440px: one Roles chip (U15: it shows who merges; the planner is in its tooltip and label) where Planner and Merges were', await page.evaluate(() => { const r = $('roles-btn'); return !!r.offsetWidth && !$('plan-btn').offsetWidth && !$('merge-btn').offsetWidth && r.nextElementSibling === $('plan-btn') && r.querySelector('.tbl').textContent === 'Roles' && r.querySelectorAll('.rn').length === 1 && !r.textContent.includes(state.settings.planner || 'first agent') && r.title.includes('Planner: ') && r.title.includes('Merges to main: ') && /^Roles: merges .+\. The planner is .+\. Choose the planner and who merges$/.test(r.getAttribute('aria-label')) && r.getAttribute('aria-expanded') === 'false' && r.getAttribute('aria-controls') === 'o-roles'; }), await page.$eval('#roles-btn', (r) => r.getAttribute('aria-label')));
   await page.$eval('#roles-btn', (b) => b.click());
   check('the Roles chip opens one popover with both choices (planner + extra tasks, who merges), focus on the planner', await page.evaluate(() => !$('o-roles').hidden && $('o-roles-h').textContent === 'Roles' && document.activeElement === $('r-plan-sel') && !!$('r-pex-sel') && !!$('r-integ-sel') && $('roles-btn').getAttribute('aria-expanded') === 'true' && $('o-plan').hidden && $('o-merge').hidden));
   const rPick = await page.evaluate(() => [...$('r-plan-sel').options].map((o) => o.value).find((v) => v !== state.settings.planner));
   await page.select('#r-plan-sel', rPick);
-  check('choosing the planner there saves it, the Roles chip\'s label names it, the popover stays open', await until(page, (n) => state.settings.planner === n && document.getElementById('roles-btn').getAttribute('aria-label').includes(`the planner (${n || 'the first agent that starts'})`) && !document.getElementById('o-roles').hidden, rPick), rPick);
+  check('choosing the planner there saves it, the Roles chip\'s label names it, the popover stays open', await until(page, (n) => state.settings.planner === n && document.getElementById('roles-btn').getAttribute('aria-label').includes(`The planner is ${n || 'the first agent that starts'}.`) && !document.getElementById('o-roles').hidden, rPick), rPick);
   await page.select('#r-pex-sel', '3');
   check('the planner\'s extra tasks are saved from there too', await until(page, () => Number(state.settings.planner_extra) === 3));
   await page.select('#r-integ-sel', 'ana-claude');
-  check('choosing who merges there saves it; the Roles chip says the name', await until(page, () => state.settings.integrator === 'ana-claude' && document.querySelectorAll('#roles-btn .rn')[0]?.textContent.includes('ana-claude') && /^Merges ana-claude/.test(document.getElementById('roles-btn').getAttribute('aria-label'))));
+  check('choosing who merges there saves it; the Roles chip says the name', await until(page, () => state.settings.integrator === 'ana-claude' && document.querySelectorAll('#roles-btn .rn')[0]?.textContent.includes('ana-claude') && /^Roles: merges ana-claude/.test(document.getElementById('roles-btn').getAttribute('aria-label'))));
   await page.focus('#r-integ-sel'); await page.keyboard.press('Escape');
   check('Esc closes the Roles popover, focus back on the Roles chip', await until(page, () => document.getElementById('o-roles').hidden && document.activeElement?.id === 'roles-btn' && document.getElementById('roles-btn').getAttribute('aria-expanded') === 'false'));
   await page.$eval('#roles-btn', (b) => b.click()); await page.click('[data-o-close="roles"]');
@@ -336,7 +336,7 @@ try {
     check('Tasks: a long column scrolls inside the window (the window keeps its size)', await page.evaluate(() => { const w = $('o-tasks').getBoundingClientRect(); return [...document.querySelectorAll('#o-tasks-b .col')].every((c) => c.getBoundingClientRect().bottom <= w.bottom + 1); }));
     const tb = await page.evaluate(() => ({ t: $('topbar').innerText.replace(/\s+/g, ' '), roles: !!$('topbar').querySelector('.tb-roles')?.offsetWidth, inv: !$('topbar').querySelector('[data-act="invite"]'), setup: !!$('topbar').querySelector('[data-fk="s-open"]')?.offsetWidth, actChips: [...$('topbar').querySelectorAll('.acts button')].every((b) => b.classList.contains('tbc') && b.offsetHeight === $('goal-btn').offsetHeight), clock: !!$('clock').offsetWidth && $('topbar').contains($('clock')) && /Demo in/.test($('clock').textContent), rows: $('topbar').offsetHeight < 56,
       chips: [...$('topbar').querySelectorAll('.tbc:not(.tb-act)')].filter((c) => c.offsetWidth).map((c) => getComputedStyle(c.querySelector('.tbl')).color === getComputedStyle(document.documentElement).getPropertyValue('--muted').trim().replace(/^#(..)(..)(..)$/, (m, r, g, b) => `rgb(${[r, g, b].map((x) => parseInt(x, 16)).join(', ')})`) ? c.querySelector('.tbl').textContent : '!').join() }));
-    check('the top bar is the Board view\'s: chips GOAL, DEMO, DONE, MERGES (the Roles chip) at 1440px (labels muted), then Setup as a chip (one row)', /GOAL A voting app/.test(tb.t) && /DONE 0 of 2/.test(tb.t) && /MERGES/.test(tb.t) && !/PLANNER|ROLES/.test(tb.t) && tb.chips === 'Goal,Demo,Done,Merges' && tb.roles && tb.inv && tb.setup && tb.actChips && tb.clock && tb.rows, JSON.stringify(tb));
+    check('the top bar is the Board view\'s: chips GOAL, DEMO, DONE, ROLES (the Roles chip) at 1440px (labels muted), then Setup as a chip (one row)', /GOAL A voting app/.test(tb.t) && /DONE 0 of 2/.test(tb.t) && /ROLES/.test(tb.t) && !/PLANNER|MERGES/.test(tb.t) && tb.chips === 'Goal,Demo,Done,Roles' && tb.roles && tb.inv && tb.setup && tb.actChips && tb.clock && tb.rows, JSON.stringify(tb));
     await page.click('#clock');
     check('the Demo chip opens the demo time in place (still the 3D view), focus in its time field', await view(page) === 'office' && await page.evaluate(() => !$('o-dl').hidden && document.activeElement === $('o-dl-in') && $('clock').getAttribute('aria-expanded') === 'true'));
     await page.$eval('#o-fz-in', (i) => { i.value = '45'; });
@@ -348,7 +348,7 @@ try {
     for (const w of [1280, 1440, 1920]) {
       await page.setViewport({ width: w, height: 900 }); await sleep(300);
       const t3 = await topbar();
-      check(`3D, ${w}px: the top bar is one row, nothing past its right edge, the goal readable`, t3.h < 56 && t3.row && !t3.over.length && t3.sw && t3.chips === (w < 1600 ? 'Goal,Demo,Done,Merges,Setup' : 'Goal,Demo,Done,Planner,Merges,Setup') && (t3.goalPx >= 115 || !t3.goalCut), JSON.stringify(t3));
+      check(`3D, ${w}px: the top bar is one row, nothing past its right edge, the goal readable`, t3.h < 56 && t3.row && !t3.over.length && t3.sw && t3.chips === (w < 1600 ? 'Goal,Demo,Done,Roles,Setup' : 'Goal,Demo,Done,Planner,Merges,Setup') && (t3.goalPx >= 115 || !t3.goalCut), JSON.stringify(t3));
     }
     // ROLES: both choices in one popover, the same in the 3D view.
     await page.setViewport({ width: 1280, height: 900 }); await sleep(300);

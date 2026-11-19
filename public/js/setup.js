@@ -284,7 +284,7 @@ function stepBacklog() {
   if (n && approvalWait()) return `<p>${plural(n, 'task')} on the board${S.planner ? `, written by the planner, ${nameTag(S.planner)}` : ''}. Check them on the task board: open a card to edit it, or add what's missing. Agents start claiming once you approve.</p>${add}`;
   if (n) return `<p>${plural(n, 'task')} on the board${S.planner ? `, written by the planner, ${nameTag(S.planner)}` : ''}. Agents claim them on their own, highest priority first.</p>${statsLine()}${add}`;
   if (!S.goal) return `<p>Write the goal first (step 2). Then the first agent that starts on the board (step 3) becomes the <b>planner</b> and writes the task list from it automatically.</p>${add}`;
-  if (S.planner) { const c = clientOf(S.planner); return `<p>${nameTag(S.planner)}${c ? ` (${esc(c)})` : ''} is the <b>planner</b> and is writing the task list now<span class="dots"></span> Cards appear on the task board as it goes.</p>${add}`; }
+  if (S.planner) { const c = clientOf(S.planner); const on = setupInfo().plannerOn; return `<p>${nameTag(S.planner)}${c ? ` (${esc(c)})` : ''} is the <b>planner</b> and ${on ? 'is writing the task list now' : 'has not started yet'}<span class="dots"></span>${on ? ' Cards appear on the task board as it goes.' : ''}</p>${add}`; }
   return `<p>The first agent that starts on the board (step 3) becomes the <b>planner</b> and writes the task list from the goal automatically.</p>${add}`;
 }
 // Who merges to main, in the same order as the planner's: label, select (with main's CI), one hint. Setup's step 5,

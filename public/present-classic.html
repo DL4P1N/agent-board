@@ -467,7 +467,7 @@ function render() {
     app.innerHTML = html; app._html = html;
     if (!matchMedia('(prefers-reduced-motion: reduce)').matches && !document.hidden) app.querySelectorAll('[data-seg]').forEach((x) => {
       const from = was[x.dataset.seg] || '0%';
-      if (from !== x.style.width && x.animate) x.animate([{ width: from }, { width: x.style.width }], { duration: 600, easing: 'cubic-bezier(.2, .7, .2, 1)' });
+      if (from !== x.style.width && x.animate) x.animate([{ width: from }, { width: x.style.width }], { duration: 240, easing: 'cubic-bezier(.2, .7, .2, 1)' });
     });
   }
   const name = SLUG ? `${SLUG} · ` : '';

@@ -190,7 +190,8 @@ function setupInfoFresh() {
   ];
   const cur = (steps.find((s) => !s.done) || {}).key || null;
   const complete = !!S.goal && agents.length > 0 && n > 0;
-  return { steps, cur, complete, agents, startedA, workingA, waitingA, onlineA, limitedA, offlineA, watchers, ros, doneCount: steps.filter((s) => s.done).length };
+  const plannerOn = !!S.planner && workingA.some((a) => a.name === S.planner);
+  return { steps, cur, complete, agents, startedA, workingA, plannerOn, waitingA, onlineA, limitedA, offlineA, watchers, ros, doneCount: steps.filter((s) => s.done).length };
 }
 // Online as the server sees it (its presence row) when there is one; recent board events otherwise.
 const agentLive = (a) => { const p = (state.presence || []).find((x) => x.kind === 'agent' && String(x.name).toLowerCase() === a.name); return p ? !!p.online : a.online; };

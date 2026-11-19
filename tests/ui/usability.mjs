@@ -134,6 +134,20 @@ try {
   check('A direct @dana counted; @me accessible name', await until(page, () => document.querySelector('[data-tab="me"]').getAttribute('aria-label') === '@me, 1 unread'), await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label')));
   await until(page, () => document.querySelector('[data-tab="me"]').getAttribute('aria-label') === '@me', undefined, 6000);
   check('A mention cleared after being visible in the feed', (await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label'))) === '@me' && !/mention/.test(await page.$eval('#needs', (e) => e.querySelector('button')?.getAttribute('aria-label') || '')));
+  // Folded Activity: choosing @me doesn't count the mention as read (nothing on screen shows it).
+  await page.click('[data-o-fold="act"]');
+  await erin('post', { text: '@dana a second one, while Activity is folded' });
+  await until(page, () => document.querySelector('[data-tab="me"]').getAttribute('aria-label') === '@me, 1 unread');
+  await page.evaluate(() => document.querySelector('[data-tab="me"]').click()); await sleep(2500);
+  check('A with Activity folded, selecting @me leaves the mention unread', (await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label'))) === '@me, 1 unread');
+  await page.click('[data-o-fold="act"]');
+  check('A unfolded, the @me feed shows it and it clears', await until(page, () => document.querySelector('[data-tab="me"]').getAttribute('aria-label') === '@me', undefined, 6000));
+  await page.evaluate(() => document.querySelector('[data-tab="all"]').click());
+
+  // A planner that is offline is not "writing the task list".
+  await page.evaluate(() => { state.settings.planner = 'ghost-claude'; ui.forceSetup = false; render(); });
+  check('A an offline planner: the empty board says it is waiting for it, not that it is writing', await page.evaluate(() => { const t = document.getElementById('board-empty').innerText; return /Waiting for the planner \(ghost-claude\) to start/.test(t) && !/writing the task list/.test(t); }), await page.$eval('#board-empty', (e) => e.innerText));
+  await page.evaluate(() => { state.settings.planner = ''; ui.forceSetup = true; render(); });
 
   // Tasks + my own agent → setup collapses, calm state suggests picking a merger
   // A human adds it: an agent's own create_task would count as recent work and make it busy, not idle.

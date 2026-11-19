@@ -28,6 +28,9 @@ const q = await bob('ask_human', { question: `Which key? ${P(40)}`, task_id: t2.
 await bob('update_task', { id: t2.id, status: 'blocked', note: `stuck ${P(50)}` });
 await human(`/questions/${q.question_id}/answer`, 'POST', { answer: 'staging' });
 await bob('update_task', { id: t2.id, status: 'in_progress', note: `unstuck ${P(60)}` });
+const longA = await agent(board, 'a-really-long-agent-name-for-a-narrow-phone-claude'); await longA('board_status');
+const t3 = await human('/tasks', 'POST', { title: 'Narrow check', size: 'S' });
+await longA('claim_task', { id: t3.id }); await longA('update_task', { id: t3.id, status: 'in_progress' });
 
 const st = await human('/state');
 const VIEW = st.setup.viewer_token;
@@ -69,7 +72,7 @@ try {
   const { page, errs } = await open(`/recap.html?token=${encodeURIComponent(VIEW)}`);
   check('renders all six panels for the viewer token', await ready(page));
   const txt = await page.$eval('#recap', (m) => m.innerText);
-  check('session facts: 1 of 3 tasks done, 1 merged, 1 of 1 questions answered', /1 of 3\s*tasks done/.test(txt) && /1\s*merged to main/.test(txt) && /1 of 1\s*questions answered/.test(txt), txt.slice(0, 300));
+  check('session facts: 1 of 4 tasks done, 1 merged, 1 of 1 questions answered', /1 of 4\s*tasks done/.test(txt) && /1\s*merged to main/.test(txt) && /1 of 1\s*questions answered/.test(txt), txt.slice(0, 300));
   check('agents: evil-claude and bob-claude', /evil-claude/.test(txt) && /bob-claude/.test(txt));
   check('humans: dana answered 1', await page.evaluate(() => [...document.querySelectorAll('#recap tr')].some((r) => /dana/.test(r.innerText) && /\b1\b/.test(r.cells[1]?.innerText))));
   check('the longest block says who unblocked it and the answer before it', /unblocked by bob-claude/.test(txt) && /after dana answered/.test(txt), txt);
@@ -84,7 +87,9 @@ try {
   await page.emulateMediaType('print');
   const pr = await page.evaluate(() => ({ btn: getComputedStyle(document.getElementById('print')).display, bg: getComputedStyle(document.body).backgroundColor, ink: getComputedStyle(document.body).color, sh: getComputedStyle(document.querySelector('.o-panel')).boxShadow }));
   check('print: white paper, dark ink, no button, no shadows', pr.btn === 'none' && pr.bg === 'rgb(255, 255, 255)' && pr.ink === 'rgb(17, 17, 17)' && pr.sh === 'none', JSON.stringify(pr));
+  check('print: the goal is not clamped', await page.evaluate(() => { const g = document.querySelector('.rc-goal'); const s = getComputedStyle(g); return s.overflow === 'visible' && (s.webkitLineClamp === 'none' || s.webkitLineClamp === '') ; }));
   await page.emulateMediaType('screen');
+  check('the live region is a small status line, not the whole page', await page.evaluate(() => !document.querySelector('[aria-live]') && document.getElementById('rc-status').getAttribute('role') === 'status' && document.getElementById('rc-status').hidden));
   await page.close();
 
   // ---- every theme, and a phone ----
@@ -108,6 +113,13 @@ try {
     check('phone: no console errors', !pe.length, pe.join(' | '));
     await ph.screenshot({ path: path.join(out, 'recap-phone.png'), fullPage: true });
     await ph.close();
+  }
+  {
+    const { page: sm } = await open(`/recap.html?token=${encodeURIComponent(VIEW)}`, { viewport: { width: 360, height: 740, isMobile: true, hasTouch: true } });
+    check('360px: renders', await ready(sm));
+    const w = await sm.evaluate(() => { const t = document.querySelector('.tw'); return { doc: document.documentElement.scrollWidth, win: innerWidth, ox: getComputedStyle(t).overflowX, long: /a-really-long-agent-name/.test(t.innerText), clipped: t.scrollWidth > t.clientWidth }; });
+    check('360px: a long agent name and the numbers beside it stay reachable (the table scrolls in its panel), the page does not scroll sideways', w.long && w.doc <= w.win && (!w.clipped || w.ox === 'auto'), JSON.stringify(w));
+    await sm.close();
   }
 
   // ---- without a token, and with a wrong one ----

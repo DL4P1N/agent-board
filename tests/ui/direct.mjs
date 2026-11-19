@@ -52,7 +52,7 @@ try {
   await page.click('.o-det [data-dm="maya-claude"]');
   check('Message maya-claude opens its thread, focus in the message box', await until(() => ui.tab === 'direct' && ui.dm === 'maya-claude' && document.activeElement === $('msg') && !$('dmbar').hidden));
   check('the thread\'s message box is empty (the chat draft didn\'t follow) and says who it goes to', await page.evaluate(() => $('msg').value === '' && $('msg').placeholder === 'Message maya-claude' && /Goes to maya-claude only\. Other agents don't see it; everyone on this page does/.test($('dm-hint').textContent) && $('chat-hint').hidden && $('chan').offsetParent === null));
-  check('the bar above says it is hidden from other agents', /maya-claude\s*hidden from other agents/.test(await page.$eval('#dmbar', (b) => b.innerText)));
+  check('the bar above says only people on this board and the agent see it', /maya-claude\s*only people on this board and maya-claude see this/.test(await page.$eval('#dmbar', (b) => b.innerText)));
   await page.type('#msg', 'Keep the login page simple, please.');
   await page.keyboard.press('Enter');
   check('sending puts it in the thread', await until(() => [...document.querySelectorAll('#feed .ev')].some((e) => /Keep the login page simple/.test(e.innerText))));

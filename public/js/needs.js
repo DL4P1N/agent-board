@@ -99,7 +99,7 @@ function renderNow(qOpen, unread, si) {
       start: !T && !S.planner ? 'No agent has started yet. Did everyone type /board ($board in Codex)?'
         : si.waitingA.length ? `${plural(si.waitingA.length, 'agent is', 'agents are')} connected but not started: type /board in it ($board in Codex)`
         : 'No agent is running right now: start yours in your project folder (step 3 shows what to type in each tool)',
-      backlog: !S.goal ? 'Write the goal first, then the agents plan the tasks' : S.planner ? `Nothing to do yet: ${agentOf(S.planner)} is writing the task list` : 'Nothing to do yet: waiting for an agent to start writing the task list (or add tasks yourself)',
+      backlog: !S.goal ? 'Write the goal first, then the agents plan the tasks' : S.planner ? (si.plannerOn ? `Nothing to do yet: ${agentOf(S.planner)} is writing the task list` : `Nothing to do yet: waiting for the planner (${agentOf(S.planner)}) to start`) : 'Nothing to do yet: waiting for an agent to start writing the task list (or add tasks yourself)',
     }[si.cur];
     if (si.cur === 'backlog' && S.goal) kind = 'ok';
     // Setup's own steps lead only while Setup is closed (open, it shows them itself: no lead here, see hideLead).

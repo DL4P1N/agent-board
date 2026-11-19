@@ -20,7 +20,8 @@ function renderBoardEmpty(si) {
   if (state.tasks.length) return patch(el, '');
   let msg;
   if (!S.goal) msg = '<b>No tasks yet.</b> Once the goal is set (Setup, step 2), the first agent on the board writes the task list. You can also add tasks yourself with <b>+ New task</b>.';
-  else if (S.planner) { const c = clientOf(S.planner); msg = `${nameTag(S.planner)}${c ? ` (${esc(c)})` : ''}, the planner, is writing the task list<span class="dots"></span> Cards appear here as it creates them.`; }
+  else if (S.planner && si.plannerOn) { const c = clientOf(S.planner); msg = `${nameTag(S.planner)}${c ? ` (${esc(c)})` : ''}, the planner, is writing the task list<span class="dots"></span> Cards appear here as it creates them.`; }
+  else if (S.planner) msg = `<b>No tasks yet.</b> Waiting for the planner (${nameTag(S.planner)}) to start<span class="dots"></span>`;
   else if (si.workingA.length && setupShown(si)) msg = '<b>No tasks yet.</b>'; // Setup's step 4 says what it waits for
   else if (si.workingA.length) msg = '<b>No tasks yet.</b> Waiting for an agent to become the planner and write the task list<span class="dots"></span>';
   else if (si.waitingA.length) msg = `<b>No tasks yet.</b> ${plural(si.waitingA.length, 'agent is', 'agents are')} connected but nobody started one: type <code>/board</code> in it (<code>$board</code> in Codex). The first one that starts writes the task list.`;

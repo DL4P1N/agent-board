@@ -93,6 +93,7 @@ const mBadge = await page.$eval('[data-tab="me"]', (e) => e.innerText);
 check('@me tab shows unread count', /\d/.test(mBadge), mBadge);
 await domClick('#nyou [data-go="mentions"]'); // mentions follow the lead under "Also"
 await sleep(200);
+await page.waitForFunction(() => !/\d/.test(document.querySelector('[data-tab="me"]').innerText), { timeout: 6000 }).catch(() => {});
 const meFeed = await page.$$eval('#feed .ev', (e) => e.length);
 const mBadge2 = await page.$eval('[data-tab="me"]', (e) => e.innerText);
 check('mentions view filters + clears unread', meFeed >= 2 && !/\d/.test(mBadge2), `${meFeed} items, tab "${mBadge2}"`);
