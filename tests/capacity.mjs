@@ -81,11 +81,17 @@ const free = await max('create_task', { title: 'unclaimed', size: 'S' });
 check('cannot mark an unclaimed task done', /Claim it first/.test(err(await pro('update_task', { id: free.id, status: 'done' }))));
 check('cannot move someone else\'s task', /assigned to/.test(err(await pro('update_task', { id: T.small.id, status: 'review' }))));
 check('cannot rewrite someone else\'s branch', /assigned to/.test(err(await pro('update_task', { id: T.small.id, branch: 'hijack' }))));
+check('cannot resize someone else\'s task', /assigned to cy: only they, the planner or a human/.test(err(await pro('update_task', { id: T.small.id, size: 'L' }))) && (await human('/state')).tasks.find((t) => t.id === T.small.id)?.size !== 'L');
 const asName = (await max('post', { text: 'helper says hi', as: 'ui/../../bob' }));
 check('helper names are sanitised (no impersonation)', asName.author === 'ana/bob' || !String(asName.author).includes('..'), asName.author);
 
 // ---- stale takeover ----
 await ageTask(board, T.small.id, 20); // cy's task, cy online → only a ping
+// Another agent's note (a comment) or an empty update doesn't make someone else's abandoned task look worked on.
+const comment = await pro('update_task', { id: T.small.id, note: 'need a hand?' });
+const empty = await pro('update_task', { id: T.small.id });
+const smallNow = (await human('/state')).tasks.find((t) => t.id === T.small.id);
+check('a teammate\'s note on a task is allowed but doesn\'t refresh it; an empty update does nothing', !err(comment) && !err(empty) && smallNow?.stale === true, `${err(comment)} ${err(empty)} stale=${smallNow?.stale}`);
 check('stale but owner online: release refused', /still online/.test(err(await pro('release_task', { id: T.small.id }))));
 const offline = (await import('node:sqlite')).DatabaseSync;
 { const db = new offline(board.dataDir + '/board.db'); db.prepare("UPDATE presence_v2 SET last_seen = ? WHERE name = 'cy'").run(Date.now() - 30 * 60e3); db.close(); }
@@ -115,6 +121,11 @@ check('/Package.json conflicts with package.json', (await pro('lock_files', { pa
   await human('/settings', 'PUT', { integrator: 'ana' });
   const sent = await max('update_task', { id: r1.id, status: 'in_progress', note: 'tests fail' });
   check('the merger can still send it back for fixes', sent.status === 'in_progress', err(sent));
+  // An owner who is also the merger gets no exemption: sending its own work back is taking a slot.
+  await eve('update_task', { id: r1.id, status: 'review' });
+  await human('/settings', 'PUT', { integrator: 'eve' });
+  const own = await eve('update_task', { id: r1.id, status: 'in_progress' });
+  check('…but an owner who merges can\'t take its own task back past its slots', /finish or release one before taking back/.test(err(own)), err(own) || own.status);
   await human('/settings', 'PUT', { integrator: '' });
   for (const t of [r1, r2]) await human(`/tasks/${t.id}`, 'DELETE');
 }
@@ -136,6 +147,8 @@ check('board token: still allowed', (await human(`/tasks/${feat.id}`, 'DELETE'))
 // ---- questions ----
 const q = await pro('ask_human', { question: 'Which colour?' });
 check('empty answer refused cleanly', /answer first/.test((await human(`/questions/${q.question_id}/answer`, 'POST', { answer: '  ' })).error || ''));
+await human(`/questions/${q.question_id}/answer`, 'POST', { answer: 'Blue.' });
+check('the answer event names who asked (data.asker)', (await human('/state')).events.find((e) => e.kind === 'answer' && e.data?.question_id === q.question_id)?.data?.asker === 'ben');
 
 // ---- freeze announcements survive a restart ----
 const count = async () => (await human('/state')).events.filter((e) => e.author === 'board' && /FEATURE FREEZE/.test(e.text)).length;

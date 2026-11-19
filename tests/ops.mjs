@@ -247,16 +247,22 @@ check('everyone is told to re-run join', st2.body.events.some((e) => /token was 
   check('at most 20 notifications per 10 minutes', sent <= 20 && sent >= 15, String(sent));
   check('a running board writes data/board.pid', fs.existsSync(path.join(b2.dataDir, 'board.pid')));
   // Rotating closes open live streams (they were authorised with the old token).
+  // What is posted right after the rotation (before the stream closes) never reaches it.
+  let streamText = '';
   const streamEnded = await new Promise((resolve) => {
     const rq = http.get(`${b2.base}/api/stream?token=${encodeURIComponent(tok)}`, (res) => {
-      res.on('data', () => {});
+      res.on('data', (d) => { streamText += d; });
       res.on('end', () => resolve(true));
-      setTimeout(() => { c2('/token/rotate', 'POST', undefined, tok).catch(() => {}); }, 300);
+      setTimeout(async () => {
+        const rot = await c2('/token/rotate', 'POST', undefined, tok).catch(() => null);
+        if (rot?.body?.token) c2('/messages', 'POST', { text: 'posted right after the rotation' }, rot.body.token).catch(() => {});
+      }, 300);
       setTimeout(() => resolve(false), 4000);
     });
     rq.on('error', () => resolve(false));
   });
   check('rotating the token closes open live streams', streamEnded);
+  check('…which get the rotation notice but nothing posted after it', /token was rotated/.test(streamText) && !streamText.includes('right after the rotation'), streamText.slice(-300));
   // Rotating also ends pending long polls opened with the old token (the Stop hook's REST wait, an agent's
   // wait_for_events): they answer "the token was changed" and never get what is posted after the rotation.
   {
@@ -323,6 +329,16 @@ check('MCP refuses JSON-RPC batches (400)', batch.status === 400 && /Batched req
 // A malformed request gets a plain answer, not the server's internals (here: "Cannot read properties of undefined").
 r = await c2('/locks/release', 'POST', {}, tok3);
 check('a malformed request: 400 without internal details', r.status === 400 && /missing a field/.test(r.body?.error || '') && !/properties of undefined/.test(r.body?.error || ''), JSON.stringify(r));
+// Bodies are read only where they're used: one sent to a board that doesn't exist, or to the admin API without
+// its token, is never parsed (a broken one would answer 400 "not valid JSON" if it were). On a board it still is.
+{
+  const post = (p, headers = {}) => fetch(`${b2.base}${p}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: '{broken' }).then(async (x) => ({ status: x.status, body: await x.json().catch(() => null) }));
+  const nowhere = await post('/b/no-such-board/api/tasks');
+  const admin = await post('/api/admin/boards');
+  const onBoard = await post('/api/tasks', { Authorization: `Bearer ${tok3}` });
+  check('a body sent to a board that doesn\'t exist, or to the admin API without its token, isn\'t parsed', nowhere.status === 404 && admin.status === 401, `${nowhere.status} ${admin.status}`);
+  check('…and on a board a broken body still gets the JSON error', onBoard.status === 400 && /not valid JSON/.test(onBoard.body?.error || ''), JSON.stringify(onBoard));
+}
 {
   // Only a TypeError from reading the request is the caller's fault; another TypeError is a bug on the server: 500.
   const statusFor = (e) => { let s = 0; const res = { status: (n) => { s = n; return res; }, json: () => res }; const log = console.error; console.error = () => {}; try { internalError(res, e); } finally { console.error = log; } return s; };

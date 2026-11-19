@@ -261,6 +261,26 @@ try {
   check('text over 1000 characters → 400', (await fetch(`${board.base}/api/qr.svg?token=${board.token}&text=${'x'.repeat(1001)}`)).status === 400);
   check('works with the agent token (GET)', (await fetch(`${board.base}/api/qr.svg?text=hi&token=${AGENT_TOKEN}`)).ok);
   check('no token → 401', (await fetch(`${board.base}/api/qr.svg?text=hi`)).status === 401);
+
+  // ================= 5. a closed board stops asking gh =================
+  // One board's PR poll, run in this process against the fake (its own state and log, each answer slow): once the
+  // board is closed, the gh call still running is ended and no call starts for the PRs left in the queue.
+  {
+    const { startGithubPolling } = await import('../src/github.js');
+    const st5 = path.join(bin, 'state5.json'); const log5 = path.join(bin, 'calls5.log');
+    const urls = [1, 2, 3, 4, 5].map((n) => `https://github.com/o/r/pull/${n}`);
+    fs.writeFileSync(st5, JSON.stringify({ auth: true, delay_ms: 300, prs: Object.fromEntries(urls.map((u) => [u, { state: 'OPEN' }])) }));
+    Object.assign(process.env, env, { FAKE_GH_STATE: st5, FAKE_GH_LOG: log5 });
+    const prCalls = () => { try { return fs.readFileSync(log5, 'utf8').split('\n').filter((l) => l.startsWith('["pr","view"')).length; } catch { return 0; } };
+    let closed = false;
+    const fakeBoard = { listTasks: () => urls.map((u, i) => ({ id: i + 1, pr_url: u, status: 'review', assignee: 'ana' })), prStatus: new Map(), emit() {}, getSettings: () => ({}) };
+    const poll = startGithubPolling({ board: fakeBoard, announced: { has: () => true, add() {} }, rawSetting: () => null, putSetting() {}, isClosed: () => closed, presence() {}, every() {}, later: (fn) => setTimeout(fn, 0) });
+    for (const t0 = Date.now(); prCalls() < 1 && Date.now() - t0 < 20e3;) await sleep(50);
+    const before = prCalls();
+    closed = true; poll?.stop?.();
+    await sleep(4000);
+    check('a closed board starts no more gh calls for its queued PRs, and the running one ends without an answer', before === 1 && prCalls() === 1 && fakeBoard.prStatus.size === 0, `${before} ${prCalls()} ${fakeBoard.prStatus.size}`);
+  }
 } catch (e) {
   R.push(`CRASH ${e.stack || e}`);
 }

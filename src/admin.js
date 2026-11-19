@@ -14,7 +14,7 @@ export function createAdminRouter({ registry, live, adminToken }) {
     next();
   }
   const admin = express.Router();
-  admin.use(adminAuth);
+  admin.use(adminAuth, express.json({ limit: '2mb' }));
   admin.get('/boards', h(() => registry.list().map(boardSummary)));
   admin.post('/boards', h((req) => {
     const b = registry.create(req.body?.name, req.body?.slug);

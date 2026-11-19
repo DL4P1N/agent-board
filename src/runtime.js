@@ -28,7 +28,9 @@ export function createBoardRuntime(slug, dir, { registry, envTokenSlug }) {
   const { every, later, forget, clearAll } = createTimers();
   const { rawSetting, putSetting, announced } = hiddenSettings(board);
   const presence = () => board.presenceChanged();
-  const tokens = createAuth({ dir, envToken });
+  let tokens;
+  // Its tokens can't be read (a broken token file): the database closes again, so nothing keeps the file open.
+  try { tokens = createAuth({ dir, envToken }); } catch (e) { board.close(); throw e; }
   const setupInfo = makeSetupInfo({ slug, registry, isDefault, prefix, tokens });
   let closed = false;
   const isClosed = () => closed;
@@ -38,8 +40,10 @@ export function createBoardRuntime(slug, dir, { registry, envTokenSlug }) {
   router.use((req, res, next) => (closed ? res.status(410).json({ error: 'This board is archived.' }) : next()));
   // Board calls per network address (all tokens), and per agent once we know it's one.
   const { ipLimit, agentLimit, holdSlot } = createRequestLimits(slug);
-  router.use('/mcp', ipLimit(true));
-  router.use('/api', ipLimit(false));
+  // The JSON body is read after the per-address limit (see app.js).
+  const json = express.json({ limit: '2mb' });
+  router.use('/mcp', ipLimit(true), json);
+  router.use('/api', ipLimit(false), json);
 
   // ---------- MCP (stateless streamable HTTP) ----------
   mountMcp(router, { board, auth: tokens.auth, tokenCurrent: tokens.current, agentLimit, holdSlot, presence });
@@ -47,12 +51,12 @@ export function createBoardRuntime(slug, dir, { registry, envTokenSlug }) {
   // ---------- REST API ----------
   const api = express.Router();
   const streams = createStreams({ board, holdSlot, presence, isClosed });
-  mountApiRoutes(api, { board, slug, registry, tokens, isDefault, prefix, setupInfo, onlineHumans: streams.onlineHumans, closeStreams: streams.closeStreams, later, presence, agentLimit, holdSlot });
+  mountApiRoutes(api, { board, slug, registry, tokens, isDefault, prefix, setupInfo, onlineHumans: streams.onlineHumans, closeStreams: streams.closeStreams, muteStreams: streams.muteStreams, later, presence, agentLimit, holdSlot });
 
   const announcements = startAnnouncements({ board, announced, every, later, forget });
   setupNotifications({ board, slug, api, prefix, humanToken: tokens.humanToken, rawSetting, putSetting });
   startBackups({ board, dir, slug, every, later });
-  startGithubPolling({ board, announced, rawSetting, putSetting, isClosed, presence, every, later });
+  const github = startGithubPolling({ board, announced, rawSetting, putSetting, isClosed, presence, every, later });
   // Proposals waiting on a planner who went offline become open tasks.
   every(() => { try { board.sweepProposals(); } catch {} }, 30e3);
 
@@ -69,6 +73,7 @@ export function createBoardRuntime(slug, dir, { registry, envTokenSlug }) {
     if (closed) return;
     closed = true;
     clearAll();
+    github.stop();
     announcements.clear();
     streams.closeStreams();
     // Settles pending long-polls before the file closes (a timer touching a closed DB would crash the server).

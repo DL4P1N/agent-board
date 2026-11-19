@@ -40,7 +40,7 @@ export function claimRefusal({ id, task, reservedElsewhere, waits, capacity, idl
 }
 
 // update_task: a status move or an edit, by an agent or (human) on the web board / REST.
-//   id, task, the requested fields (status, branch, assignee, reserved_for, pr_url, force), human;
+//   id, task, the requested fields (status, branch, assignee, reserved_for, size, pr_url, force), human;
 //   owner: the asker holds the task (or is on its team); canMerge: the asker merges it (the integrator,
 //   or the agent that took its review); isPlanner; integrator: settings.integrator; anyone: the integrator
 //   is "whoever is free". Lookups: capacity() of the asker, waitingOn() its unfinished dependency ids,
@@ -58,9 +58,12 @@ export function updateRefusal(c) {
 // A human moving a card to claimed / in progress: it needs an owner, and its dependencies done
 // (otherwise nobody holds it and no agent can claim it). API callers can send force: true to move it
 // anyway; the messages are for people on the web board, so they don't mention it.
+// The owner check runs on every change of status or owner that leaves the task claimed or in progress (a claimed
+// task whose owner is cleared while its status is sent unchanged, too). `assignee` arrives normalised: null for none.
 function humanMoveRefusal({ id, task, status, assignee, force, waitingOn }, changingStatus) {
-  if (force || !changingStatus || !['claimed', 'in_progress'].includes(status)) return null;
+  if (force || !['claimed', 'in_progress'].includes(status ?? task.status) || !(changingStatus || assignee !== undefined)) return null;
   if (!(assignee !== undefined ? assignee : task.assignee)) return `Pick who #${id} is for first.`;
+  if (!changingStatus) return null;
   const waiting = ['claimed', 'in_progress'].includes(task.status) ? [] : waitingOn();
   if (!waiting.length) return null;
   const list = waiting.map((d) => '#' + d);
@@ -77,8 +80,9 @@ function agentChangeRefusal(c, changingStatus) {
   // The merger may move a task out of review: done, back to in_progress for fixes, or blocked (can't test it).
   const merger = task.status === 'review' && ['done', 'in_progress', 'blocked'].includes(status) && canMerge;
   // Blocked, review and done tasks don't hold a slot, so unblocking, reopening or taking one back from review
-  // has to fit within the slots again. (The merger sending it back for fixes isn't the owner taking a slot.)
-  if (owner && !merger && ['blocked', 'review', 'done'].includes(task.status) && ['claimed', 'in_progress'].includes(status)) {
+  // has to fit within the slots again. (Another agent merging it and sending it back for fixes isn't the owner
+  // taking a slot, and isn't the owner, so this doesn't apply to it; an owner who also merges gets no exemption.)
+  if (owner && ['blocked', 'review', 'done'].includes(task.status) && ['claimed', 'in_progress'].includes(status)) {
     const cap = c.capacity();
     if (cap.active >= cap.slots) return `You hold ${cap.active} of ${cap.slots} task(s) at once: finish or release one before ${task.status === 'done' ? 'reopening' : task.status === 'review' ? 'taking back' : 'unblocking'} #${id}.`;
   }
@@ -104,6 +108,10 @@ function agentChangeRefusal(c, changingStatus) {
       : task.status === 'review' && anyone
         ? `task #${id} is in review. Take the review first with claim_review(${id}), then you can merge it or send it back.`
         : `task #${id} is assigned to ${task.assignee}; post a message to them instead of changing it.`;
+  }
+  // The size of someone else's task: its owner, the planner or a human sets it. (A note is a comment: allowed.)
+  if (c.size !== undefined && c.size !== task.size && task.assignee && !owner && !c.isPlanner) {
+    return `task #${id} is assigned to ${task.assignee}: only they, the planner or a human can change its size. Post to them instead.`;
   }
   return null;
 }

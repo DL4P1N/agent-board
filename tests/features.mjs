@@ -2,11 +2,13 @@
 // integrator modes (specific / whoever is free), busy vs idle, per-agent task limits, usage-limit
 // marks, planner extra slots, PR links, /api/next for the Stop hook, and schema upgrades of older boards.
 // Starts its own throwaway boards. Run all suites with: npm test
+import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { startBoard, finish, rest, tempDir, Client, StreamableHTTPClientTransport } from './helpers.mjs';
 import { agentTokenFor } from '../src/tokens.js';
 import { Board } from '../src/board.js';
+import { createBoardRuntime } from '../src/runtime.js';
 
 const board = await startBoard();
 const R = [];
@@ -539,6 +541,20 @@ check('…and force: true assigns it anyway (claimed, with a branch)', mvr.statu
 await k2('lock_files', { paths: ['src/unassign-me.js'], task_id: mv2.id });
 mvr = await http(`/tasks/${mv2.id}`, 'PATCH', { assignee: '' });
 check('clearing the assignee of a claimed task moves it to open and frees its locks', mvr.status === 200 && mvr.body.status === 'open' && !mvr.body.assignee && !(await state()).locks.some((l) => l.path === 'src/unassign-me.js'), JSON.stringify(mvr.body));
+// The resulting (status, owner) pair is checked on every change: clearing the owner while sending the same status
+// "claimed" is refused, and a blank owner ("   ") is nobody.
+{
+  const pt = await newTask('owner pair');
+  await http(`/tasks/${pt.id}`, 'PATCH', { assignee: 'k2' });
+  mvr = await http(`/tasks/${pt.id}`, 'PATCH', { status: 'claimed', assignee: null });
+  let ptT = (await state()).tasks.find((t) => t.id === pt.id);
+  check('a claimed task can\'t lose its owner by sending status "claimed" with assignee null', mvr.status === 400 && /^Pick who #\d+ is for first\.$/.test(err(mvr.body)) && ptT.status === 'claimed' && ptT.assignee === 'k2', `${JSON.stringify(mvr.body)} ${ptT.status}/${ptT.assignee}`);
+  await http(`/tasks/${pt.id}`, 'PATCH', { status: 'open' });
+  mvr = await http(`/tasks/${pt.id}`, 'PATCH', { status: 'in_progress', assignee: '   ' });
+  ptT = (await state()).tasks.find((t) => t.id === pt.id);
+  check('a blank assignee is nobody: moving to in progress with "   " is refused', mvr.status === 400 && /^Pick who/.test(err(mvr.body)) && ptT.status === 'open' && !ptT.assignee, `${JSON.stringify(mvr.body)} ${ptT.status}/${JSON.stringify(ptT.assignee)}`);
+  await http(`/tasks/${pt.id}`, 'DELETE');
+}
 
 // Settings are saved whole or not at all: a bad deadline next to a good goal saves neither.
 const goalBefore = (await state()).settings.goal;
@@ -681,6 +697,75 @@ check('PR link backfilled from the owner\'s earlier event', bfT?.pr_url === 'htt
   reopen(first);
   const again = open(first, (d) => ({ shape: shape(d), v: version(d), pr: d.prepare('SELECT pr_url FROM tasks').get().pr_url, who: d.prepare("SELECT name FROM presence_v2 WHERE kind = 'human'").get()?.name }));
   check('reopening an up-to-date board is a no-op', JSON.stringify(again.shape) === JSON.stringify(want) && again.v === latest && again.pr === null && again.who === 'Quinn', JSON.stringify(again));
+
+  // Locks from before lock paths were normalised get the one spelling; two that name one file keep the longest.
+  const locks = tempDir();
+  reopen(locks);
+  open(locks, (d) => {
+    const ins = d.prepare('INSERT INTO locks (path, owner, task_id, reason, expires_at) VALUES (?, ?, NULL, ?, ?)');
+    ins.run('src/sub/../config.js', 'ola', 'raw spelling', now + 600e3);
+    ins.run('src/config.js', 'pia', 'canonical, shorter', now + 60e3);
+    ins.run('./README.md', 'ola', '', now + 60e3);
+    ins.run('src\\win\\path.js', 'pia', '', now + 60e3);
+    ins.run('../outside.js', 'ola', '', now + 60e3);
+    d.exec('PRAGMA user_version = 3'); // as if from before the lock path step
+  });
+  const lb = new Board(locks);
+  const lrows = lb.db.prepare('SELECT path, owner, reason FROM locks ORDER BY path').all().map((l) => `${l.path}:${l.owner}`);
+  const conflict = lb.lockFiles('quinn', { paths: ['src/config.js'] });
+  const unlocked = lb.unlockFiles('ola', { paths: ['src/config.js'] });
+  lb.close();
+  check('older lock paths are normalised once (duplicates merged, the longest kept; outside-repo paths dropped)', lrows.join() === 'README.md:ola,src/config.js:ola,src/win/path.js:pia' && open(locks, version) === latest, lrows.join());
+  check('…so an older src/sub/../config.js lock conflicts with and unlocks as src/config.js', conflict.ok === false && conflict.conflicts?.[0]?.owner === 'ola' && unlocked.released.join() === 'src/config.js', JSON.stringify([conflict, unlocked]));
+}
+
+// ================= 15. board internals: one transaction per write, the stats cache, files closed on failure =================
+{
+  const open = (dir, fn) => { const d = new DatabaseSync(path.join(dir, 'board.db')); try { return fn(d); } finally { d.close(); } };
+  const dir = tempDir();
+  const b = new Board(dir);
+  const mk = (title) => b.createTask('dana', { title, size: 'S' }, { human: true });
+  // A cancel whose event can't be written leaves the task where it was (removal and event are one transaction).
+  const ct = mk('cancel me');
+  const emit = b.emit;
+  b.emit = () => { throw new Error('event write failed'); };
+  let threw = false;
+  try { b.cancelTask('dana', ct.id, 'dup', { human: true }); } catch { threw = true; }
+  b.emit = emit;
+  check('cancelTask: when its event fails, the task isn\'t removed either', threw && !!b.getTask(ct.id), String(!!b.getTask(ct.id)));
+
+  // The task stats are computed again after task changes only, not after every chat message.
+  for (const t of [mk('s1'), mk('s2'), mk('s3')]) b.updateTask('dana', t.id, { status: 'done', assignee: 'ola', force: true }, { human: true });
+  let computed = 0;
+  const compute = b.computeTaskStats.bind(b);
+  b.computeTaskStats = () => { computed++; return compute(); };
+  const s0 = b.taskStats();
+  b.post('dana', { text: 'just chatting' }, { human: true });
+  b.taskStats();
+  const afterChat = computed;
+  b.updateTask('dana', mk('resize me').id, { size: 'L' }, { human: true });
+  b.taskStats();
+  check('task stats aren\'t recomputed after a chat message, but are after a task change', s0?.done === 3 && afterChat === 1 && computed === 2, `${afterChat} ${computed}`);
+  b.close();
+
+  // A board whose upgrade fails doesn't keep its database open (Windows can't replace an open file).
+  const broken = tempDir();
+  new Board(broken).close();
+  open(broken, (d) => d.exec('DROP TABLE tasks; PRAGMA user_version = 1')); // the lowercase step updates tasks: it fails
+  let failed = false;
+  try { new Board(broken); } catch { failed = true; }
+  let freed = true;
+  try { fs.renameSync(path.join(broken, 'board.db'), path.join(broken, 'moved.db')); } catch { freed = false; }
+  check('a board whose migration fails closes its database file again', failed && freed, `${failed} ${freed}`);
+
+  // A board whose token file can't be read: the runtime closes the database it opened.
+  const badTok = tempDir();
+  fs.mkdirSync(path.join(badTok, 'token'));
+  let rtFailed = false;
+  try { createBoardRuntime('badtok', badTok, { registry: { defaultSlug: 'other', get: () => null }, envTokenSlug: null }); } catch { rtFailed = true; }
+  let rtFreed = true;
+  try { fs.renameSync(path.join(badTok, 'board.db'), path.join(badTok, 'moved.db')); } catch { rtFreed = false; }
+  check('a board runtime whose tokens fail to load closes its database file again', rtFailed && rtFreed, `${rtFailed} ${rtFreed}`);
 }
 
 await finish(R, { board });

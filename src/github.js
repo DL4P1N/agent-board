@@ -16,8 +16,10 @@ export async function ghAvailable() {
   if (ghChecking) await ghChecking;
   return ghOk;
 }
-const gh = (args) => new Promise((resolve) => {
-  execFile('gh', args, { timeout: 20e3, windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (err, out) => {
+// signal: the board's, aborted when it closes, which ends a gh call still running (no answer).
+const gh = (args, signal) => new Promise((resolve) => {
+  if (signal?.aborted) return resolve(null);
+  execFile('gh', args, { timeout: 20e3, windowsHide: true, maxBuffer: 8 * 1024 * 1024, signal }, (err, out) => {
     try { resolve(err ? null : JSON.parse(out)); } catch { resolve(null); }
   });
 });
@@ -73,7 +75,9 @@ export const GH_POLL_MS = Math.min(3600e3, Math.max(200, Number(process.env.GH_P
 export const CI_POLL_MS = GH_POLL_MS * 2 - 5e3 > 0 ? Math.max(GH_POLL_MS, GH_POLL_MS * 2 - 5e3) : GH_POLL_MS;
 
 // The polls of one board. `isClosed` says whether the board was archived; `presence` nudges web boards to refresh.
+// Returns stop(): ends a gh call that is still running (the board's close calls it).
 export function startGithubPolling({ board, announced, rawSetting, putSetting, isClosed, presence, every, later }) {
+  const ac = new AbortController();
   // Pull request status for tasks in review, via the host's `gh` (if it's installed and signed in).
   // Shown on review cards; the author is told once when checks fail or changes are requested, with
   // the failing checks and what reviewers (people or bots) said, so it doesn't have to dig.
@@ -81,8 +85,11 @@ export function startGithubPolling({ board, announced, rawSetting, putSetting, i
     const urls = [...new Set(board.listTasks({ status: 'review' }).map((t) => t.pr_url).filter(Boolean))];
     let changed = false;
     for (const url of urls) {
-      const j = await gh(['pr', 'view', url, '--json', 'state,reviewDecision,statusCheckRollup,comments,latestReviews,author,headRefOid,mergeable,mergeStateStatus']);
-      if (!j || isClosed()) continue;
+      // Archived meanwhile: no more gh calls for it.
+      if (isClosed()) break;
+      const j = await gh(['pr', 'view', url, '--json', 'state,reviewDecision,statusCheckRollup,comments,latestReviews,author,headRefOid,mergeable,mergeStateStatus'], ac.signal);
+      if (isClosed()) break;
+      if (!j) continue;
       const next = { url, ...prSummary(j) };
       const prev = board.prStatus.get(url);
       if (JSON.stringify(prev) === JSON.stringify(next)) continue;
@@ -116,11 +123,12 @@ export function startGithubPolling({ board, announced, rawSetting, putSetting, i
     const repo = githubRepo(board.getSettings().repo);
     if (!repo) { if (board.mainCi) { board.mainCi = null; return true; } return false; }
     if (!branchOf.has(repo)) {
-      const r = await gh(['repo', 'view', repo, '--json', 'defaultBranchRef']);
+      const r = await gh(['repo', 'view', repo, '--json', 'defaultBranchRef'], ac.signal);
+      if (isClosed()) return false;
       branchOf.set(repo, r?.defaultBranchRef?.name || 'main');
     }
     const branch = branchOf.get(repo);
-    const runs = await gh(['run', 'list', '-R', repo, '--branch', branch, '--limit', '20', '--json', 'status,conclusion,headSha,url,displayTitle,workflowName,createdAt']);
+    const runs = await gh(['run', 'list', '-R', repo, '--branch', branch, '--limit', '20', '--json', 'status,conclusion,headSha,url,displayTitle,workflowName,createdAt'], ac.signal);
     if (!Array.isArray(runs) || isClosed()) return false;
     const prev = board.mainCi;
     let next = null;
@@ -162,7 +170,7 @@ export function startGithubPolling({ board, announced, rawSetting, putSetting, i
       try {
         if (await ghAvailable()) {
           await pollPrs();
-          if (Date.now() - ciAt >= CI_POLL_MS) { ciAt = Date.now(); if (await pollMainCi()) presence(); }
+          if (!isClosed() && Date.now() - ciAt >= CI_POLL_MS) { ciAt = Date.now(); if (await pollMainCi()) presence(); }
         }
       } catch {}
       polling = false;
@@ -170,4 +178,5 @@ export function startGithubPolling({ board, announced, rawSetting, putSetting, i
     every(tick, GH_POLL_MS);
     later(tick, Math.min(3e3, GH_POLL_MS));
   }
+  return { stop: () => ac.abort() };
 }

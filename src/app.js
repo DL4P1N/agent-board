@@ -19,7 +19,9 @@ export function createApp({ registry, live, adminToken }) {
     res.set({ 'Content-Security-Policy': CSP, 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer' });
     next();
   });
-  app.use(express.json({ limit: '2mb' }));
+  // Request bodies (JSON) are read further in, only where they're used: a board's /api and /mcp after its
+  // per-address limit (runtime.js), and the admin API after its token check. A request for nothing that exists
+  // never has its body read or decompressed.
 
   // app stays 'claude-board' (the name before the rename to Agent Board): older join/doctor/start scripts and
   // people's monitoring check it. name is the display name. pid tells a script which server answered (the tests'

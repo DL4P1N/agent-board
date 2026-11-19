@@ -79,6 +79,7 @@ const MIGRATIONS = [
   (b) => b.baseSchema(),
   (b) => b.lowercaseNames(),
   (b) => b.backfillPrLinks(),
+  (b) => b.normaliseLockPaths(),
 ];
 
 export class Board {
@@ -89,13 +90,22 @@ export class Board {
     // Pending long-polls (wait_for_events, /api/events?wait=): settled with [] when the board closes.
     this.waiters = new Set();
     this.closed = false;
+    // Task events (task_claimed, task_updated, …) written by this board: what the task stats cache keys on.
+    this.taskEvents = 0;
     // Pull request status by URL ({state, review, checks}), filled in by the server's gh poller.
     this.prStatus = new Map();
     // CI on the project's main branch ({status: 'pass'|'fail'|'pending', failing, url, sha, title, at}), from the server's gh poller.
     this.mainCi = null;
     this.bus.setMaxListeners(0);
-    this.db.exec('PRAGMA journal_mode = WAL');
-    this.migrate();
+    // A board that can't be opened leaves no file open behind it (on Windows an open file can't be replaced,
+    // e.g. by a restore retrying).
+    try {
+      this.db.exec('PRAGMA journal_mode = WAL');
+      this.migrate();
+    } catch (e) {
+      try { this.db.close(); } catch {}
+      throw e;
+    }
   }
 
   // Brings the database up to date: runs each MIGRATIONS step it hasn't had yet, in order, each in one
@@ -212,6 +222,23 @@ export class Board {
     }
   }
 
+  // Version 4: lock paths used to be stored as given, so an older "src/sub/../a.js" lock neither conflicted with
+  // nor unlocked as "src/a.js". Each lock gets the one spelling lockFiles uses now; locks that end up on the same
+  // path keep the one that lasts longest. A path that names nothing in the repo (".", "../x") can't be locked
+  // any more: dropped (locks last an hour at most anyway).
+  normaliseLockPaths() {
+    const rows = this.db.prepare('SELECT * FROM locks ORDER BY expires_at DESC').all();
+    const keep = new Map();
+    for (const r of rows) {
+      let p = '';
+      try { p = normPath(r.path); } catch {}
+      if (p && !keep.has(p)) keep.set(p, { ...r, path: p });
+    }
+    this.db.exec('DELETE FROM locks');
+    const ins = this.db.prepare('INSERT INTO locks (path, owner, task_id, reason, expires_at) VALUES (?,?,?,?,?)');
+    for (const l of keep.values()) ins.run(l.path, l.owner, l.task_id, l.reason, l.expires_at);
+  }
+
   // Version 2: names used to be case-sensitive, so "Dana" and "dana" were two people.
   // Lowercase every stored name and merge the presence rows that now collide.
   // Boards from before versioning that already had this carry the _names_lowercase mark.
@@ -274,6 +301,7 @@ export class Board {
       .prepare('INSERT INTO events (ts, author, kind, channel, task_id, text, data) VALUES (?,?,?,?,?,?,?)')
       .run(ts, author, kind, channel, task_id, text, data ? JSON.stringify(data) : null);
     const ev = { id: Number(r.lastInsertRowid), ts, author, kind, channel, task_id, text, data };
+    if (/^task_/.test(kind)) this.taskEvents++;
     // Inside a transaction the event goes out once it is committed (see tx).
     if (this.txEvents) this.txEvents.push(ev);
     else this.bus.emit('event', ev);
@@ -611,6 +639,8 @@ export class Board {
     if (!human) this.assertOwnName(author);
     const task = this.getTask(id);
     if (!task) throw new Error(`task #${id} not found`);
+    // The owner as stored ("  " is nobody), before any check looks at it.
+    if (assignee !== undefined) assignee = normName(assignee) || null;
     const owner = !!task.assignee && sameTeam(author, task.assignee);
     const s = this.getSettings();
     // Whoever merges it: the integrator, or (integrator = whoever is free) the agent that took the review.
@@ -622,7 +652,7 @@ export class Board {
       : assignee ? (task.status === 'open' ? 'claimed' : undefined)
         : (['claimed', 'in_progress'].includes(task.status) ? 'open' : undefined));
     const refusal = updateRefusal({
-      id, task, status: moveTo, branch, assignee, reserved_for, pr_url, force, human, owner, canMerge,
+      id, task, status: moveTo, branch, assignee, reserved_for, size, pr_url, force, human, owner, canMerge,
       isPlanner: !!s.planner && sameTeam(author, s.planner), integrator: s.integrator, anyone: s.integrator === ANYONE,
       capacity: () => this.capacity(author),
       waitingOn: () => task.depends_on.filter((d) => { const x = this.getTask(d); return x && x.status !== 'done'; }),
@@ -642,23 +672,29 @@ export class Board {
       description: description !== undefined ? String(description).slice(0, 10000) : task.description,
       priority: priority !== undefined ? checkPriority(priority) : task.priority,
       size: size !== undefined ? checkSize(size) : task.size,
-      assignee: assignee !== undefined ? assignee || null : task.assignee,
+      assignee: assignee !== undefined ? assignee : task.assignee,
       reserved_for: reserved_for !== undefined ? normName(reserved_for).split('/')[0] || null : task.reserved_for,
     };
-    if (assignee !== undefined) next.assignee = assignee ? normName(assignee) : null;
     // A human hands a task to an agent: it gets a branch, and the agent is told (the event's @mention).
     if (human && assignee && ['claimed', 'in_progress'].includes(next.status) && !next.branch) next.branch = `task/${id}-${slug(task.title)}`;
     if (next.status === 'open' || next.status === 'proposed') next.assignee = null;
     // The review claim ends when the task leaves review.
     const reviewer = next.status === 'review' ? task.reviewer : null;
-    return this.tx(() => this.writeTask(id, author, task, next, { status, note, reserved_for, assignee, pr, reviewer }));
+    const changed = Object.keys(next).some((k) => next[k] !== task[k]) || reviewer !== task.reviewer || pr !== task.pr_url;
+    // Nothing to change and nothing said: no write, no event.
+    if (!changed && !note) return task;
+    // updated_at is the owner's progress (a task without updates for 15+ min is stale and can be taken over), so
+    // only a new status or owner, the owner's own update, or a human's change refreshes it. Another agent's note
+    // (a comment) or the planner's reservation doesn't keep someone else's abandoned task looking alive.
+    const progress = next.status !== task.status || next.assignee !== task.assignee || owner || (human && changed);
+    return this.tx(() => this.writeTask(id, author, task, next, { status, note, reserved_for, assignee, pr, reviewer, at: progress ? Date.now() : task.updated_at }));
   }
 
   // updateTask's write: the row, its event and (done or open) its locks, as one transaction.
-  writeTask(id, author, task, next, { status, note, reserved_for, assignee, pr, reviewer }) {
+  writeTask(id, author, task, next, { status, note, reserved_for, assignee, pr, reviewer, at }) {
     this.db
       .prepare('UPDATE tasks SET status=?, branch=?, title=?, description=?, priority=?, size=?, assignee=?, reserved_for=?, reviewer=?, pr_url=?, updated_at=? WHERE id=?')
-      .run(next.status, next.branch, next.title, next.description, next.priority, next.size, next.assignee, next.reserved_for, reviewer, pr, Date.now(), id);
+      .run(next.status, next.branch, next.title, next.description, next.priority, next.size, next.assignee, next.reserved_for, reviewer, pr, at, id);
     const parts = [];
     if (status && status !== task.status) parts.push(`${task.status} → ${status}`);
     if (reserved_for !== undefined && next.reserved_for !== task.reserved_for) parts.push(next.reserved_for ? `reserved for @${next.reserved_for}` : 'reservation removed');
@@ -816,7 +852,7 @@ export class Board {
       channel: 'humans',
       task_id: q.task_id,
       text: `@${q.asker} re "${q.question.slice(0, 80)}": ${answer}`,
-      data: { question_id: id },
+      data: { question_id: id, asker: q.asker },
     });
     return this.db.prepare('SELECT * FROM questions WHERE id = ?').get(id);
   }
@@ -891,8 +927,10 @@ export class Board {
     if (task.status === 'done') throw new Error(`#${id} is already done.`);
     if (!human && task.assignee && !sameTeam(author, task.assignee) && !['open', 'proposed'].includes(task.status)) throw new Error(`#${id} is being worked on by ${task.assignee}: ask them to stop first (post to @${agentRootOf(task.assignee)}).`);
     reason = String(reason || '').trim().slice(0, 300);
-    this.removeTask(id);
-    this.emit({ author, kind: 'task_deleted', channel: 'tasks', task_id: id, text: `cancelled #${id} ${task.title}${reason ? `: ${reason}` : ''}${task.assignee ? ` @${agentRootOf(task.assignee)}` : ''}` });
+    this.tx(() => {
+      this.removeTask(id);
+      this.emit({ author, kind: 'task_deleted', channel: 'tasks', task_id: id, text: `cancelled #${id} ${task.title}${reason ? `: ${reason}` : ''}${task.assignee ? ` @${agentRootOf(task.assignee)}` : ''}` });
+    });
     return { cancelled: id };
   }
 
@@ -1722,8 +1760,10 @@ export class Board {
   // per size (sizes with 2+ samples), the share of done tasks sent back from review at least once, and
   // the median wait from the last move to review until done. null until 3 tasks are done.
   taskStats() {
-    // Cached: it scans task events, and runs on every MCP request and every /api/state.
-    const key = `${this.latestEventId()}|${this.db.prepare("SELECT COUNT(*) AS n, COALESCE(MAX(updated_at),0) AS u FROM tasks").get().u}`;
+    // Cached: it scans task events, and runs on every MCP request and every /api/state. Only task events
+    // (taskEvents, counted by emit) and task rows change it: chat and presence don't.
+    const t = this.db.prepare('SELECT COUNT(*) AS n, COALESCE(MAX(updated_at),0) AS u FROM tasks').get();
+    const key = `${this.taskEvents}|${t.n}|${t.u}`;
     if (this._statsCache?.key === key) return this._statsCache.value;
     const value = this.computeTaskStats();
     this._statsCache = { key, value };

@@ -11,7 +11,7 @@ import { TOKEN_ROTATED } from './auth.js';
 // How long a built /api/state answer may be reused while nothing happens on the board.
 const STATE_TTL_MS = 1000;
 
-export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, prefix, setupInfo, onlineHumans, closeStreams, later, presence, agentLimit, holdSlot }) {
+export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, prefix, setupInfo, onlineHumans, closeStreams, muteStreams, later, presence, agentLimit, holdSlot }) {
   const { auth, viewerLimits, humanOnly, humanToken, envToken } = tokens;
   api.use(auth);
   api.use((req, res, next) => (req.role !== 'agent' || agentLimit(req, res, agentFrom(req), false) ? next() : undefined));
@@ -173,7 +173,9 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     // Long polls opened with the old token end now, and answer "the token was changed".
     board.endWaits();
     board.emit({ author: 'board', kind: 'message', channel: 'general', text: '@all The board token was rotated: everyone re-runs the join command from the web board.' });
-    // Live streams were authorised with the old token: close them all (open pages reconnect with the new one).
+    // Live streams were authorised with the old token: they get nothing posted from now on, and close in a
+    // moment (open pages reconnect with the new one).
+    muteStreams();
     later(closeStreams, 50);
     return { token: t, setup: { ...setupInfo(), viewer_token: tokens.viewerToken } };
   }));

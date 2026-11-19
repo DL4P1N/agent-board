@@ -18,6 +18,8 @@ function answer(args) {
   if (process.env.FAKE_GH_LOG) try { fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify(args) + '\n'); } catch {}
   const [a, b] = args;
   if (a === 'auth' && b === 'status') return { code: st.auth === false ? 1 : 0 };
+  // delay_ms: answer PR questions slowly (a slow network), to test what happens meanwhile.
+  if (a === 'pr' && b === 'view' && st.delay_ms) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, st.delay_ms);
   if (a === 'pr' && b === 'view') { const pr = (st.prs || {})[args[2]]; return pr ? { code: 0, out: pr } : { code: 1 }; }
   if (a === 'repo' && b === 'view') return { code: 0, out: { defaultBranchRef: { name: st.branch || 'main' } } };
   if (a === 'run' && b === 'list') return Array.isArray(st.runs) ? { code: 0, out: st.runs } : { code: 1 };

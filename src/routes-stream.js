@@ -14,9 +14,11 @@ export function createStreams({ board, holdSlot, presence, isClosed }) {
   // Humans with the web board open (by name -> open SSE connection count).
   const humansOnline = new Map();
   const onlineHumans = () => new Set([...humansOnline].filter(([, n]) => n > 0).map(([k]) => k));
-  // Each open stream's stop(): its listener and pings stop before its response ends.
-  const openStreams = new Set();
-  const closeStreams = () => { for (const stop of [...openStreams]) stop(); };
+  // Each open stream's stop(): its listener and pings stop before its response ends. mute() stops sending at once,
+  // without ending it: a token rotation mutes every stream (nothing posted after it reaches them), then ends them.
+  const openStreams = new Map(); // stop -> mute
+  const closeStreams = () => { for (const stop of [...openStreams.keys()]) stop(); };
+  const muteStreams = () => { for (const mute of openStreams.values()) mute(); };
 
   // GET /stream on the board's API router.
   function mount(api) {
@@ -44,13 +46,16 @@ export function createStreams({ board, holdSlot, presence, isClosed }) {
       };
       const ping = setInterval(() => write(': ping\n\n'), 20000);
       board.bus.on('event', send);
-      const stop = () => {
-        openStreams.delete(stop);
+      const mute = () => {
         clearInterval(ping);
         board.bus.off('event', send);
+      };
+      const stop = () => {
+        openStreams.delete(stop);
+        mute();
         try { res.end(); } catch {}
       };
-      openStreams.add(stop);
+      openStreams.set(stop, mute);
       if (human) {
         humansOnline.set(human, (humansOnline.get(human) || 0) + 1);
         board.touch(human, 'human');
@@ -67,5 +72,5 @@ export function createStreams({ board, holdSlot, presence, isClosed }) {
     });
   }
 
-  return { onlineHumans, closeStreams, mount };
+  return { onlineHumans, closeStreams, muteStreams, mount };
 }
