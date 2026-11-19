@@ -199,31 +199,45 @@ try {
   check('no match says so', await page.$eval('#pal-empty', (e) => !e.hidden) && (await labels()).length === 0 && await page.$eval('#pal-in', (e) => e.getAttribute('aria-activedescendant') === ''));
   await page.keyboard.press('Enter');
   check('Enter with no match does nothing', !!(await page.$('#pal-dlg[open]')));
-  await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.getElementById('pal-dlg').open);
-  check('Esc closes the palette and focus returns to where it was (the card)', await page.evaluate((id) => document.activeElement?.matches?.(`.card[data-id="${id}"]`), s.schema.id));
+  // A dialog's close event (where the board hands focus back) comes a task after `open` goes false: wait for it to have
+  // run (this listener goes after the board's) before the next step, then for focus on the card (a little: it may only
+  // come back once the fade has finished).
+  const closing = (dlg) => page.evaluate((dlg) => { window.__closed = new Promise((r) => document.getElementById(dlg).addEventListener('close', () => r(), { once: true })); }, dlg);
+  const closed = () => page.evaluate(() => window.__closed);
+  const onCard = (id) => page.waitForFunction((id) => document.activeElement?.dataset?.id === id, { timeout: 2000 }, id).then(() => true, () => false);
+  const where = (id) => page.evaluate((id) => `card #${id}, focus on ${document.activeElement?.outerHTML.slice(0, 70)}`, id);
+  await closing('pal-dlg'); await page.keyboard.press('Escape'); await closed();
+  check('Esc closes the palette and focus returns to where it was (the card)', await onCard(String(s.schema.id)), await where(s.schema.id));
 
   // Ctrl+K again toggles it shut; from a card, focus comes back to the card
   await page.focus('.card');
   const cardId = await page.evaluate(() => document.activeElement.dataset.id);
   await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control');
-  await page.waitForSelector('#pal-dlg[open]');
+  await page.waitForSelector('#pal-dlg[open]'); await closing('pal-dlg');
   await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control');
-  await page.waitForFunction(() => !document.getElementById('pal-dlg').open);
-  check('Ctrl+K again closes it, focus is back on the card', await page.evaluate((id) => document.activeElement.dataset?.id === id, cardId));
-  await page.keyboard.press('?'); await page.waitForSelector('#help-dlg[open]');
-  await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.getElementById('help-dlg').open);
-  check('? opens help; Esc closes it and focus is back on the card', await page.evaluate((id) => document.activeElement.dataset?.id === id, cardId));
+  await closed();
+  check('Ctrl+K again closes it, focus is back on the card', await onCard(cardId), await where(cardId));
+  await page.keyboard.press('?'); await page.waitForSelector('#help-dlg[open]'); await closing('help-dlg');
+  await page.keyboard.press('Escape'); await closed();
+  check('? opens help; Esc closes it and focus is back on the card', await onCard(cardId), await where(cardId));
   // A live update that redraws the board while the palette or help is open: focus still comes back to that card.
   const redraw = () => page.evaluate(() => { $('board')._html = undefined; render(); });
-  // Focus may come back once the dialog's fade has finished: wait for it (a little), then say where it is.
-  const swapped = () => page.waitForFunction((id) => document.activeElement?.dataset?.id === id, { timeout: 2000 }, cardId).then(() => true, () => false);
   await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control');
-  await page.waitForSelector('#pal-dlg[open]'); await redraw();
-  await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.getElementById('pal-dlg').open);
-  check('the board redrawn while Ctrl+K is open: closing it, focus is back on the same card', await swapped(), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 70)));
-  await page.keyboard.press('?'); await page.waitForSelector('#help-dlg[open]'); await redraw();
-  await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.getElementById('help-dlg').open);
-  check('the board redrawn while help is open: closing it, focus is back on the same card', await swapped(), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 70)));
+  await page.waitForSelector('#pal-dlg[open]'); await redraw(); await closing('pal-dlg');
+  await page.keyboard.press('Escape'); await closed();
+  check('the board redrawn while Ctrl+K is open: closing it, focus is back on the same card', await onCard(cardId), await where(cardId));
+  await page.keyboard.press('?'); await page.waitForSelector('#help-dlg[open]'); await redraw(); await closing('help-dlg');
+  await page.keyboard.press('Escape'); await closed();
+  check('the board redrawn while help is open: closing it, focus is back on the same card', await onCard(cardId), await where(cardId));
+  // Focus moved on between close() and its close event (a quick key or click) stays there: the board doesn't pull it back.
+  for (const dlg of ['pal-dlg', 'help-dlg']) {
+    if (dlg === 'pal-dlg') { await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control'); } else await page.keyboard.press('?');
+    await page.waitForSelector(`#${dlg}[open]`); await closing(dlg);
+    const other = await page.evaluate((dlg, id) => { const o = [...document.querySelectorAll('.card')].find((c) => c.dataset.id !== id); document.getElementById(dlg).close(); o.focus(); return o.dataset.id; }, dlg, cardId);
+    await closed(); await sleep(400); // and past the fade, when the board tries again
+    check(`${dlg === 'pal-dlg' ? 'Ctrl+K' : 'Help'} closed and focus moved to another card before its close event: it stays on that card`, await page.evaluate((id) => document.activeElement?.dataset?.id === id, other), await where(other));
+    await page.evaluate((id) => document.querySelector(`.card[data-id="${id}"]`).focus(), cardId);
+  }
 
   // ---- other commands ----
   const run = async (q) => { await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control'); await page.waitForSelector('#pal-dlg[open]'); await page.keyboard.type(q); await page.keyboard.press('Enter'); await page.waitForFunction(() => !document.getElementById('pal-dlg').open); await sleep(250); };

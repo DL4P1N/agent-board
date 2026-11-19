@@ -326,14 +326,19 @@ function focusMark() {
     if (id) document.querySelector(`.card[data-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
   };
 }
-// After a dialog closed: focus back now, and again once its fade has finished if it is still on the page or in the
-// fading dialog (while it fades, what's behind it can't always take focus).
+// After a dialog closed: focus back if it is on the page or still in the dialog, now and again once its fade has
+// finished (while it fades, what's behind it can't always take focus). The close event comes a task after close():
+// focus already moved elsewhere by then (a click, a key, the browser putting it back) stays where it is.
 function refocusAfter(dlg, back) {
   if (!back) return;
-  back();
-  // A closing dialog can stay in the top layer (and keep the page inert) a little past its fade: try each frame for a while.
   const lost = () => { const a = document.activeElement; return !a || a === document.body || dlg.contains(a); };
-  const again = (n = 30) => { if (!lost() || dlg.open) return; back(); if (lost() && n > 0) requestAnimationFrame(() => again(n - 1)); };
+  // Only the latest close of this dialog hands focus back: an earlier one still waiting on its fade gives up.
+  const turn = dlg._refocus = (dlg._refocus || 0) + 1;
+  const stale = () => dlg.open || dlg._refocus !== turn;
+  if (stale()) return;
+  if (lost()) back();
+  // A closing dialog can stay in the top layer (and keep the page inert) a little past its fade: try each frame for a while.
+  const again = (n = 30) => { if (stale() || !lost()) return; back(); if (lost() && n > 0) requestAnimationFrame(() => again(n - 1)); };
   const fade = dlg.getAnimations();
   if (fade.length) Promise.all(fade.map((x) => x.finished.catch(() => {}))).then(() => again()); else setTimeout(() => again());
 }
