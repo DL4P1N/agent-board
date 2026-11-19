@@ -324,9 +324,11 @@ function focusMark() {
 function refocusAfter(dlg, back) {
   if (!back) return;
   back();
-  const again = () => { const a = document.activeElement; if (!a || a === document.body || dlg.contains(a)) back(); };
+  // A closing dialog can stay in the top layer (and keep the page inert) a little past its fade: try each frame for a while.
+  const lost = () => { const a = document.activeElement; return !a || a === document.body || dlg.contains(a); };
+  const again = (n = 30) => { if (!lost() || dlg.open) return; back(); if (lost() && n > 0) requestAnimationFrame(() => again(n - 1)); };
   const fade = dlg.getAnimations();
-  if (fade.length) Promise.all(fade.map((x) => x.finished.catch(() => {}))).then(again); else setTimeout(again);
+  if (fade.length) Promise.all(fade.map((x) => x.finished.catch(() => {}))).then(() => again()); else setTimeout(() => again());
 }
 
 export { agentRoot, ago, announce, canMove, cardRects, clock, cmdBox, easeHeight, esc, fmt, focusMark, fullTime, glide, hs, hue,
