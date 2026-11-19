@@ -35,8 +35,8 @@ const STATE_FILE = path.join(os.homedir(), '.agent-board-hook.json');
 const KEEP_MS = 30 * 24 * 3600e3;
 
 // Several hooks (agents, sessions) save to that one file: a short lock keeps their read-merge-write steps apart.
-// Best effort and never a hang: a lock older than LOCK_STALE_MS (a crashed hook's) is removed, and after LOCK_WAIT_MS
-// the hook saves without it (the merge below still keeps the other entries).
+// Never a hang: a lock older than LOCK_STALE_MS (a crashed hook's) is removed, and after LOCK_WAIT_MS the hook skips
+// its save (saving unlocked could undo another hook's). That's safe: the next stop reports the same events again.
 const LOCK_FILE = `${STATE_FILE}.lock`;
 const LOCK_WAIT_MS = 300;
 const LOCK_STALE_MS = 5e3;
@@ -51,13 +51,15 @@ function lockState() {
 }
 
 // The hook's memory for one board + agent: read once, saved with save(patch). reset: the cursor may go back
-// (the board was started fresh); otherwise a cursor or nudge time saved meanwhile by another hook of this agent
-// (one that didn't wait as long) is kept when it's further along.
+// (the board was started fresh), but only while the cursor on disk is still the one read here; otherwise a cursor
+// or nudge time saved meanwhile by another hook of this agent (one that didn't wait as long) is kept when it's
+// further along.
 function hookState(key) {
   const read = () => { try { const a = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); return a && typeof a === 'object' && !Array.isArray(a) ? a : {}; } catch { return {}; } };
   const entry = { ...(read()[key] || {}) };
+  const startCursor = entry.cursor;
   const save = (patch, { reset = false } = {}) => {
-    const locked = lockState();
+    if (!lockState()) return;
     const tmp = `${STATE_FILE}.${process.pid}.tmp`;
     try {
       // Read again just before writing, and change only what this hook changed: other hooks may have saved meanwhile.
@@ -65,14 +67,15 @@ function hookState(key) {
       const now = Date.now();
       const disk = all[key] && typeof all[key] === 'object' ? all[key] : {};
       const merged = { ...disk, ...patch, seen: now };
-      for (const f of ['cursor', 'nudge']) if (f in patch && !(reset && f === 'cursor') && Number(disk[f]) > Number(patch[f])) merged[f] = disk[f];
+      const resetting = reset && disk.cursor === startCursor;
+      for (const f of ['cursor', 'nudge']) if (f in patch && !(resetting && f === 'cursor') && Number(disk[f]) > Number(patch[f])) merged[f] = disk[f];
       all[key] = merged;
       Object.assign(entry, merged);
       for (const k of Object.keys(all)) if (!(now - (all[k]?.seen || 0) < KEEP_MS)) delete all[k];
       fs.writeFileSync(tmp, JSON.stringify(all));
       fs.renameSync(tmp, STATE_FILE);
     } catch { try { fs.unlinkSync(tmp); } catch {} }
-    finally { if (locked) try { fs.unlinkSync(LOCK_FILE); } catch {} }
+    finally { try { fs.unlinkSync(LOCK_FILE); } catch {} }
   };
   return { entry, save };
 }

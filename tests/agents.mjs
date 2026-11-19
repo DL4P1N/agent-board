@@ -199,13 +199,30 @@ check('hook: entries unused for 30 days are dropped, newer ones kept', !hookStat
   h = await runHook([]);
   check('hook: a stale state lock is cleared and the save goes through', /after a stale lock/.test(h.out) && !fs.existsSync(lock) && readState()[anaKey].cursor === await latest(), h.out.slice(0, 200));
   fs.writeFileSync(lock, '');
+  const before = readState()[anaKey].cursor;
   await ben('post', { text: 'while the lock is held' });
   const t0 = Date.now();
   h = await runHook([]);
   const took = Date.now() - t0;
-  check('hook: a held state lock doesn\'t hold it up: it saves anyway and leaves the lock to its owner',
-    /while the lock is held/.test(h.out) && took < 5000 && fs.existsSync(lock) && readState()[anaKey].cursor === await latest(), `${took}ms ${h.out.slice(0, 200)}`);
+  // Saving without the lock could undo another hook's save: it skips the save (the next stop reports the event again).
+  check('hook: a held state lock doesn\'t hold it up: it skips the save and leaves the lock to its owner',
+    h.code === 0 && /while the lock is held/.test(h.out) && took < 5000 && fs.existsSync(lock) && readState()[anaKey].cursor === before, `${took}ms ${readState()[anaKey].cursor} vs ${before} ${h.out.slice(0, 200)}`);
   fs.rmSync(lock, { force: true });
+  h = await runHook([]);
+  check('hook: …and the next stop reports it again and saves', /while the lock is held/.test(h.out) && readState()[anaKey].cursor === await latest(), h.out.slice(0, 200));
+  // A reset (the board looked fresh to this hook) applies only while the cursor on disk is still the one it read:
+  // progress another hook saved meanwhile is kept. The hook below finds a cursor past the board's newest event and
+  // waits (ana's own events don't wake it); meanwhile another hook saves a newer cursor.
+  for (let i = 0; i < 51; i++) await ana('post', { text: `own ${i}` });
+  let s2 = readState(); s2[anaKey] = { ...s2[anaKey], cursor: (await latest()) + 1000 }; fs.writeFileSync(stateFile, JSON.stringify(s2));
+  const resetting = runHook([], 'ana', { BOARD_HOOK_WAIT: '15' });
+  await sleep(2500);
+  const progress = (await latest()) + 3;
+  s2 = readState(); s2[anaKey] = { ...s2[anaKey], cursor: progress }; fs.writeFileSync(stateFile, JSON.stringify(s2));
+  await ben('post', { text: 'wakes the resetting hook' });
+  h = await resetting;
+  check('hook: a reset doesn\'t overwrite a newer cursor another hook saved meanwhile', /wakes the resetting hook/.test(h.out) && readState()[anaKey].cursor === progress, `${readState()[anaKey].cursor} vs ${progress} ${h.out.slice(0, 200)}`);
+  for (let i = 0; i < 2; i++) await ben('post', { text: `catch up ${i}` });
 }
 // The transcript is read from its end (a bounded tail), never whole: a transcript too big for one string (simulated
 // here: reading it whole throws) still has its usage-limit notice found, after megabytes of earlier entries.
