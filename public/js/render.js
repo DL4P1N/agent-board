@@ -11,7 +11,7 @@ import { checkNotify, renderBell, renderClock, renderTopbar } from './topbar.js'
 import { renderSetup } from './setup.js';
 import { fadeAgents, officeState, renderAgents } from './agents.js';
 import { renderBoard, renderBoardEmpty, renderBoardNote, renderCi, renderFilter } from './tasks.js';
-import { announceActivity, dmUnreadCount, feedPlace, markDmSeen, renderFeed, renderLocks } from './activity.js';
+import { announceActivity, dmUnreadCount, feedOnScreen, feedPlace, markDmSeen, renderFeed, renderLocks } from './activity.js';
 import { renderDialogLive } from './task-dialog.js';
 import { boardView, office } from './office.js';
 import { renderDocks, renderOffice } from './panels.js';
@@ -27,8 +27,8 @@ function renderPass() {
   // The session recap too (read-only, the same viewer token).
   { const vt = state.setup?.viewer_token; $('recap-row').hidden = !vt; if (vt) { const h = BASE + '/recap.html?token=' + encodeURIComponent(vt); if ($('recap-link').getAttribute('href') !== h) $('recap-link').href = h; } }
   const { qOpen, unread } = renderTitle();
-  // The open thread is read while it's on screen.
-  if (ui.tab === 'direct' && ui.dm && document.visibilityState === 'visible' && markDmSeen(ui.dm)) renderTitle();
+  // The open thread is read while it's on screen: the tab shown, and the feed in view (not folded or scrolled away).
+  if (ui.tab === 'direct' && ui.dm && document.visibilityState === 'visible' && feedOnScreen() && markDmSeen(ui.dm)) renderTitle();
   if (SLUG && state.board?.name) { const b = $('bname'); if (b.textContent !== state.board.name) { b.textContent = state.board.name; b.title = `Board "${state.board.name}" (/b/${SLUG}/) on this server`; } }
   renderNeeds(qOpen, unread);
   renderClock(); renderBell();

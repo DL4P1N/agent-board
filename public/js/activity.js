@@ -330,15 +330,22 @@ function fadeFeed() { const f = $('feed'); f.classList.toggle('more-above', f.sc
 // New activity: the feed scrolls down to its latest line, like every other go-to link.
 $('jump').onclick = () => { $('feed').scrollTo({ top: $('feed').scrollHeight, behavior: smooth() }); $('jump').hidden = true; };
 
-// A mention counts as read once it has been visible in the feed for a moment.
+// A mention counts as read once it has been visible in the feed for a moment: inside the feed's scrolled box and on
+// the screen (a feed scrolled out of the page, or Activity folded, shows nothing).
 let mentionIO = null; const mentionTimers = new Map();
+const onScreen = (r) => r.height > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+// The feed is on screen (a direct thread is read only then, render.js).
+const feedOnScreen = () => onScreen($('feed').getBoundingClientRect());
 function inFeedView(id) {
   const f = $('feed'); const n = f.querySelector(`.ev[data-eid="${id}"]`); if (!n) return false;
   const a = f.getBoundingClientRect(); const b = n.getBoundingClientRect();
-  return b.height > 0 && b.top >= a.top - 2 && b.bottom <= a.bottom + 2 && a.height > 0;
+  return b.height > 0 && b.top >= a.top - 2 && b.bottom <= a.bottom + 2 && a.height > 0 && b.top >= -2 && b.bottom <= innerHeight + 2;
 }
+// A direct thread with replies not yet read: they are, once the feed comes on screen (scrolled to, Activity unfolded).
+if ('IntersectionObserver' in window) new IntersectionObserver((es) => { if (es.at(-1).isIntersecting && ui.tab === 'direct' && ui.dm && dmUnreadIn(ui.dm)) render(); }).observe($('feed'));
 function observeMentions() {
   if (!('IntersectionObserver' in window)) return;
+  // The viewport is the root: the feed's own scrolling and the page's both clip what's visible.
   if (!mentionIO) mentionIO = new IntersectionObserver((entries) => {
     for (const en of entries) {
       const id = Number(en.target.dataset.eid);
@@ -349,7 +356,7 @@ function observeMentions() {
         }, 1500));
       } else { clearTimeout(mentionTimers.get(id)); mentionTimers.delete(id); }
     }
-  }, { root: $('feed'), threshold: [0, 0.95] });
+  }, { threshold: [0, 0.95] });
   mentionIO.disconnect();
   $('feed').querySelectorAll('.ev.mention[data-eid]').forEach((n) => { if (Number(n.dataset.eid) > seenMention) mentionIO.observe(n); });
 }
@@ -465,5 +472,5 @@ $('msg').addEventListener('keydown', (ev) => {
 // mousedown, not click: the textarea keeps focus.
 $('msg-ac').addEventListener('mousedown', (ev) => { const li = ev.target.closest('[data-ac]'); if (!li) return; ev.preventDefault(); pickAc(Number(li.dataset.ac)); });
 
-export { ac, ACT_GAP, announceActivity, closeAc, dmUnreadCount, evHtml, feedOnEvent, feedOnState, feedPlace, growMsg, markDmSeen, openDm,
+export { ac, ACT_GAP, announceActivity, closeAc, dmUnreadCount, evHtml, feedOnEvent, feedOnScreen, feedOnState, feedPlace, growMsg, markDmSeen, openDm,
   renderFeed, renderLocks, setActGap, settingsText, statusWords };

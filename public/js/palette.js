@@ -4,7 +4,7 @@ import './panels.js';
 import { $, BASE, LABEL, me, smooth, state, ui } from './state.js';
 import { esc, focusMark, refocusAfter, youTag } from './helpers.js';
 import { openQuestions, people, setupShown } from './derived.js';
-import { doAct, goQuestion, helpDlg, openHelp, setFilter } from './actions.js';
+import { doAct, goChat, goQuestion, helpDlg, openHelp, setFilter } from './actions.js';
 import { openTask, setDlgBackTo } from './task-dialog.js';
 import { setTheme, THEME_LIST, themePref } from './theme.js';
 import { boardView, officeAllowed, setBoardView } from './office.js';
@@ -35,7 +35,7 @@ function palCommands() {
   add('Action', roles ? 'Choose the planner and who merges' : 'Choose the planner', () => doAct(roles ? 'roles' : 'planner'), 'planner roles');
   if (!roles) add('Action', 'Choose who merges', () => doAct('merge'), 'merges to main merger integrator roles');
   if (state.tasks.length) add('View', tv.view === 'table' ? 'Show Columns' : 'Show Table', () => { const b = $('viewtog').querySelector(`[data-view="${tv.view === 'table' ? 'columns' : 'table'}"]`); b.click(); return b; }, 'tasks view columns table list');
-  add('Action', 'Write a message in chat', () => { oShow('act'); $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); $('msg').focus({ preventScroll: true }); }, 'focus chat');
+  add('Action', 'Write a message in chat', () => goChat(smooth()), 'focus chat');
   add('Action', 'Open help', openHelp, 'what everything means keyboard');
   const others = people().map((p) => p.name).filter((n) => n !== me);
   add('Filter', 'Show tasks for everyone', () => setFilter(''), 'filter show');

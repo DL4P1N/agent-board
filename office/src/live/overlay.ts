@@ -40,6 +40,23 @@ export class Overlay {
     if (sub && sub.textContent !== cd.sub) sub.textContent = cd.sub;
   }
 
+  /** The window changed size: Needs attention is fitted again (rows it had no room for may fit now). */
+  refit(): void { this.html.bottom = ''; this.render(); }
+
+  /** A short screen: Needs attention keeps the rows that fit and counts the rest in its "and N more" line, so no row
+   *  (and never that line) is cut off at the card's bottom edge. The questions line always stays. */
+  private fitNeeds(): void {
+    const card = this.els.bottom.querySelector<HTMLElement>('.needs'); const ul = card?.querySelector('ul');
+    if (!card || !ul) return;
+    let more = ul.querySelector<HTMLElement>('li.more');
+    const rows = [...ul.querySelectorAll('li.b, li.s')];
+    while (card.scrollHeight > card.clientHeight + 1 && rows.length) {
+      rows.pop()!.remove();
+      if (!more) { more = document.createElement('li'); more.className = 'more'; ul.append(more); }
+      const n = Number(more.dataset.n || 0) + 1; more.dataset.n = String(n); more.textContent = `and ${n} more`;
+    }
+  }
+
   private put(k: 'top' | 'bottom' | 'msg', html: string): boolean {
     if (this.html[k] === html) return false;
     this.html[k] = html; this.els[k].innerHTML = html;
@@ -99,7 +116,7 @@ export class Overlay {
     const needs = [
       qs.length ? `<li class="q"><span class="tag warn">${plural(qs.length, 'question')} waiting</span><span class="what">${askers.length ? `from ${askers.map((a) => `<span class="who" style="--h:${hueOf(a, s.presence || [])}">${esc(a)}</span>`).join(', ')}` : 'for you'}</span></li>` : '',
       ...rows.slice(0, NEEDS_MAX),
-      rows.length > NEEDS_MAX ? `<li class="more">and ${rows.length - NEEDS_MAX} more</li>` : '',
+      rows.length > NEEDS_MAX ? `<li class="more" data-n="${rows.length - NEEDS_MAX}">and ${rows.length - NEEDS_MAX} more</li>` : '',
     ].filter(Boolean);
     const bottom = `
       <section class="card prog" aria-labelledby="h-prog"><h2 id="h-prog">Progress</h2>
@@ -112,6 +129,7 @@ export class Overlay {
       </section>`;
     const a = this.put('top', top);
     const b = this.put('bottom', bottom);
+    if (b) this.fitNeeds();
     if (a) this.paintClock();
     const name = this.slug ? `${this.slug} · ` : '';
     document.title = total ? `${done}/${total} done · ${name}Board presenter` : `${name}Board presenter`;

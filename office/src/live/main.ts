@@ -61,7 +61,7 @@ function applyBoard(): void {
 }
 function labelScale(): void { root.style.setProperty('--label-scale', String(Math.max(1.25, Math.min(2, Math.min(innerWidth / 1100, innerHeight / 620))).toFixed(2))); }
 labelScale();
-addEventListener('resize', () => { labelScale(); settle(); });
+addEventListener('resize', () => { labelScale(); overlay.refit(); settle(); });
 
 function themeChanged(): void {
   world.setOptions({ light: light() });

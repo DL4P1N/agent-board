@@ -155,6 +155,28 @@ try {
     await fp.goto(`${board.base}/present.html`);
     check('scene fails to start: falls back to the classic page', await until(fp, () => /present-classic/.test(location.pathname) && /2 of 5 done|of 5 done/.test(document.body.innerText), null, 10000), fp.url());
     await fp.close();
+
+    // A short screen and a long list: Needs attention keeps the rows that fit and counts the rest ("and N more"); no
+    // row, and never that line, is cut off at the card's edge. Taller again, the rows come back.
+    for (let i = 0; i < 6; i++) {
+      const f = await human('/tasks', 'POST', { title: `Blocked filler ${i}` });
+      await human(`/tasks/${f.id}`, 'PATCH', { assignee: `filler${i}-claude`, status: 'in_progress' }); await human(`/tasks/${f.id}`, 'PATCH', { status: 'blocked', note: 'waiting' });
+    }
+    await page.setViewport({ width: 1366, height: 600 });
+    await until(page, () => (document.getElementById('needs')?.innerText.match(/Blocked filler/g) || []).length + Number(/and (\d+) more/.exec(document.getElementById('needs')?.innerText || '')?.[1] || 0) === 6);
+    await sleep(400);
+    const fitAt = () => page.evaluate(() => {
+      const card = document.querySelector('#bottom .needs'); const c = card.getBoundingClientRect(); const lis = [...card.querySelectorAll('#needs li')]; const more = card.querySelector('li.more');
+      return { cut: lis.some((l) => l.getBoundingClientRect().bottom > c.bottom + 1), rows: card.querySelectorAll('li.b, li.s').length, more: Number(/\d+/.exec(more?.textContent || '')?.[0] || 0), last: lis.at(-1)?.className };
+    });
+    const short = await fitAt();
+    check('1366×600, 6 blocked tasks: Needs attention shows the rows that fit, "and N more" counts the rest, nothing cut off', !short.cut && short.rows + short.more === 6 && short.more > 0 && short.last === 'more', JSON.stringify(short));
+    await page.setViewport({ width: 1920, height: 1080 }); await sleep(600);
+    const tall = await fitAt();
+    check('1920×1080: the rows that fit come back (still none cut off)', !tall.cut && tall.rows > short.rows && tall.rows + tall.more === 6, JSON.stringify(tall));
+    // The feature freeze is amber on the presenter, as on the board (a phase, not an error).
+    await human('/settings', 'PUT', { deadline: Date.now() + 30 * 60e3, freeze_minutes: 60 });
+    check('in the feature freeze the countdown is amber (warn), not red', await until(page, () => /Feature freeze/.test(document.getElementById('clock-sub')?.textContent || '') && document.getElementById('clock').className === 'clock warn'), await page.$eval('#clock', (c) => c.className));
   }
 
   // No WebGL at all: straight to the classic page, carrying the token from the link.

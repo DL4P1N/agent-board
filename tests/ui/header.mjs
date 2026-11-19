@@ -73,6 +73,41 @@ try {
   check('ONB-2 the hint opens the demo time under the Demo chip, focus in its field', await page.evaluate(() => document.activeElement?.id === 'o-dl-in' && !$('o-dl').hidden));
   await page.keyboard.press('Escape');
 
+  // ---- drafts: typed in a popover or in Setup's step 2 and not saved, it comes back when that opens again; Cancel drops it ----
+  await page.click('#clock'); await sleep(300);
+  await page.$eval('#o-fz-in', (e) => { e.value = '45'; });
+  await page.keyboard.press('Escape'); await sleep(200);
+  await page.click('#clock'); await sleep(300);
+  check('drafts: the Demo popover closed unsaved, opened again with the freeze minutes as typed', await page.evaluate(() => $('o-fz-in')?.value === '45'));
+  await page.click('[data-fk="o-dl-cancel"]'); await sleep(200);
+  await page.click('#clock'); await sleep(300);
+  check('drafts: the Demo popover\'s Cancel drops them', await page.evaluate(() => $('o-fz-in')?.value !== '45' && $('o-fz-in').value === $('o-fz-in').defaultValue));
+  await page.keyboard.press('Escape'); await sleep(200);
+  await page.click('#goal-btn'); await sleep(200);
+  await page.click('#o-goal [data-act="o-goal-edit"]'); await sleep(200);
+  await page.type('#o-goal-in', ' Draft words.');
+  await page.evaluate(() => document.body.click()); await sleep(200);
+  check('(the Goal popover closes on a click elsewhere)', await page.evaluate(() => !ui.oGoal));
+  await page.click('#goal-btn'); await sleep(200);
+  check('drafts: the Goal popover dismissed unsaved, opened again in its form with the words as typed', await page.evaluate(() => / Draft words\.$/.test($('o-goal-in')?.value || '')));
+  await page.click('[data-fk="o-goal-cancel"]'); await sleep(200);
+  await page.click('#o-goal [data-act="o-goal-edit"]'); await sleep(200);
+  check('drafts: the Goal popover\'s Cancel drops the draft', await page.evaluate(() => $('o-goal-in')?.value === state.settings.goal));
+  await page.keyboard.press('Escape'); await sleep(200);
+  await page.click('#topbar [data-act="setup-open"]'); await sleep(400);
+  await page.evaluate(() => { if (!document.querySelector('#step-goal .step-b')) document.querySelector('[data-fk="sh-goal"]').click(); }); await sleep(200);
+  await page.click('#step-goal [data-act="goal-edit"]'); await sleep(200);
+  await page.$eval('#repo-in', (e) => { e.value = 'https://github.com/team/vote-draft'; });
+  await page.click('[data-fk="s-x"]'); await sleep(400);
+  check('(Setup closed)', await page.evaluate(() => $('setup').hidden && !$('repo-in')));
+  await page.click('#topbar [data-act="setup-open"]'); await sleep(400);
+  check('drafts: Setup closed and opened again, step 2 has the repo as typed', await page.evaluate(() => $('repo-in')?.value === 'https://github.com/team/vote-draft'), await page.evaluate(() => $('repo-in')?.value));
+  await page.click('#step-goal [data-act="goal-cancel"]'); await sleep(200);
+  await page.click('#step-goal [data-act="goal-edit"]'); await sleep(200);
+  check('drafts: step 2\'s Cancel drops it', await page.evaluate(() => $('repo-in')?.value === 'https://github.com/team/vote'), await page.evaluate(() => $('repo-in')?.value));
+  await page.click('#step-goal [data-act="goal-cancel"]'); await sleep(200);
+  await page.click('[data-fk="s-x"]'); await sleep(400);
+
   // ---- WB-6: the online count leaves out agents that are out of usage or offline ----
   const ann = await agent('ann'); const bea = await agent('bea'); const cid = await agent('cid');
   for (const a of [ann, bea, cid]) await a('board_status');

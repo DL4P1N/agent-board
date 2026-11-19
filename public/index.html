@@ -275,7 +275,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       <div><label for="td-prio">Priority</label>
         <select id="td-prio" aria-describedby="td-err"><option value="1">P1 · high</option><option value="2">P2 · normal</option><option value="3">P3 · low</option></select></div>
       <div><label for="td-size">Size</label>
-        <select id="td-size" aria-describedby="td-size-hint td-err" title="Agents on bigger plans (more tasks at once) take L tasks first; one-task-at-a-time agents take S first."><option value="S">S · small, under 30 min</option><option value="M">M · medium, about an hour</option><option value="L">L · large, needs a strong plan</option></select></div>
+        <select id="td-size" aria-describedby="td-size-hint td-err" title="Agents on bigger plans (more tasks at once) take L tasks first; one-task-at-a-time agents take S first."><option value="S">S · under 30 min</option><option value="M">M · about an hour</option><option value="L">L · large</option></select></div>
       <div id="td-status-wrap"><label for="td-status">Status</label><select id="td-status"></select></div>
       <div id="td-deps-wrap"><label for="td-deps">Depends on</label><input id="td-deps" placeholder="e.g. 3, 5" autocomplete="off" aria-describedby="td-deps-hint td-err" title="Task ids that must be done before this can be claimed. Optional."></div>
     </div>

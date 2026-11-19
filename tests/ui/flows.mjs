@@ -251,6 +251,37 @@ await page.waitForFunction((id) => document.querySelector(`#col-in_progress .car
 const dc = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === dlgT.id);
 check('DLG-1 dialog Status Claimed + Assign to bob: claimed for bob, no question asked', dc.status === 'claimed' && dc.assignee === 'bob' && !(await page.$(`.card[data-id="${dlgT.id}"] .mvask`)), `${dc.status} ${dc.assignee}`);
 check('a claimed task sits in In progress, marked "claimed, not started"', await page.evaluate((id) => /claimed, not started/.test(document.querySelector(`#col-in_progress .card[data-id="${id}"]`)?.innerText || '') && !document.getElementById('col-claimed'), dlgT.id));
+// Assign to on an Open task with unfinished dependencies: "Move anyway" keeps the owner picked in the dialog.
+const depT = await rest('dana', '/tasks', 'POST', { title: 'Owner kept past dependencies', depends_on: [schemaId] });
+await page.waitForSelector(`.card[data-id="${depT.id}"]`, { timeout: 5000 });
+await page.evaluate(() => { [...document.querySelectorAll('#toasts .toast')].forEach((t) => t.remove()); });
+await page.evaluate((id) => openTask(id), depT.id);
+await page.waitForSelector('#task-dlg[open]');
+await page.select('#td-asg', 'bob'); await page.click('#td-save');
+await page.waitForFunction(() => [...document.querySelectorAll('#toasts .toast')].some((t) => /waits on/.test(t.innerText) && /Move anyway/.test(t.innerText)), { timeout: 5000 }).catch(() => {});
+await page.evaluate(() => [...document.querySelectorAll('#toasts button')].find((b) => b.textContent === 'Move anyway')?.click());
+await page.waitForFunction((id) => state.tasks.find((t) => t.id === id)?.status === 'claimed' || !!document.querySelector(`.card[data-id="${id}"] .mvask`), { timeout: 5000 }, depT.id).catch(() => {});
+await sleep(300);
+const dk = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === depT.id);
+check('DLG-1 Assign to past unfinished dependencies: "Move anyway" claims it for the agent picked, no owner question', dk.status === 'claimed' && dk.assignee === 'bob' && !(await page.$(`.card[data-id="${depT.id}"] .mvask`)), `${dk.status} ${dk.assignee}`);
+// Message assignee and a name in the dialog's history go to the chat: without edits at once, with unsaved edits
+// they ask first (like closing it).
+await page.evaluate(() => { $('msg').value = ''; });
+await page.evaluate((id) => openTask(id), dlgT.id); await page.waitForSelector('#task-dlg[open]');
+await page.click('#td-mention');
+check('DLG Message assignee (no edits): the dialog closes, the chat has "@bob re #id: "', await page.waitForFunction((id) => !$('task-dlg').open && $('msg').value === `@bob re #${id}: ` && document.activeElement === $('msg'), { timeout: 3000 }, dlgT.id).then(() => true).catch(() => false), await page.evaluate(() => $('msg').value));
+await page.evaluate(() => { $('msg').value = ''; });
+await page.evaluate((id) => openTask(id), dlgT.id); await page.waitForSelector('#task-dlg[open]');
+await page.type('#td-name', ' (edited)');
+await page.click('#td-mention');
+check('DLG unsaved edits: Message assignee asks first (the dialog stays, on Keep editing)', await page.evaluate(() => $('task-dlg').open && !$('td-discard').hidden && document.activeElement?.id === 'td-keep' && !$('msg').value));
+await page.click('#td-keep');
+await page.$eval('#td-history [data-mention]', (b) => b.click());
+check('DLG unsaved edits: a name in the dialog\'s history asks first too, the edit still there', await page.evaluate(() => $('task-dlg').open && !$('td-discard').hidden && / \(edited\)$/.test($('td-name').value) && !$('msg').value));
+await page.click('#td-drop');
+check('DLG …Discard goes on: the dialog closes and the chat @mentions that name', await page.waitForFunction(() => !$('task-dlg').open && /^@\S+ $/.test($('msg').value) && document.activeElement === $('msg'), { timeout: 3000 }).then(() => true).catch(() => false), await page.evaluate(() => $('msg').value));
+check('DLG …and the edit was not saved', !/\(edited\)/.test((await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === dlgT.id).title));
+await page.evaluate(() => { $('msg').value = ''; });
 
 // WB-19: column names read "Open, 3 tasks" (no stray space before the comma)
 check('WB-19 / A12 a column heading reads "Open, N tasks" (not "Open5"); columns are not landmarks of their own', await page.evaluate(() => { const c = document.getElementById('col-open'); const n = c.querySelector('h3').textContent; return /^Open, \d+ tasks?$/.test(n) && !c.getAttribute('role') ? true : `${n} ${c.getAttribute('role')}`; }) === true);

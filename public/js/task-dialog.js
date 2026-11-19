@@ -70,7 +70,7 @@ function openTask(id, { discard = false } = {}) {
   const t = id ? taskById(id) : null;
   if (id && !t) return toast(`Task #${id} no longer exists`, true);
   // A #ref clicked inside the open dialog: unsaved edits are asked about first (Discard opens the other task).
-  if (!discard && dlg.open && (editing?.id ?? null) !== (id ?? null) && dlgDirty()) { pendingOpen = id; $('td-discard').hidden = false; $('td-keep').focus(); return; }
+  if (!discard && dlg.open && (editing?.id ?? null) !== (id ?? null) && dlgDirty()) { pendingOpen = () => openTask(id, { discard: true }); $('td-discard').hidden = false; $('td-keep').focus(); return; }
   pendingOpen = undefined;
   editing = t ? JSON.parse(JSON.stringify(t)) : null;
   $('td-title').textContent = t ? `Task #${t.id}` : 'New task';
@@ -142,10 +142,12 @@ function renderDialogLive() {
   ].join(''));
   patch($('td-deps-hint'), deps.length ? `Depends on ${deps.join(', ')}. Dependencies are fixed after creation.` : ''); $('td-deps-hint').classList.remove('vh');
   const h = $('td-history'); const before = h._html;
+  // Newest at the bottom, in view: on opening, and while it's read there; scrolled up to older lines, it stays put.
+  const follow = before === undefined || h.scrollHeight - h.scrollTop - h.clientHeight < 24;
   const evs = state.events.filter((e) => e.task_id === t.id);
   patch(h, evs.map((e, i) => evHtml(e, evs[i - 1])).join('') || '<div class="empty-note">No activity yet.</div>');
   refreshTimes(h);
-  if (before !== h._html) h.scrollTop = h.scrollHeight; // newest at the bottom, in view
+  if (before !== h._html && follow) h.scrollTop = h.scrollHeight;
 }
 // Blocked: the reason first, then the agent's open question with an answer box, then the way back to In progress.
 function renderTaskBlock(t) {
@@ -182,15 +184,22 @@ $('td-status').addEventListener('change', () => {
   $('td-status-hint').classList.toggle('vh', !more); // shown only when the change does something more than its name says
 });
 // Closing with unsaved edits asks first (inline, no browser popup). Esc while it asks means Keep editing.
-let pendingOpen; // a task to open instead once the edits are discarded (a #ref clicked in the dialog)
+let pendingOpen; // what to do instead once the edits are discarded (a #ref, a name or Message assignee clicked in the dialog)
 function requestCloseTask() { if (dlgDirty() && $('td-discard').hidden) { pendingOpen = undefined; $('td-discard').hidden = false; $('td-keep').focus(); return; } dlg.close(); }
+// Leaving the dialog for the chat (Message assignee, a name in its history): unsaved edits are asked about first,
+// like closing it; Discard goes on.
+function leaveTask(fn) {
+  if (dlg.open && dlgDirty()) { pendingOpen = () => { dlg.close(); fn(); }; $('td-discard').hidden = false; $('td-keep').focus(); return; }
+  if (dlg.open) dlg.close();
+  fn();
+}
 const keepEditing = () => { pendingOpen = undefined; $('td-discard').hidden = true; $('td-name').focus(); };
 dlg.addEventListener('cancel', (ev) => {
   if (!$('td-discard').hidden) { ev.preventDefault(); return keepEditing(); }
   if (dlgDirty()) { ev.preventDefault(); requestCloseTask(); }
 });
 $('td-keep').onclick = keepEditing;
-$('td-drop').onclick = () => { const next = pendingOpen; pendingOpen = undefined; if (next === undefined) return dlg.close(); $('td-discard').hidden = true; openTask(next, { discard: true }); };
+$('td-drop').onclick = () => { const next = pendingOpen; pendingOpen = undefined; if (!next) return dlg.close(); $('td-discard').hidden = true; next(); };
 dlg.addEventListener('click', (ev) => { if (ev.target.closest('[data-close]')) return requestCloseTask();
   if (ev.target === dlg) { const r = dlg.getBoundingClientRect(); if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) requestCloseTask(); } });
 // Closed: focus goes back where it was (the browser does that), or to the task's card when that's gone or the task was
@@ -216,7 +225,7 @@ dlg.addEventListener('close', () => {
   });
 });
 $('td-desc').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); if (!saving) $('task-form').requestSubmit(); } });
-$('td-mention').onclick = () => { const a = editing?.assignee; const id = editing?.id; if (a) { mention(a); $('msg').value += `re #${id}: `; growMsg(); } };
+$('td-mention').onclick = () => { const a = editing?.assignee; const id = editing?.id; if (a) leaveTask(() => { mention(a); $('msg').value += `re #${id}: `; growMsg(); }); };
 // Delete asks for a second click (inline confirm, no browser popup).
 let deleteArmed = null;
 function resetDelete() { clearTimeout(deleteArmed); deleteArmed = null; $('td-delete').textContent = 'Delete task'; $('td-delete').classList.remove('danger'); }
@@ -368,4 +377,4 @@ function checkOverwrites(s) {
   }
 }
 
-export { checkOverwrites, openTask, renderDialogLive, setDlgBackTo };
+export { checkOverwrites, leaveTask, openTask, renderDialogLive, setDlgBackTo };

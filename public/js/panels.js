@@ -3,7 +3,7 @@
 
 import './office.js';
 import { $, nsKey, oSave, oUi, smooth, state, store, ui } from './state.js';
-import { agentRoot, esc, glide, nameTag, patch, setText, short } from './helpers.js';
+import { agentRoot, dropDrafts, esc, glide, hasDraft, nameTag, patch, setText, short, stashDrafts } from './helpers.js';
 import { blockedSplit, inPass, openQuestions, setupInfo, setupShown, timeNow } from './derived.js';
 import { render } from './render.js';
 import { syncNeeds } from './needs.js';
@@ -153,7 +153,9 @@ function oAct(focus = true) {
 // The goal, the demo time, the planner and who merges open in place under their chips in the top bar (one at a time), and each is
 // edited there. A click elsewhere or Esc closes them.
 function oGoal(open, { edit = false } = {}) {
-  ui.oGoal = open; ui.oGoalEdit = open && edit; ui.goalErr = ''; if (open) { ui.oDl = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; setupAway(); if (ui.themeOpen) themePop(false, false); }
+  // A goal typed and not saved (the popover dismissed): it opens in the form again, with that text.
+  if (open) stashDrafts($('o-goal-b'));
+  ui.oGoal = open; ui.oGoalEdit = open && (edit || hasDraft('o-goal')); ui.goalErr = ''; if (open) { ui.oDl = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; setupAway(); if (ui.themeOpen) themePop(false, false); }
   $('o-goal-b')._html = undefined; renderDocks(); $('tb-a')._html = undefined; $('tb-b')._html = undefined; renderTopbar(setupInfo());
   if (!open) return $('goal-btn')?.focus({ preventScroll: true });
   const ta = $('o-goal-in');
@@ -161,7 +163,7 @@ function oGoal(open, { edit = false } = {}) {
 }
 function oDl(open) {
   ui.oDl = open; ui.dlErr = ''; if (open) { ui.oGoal = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; setupAway(); if (ui.themeOpen) themePop(false, false); }
-  if (open) { $('o-dl-b').innerHTML = ''; $('o-dl-b')._html = undefined; } // a fresh form (closing, it fades out as it was)
+  if (open) { stashDrafts($('o-dl-b')); $('o-dl-b').innerHTML = ''; $('o-dl-b')._html = undefined; } // a fresh form, with what was typed and not saved (closing, it fades out as it was)
   renderDocks();
   if (open) $('o-dl-in')?.focus(); else $('clock').focus({ preventScroll: true });
 }
@@ -239,8 +241,8 @@ function oDlForm() {
   const S = state.settings; const t = timeNow();
   const fm = S.freeze_minutes === '' || S.freeze_minutes == null ? '60' : S.freeze_minutes;
   return `<form class="o-form" data-dlform="o" novalidate>
-      <div class="o-fr"><input id="o-dl-in" type="datetime-local" aria-label="Demo time" data-keep="o-dl" value="${esc(localInput(t.deadline || defaultDeadline()))}" step="60" aria-describedby="o-dl-hint o-dl-err" ${ui.dlErr ? 'aria-invalid="true"' : ''}></div>
-      <div class="o-fr"><label for="o-fz-in">Feature freeze</label><span class="o-in"><input id="o-fz-in" type="number" data-keep="o-fz" value="${esc(fm)}" min="0" max="600" step="5" inputmode="numeric" aria-describedby="o-fz-u o-dl-hint"><span class="muted" id="o-fz-u">min before</span></span></div>
+      <div class="o-fr"><input id="o-dl-in" type="datetime-local" aria-label="Demo time" data-keep="o-dl" data-draft value="${esc(localInput(t.deadline || defaultDeadline()))}" step="60" aria-describedby="o-dl-hint o-dl-err" ${ui.dlErr ? 'aria-invalid="true"' : ''}></div>
+      <div class="o-fr"><label for="o-fz-in">Feature freeze</label><span class="o-in"><input id="o-fz-in" type="number" data-keep="o-fz" data-draft value="${esc(fm)}" min="0" max="600" step="5" inputmode="numeric" aria-describedby="o-fz-u o-dl-hint"><span class="muted" id="o-fz-u">min before</span></span></div>
       <p class="hint" id="o-dl-hint">${t.deadline ? '' : 'Not set yet: the time shown is a suggestion. '}At the freeze agents stop taking new tasks (except priority-1 fixes) and get what they have merged.</p>
       <div class="err" id="o-dl-err" role="alert">${esc(ui.dlErr || '')}</div>
       <div class="xacts">${t.deadline ? '<button type="button" class="ghost sm" data-act="dl-clear" data-fk="o-dl-clear">Remove</button>' : ''}<span class="sp"></span><button type="button" class="ghost sm" data-o-close="dl" data-fk="o-dl-cancel">Cancel</button><button type="submit" class="sm" data-fk="o-dl-save">Save time</button></div></form>`;
@@ -265,7 +267,7 @@ function renderDocksNow(qOpen) {
   const goal = String(state.settings.goal || '').trim();
   patch($('o-goal-b'), ui.oGoalEdit || (ui.oGoal && !goal)
     ? `<form class="o-form goalform" data-goalform="o" novalidate><label for="o-goal-in">${goal ? 'The goal' : 'In 1–3 sentences: what are you building, and what should the demo show?'}</label>
-        <textarea id="o-goal-in" data-keep="o-goal" rows="4" maxlength="1000" title="Enter saves · Shift+Enter adds a new line" aria-describedby="o-goal-err" ${ui.goalErr ? 'aria-invalid="true"' : ''}>${esc(goal)}</textarea>
+        <textarea id="o-goal-in" data-keep="o-goal" data-draft rows="4" maxlength="1000" title="Enter saves · Shift+Enter adds a new line" aria-describedby="o-goal-err" ${ui.goalErr ? 'aria-invalid="true"' : ''}>${esc(goal)}</textarea>
         <div class="err" id="o-goal-err" role="alert">${esc(ui.goalErr || '')}</div>
         <div class="xacts"><span class="sp"></span>${goal ? '<button type="button" class="ghost sm" data-act="o-goal-cancel" data-fk="o-goal-cancel">Cancel</button>' : ''}<button type="submit" class="sm" data-fk="o-goal-save">Save goal</button></div></form>`
     : `<p>${esc(goal)}</p><div class="xacts"><button type="button" class="ghost sm" data-act="o-goal-edit" data-fk="o-goal-edit">Edit the goal</button></div>`);
@@ -313,7 +315,7 @@ $('app').addEventListener('click', (ev) => {
   if (d.oFold) return oFold(d.oFold);
   if ('oMax' in d) return oExpand(!oMax());
   if (d.oClose === 'goal') return oGoal(false);
-  if (d.oClose === 'dl') return oDl(false);
+  if (d.oClose === 'dl') { if (d.fk === 'o-dl-cancel') dropDrafts($('o-dl-b')); return oDl(false); } // its Cancel drops what was typed; × keeps it
   if (d.oClose === 'merge') return oMerge(false);
   if (d.oClose === 'plan') return oPlan(false);
   if (d.oClose === 'roles') return oRoles(false);

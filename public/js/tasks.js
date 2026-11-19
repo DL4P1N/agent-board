@@ -195,13 +195,14 @@ const TSORT = {
   updated: (t) => -(t.updated_at || 0),
 };
 const TCOLS = [['id', '#'], ['title', 'Task'], ['status', 'Status'], ['priority', 'Priority'], ['size', 'Size'], ['assignee', 'Assignee'], ['updated', 'Updated']];
+// The Table view has no cards: who a moved task is for is asked in a row under its own.
 function renderTable(visible) {
   const f = TSORT[tv.sort] || TSORT.status;
   const rows = [...visible].sort((a, b) => { const x = f(a); const y = f(b); return (x < y ? -1 : x > y ? 1 : 0) * tv.dir || a.id - b.id; });
   const th = TCOLS.map(([k, l]) => TSORT[k]
     ? `<th scope="col" aria-sort="${tv.sort === k ? (tv.dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" data-tsort="${k}" data-fk="ts-${k}">${l}</button></th>`
     : `<th scope="col">${l}</th>`).join('');
-  const body = rows.map((t) => `<tr data-open-task="${t.id}" data-id="${t.id}"><td>#${t.id}</td><td class="tt"><button type="button" class="link" data-open-task="${t.id}" data-fk="tt-${t.id}">${esc(t.title)}</button></td><td><span class="pill s-${t.status}">${LABEL[t.status]}</span></td><td>P${t.priority || 2}</td><td>${['S', 'L'].includes(t.size) ? t.size : 'M'}</td><td>${t.assignee ? esc(t.assignee) : '<span class="muted">unassigned</span>'}</td><td title="Last update ${esc(fullTime(t.updated_at))}">${ago(t.updated_at)}</td></tr>`).join('');
+  const body = rows.map((t) => `<tr data-open-task="${t.id}" data-id="${t.id}"><td>#${t.id}</td><td class="tt"><button type="button" class="link" data-open-task="${t.id}" data-fk="tt-${t.id}">${esc(t.title)}</button></td><td><span class="pill s-${t.status}">${LABEL[t.status]}</span></td><td>P${t.priority || 2}</td><td>${['S', 'L'].includes(t.size) ? t.size : 'M'}</td><td>${t.assignee ? esc(t.assignee) : '<span class="muted">unassigned</span>'}</td><td title="Last update ${esc(fullTime(t.updated_at))}">${ago(t.updated_at)}</td></tr>${ui.moveAsk?.id === t.id ? `<tr class="tt-ask"><td colspan="${TCOLS.length}">${moveAskHtml(t, 'tt-')}</td></tr>` : ''}`).join('');
   patch($('tasktable'), `<table><caption class="vh">Tasks, sorted by ${tv.sort}</caption><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>${rows.length ? '' : `<p class="muted tt-empty">${tv.q.trim() ? 'No tasks match your search.' : 'No tasks to show.'}</p>`}`);
 }
 $('tsearch').addEventListener('input', () => { tv.q = $('tsearch').value; renderBoard(); renderOffice(); });
@@ -363,7 +364,7 @@ function moveTask(t, to, { force = false, assignee } = {}) {
   const from = t.status; const prevAssignee = t.assignee; const id = t.id;
   if (HOLDING.includes(to) && !HOLDING.includes(from) && !force) {
     const waiting = t.depends_on.filter((d) => { const x = taskById(d); return x && x.status !== 'done'; });
-    if (waiting.length) return toast(`#${id} waits on ${waiting.map((d) => '#' + d).join(', ')}, which ${waiting.length > 1 ? "aren't" : "isn't"} done yet.`, true, { label: 'Move anyway', run: () => setTimeout(() => moveTask(taskById(id) || t, to, { force: true })) }); // after this click's handlers
+    if (waiting.length) return toast(`#${id} waits on ${waiting.map((d) => '#' + d).join(', ')}, which ${waiting.length > 1 ? "aren't" : "isn't"} done yet.`, true, { label: 'Move anyway', run: () => setTimeout(() => moveTask(taskById(id) || t, to, { force: true, assignee })) }); // after this click's handlers (the owner chosen, if any, kept)
   }
   if (HOLDING.includes(to) && !assignee && !t.assignee) {
     if (!askAgents(t).length) return toast(`#${id} needs someone to work on it before it can be ${LABEL[to]}. No agent has joined yet.`, true);

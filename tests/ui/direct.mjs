@@ -93,6 +93,27 @@ try {
   check('the planner\'s reply lands in the planner thread', await until(() => [...document.querySelectorAll('#feed .ev')].some((e) => /moved it to priority 1/.test(e.innerText))));
   await shot('4-planner');
 
+  // ---- a reply while Activity is folded stays unread until the thread is on screen ----
+  check('(the planner thread is open and read)', await until(() => ui.dm === 'planner' && $('tabs').querySelector('[data-tab="direct"]').getAttribute('aria-label') === 'Direct'));
+  await page.click('[data-o-fold="act"]');
+  await until(() => !$('feed').getBoundingClientRect().height);
+  await emil('post', { to: 'dana', text: 'A reply while Activity is folded.' });
+  check('a reply in the open thread while Activity is folded counts as unread', await until(() => $('tabs').querySelector('[data-tab="direct"]').getAttribute('aria-label') === 'Direct, 1 unread'));
+  await sleep(800);
+  check('…and stays unread (nothing on screen shows it)', await page.evaluate(() => $('tabs').querySelector('[data-tab="direct"]').getAttribute('aria-label') === 'Direct, 1 unread'));
+  await page.click('[data-o-fold="act"]');
+  check('unfolded, the thread is on screen and the reply is read', await until(() => $('tabs').querySelector('[data-tab="direct"]').getAttribute('aria-label') === 'Direct'));
+
+  // ---- the ways to the chat ("/", the phone's chat icon) open the shared chat, not the thread ----
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press('/');
+  check('"/" from an open thread opens the shared chat\'s message box (its draft there)', await until(() => ui.tab === 'all' && !$('composer').hidden && document.activeElement === $('msg') && $('msg').placeholder === 'Message, @ to mention' && $('msg').value === 'chat draft'));
+  await page.click('[data-tab="direct"]'); await until(() => !!document.querySelector('#feed .dmlist'));
+  await page.evaluate(() => $('tochat').click());
+  check('the chat icon from the thread list opens the shared chat too', await until(() => ui.tab === 'all' && !$('composer').hidden && document.activeElement === $('msg')));
+  await page.click('[data-tab="direct"]'); await until(() => !!document.querySelector('#feed .dmlist'));
+  await page.click('#feed [data-dm="planner"]'); await until(() => ui.dm === 'planner' && [...document.querySelectorAll('#feed .ev')].some((e) => /moved it to priority 1/.test(e.innerText)));
+
   // ---- names in the feed still @mention in the shared chat ----
   await page.$eval('#feed .ev.chat [data-mention="emil-codex"]', (b) => b.click());
   check('clicking a name in a thread @mentions it in the shared chat (never in the thread)', await until(() => ui.tab === 'all' && /@emil-codex/.test($('msg').value)));

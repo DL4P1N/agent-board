@@ -86,6 +86,10 @@ try {
     await page.screenshot({ path: path.join(out, `present-${w}.png`) });
   }
   await page.setViewport({ width: 1600, height: 900 });
+  // The feature freeze is amber, as on the board (a phase, not an error).
+  await human('/settings', 'PUT', { deadline: Date.now() + 30 * 60e3, freeze_minutes: 60 });
+  const fz = await page.waitForFunction(() => /Feature freeze/.test(document.getElementById('clock-sub')?.textContent || '') && document.getElementById('clock').className === 'clock warn', { timeout: 8000 }).then(() => true).catch(() => false);
+  check('in the feature freeze the countdown is amber (warn), not red', fz, await page.$eval('#clock', (c) => c.className));
   // Deadline passed.
   await human('/settings', 'PUT', { deadline: Date.now() + 1000, freeze_minutes: 0 }); // a past time is refused: let it pass
   await new Promise((r) => setTimeout(r, 1200));

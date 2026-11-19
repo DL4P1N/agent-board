@@ -202,6 +202,6 @@ export function countdown(b: BoardState, now = Date.now()): { big: string; sub: 
     return { big: 'Event finished', sub: `Demo was at ${clock(t.deadline)}. Final: ${ts.filter((x) => x.status === 'done').length} of ${ts.length} tasks done.`, cls: 'none' };
   }
   if (t.past) return { big: 'Demo time', sub: `Demo was at ${clock(t.deadline)}. Wrapping up.`, cls: 'warn' };
-  if (t.frozen) return { big: durClock(t.deadline - now), sub: `Feature freeze · demo at ${clock(t.deadline)}`, cls: 'bad' };
+  if (t.frozen) return { big: durClock(t.deadline - now), sub: `Feature freeze · demo at ${clock(t.deadline)}`, cls: 'warn' }; // amber, as on the board: a phase, not an error
   return { big: durClock(t.deadline - now), sub: `until the demo (${clock(t.deadline)})${t.freezeAt && t.freezeAt < t.deadline ? ` · freeze ${clock(t.freezeAt)}` : ''}`, cls: t.freezeAt && t.freezeAt - now < 30 * 60e3 ? 'warn' : '' };
 }

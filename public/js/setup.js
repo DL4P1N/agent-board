@@ -202,15 +202,15 @@ function stepGoal() {
   return `<p>In 1–3 sentences: what are you building, and what should the demo show? The agents plan their tasks from this. Your agent may also ask you for the goal in its terminal — either works.</p>
     <form class="stepform" data-goalform novalidate>
       <label class="vh" for="goal-in">Project goal</label>
-      <textarea id="goal-in" data-keep="goal" rows="2" maxlength="1000" title="Enter saves · Shift+Enter adds a new line" aria-describedby="goal-err" ${ui.goalErr ? 'aria-invalid="true"' : ''} placeholder="e.g. A web app where teams submit their project and everyone votes. The demo shows submitting, voting and a live leaderboard.">${esc(S.goal)}</textarea>
+      <textarea id="goal-in" data-keep="goal" data-draft rows="2" maxlength="1000" title="Enter saves · Shift+Enter adds a new line" aria-describedby="goal-err" ${ui.goalErr ? 'aria-invalid="true"' : ''} placeholder="e.g. A web app where teams submit their project and everyone votes. The demo shows submitting, voting and a live leaderboard.">${esc(S.goal)}</textarea>
       <div class="err m0" id="goal-err" role="alert">${esc(ui.goalErr || '')}</div>
       <div class="repo m0"><label for="repo-in">Project repo URL <span class="muted fw-normal">(optional)</span></label>
-        <input id="repo-in" data-keep="repo" value="${esc(S.repo)}" placeholder="https://github.com/your-team/project" autocomplete="off" spellcheck="false" aria-describedby="repo-hint repo-err" ${ui.repoErr ? 'aria-invalid="true"' : ''}>
+        <input id="repo-in" data-keep="repo" data-draft value="${esc(S.repo)}" placeholder="https://github.com/your-team/project" autocomplete="off" spellcheck="false" aria-describedby="repo-hint repo-err" ${ui.repoErr ? 'aria-invalid="true"' : ''}>
         <p class="hint row m0" id="repo-hint">The git repo you're all building in. It goes into the invite message, and agents see it too.</p></div>
       <div class="err m0" id="repo-err" role="alert">${esc(ui.repoErr || '')}</div>
       <div class="repo dlform m0"><label for="dl-in">Demo time <span class="muted fw-normal">(optional)</span></label>
-        <input id="dl-in" type="datetime-local" data-keep="dl" value="${dl ? esc(localInput(dl)) : ''}" step="60" aria-describedby="dl-hint dl-err" ${ui.dlErr ? 'aria-invalid="true"' : ''}>
-        <label for="fz-in">Feature freeze</label><input id="fz-in" type="number" data-keep="fz" value="${esc(fm)}" min="0" max="600" step="5" inputmode="numeric" aria-describedby="fz-u dl-hint"><span class="u" id="fz-u">min before</span></div>
+        <input id="dl-in" type="datetime-local" data-keep="dl" data-draft value="${dl ? esc(localInput(dl)) : ''}" step="60" aria-describedby="dl-hint dl-err" ${ui.dlErr ? 'aria-invalid="true"' : ''}>
+        <label for="fz-in">Feature freeze</label><input id="fz-in" type="number" data-keep="fz" data-draft value="${esc(fm)}" min="0" max="600" step="5" inputmode="numeric" aria-describedby="fz-u dl-hint"><span class="u" id="fz-u">min before</span></div>
       <p class="hint m0" id="dl-hint">${t.deadline ? '' : dl ? '<b>Not set yet:</b> the time shown is a suggestion, saved with the goal (or press No demo time). ' : ''}When the demo starts. The header counts down to it. At the feature freeze agents stop taking new tasks (except priority-1 bug fixes) and get what they have merged, so main works for the demo.</p>
       <div class="err m0" id="dl-err" role="alert">${esc(ui.dlErr || '')}</div>
       <div class="inl m0"><button type="submit" data-fk="goal-save">Save</button>${!t.deadline && dl ? '<button type="button" class="ghost" data-act="dl-skip" data-fk="dl-skip">No demo time</button>' : ''}${t.deadline ? '<button type="button" class="ghost" data-act="dl-clear" data-fk="dl-clear">Remove the demo time</button>' : ''}${S.goal ? '<button type="button" class="ghost" data-act="goal-cancel" data-fk="goal-cancel">Cancel</button>' : ''}</div>

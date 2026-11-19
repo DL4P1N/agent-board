@@ -75,6 +75,38 @@ try {
   await page.waitForSelector('#tasktable tbody tr');
   check('table choice survives reload', !(await page.$eval('#tasktable', (x) => x.hidden)));
 
+  // The Table view has no cards: a move that needs an owner asks under the task's row, and picking one moves it.
+  const cy = await agent(board, 'cy-claude'); await cy('board_status');
+  const d = await rest('dana', '/tasks', 'POST', { title: 'Pick an owner in the table' });
+  await page.waitForSelector(`#tasktable [data-fk="tt-${d.id}"]`);
+  await page.click(`#tasktable [data-fk="tt-${d.id}"]`); await page.waitForSelector('#task-dlg[open]');
+  await page.select('#td-status', 'claimed'); await page.click('#td-save');
+  const asked = await page.waitForSelector('#tasktable tr.tt-ask [data-ask-to="cy-claude"]', { visible: true, timeout: 5000 }).then(() => true).catch(() => false);
+  check('Table view: a move that needs an owner asks under the task\'s row, focus on its first choice', asked && await page.evaluate(() => !!document.activeElement?.closest('#tasktable tr.tt-ask .mvask')));
+  await page.click('#tasktable [data-ask-to="cy-claude"]');
+  await page.waitForFunction((id) => state.tasks.find((t) => t.id === id)?.assignee === 'cy-claude', { timeout: 5000 }, d.id).catch(() => {});
+  const dt = (await rest('dana', '/state', 'GET')).tasks.find((t) => t.id === d.id);
+  check('Table view: picking an agent claims it for that agent, focus back on its row', dt.status === 'claimed' && dt.assignee === 'cy-claude' && !(await page.$('#tasktable tr.tt-ask')) && await page.evaluate((id) => document.activeElement?.dataset.fk === `tt-${id}`, d.id), `${dt.status} ${dt.assignee} ${await page.evaluate(() => document.activeElement?.dataset.fk)}`);
+  // Needs attention's "in Review" link: the columns are hidden, so it goes to the first row in Review.
+  await rest('dana', `/tasks/${d.id}`, 'PATCH', { status: 'in_progress' }); await rest('dana', `/tasks/${d.id}`, 'PATCH', { status: 'review' });
+  await page.waitForFunction((id) => state.tasks.find((t) => t.id === id)?.status === 'review' && !!document.querySelector(`#tasktable [data-fk="tt-${id}"]`), { timeout: 5000 }, d.id);
+  await page.evaluate(() => { const b = document.createElement('button'); b.dataset.go = 'review'; document.body.append(b); b.click(); b.remove(); });
+  check('Table view: the "in Review" link goes to the task\'s row', await page.evaluate((id) => document.activeElement?.dataset.fk === `tt-${id}`, d.id), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
+  await rest('dana', `/tasks/${d.id}`, 'DELETE');
+  await page.waitForFunction((id) => !state.tasks.some((t) => t.id === id), { timeout: 5000 }, d.id);
+
+  // The size labels fit their list in the dialog's three columns (the narrowest is around 600px wide).
+  await page.setViewport({ width: 600, height: 900 }); await sleep(200);
+  await page.evaluate(() => openTask(null)); await page.waitForSelector('#task-dlg[open]');
+  const fits = await page.evaluate(() => {
+    const s = document.getElementById('td-size'); const cs = getComputedStyle(s);
+    const c = document.createElement('canvas').getContext('2d'); c.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    return { room: Math.round(s.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)), longest: Math.max(...[...s.options].map((o) => Math.ceil(c.measureText(o.text).width))) };
+  });
+  check('the task dialog\'s size labels are not cut off at 600px', fits.longest <= fits.room, JSON.stringify(fits));
+  await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.getElementById('task-dlg').open);
+  await page.setViewport({ width: 1440, height: 1000 }); await sleep(200);
+
   // Phone: no page overflow, the table scrolls inside its container.
   await page.setViewport({ width: 390, height: 800 });
   await sleep(300);

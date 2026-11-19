@@ -142,6 +142,17 @@ try {
   check('A with Activity folded, selecting @me leaves the mention unread', (await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label'))) === '@me, 1 unread');
   await page.click('[data-o-fold="act"]');
   check('A unfolded, the @me feed shows it and it clears', await until(page, () => document.querySelector('[data-tab="me"]').getAttribute('aria-label') === '@me', undefined, 6000));
+  // A feed scrolled off the screen (a phone, Activity far below) shows nothing either: read once it is scrolled to.
+  await page.setViewport({ width: 390, height: 500 }); await sleep(300);
+  await page.evaluate(() => scrollTo(0, 0)); await sleep(100);
+  const below = await page.evaluate(() => $('feed').getBoundingClientRect().top >= innerHeight);
+  await erin('post', { text: '@dana a third one, below the screen' });
+  await until(page, () => document.querySelector('[data-tab="me"]').getAttribute('aria-label') === '@me, 1 unread');
+  await sleep(2500);
+  check('A in a feed scrolled off the screen, a mention stays unread', below && (await page.$eval('[data-tab="me"]', (b) => b.getAttribute('aria-label'))) === '@me, 1 unread', String(below));
+  await page.evaluate(() => $('feed').scrollIntoView({ block: 'center' }));
+  check('A scrolled into view, it clears', await until(page, () => document.querySelector('[data-tab="me"]').getAttribute('aria-label') === '@me', undefined, 6000));
+  await page.setViewport({ width: 1440, height: 1000 }); await page.evaluate(() => scrollTo(0, 0)); await sleep(300);
   await page.evaluate(() => document.querySelector('[data-tab="all"]').click());
 
   // A planner that is offline is not "writing the task list".
@@ -321,6 +332,14 @@ try {
   const cf = await p.$eval('#td-conflict', (e) => (e.hidden ? '' : e.textContent));
   check('B dialog: warns when a field I edited changed on the server', /description/.test(cf), cf);
   check('B dialog: history scrolled to newest', await p.$eval('#td-history', (h) => h.scrollHeight - h.scrollTop - h.clientHeight < 4));
+  // New lines: followed while it's read at the bottom; scrolled up to older ones, it stays where it is.
+  for (let i = 0; i < 16; i++) await A.alice('update_task', { id: dId, note: `progress note ${i}` });
+  await until(p, () => /progress note 15/.test(document.getElementById('td-history').innerText));
+  check('B dialog: at the bottom, the history follows new lines', await p.$eval('#td-history', (h) => h.scrollHeight > h.clientHeight + 40 && h.scrollHeight - h.scrollTop - h.clientHeight < 4), await p.$eval('#td-history', (h) => `${h.scrollHeight} ${h.clientHeight} ${h.scrollTop}`));
+  await p.$eval('#td-history', (h) => { h.scrollTop = 0; });
+  await A.alice('update_task', { id: dId, note: 'one more note' });
+  await until(p, () => /one more note/.test(document.getElementById('td-history').innerText)); await sleep(100);
+  check('B dialog: scrolled up to older lines, a new line doesn\'t pull it down', await p.$eval('#td-history', (h) => h.scrollTop === 0));
   await p.keyboard.press('Escape'); await sleep(200);
   check('B dialog: Esc with unsaved edits asks first', await p.evaluate(() => $('task-dlg').open && !$('td-discard').hidden && document.activeElement?.id === 'td-keep'));
   await p.click('#td-drop'); await sleep(200);

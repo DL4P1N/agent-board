@@ -119,6 +119,7 @@
   .rc .lm q { color: var(--ink); }
   .rc .still { color: var(--bad); }
   .msg { padding: var(--s8) var(--edge); text-align: center; color: var(--muted); }
+  .msg.stale { padding: var(--s4) var(--edge) 0; }
   @media print {
     /* Paper: the Light theme's colours whatever the screen shows, no shadows, no sticky header, no buttons. */
     :root:root:root { color-scheme: light; --bg: #fff; --panel: #fff; --raised: #fff; --ink: #111; --muted: #444; --border: #999; --line: #ccc; --line-strong: #888; --info: #08647f; --ok: #1b6b37; --bad: #b2261e; --outline: #303236; --shade: none; --dl: 48%; }
@@ -229,7 +230,7 @@ function render(r) {
     panel('Longest blocks', blockList(r.blocks)),
   ].join('');
 }
-function showMsg(html) { last = ''; $('recap').innerHTML = ''; $('rc-status').innerHTML = html; $('rc-status').hidden = false; }
+function showMsg(html) { last = ''; $('recap').innerHTML = ''; $('rc-status').innerHTML = html; $('rc-status').className = 'msg'; $('rc-status').hidden = false; }
 
 let stopped = false;
 async function load() {
@@ -240,8 +241,12 @@ async function load() {
     if (r.status === 410) return showMsg('This board is archived.');
     const body = await r.json().catch(() => ({}));
     if (!r.ok) return showMsg(esc(body.error || r.statusText || 'The recap could not be loaded.'));
-    render(body);
-  } catch { if (!last) showMsg('Can\'t reach the board server; retrying…'); }
+    $('rc-status').hidden = true; render(body);
+  } catch {
+    // A recap already on the page stays, and the status line says it may be behind until a reload gets through.
+    if (!last) return showMsg('Can\'t reach the board server; retrying…');
+    const st = $('rc-status'); st.textContent = 'Can\'t reach the board server; retrying. The recap below may be out of date.'; st.className = 'msg stale'; st.hidden = false;
+  }
 }
 $('print').addEventListener('click', () => print());
 load();

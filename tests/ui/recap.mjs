@@ -90,6 +90,12 @@ try {
   check('print: the goal is not clamped', await page.evaluate(() => { const g = document.querySelector('.rc-goal'); const s = getComputedStyle(g); return s.overflow === 'visible' && (s.webkitLineClamp === 'none' || s.webkitLineClamp === '') ; }));
   await page.emulateMediaType('screen');
   check('the live region is a small status line, not the whole page', await page.evaluate(() => !document.querySelector('[aria-live]') && document.getElementById('rc-status').getAttribute('role') === 'status' && document.getElementById('rc-status').hidden));
+  // The server out of reach: the recap stays, the status line says it may be behind, and a later reload clears it.
+  await page.setOfflineMode(true); await page.evaluate(() => load());
+  const off = await page.evaluate(() => ({ st: !document.getElementById('rc-status').hidden && /retrying/.test(document.getElementById('rc-status').textContent), panels: document.querySelectorAll('#recap .o-panel').length }));
+  check('server out of reach: the recap stays, the status line says it is retrying', off.st && off.panels === 6, JSON.stringify(off));
+  await page.setOfflineMode(false); await page.evaluate(() => load());
+  check('back in reach: the status line goes', await page.evaluate(() => document.getElementById('rc-status').hidden && document.querySelectorAll('#recap .o-panel').length === 6));
   await page.close();
 
   // ---- every theme, and a phone ----

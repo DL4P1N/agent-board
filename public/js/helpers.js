@@ -105,19 +105,26 @@ function fmt(text, inline = false) {
   }).join('');
 }
 
+// A field that also has data-draft (the goal and demo time popovers, Setup's step 2) keeps what was typed when its form
+// goes unsaved (dismissed, Setup closed): it comes back when the form is drawn again, until saved or cancelled (dropDrafts).
+const drafts = new Map();
+function stashDrafts(el) { el?.querySelectorAll('[data-draft][data-keep]').forEach((n) => { if (n.value !== n.defaultValue) drafts.set(n.dataset.keep, n.value); else drafts.delete(n.dataset.keep); }); }
+function dropDrafts(el) { el?.querySelectorAll('[data-draft][data-keep]').forEach((n) => { drafts.delete(n.dataset.keep); n.removeAttribute('data-draft'); }); }
+const hasDraft = (key) => drafts.has(key);
 // Replace a container's HTML without losing what the user is typing or where focus is.
 // Inputs carry data-keep="<stable key>", focusable items data-fk="<stable key>".
 function patch(el, html) {
   if (el._html === html) return false;
   const kept = {}; let focusKey = null; let sel = null;
   const active = document.activeElement;
+  stashDrafts(el);
   el.querySelectorAll('[data-keep]').forEach((n) => { kept[n.dataset.keep] = n.value; });
   if (active && el.contains(active)) {
     focusKey = active.dataset.keep || active.dataset.fk || null;
     if (active.dataset.keep) try { sel = [active.selectionStart, active.selectionEnd]; } catch {}
   }
   el.innerHTML = html; el._html = html;
-  el.querySelectorAll('[data-keep]').forEach((n) => { if (n.dataset.keep in kept) n.value = kept[n.dataset.keep]; });
+  el.querySelectorAll('[data-keep]').forEach((n) => { const k = n.dataset.keep; if (k in kept) n.value = kept[k]; else if ('draft' in n.dataset && drafts.has(k)) n.value = drafts.get(k); });
   if (focusKey) {
     const n = el.querySelector(`[data-keep="${CSS.escape(focusKey)}"],[data-fk="${CSS.escape(focusKey)}"]`);
     if (n) { n.focus({ preventScroll: true }); if (sel) try { n.setSelectionRange(sel[0], sel[1]); } catch {} }
@@ -331,7 +338,7 @@ function refocusAfter(dlg, back) {
   if (fade.length) Promise.all(fade.map((x) => x.finished.catch(() => {}))).then(() => again()); else setTimeout(() => again());
 }
 
-export { agentRoot, ago, announce, canMove, cardRects, clock, cmdBox, easeHeight, esc, fmt, focusMark, fullTime, glide, hs, hue,
+export { agentRoot, ago, announce, canMove, cardRects, clock, cmdBox, dropDrafts, easeHeight, esc, fmt, focusMark, fullTime, glide, hasDraft, hs, hue,
   instantly, isHttps, isMe, isStale, isWebUrl, knownPeople, leave, mentionsLite, mentionsMe, motion, moveCards, nameHash,
-  nameTag, noteMove, ownerOffline, patch, plural, refocusAfter, refreshTimes, reveal, root, setText, short, snapCards, taskById, timeEl,
+  nameTag, noteMove, ownerOffline, patch, plural, refocusAfter, refreshTimes, reveal, root, setText, short, snapCards, stashDrafts, taskById, timeEl,
   toast, when, who, youTag };

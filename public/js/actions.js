@@ -3,7 +3,7 @@
 
 import './activity.js';
 import { $, ANYONE, LABEL, seenMention, setSeenMention, smooth, state, store, ui } from './state.js';
-import { agentRoot, ago, announce, clock, esc, focusMark, glide, refocusAfter, mentionsMe, plural, snapCards, taskById, toast, when } from './helpers.js';
+import { agentRoot, ago, announce, clock, dropDrafts, esc, focusMark, glide, isStale, refocusAfter, mentionsMe, plural, snapCards, taskById, toast, when } from './helpers.js';
 import { act, api, load, scheduleReload } from './data.js';
 import { agentInfoNow, bouncedTasks, cutTasks, filterRoot, openQuestions, setupInfo, setupOpen, stepOpen,
   teamCapacity } from './derived.js';
@@ -12,7 +12,7 @@ import { toggleNotify } from './topbar.js';
 import { exportFile, inviteText, nfEvents, NOTIFY_KIND, renderSetup, rotateToken } from './setup.js';
 import { askAgents, doneOpen, moveTask, pingedAt, renderBoard, tv } from './tasks.js';
 import { closeAc, growMsg, openDm } from './activity.js';
-import { openTask } from './task-dialog.js';
+import { leaveTask, openTask } from './task-dialog.js';
 import { boardView, needBoard } from './office.js';
 import { oAct, oDl, oGoal, oMerge, oPlan, oRoles, oSetup, oShow, pickAgent, renderDocks, renderOffice, setupFocus } from './panels.js';
 import { togglePalette } from './palette.js';
@@ -35,10 +35,22 @@ function moveAskHtml(t, pre = '') {
 }
 // The first button of that question, in the view on screen.
 const focusMoveAsk = () => [...document.querySelectorAll('.mvask button')].find((b) => b.offsetParent)?.focus({ preventScroll: true });
-// A task's card in the view on screen (the Board's card or the 3D Tasks window's).
+// A task's card in the view on screen (the Board's card or the 3D Tasks window's), or its row in the Table view.
 function focusTask(id) {
-  const c = document.querySelector(`.card[data-id="${id}"]`);
-  if (c?.offsetParent) { c.focus({ preventScroll: true }); c.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+  const c = [document.querySelector(`.card[data-id="${id}"]`), document.querySelector(`#tasktable [data-fk="tt-${id}"]`)].find((n) => n?.offsetParent);
+  if (c) { c.focus({ preventScroll: true }); c.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+}
+// Needs attention's links to tasks of a kind (in Review, stale, a proposal): the first card (or the column), or in the
+// Table view, where the columns are hidden, the first such row.
+const tableShown = () => tv.view === 'table' && !$('tasktable').hidden;
+function goCards(pred, sel, col) {
+  if (tableShown()) {
+    const b = [...$('tasktable').querySelectorAll('tr[data-id]')].find((r) => { const t = taskById(Number(r.dataset.id)); return t && pred(t); })?.querySelector('button');
+    b?.scrollIntoView({ behavior: smooth(), block: 'center' }); return b?.focus({ preventScroll: true });
+  }
+  const box = col ? $(col) : document.querySelector(sel);
+  box?.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' });
+  return (col ? box?.querySelector('.card') || box : box)?.focus({ preventScroll: true });
 }
 function focusNow() { const b = $('now').hidden ? $('questions').querySelector('textarea') : $('now').querySelector('button'); if (b) b.focus({ preventScroll: true }); else { $('now').tabIndex = -1; $('now').focus({ preventScroll: true }); } }
 
@@ -80,17 +92,21 @@ function goWrapup() {
   n.scrollIntoView({ behavior: smooth(), block: 'center' });
   (n.querySelector('[data-act^="export"]') || n).focus({ preventScroll: true });
 }
+// The way to the chat ("/", Skip to chat, the phone's chat icon, Also's links) is the shared chat's message box, not a
+// direct thread's (or the thread list, which has none).
+function toChatTab() { if (ui.tab === 'direct') { ui.tab = 'all'; store.set('board-tab', 'all'); $('feed')._html = undefined; render(); } }
+function goChat(behavior) { oShow('act'); toChatTab(); $('msg').scrollIntoView({ behavior, block: 'center' }); $('msg').focus({ preventScroll: true }); }
 function skipTo(where) {
   if (where === 'now') { oShow('left'); $('nyou').scrollIntoView({ block: 'start' }); return focusNow(); }
-  if (where === 'chat') { oShow('act'); $('msg').scrollIntoView({ block: 'center' }); return $('msg').focus({ preventScroll: true }); }
+  if (where === 'chat') return goChat('auto');
   needBoard();
   // The Table view: its first sort button (the columns are hidden).
-  if (tv.view === 'table' && !$('tasktable').hidden) { $('tasktable').scrollIntoView({ block: 'start' }); return $('tasktable').querySelector('button')?.focus({ preventScroll: true }); }
+  if (tableShown()) { $('tasktable').scrollIntoView({ block: 'start' }); return $('tasktable').querySelector('button')?.focus({ preventScroll: true }); }
   const c = $('board').querySelector('.card'); ($('board').hidden || !state.tasks.length ? $('board-empty') : $('board')).scrollIntoView({ block: 'start' });
   if (c) c.focus({ preventScroll: true }); else { $('board').focus({ preventScroll: true }); }
 }
 // Phones: Chat sits far down the page; the header's chat icon jumps to its message box.
-$('tochat').onclick = () => { oShow('act'); $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); $('msg').focus({ preventScroll: true }); };
+$('tochat').onclick = () => goChat(smooth());
 
 document.addEventListener('click', (ev) => {
   const sk = ev.target.closest('[data-skip]'); if (sk) { ev.preventDefault(); return skipTo(sk.dataset.skip); }
@@ -116,7 +132,7 @@ document.addEventListener('click', (ev) => {
   if (d.limcancel) { const n = d.limcancel; ui.limitForm = null; render(); return document.querySelector(`[data-fk="lm-${CSS.escape(n)}"]`)?.focus(); }
   if (d.unlimit) { const n = d.unlimit; act(api(`/agents/${encodeURIComponent(n)}`, { method: 'PATCH', body: JSON.stringify({ limited: false }) }), `${n} counts as available again`).catch(() => {}); return; }
   if (d.go === 'ci') { const n = $('ci-note'); n.scrollIntoView({ behavior: smooth(), block: 'center' }); return (n.querySelector('a') || n).focus({ preventScroll: true }); }
-  if (d.go === 'proposed') { const c = document.querySelector('.card.proposed'); c?.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); return c?.focus({ preventScroll: true }); }
+  if (d.go === 'proposed') return goCards((t) => t.status === 'proposed', '.card.proposed');
   if (d.ping) {
     const t = taskById(Number(d.ping)); if (!t?.assignee) return;
     if (pingedAt(t)) return toast(`Already pinged ${agentRoot(t.assignee)} ${ago(pingedAt(t))}. Give it a few minutes.`);
@@ -129,7 +145,7 @@ document.addEventListener('click', (ev) => {
   if (d.step) { const si = setupInfo(); ui.steps[d.step] = !stepOpen(d.step, si.cur); return renderSetup(si); }
   if (d.act) return doAct(d.act, el);
   if (d.go && d.go.startsWith('step-')) return goStep(d.go.slice(5));
-  if (d.go === 'compose') { oShow('act'); $('msg').scrollIntoView({ behavior: smooth(), block: 'center' }); return $('msg').focus({ preventScroll: true }); }
+  if (d.go === 'compose') return goChat(smooth());
   if (d.openTask) return openTask(Number(d.openTask));
   if (d.dm) return openDm(d.dm);
   if ('dmBack' in d) { const n = ui.dm; ui.dm = null; $('feed')._html = undefined; render(); return document.querySelector(`[data-fk="dm-${CSS.escape(n || '')}"]`)?.focus({ preventScroll: true }); }
@@ -176,8 +192,8 @@ document.addEventListener('click', (ev) => {
     const el = document.querySelector(`[data-fk="pb-${CSS.escape(a.name)}"]`) || document.querySelector(`[data-fk="oa-${CSS.escape(a.name)}"]`);
     el?.scrollIntoView({ behavior: smooth(), block: 'center' }); return el?.focus({ preventScroll: true });
   }
-  if (d.go === 'review') { $('col-review')?.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); return ($('col-review')?.querySelector('.card') || $('col-review'))?.focus({ preventScroll: true }); }
-  if (d.go === 'stale') { const c = document.querySelector('.card.stale'); c?.scrollIntoView({ behavior: smooth(), block: 'center', inline: 'center' }); return c?.focus({ preventScroll: true }); }
+  if (d.go === 'review') return goCards((t) => t.status === 'review', null, 'col-review');
+  if (d.go === 'stale') return goCards(isStale, '.card.stale');
 });
 document.addEventListener('keydown', (ev) => {
   if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === 'k') { ev.preventDefault(); return togglePalette(); }
@@ -252,7 +268,7 @@ async function submitForm(f) {
     const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
     try {
       state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: ts, freeze_minutes: fm }) });
-      ui.dlErr = '';
+      dropDrafts(f); ui.dlErr = '';
       toast(`Demo at ${when(ts)}${fm ? `; feature freeze at ${when(ts - fm * 60e3)}` : ''}. Agents see it too.`);
       ui.oDl = false; render(); scheduleReload(); return $('clock').focus({ preventScroll: true });
     } catch (e) { toast(e.message, true); btn.disabled = false; }
@@ -301,7 +317,7 @@ async function saveGoalPopover(f) {
   btn.disabled = true;
   try {
     state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ goal }) });
-    ui.oGoalEdit = false; ui.goalErr = ''; toast('Goal saved. The agents will plan from it.'); render(); scheduleReload();
+    dropDrafts(f); ui.oGoalEdit = false; ui.goalErr = ''; toast('Goal saved. The agents will plan from it.'); render(); scheduleReload();
     return document.querySelector('[data-fk="o-goal-edit"]')?.focus({ preventScroll: true });
   } catch (e) { toast(e.message, true); btn.disabled = false; }
 }
@@ -324,7 +340,7 @@ async function saveStepGoal(f) {
   const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
   try {
     state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify(body) });
-    ui.editGoal = false; // the step stays as it was: open (showing what was saved, with Edit) if it was opened
+    dropDrafts(f); ui.editGoal = false; // the step stays as it was: open (showing what was saved, with Edit) if it was opened
     toast(`Saved. The agents will plan from the goal${Number(state.settings.deadline) ? `; demo at ${when(Number(state.settings.deadline))}` : ''}.`);
     render(); scheduleReload();
     document.querySelector('[data-fk="sh-goal"]')?.focus({ preventScroll: true });
@@ -439,10 +455,10 @@ function doAct(a, el) {
   if (a === 'planner') return oPlan(!ui.oPlan);
   if (a === 'roles') return oRoles(!ui.oRoles);
   if (a === 'o-goal-edit') return oGoal(true, { edit: true });
-  if (a === 'o-goal-cancel') { ui.oGoalEdit = false; ui.goalErr = ''; renderDocks(); return document.querySelector('[data-fk="o-goal-edit"]')?.focus(); }
+  if (a === 'o-goal-cancel') { dropDrafts($('o-goal-b')); ui.oGoalEdit = false; ui.goalErr = ''; renderDocks(); return document.querySelector('[data-fk="o-goal-edit"]')?.focus(); }
   if (a === 'dl-clear') {
     return api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: '' }) }).then((st) => {
-      state.settings = st; ui.dlErr = ''; toast('Demo time removed. No countdown or feature freeze.');
+      state.settings = st; ui.dlErr = ''; dropDrafts($('o-dl-b')); toast('Demo time removed. No countdown or feature freeze.');
       if (ui.oDl) { ui.oDl = false; render(); scheduleReload(); return $('clock').hidden ? focusNow() : $('clock').focus(); }
       render(); scheduleReload();
       if ($('dl-in')) { $('dl-in').value = ''; $('dl-in').focus(); }
@@ -459,7 +475,7 @@ function doAct(a, el) {
   if (a === 'copy-invite') return copyText(inviteText(), document.querySelector('[data-act="copy-invite"]'), 'Invite copied. Paste it in your team chat.');
   if (a === 'addrs') { ui.addrs = !ui.addrs; return render(); }
   if (a === 'goal-edit') { ui.editGoal = true; render(); const t = $('goal-in'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } return; }
-  if (a === 'goal-cancel') { ui.editGoal = false; ui.goalErr = ''; ui.repoErr = ''; ui.dlErr = ''; render(); return document.querySelector('[data-fk="goal-edit"]')?.focus(); }
+  if (a === 'goal-cancel') { dropDrafts($('step-goal')); ui.editGoal = false; ui.goalErr = ''; ui.repoErr = ''; ui.dlErr = ''; render(); return document.querySelector('[data-fk="goal-edit"]')?.focus(); }
   if (a === 'done-toggle') {
     const open = !doneOpen(); ui.doneOpen = open ? 'open' : 'closed'; store.set('board-done', ui.doneOpen); snapCards(redrawTasks);
     return document.querySelector(`[data-fk="${open ? 'done-close' : 'done-tog'}"]`)?.focus({ preventScroll: true });
@@ -509,13 +525,14 @@ helpDlg.addEventListener('click', (ev) => { if (ev.target.closest('[data-close]'
 function setFilter(v) { ui.filter = v; store.set('board-filter', v); render(); }
 $('filter').addEventListener('change', (e) => setFilter(e.target.value));
 function mention(name) {
+  // From the task dialog (a name in its history): unsaved edits are asked about first.
+  if ($('task-dlg').open) return leaveTask(() => mention(name));
   oShow('act');
-  if ($('task-dlg').open) $('task-dlg').close();
-  if (ui.tab === 'direct') { ui.tab = 'all'; store.set('board-tab', 'all'); $('feed')._html = undefined; render(); }
+  toChatTab();
   const m = $('msg'); const tagText = '@' + name + ' ';
   if (!m.value.includes(tagText)) m.value = (m.value && !/\s$/.test(m.value) ? m.value + ' ' : m.value) + tagText;
   m.focus(); m.setSelectionRange(m.value.length, m.value.length); growMsg(); closeAc();
 }
 
-export { applyKeys, copyText, doAct, focusMoveAsk, focusNow, focusTask, goCard, goMention, goQuestion, goStep,
+export { applyKeys, copyText, doAct, focusMoveAsk, focusNow, focusTask, goCard, goChat, goMention, goQuestion, goStep,
   helpDlg, mention, moveAskHtml, openHelp, sendAnswer, setFilter };
