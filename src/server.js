@@ -18,6 +18,10 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 // One server per data folder: a second one would open the same databases and write over the first one's data.
 // (`npm start`'s reload after a change stops the old process before it starts the new one.)
 const owner = await takePid();
+if (owner?.error) {
+  console.error(`\n✗ Can't mark the data folder ${DATA_DIR} as in use (${owner.error}), so the board doesn't start: a second server could then open the same databases. Check that the folder is writable.`);
+  process.exit(1);
+}
 if (owner) {
   console.error(`\n✗ Another board server (process ${owner.pid}, port ${owner.port}) is already using the data folder ${DATA_DIR}.`);
   console.error(`  Use that one, or stop it first (Ctrl+C in its window). To run a second, separate server, give it its own folder:  BOARD_DATA=<folder> PORT=<port> npm start`);

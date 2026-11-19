@@ -340,9 +340,63 @@ check('a malformed request: 400 without internal details', r.status === 400 && /
   check('a second server on the same data folder refuses to start (exit 1, says which process has it)', s2.status === 1 && /already using the data folder/.test(s2.stderr) && s2.stderr.includes(String(b2.child.pid)) && fs.readFileSync(pf, 'utf8') === before, `${s2.status} ${s2.stdout} ${s2.stderr}`);
   check('the first board still answers after that', (await fetch(`${b2.base}/health`)).ok);
   // A board.pid naming a live process that isn't a board (a pid taken again after a crash) doesn't block a start.
-  fs.writeFileSync(pf, JSON.stringify({ pid: process.pid, port: b2.port + 1, started: new Date(Date.now() - 5 * 60e3).toISOString() }));
+  fs.writeFileSync(pf, JSON.stringify({ pid: process.pid, port: await freePort(), started: new Date(Date.now() - 5 * 60e3).toISOString() }));
   await b2.relaunch();
   check('a stale board.pid whose pid now belongs to another program is replaced', JSON.parse(fs.readFileSync(pf, 'utf8')).pid === b2.child.pid);
+}
+// board.pid of a live process whose port takes the connection but doesn't answer /health in time (a busy or
+// suspended server): no proof it isn't the board, so it keeps the folder. Something else answering /health there
+// (another pid) is proof: the file is replaced.
+{
+  const data = tempDir('pidbusy-');
+  const pf = path.join(data, 'board.pid');
+  const held = new Set();
+  const slow = http.createServer((req) => { held.add(req.socket); }); // takes the request, never answers
+  const other = http.createServer((_req, res) => res.end(JSON.stringify({ ok: true, app: 'claude-board', pid: 1 })));
+  await Promise.all([slow, other].map((s) => new Promise((r) => s.listen(0, '127.0.0.1', r))));
+  const start = (port) => new Promise((resolve) => {
+    fs.writeFileSync(pf, JSON.stringify({ pid: process.pid, port, host: '127.0.0.1', started: new Date(Date.now() - 5 * 60e3).toISOString() }));
+    const c = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js')], { env: { ...process.env, PORT: '0', HOST: '127.0.0.1', BOARD_TOKEN: 'pidtok', BOARD_DATA: data, BOARD_NO_JOIN: '1', BOARD_BACKUP_MINUTES: '0' }, stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = ''; c.stderr.on('data', (d) => { err += d; });
+    // Still running after a while: it took the folder. (Its exit code after the kill doesn't count.)
+    const t = setTimeout(async () => { const pid = JSON.parse(fs.readFileSync(pf, 'utf8')).pid; resolve({ code: 'running', pid: pid === c.pid ? 'child' : pid, err }); killTree(c); await exited(c, 3000); }, 10e3);
+    c.on('exit', (code) => { clearTimeout(t); resolve({ code, err }); });
+  });
+  const busy = await start(slow.address().port);
+  check('a live board.pid owner whose /health times out keeps the data folder (a second server refuses)', busy.code === 1 && /already using the data folder/.test(busy.err) && JSON.parse(fs.readFileSync(pf, 'utf8')).pid === process.pid, JSON.stringify(busy));
+  const taken = await start(other.address().port);
+  check('…but another pid answering /health on its port is proof it is stale: the file is replaced', taken.code === 'running' && taken.pid === 'child', JSON.stringify(taken));
+  for (const s of held) s.destroy();
+  slow.close(); other.close();
+}
+// board.pid can't be created (here: the data folder's path runs through a file): the server doesn't start unguarded.
+{
+  const file = path.join(tempDir('pidfail-'), 'not-a-folder');
+  fs.writeFileSync(file, '');
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', `import { takePid } from ${JSON.stringify(new URL('../src/pidfile.js', import.meta.url).href)}; console.log(JSON.stringify(await takePid()));`],
+    { env: { ...process.env, BOARD_DATA: path.join(file, 'data') }, encoding: 'utf8', timeout: 20e3 });
+  const out = (() => { try { return JSON.parse(r.stdout); } catch { return r.stdout; } })();
+  check('takePid fails closed when board.pid can\'t be created (an error, not "go ahead")', !!out?.error, `${r.stdout} ${r.stderr}`);
+}
+// Several servers reclaiming the same stale board.pid at once: exactly one gets the folder (the stale file is
+// removed under a lock, so one can't delete the file another just created).
+{
+  const data = tempDir('pidrace-');
+  const pf = path.join(data, 'board.pid');
+  const code = `import { takePid } from ${JSON.stringify(new URL('../src/pidfile.js', import.meta.url).href)}; const o = await takePid(); console.log(o ? 'refused' : 'took'); setTimeout(() => {}, 4000);`;
+  const deadPort = await freePort();
+  let good = 0; const seen = [];
+  for (let round = 0; round < 4; round++) {
+    fs.writeFileSync(pf, JSON.stringify({ pid: process.pid, port: deadPort, host: '127.0.0.1', started: new Date(Date.now() - 5 * 60e3).toISOString() }));
+    const kids = Array.from({ length: 6 }, () => spawn(process.execPath, ['--input-type=module', '-e', code], { env: { ...process.env, BOARD_DATA: data }, stdio: ['ignore', 'pipe', 'ignore'] }));
+    const said = await Promise.all(kids.map((k) => new Promise((r) => { let o = ''; k.stdout.on('data', (d) => { o += d; if (/took|refused/.test(o)) r(o.trim()); }); k.on('exit', () => r(o.trim() || 'exit')); })));
+    const owner = JSON.parse(fs.readFileSync(pf, 'utf8')).pid;
+    const winner = kids[said.indexOf('took')];
+    seen.push(said.join('/'));
+    if (said.filter((s) => s === 'took').length === 1 && winner?.pid === owner) good++;
+    for (const k of kids) killTree(k);
+  }
+  check('several servers reclaiming one stale board.pid at once: exactly one takes it, every time', good === 4, seen.join('; '));
 }
 // Two servers started at the same moment on one data folder: exactly one gets it (board.pid is created only
 // when there is none), the other refuses and exits.
