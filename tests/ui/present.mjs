@@ -35,6 +35,35 @@ const browser = await launchBrowser({ headless: true, defaultViewport: { width: 
 const page = await browser.newPage();
 const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 const out = shotsDir('present');
+// A slow answer can't put an older board back: one /api/state is held 2.5 s and then answered with the board as it was,
+// while a newer change asks for another. The task total on screen (sampled) never goes back down.
+async function staleCheck(file) {
+  const sp = await browser.newPage();
+  await sp.evaluateOnNewDocument(() => {
+    const f = window.fetch.bind(window);
+    window.fetch = async (u, o) => {
+      if (!window.__hold || !/\/api\/state(\?|$)/.test(String(u))) return f(u, o);
+      const b = window.__hold; window.__hold = null;
+      await new Promise((r) => setTimeout(r, 2500));
+      return new Response(b, { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+  });
+  await sp.goto(`${board.base}/${file}?token=${encodeURIComponent(VIEW)}`);
+  await sp.waitForFunction(() => /\d+ of \d+ done/.test(document.body.innerText), { timeout: 10000, polling: 100 });
+  await sleep(800);
+  await sp.evaluate(() => { window.__seen = []; setInterval(() => { const m = /\d+ of (\d+) done/.exec(document.body.innerText); if (m && +m[1] !== window.__seen.at(-1)) window.__seen.push(+m[1]); }, 30); });
+  const old = await (await fetch(`${board.base}/api/state`, { headers: { Authorization: `Bearer ${VIEW}` } })).text();
+  await sp.evaluate((b) => { window.__hold = b; }, old);
+  await human('/tasks', 'POST', { title: 'Race A' }); // its reload is held, then answered with the board before it
+  await sleep(800);
+  await human('/tasks', 'POST', { title: 'Race B' }); // a newer reload, answered at once
+  await sleep(4000);
+  const seen = await sp.evaluate(() => window.__seen);
+  const n0 = JSON.parse(old).tasks.filter((t) => t.status !== 'proposed').length;
+  check(`${file}: a slow, older answer never replaces a newer board (the task total only goes up, ending with both new tasks)`, seen.every((v, i) => !i || v >= seen[i - 1]) && seen.at(-1) === n0 + 2, JSON.stringify({ n0, seen }));
+  await sp.close();
+}
+
 try {
   await page.goto(`${board.base}/present-classic.html?token=${encodeURIComponent(VIEW)}`);
   await page.waitForFunction(() => /Leaderboard|Vote API|voting app/i.test(document.body.innerText), { timeout: 8000 });
@@ -159,6 +188,7 @@ try {
     check('another tab clears board-theme: back to Auto (no data-theme)', await a.tp.waitForFunction(() => !document.documentElement.hasAttribute('data-theme'), { timeout: 5000, polling: 100 }).then(() => true).catch(() => false));
     await b.close(); await a.tp.close();
   }
+  await staleCheck('present-classic.html');
   check('no page errors', !errors.length, errors.join('; '));
 } catch (e) {
   R.push(`CRASH ${e.message}`);

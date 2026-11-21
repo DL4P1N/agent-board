@@ -29,6 +29,35 @@ const S = (page) => page.evaluate(() => window.__officeState);
 const until = (page, fn, arg, timeout = 8000) => page.waitForFunction(fn, { timeout, polling: 100 }, arg).then(() => true).catch(() => false);
 const text = (page) => page.evaluate(() => document.body.innerText);
 
+// A slow answer can't put an older board back: one /api/state is held 2.5 s and then answered with the board as it was,
+// while a newer change asks for another. The task total on screen (sampled) never goes back down.
+async function staleCheck(file) {
+  const sp = await browser.newPage();
+  await sp.evaluateOnNewDocument(() => {
+    const f = window.fetch.bind(window);
+    window.fetch = async (u, o) => {
+      if (!window.__hold || !/\/api\/state(\?|$)/.test(String(u))) return f(u, o);
+      const b = window.__hold; window.__hold = null;
+      await new Promise((r) => setTimeout(r, 2500));
+      return new Response(b, { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+  });
+  await sp.goto(`${board.base}/${file}?token=${encodeURIComponent(VIEW)}`);
+  await sp.waitForFunction(() => /\d+ of \d+ done/.test(document.body.innerText), { timeout: 10000, polling: 100 });
+  await sleep(800);
+  await sp.evaluate(() => { window.__seen = []; setInterval(() => { const m = /\d+ of (\d+) done/.exec(document.body.innerText); if (m && +m[1] !== window.__seen.at(-1)) window.__seen.push(+m[1]); }, 30); });
+  const old = await (await fetch(`${board.base}/api/state`, { headers: { Authorization: `Bearer ${VIEW}` } })).text();
+  await sp.evaluate((b) => { window.__hold = b; }, old);
+  await human('/tasks', 'POST', { title: 'Race A' }); // its reload is held, then answered with the board before it
+  await sleep(800);
+  await human('/tasks', 'POST', { title: 'Race B' }); // a newer reload, answered at once
+  await sleep(4000);
+  const seen = await sp.evaluate(() => window.__seen);
+  const n0 = JSON.parse(old).tasks.filter((t) => t.status !== 'proposed').length;
+  check(`${file}: a slow, older answer never replaces a newer board (the task total only goes up, ending with both new tasks)`, seen.every((v, i) => !i || v >= seen[i - 1]) && seen.at(-1) === n0 + 2, JSON.stringify({ n0, seen }));
+  await sp.close();
+}
+
 try {
   const page = watch(await browser.newPage());
   await page.goto(`${board.base}/present.html?token=${encodeURIComponent(VIEW)}`);
@@ -201,6 +230,7 @@ try {
     // The feature freeze is amber on the presenter, as on the board (a phase, not an error).
     await human('/settings', 'PUT', { deadline: Date.now() + 30 * 60e3, freeze_minutes: 60 });
     check('in the feature freeze the countdown is amber (warn), not red', await until(page, () => /Feature freeze/.test(document.getElementById('clock-sub')?.textContent || '') && document.getElementById('clock').className === 'clock warn'), await page.$eval('#clock', (c) => c.className));
+    await staleCheck('present.html');
   }
 
   // No WebGL at all: straight to the classic page, carrying the token from the link.

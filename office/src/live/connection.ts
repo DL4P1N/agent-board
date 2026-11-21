@@ -39,7 +39,18 @@ export function connect(on: ConnectionEvents): void {
   let expired = false; let unavailable = 0; let live = false; let lastErr = ''; let have = false; let lastLoad = 0;
   let es: EventSource | null = null; let reloadT: ReturnType<typeof setTimeout> | undefined;
 
-  async function load(): Promise<void> {
+  // One /api/state at a time, like the board's own loader (public/js/data.js): a load asked for while one is on its
+  // way runs once it is back, so a slow, older answer never replaces a newer one.
+  let loading: Promise<void> | null = null; let again = false;
+  function load(): Promise<void> {
+    if (loading) { again = true; return loading; }
+    loading = (async () => {
+      try { do { again = false; await loadOnce(); } while (again && !expired); } finally { loading = null; }
+    })();
+    return loading;
+  }
+
+  async function loadOnce(): Promise<void> {
     lastLoad = Date.now();
     if (!token) { on.message(NO_TOKEN); return; }
     if (expired) return;
@@ -55,6 +66,8 @@ export function connect(on: ConnectionEvents): void {
         if (r.status === 503) return on.message(`This board couldn't open: ${esc(body.error || 'unknown error')}. Checking again by itself.`);
         const to = String(body.moved_to || '').replace(/\/+$/, '');
         const url = new URL(to + '/present.html', location.origin); url.searchParams.set('token', token);
+        // Only a web address becomes a link (as on the classic page).
+        if (!/^https?:$/.test(url.protocol)) return on.message('This board moved to its own address. Ask the host for the new presenter link.');
         return on.message(`This board moved to its own address. <a href="${esc(url.href)}">Open the presenter view there</a>.`);
       }
       if (!r.ok) throw new Error(r.statusText);

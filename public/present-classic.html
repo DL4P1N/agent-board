@@ -371,7 +371,15 @@ function needsOf(now = Date.now()) {
 }
 function dur(ms) { const t = Math.max(0, Math.round(ms / 1000)); const h = Math.floor(t / 3600); const m = Math.floor((t % 3600) / 60); const s = t % 60; return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}:${String(s).padStart(2, '0')}`; }
 
-async function load() {
+// One /api/state at a time, like the board's own loader: a load asked for while one is on its way runs once it is
+// back, so a slow, older answer never replaces a newer one.
+let loading = null, again = false;
+function load() {
+  if (loading) { again = true; return loading; }
+  loading = (async () => { try { do { again = false; await loadOnce(); } while (again && !expired); } finally { loading = null; } })();
+  return loading;
+}
+async function loadOnce() {
   if (!token) return showMsg('Open this from the board: <b>Presenter view</b> in its help (<b>?</b>) or Ctrl+K.');
   try {
     const r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } });
