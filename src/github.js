@@ -125,9 +125,10 @@ export function startGithubPolling({ board, announced, rawSetting, putSetting, i
     if (!branchOf.has(repo)) {
       const r = await gh(['repo', 'view', repo, '--json', 'defaultBranchRef'], ac.signal);
       if (isClosed()) return false;
-      branchOf.set(repo, r?.defaultBranchRef?.name || 'main');
+      // Kept only when gh answered: after a failed call 'main' is a guess for this poll, asked again next time.
+      if (r?.defaultBranchRef?.name) branchOf.set(repo, r.defaultBranchRef.name);
     }
-    const branch = branchOf.get(repo);
+    const branch = branchOf.get(repo) || 'main';
     const runs = await gh(['run', 'list', '-R', repo, '--branch', branch, '--limit', '20', '--json', 'status,conclusion,headSha,url,displayTitle,workflowName,createdAt'], ac.signal);
     if (!Array.isArray(runs) || isClosed()) return false;
     const prev = board.mainCi;

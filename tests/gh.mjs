@@ -281,6 +281,29 @@ try {
     await sleep(4000);
     check('a closed board starts no more gh calls for its queued PRs, and the running one ends without an answer', before === 1 && prCalls() === 1 && fakeBoard.prStatus.size === 0, `${before} ${prCalls()} ${fakeBoard.prStatus.size}`);
   }
+
+  // ================= 6. the default branch is only remembered when gh said it =================
+  // A first `gh repo view` that fails polls 'main' that once; the next poll asks again and uses the real branch.
+  {
+    const { startGithubPolling } = await import('../src/github.js');
+    const st6 = path.join(bin, 'state6.json'); const log6 = path.join(bin, 'calls6.log');
+    Object.assign(process.env, env, { FAKE_GH_STATE: st6, FAKE_GH_LOG: log6 });
+    const runLists = () => { try { return fs.readFileSync(log6, 'utf8').split('\n').filter((l) => l.startsWith('["run","list","-R","o/r6"')); } catch { return []; } };
+    const pollOnce = async () => {
+      const n = runLists().length;
+      let tick = null;
+      const fakeBoard = { listTasks: () => [], prStatus: new Map(), mainCi: null, emit() {}, getSettings: () => ({ repo: 'https://github.com/o/r6' }) };
+      const poll = startGithubPolling({ board: fakeBoard, announced: { has: () => true, add() {} }, rawSetting: () => null, putSetting() {}, isClosed: () => false, presence() {}, every() {}, later: (fn) => { tick = fn; } });
+      await tick();
+      poll.stop();
+      return runLists().slice(n);
+    };
+    fs.writeFileSync(st6, JSON.stringify({ auth: true, branch: 'trunk', repo_view_fail: true, runs: [] }));
+    const first = await pollOnce();
+    fs.writeFileSync(st6, JSON.stringify({ auth: true, branch: 'trunk', runs: [] }));
+    const second = await pollOnce();
+    check('a failed default-branch lookup is not remembered: the next poll uses the real branch', first.some((l) => l.includes('"--branch","main"')) && second.some((l) => l.includes('"--branch","trunk"')), JSON.stringify({ first, second }));
+  }
 } catch (e) {
   R.push(`CRASH ${e.stack || e}`);
 }

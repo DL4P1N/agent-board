@@ -1,6 +1,6 @@
 // Stand-in for the GitHub CLI (`gh`) in tests: answers the few commands the board server runs
 // from a JSON file the test rewrites between steps (path in FAKE_GH_STATE):
-//   { "auth": true, "prs": { "<url>": <gh pr view --json …> }, "branch": "main", "runs": [<gh run list --json …>] }
+//   { "auth": true, "prs": { "<url>": <gh pr view --json …> }, "branch": "main", "runs": [<gh run list --json …>], "repo_view_fail": false }
 // Unknown commands exit 1 (the server treats that as "no answer").
 //
 // Two ways in:
@@ -21,7 +21,8 @@ function answer(args) {
   // delay_ms: answer PR questions slowly (a slow network), to test what happens meanwhile.
   if (a === 'pr' && b === 'view' && st.delay_ms) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, st.delay_ms);
   if (a === 'pr' && b === 'view') { const pr = (st.prs || {})[args[2]]; return pr ? { code: 0, out: pr } : { code: 1 }; }
-  if (a === 'repo' && b === 'view') return { code: 0, out: { defaultBranchRef: { name: st.branch || 'main' } } };
+  // repo_view_fail: gh can't answer which branch is the default (offline, or a moment of trouble).
+  if (a === 'repo' && b === 'view') return st.repo_view_fail ? { code: 1 } : { code: 0, out: { defaultBranchRef: { name: st.branch || 'main' } } };
   if (a === 'run' && b === 'list') return Array.isArray(st.runs) ? { code: 0, out: st.runs } : { code: 1 };
   return { code: 1 };
 }
