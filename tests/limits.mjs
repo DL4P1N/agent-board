@@ -5,6 +5,7 @@
 import { startBoard, finish, agent } from './helpers.mjs';
 import { agentTokenFor } from '../src/tokens.js';
 import { RateLimiter } from '../src/limits.js';
+import { clientIp } from '../src/request-limits.js';
 
 const board = await startBoard({ env: { BOARD_RATE_AGENT: '30', BOARD_RATE_IP: '100', BOARD_WAITS_AGENT: '2', BOARD_WAITS_TOTAL: '5' } });
 const AG = agentTokenFor(board.token);
@@ -43,6 +44,31 @@ try {
     check('RateLimiter: a quiet key refills to the limit, not past it', k === 60, String(k));
     const off = new RateLimiter(0);
     check('RateLimiter: 0 turns the limit off', Array.from({ length: 1000 }, () => off.take('a', t).ok).every(Boolean));
+  }
+
+  // ---- which address a request counts against (clientIp) ----
+  // Only cloudflared on this machine may name the caller (CF-Connecting-IP); anyone else is their socket's address,
+  // whatever headers they send, so a client can't pick a fresh address per call to dodge the per-address limit.
+  {
+    const req = (peer, headers = {}) => {
+      const h = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
+      return { socket: { remoteAddress: peer }, headers: h, get: (k) => h[k.toLowerCase()] };
+    };
+    const spoof = { 'CF-Connecting-IP': '198.51.100.9', 'X-Forwarded-For': '198.51.100.10', 'X-Real-IP': '198.51.100.11', Forwarded: 'for=198.51.100.12' };
+    const cases = [
+      ['a remote caller sending CF-Connecting-IP, X-Forwarded-For, X-Real-IP and Forwarded is its own address', req('203.0.113.5', spoof), '203.0.113.5'],
+      ['…also as an IPv4-mapped IPv6 peer', req('::ffff:203.0.113.5', spoof), '203.0.113.5'],
+      ['…and a LAN caller too', req('192.168.1.20', spoof), '192.168.1.20'],
+      ['X-Forwarded-For is never trusted, not even from this machine', req('127.0.0.1', { 'X-Forwarded-For': '198.51.100.10' }), '127.0.0.1'],
+      ['CF-Connecting-IP from this machine (cloudflared) names the caller', req('127.0.0.1', { 'CF-Connecting-IP': '198.51.100.9' }), '198.51.100.9'],
+      ['…from ::1 and ::ffff:127.0.0.1 as well', req('::1', { 'CF-Connecting-IP': '2001:db8::5' }), '2001:db8::5'],
+      ['…(mapped loopback)', req('::ffff:127.0.0.1', { 'CF-Connecting-IP': '198.51.100.9' }), '198.51.100.9'],
+      ['a CF-Connecting-IP that isn\'t one address is ignored', req('127.0.0.1', { 'CF-Connecting-IP': '198.51.100.9, 198.51.100.10' }), '127.0.0.1'],
+      ['…nor is a name', req('127.0.0.1', { 'CF-Connecting-IP': 'evil.example' }), '127.0.0.1'],
+      ['no socket address: "unknown"', req(undefined, spoof), 'unknown'],
+    ];
+    const wrong = cases.filter(([, r, want]) => clientIp(r) !== want).map(([n, r, want]) => `${n}: ${clientIp(r)} (want ${want})`);
+    check('clientIp: headers name the caller only when cloudflared on this machine sends CF-Connecting-IP', !wrong.length, wrong.join('; '));
   }
 
   // ---- one agent in a loop (REST, like a broken Stop hook) ----
