@@ -457,11 +457,14 @@ document.addEventListener('click', async (ev) => {
   try {
     if (act === 'open') {
       const w = window.open('about:blank', '_blank'); // opened now, so popup blockers allow it
+      // The new tab starts with a copy of this tab's sessionStorage: the admin token comes out of it at once.
+      try { w?.sessionStorage.removeItem(KEY); } catch {}
       let r;
       try { r = await api(`/boards/${encodeURIComponent(slug)}/open`); }
       catch (e) { w?.close(); throw e; } // e.g. 503: the board failed to open; 409/410 after a change elsewhere
       const url = new URL(r.url, location.origin); url.searchParams.set('token', r.token);
-      if (w) { w.opener = null; w.location = url.href; } else location.href = url.href;
+      // No new tab (popup blocked): this tab becomes the board, so it drops the admin token first.
+      if (w) { w.opener = null; w.location = url.href; } else { store.set(''); location.href = url.href; }
     } else if (act === 'copy-join' || act === 'copy-link') {
       const r = await api(`/boards/${encodeURIComponent(slug)}/open`);
       if (act === 'copy-link') { const url = new URL(r.url, location.origin); url.searchParams.set('token', r.token); return copy(url.href, `Link to ${b?.name || slug} copied. It includes the board token.`); }

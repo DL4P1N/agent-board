@@ -114,6 +114,23 @@ try {
   check('presenter keeps its viewer token per board', await pp.evaluate(() => !!localStorage.getItem('board-view-token@/b/spring-hackathon')));
   await pp.close();
 
+  // ---- Open from the Boards page: the new tab gets the board token, never the admin token ----
+  // window.open copies the tab's sessionStorage (the admin token) into the tab it opens, for the same origin: the
+  // Boards page is opened at the address the board links use (the server's own address, not localhost).
+  const linkOrigin = new URL(open.url, BASE).origin;
+  const hp = await browser.newPage();
+  hp.on('pageerror', (e) => errors.push(e.message));
+  await hp.goto(`${linkOrigin}/boards?admin=${ADMIN}`);
+  await hp.waitForSelector('[data-board="spring-hackathon"] [data-act="open"]', { timeout: 5000 });
+  const opened = new Promise((resolve) => browser.once('targetcreated', resolve));
+  await hp.click('[data-board="spring-hackathon"] [data-act="open"]');
+  const op = await (await opened).page();
+  const opOk = await op.waitForFunction((o) => location.origin === o && /\/b\/spring-hackathon\//.test(location.pathname) && document.readyState === 'complete', { timeout: 8000, polling: 250 }, linkOrigin).then(() => true).catch(() => false);
+  const opKeys = await op.evaluate((a) => Object.keys(sessionStorage).filter((k) => k === 'board-admin-token' || sessionStorage.getItem(k) === a), ADMIN);
+  check('Open from the Boards page: the board opens in a new tab without the admin token in its sessionStorage', opOk && !opKeys.length, `${opOk} ${op.url().split('?')[0]} ${JSON.stringify(opKeys)}`);
+  check('and the Boards tab keeps it', await hp.evaluate((a) => sessionStorage.getItem('board-admin-token') === a, ADMIN));
+  await op.close(); await hp.close();
+
   // ---- archive ----
   await page.bringToFront();
   await page.click('[data-board="spring-hackathon"] [data-act="archive"]');
