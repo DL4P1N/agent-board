@@ -162,7 +162,11 @@ function securityBox() {
       <button type="button" class="danger" data-act="rotate-yes" data-fk="rot-yes">Rotate now</button><button type="button" class="ghost" data-act="rotate-no" data-fk="rot-no">Keep the token</button></div>`
       : '<div class="rot"><button type="button" class="ghost" data-act="rotate" data-fk="rot">Rotate token…</button></div>'}`;
 }
+// One rotation at a time: a second click would send the token the first one just retired (a 401 locks the page out).
+let rotating = false;
 async function rotateToken() {
+  if (rotating) return;
+  rotating = true;
   try {
     const r = await api('/token/rotate', { method: 'POST', body: '{}' });
     if (!r?.token) throw new Error('The server didn\'t return a new token.');
@@ -173,6 +177,7 @@ async function rotateToken() {
     toast('Token rotated: send everyone the new join command.');
     document.querySelector('[data-fk="s-invite"]')?.focus({ preventScroll: true });
   } catch (e) { ui.rotateArm = false; render(); toast(`Couldn't rotate the token: ${e.message}`, true); }
+  finally { rotating = false; }
 }
 // How long tasks took so far (per size) and how often reviews sent them back, from the server's stats.
 function statsLine() {

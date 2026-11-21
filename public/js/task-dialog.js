@@ -294,7 +294,8 @@ function syncSave() { $('td-save').hidden = !!editing && !dlgDirty(); }
 $('task-form').addEventListener('input', syncSave); $('task-form').addEventListener('change', syncSave);
 // Approve (a proposal): any edits are saved first, through the form, then it's approved.
 let approving = false;
-$('td-approve').onclick = () => { approving = true; $('task-form').requestSubmit(); };
+// Ignored while a save is on its way: the dropped submit would leave approving set for the next save.
+$('td-approve').onclick = () => { if (saving) return; approving = true; $('task-form').requestSubmit(); };
 // One save at a time: Ctrl+Enter (or Save) again while it's on its way doesn't create the task twice.
 let saving = false;
 $('task-form').addEventListener('submit', async (ev) => {

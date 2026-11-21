@@ -126,8 +126,9 @@ $('gate').addEventListener('submit', async (ev) => {
   if (!n) { $('g-err').textContent = 'Enter your name (letters, numbers, . - _).'; return $('g-name').focus(); }
   const r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
   if (!r) { $('g-err').textContent = 'Cannot reach the board server. Is it still running?'; return; }
-  if (r.status === 410 || r.status === 409 || r.status === 503) { setToken(t); setMe(n); const body = await r.json().catch(() => ({})); return unavailableStatus(r.status, body); }
   if (r.status === 401) { const b = await r.json().catch(() => ({})); $('g-err').textContent = tokenError(b); return $('g-token').focus(); }
+  // A board that is unavailable (archived, moved, failed to open) signs in too, as a page opened with a saved token
+  // does: start() shows why and starts the timers, so the page is all there once the board comes back.
   setToken(t); setMe(n); store.set('board-token', token); store.set('board-name', me);
   signedIn?.();
 });
