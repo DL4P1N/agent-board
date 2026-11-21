@@ -6,6 +6,7 @@
 //   FAKE_CF_ARGS=file   write the arguments it got to this file (the long-running modes)
 //   FAKE_CF_LOG=file    append one JSON line of arguments per call (the setup steps)
 //   FAKE_CF_MODE=fail   print an error and exit 1 instead
+//   FAKE_CF_MODE=api-error  fail like the real one when the quick-tunnel service errors (it names api.trycloudflare.com)
 //   FAKE_CF_ROUTE=exists  `tunnel route dns` fails like the real one when the hostname already has a record
 import fs from 'node:fs';
 
@@ -21,7 +22,10 @@ if (['login', 'create', 'route'].includes(sub)) {
   process.exit(0);
 }
 if (process.env.FAKE_CF_ARGS) fs.writeFileSync(process.env.FAKE_CF_ARGS, JSON.stringify(args));
-if (process.env.FAKE_CF_MODE === 'fail') {
+if (process.env.FAKE_CF_MODE === 'api-error') {
+  console.error('2026-01-01T00:00:00Z ERR Error unmarshaling QuickTunnel response: error="invalid character" status_code="500 Internal Server Error" url=https://api.trycloudflare.com/tunnel');
+  setTimeout(() => process.exit(1), 300);
+} else if (process.env.FAKE_CF_MODE === 'fail') {
   console.error('2026-01-01T00:00:00Z ERR failed to request quick Tunnel: no internet (fake)');
   process.exit(1);
 }
@@ -31,6 +35,7 @@ setTimeout(() => {
     console.error('2026-01-01T00:00:00Z INF Registered tunnel connection connIndex=0 connection=fake event=0 ip=198.41.200.13 location=fake protocol=quic');
     return;
   }
+  if (process.env.FAKE_CF_MODE === 'api-error') return;
   console.error('2026-01-01T00:00:00Z INF Requesting new quick Tunnel on trycloudflare.com...');
   console.error('2026-01-01T00:00:00Z INF +--------------------------------------------------------------------------------------------+');
   console.error('2026-01-01T00:00:00Z INF |  Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):  |');

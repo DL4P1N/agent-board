@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import net from 'node:net';
+import http from 'node:http';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { startBoard, finish, rest, ROOT, TOKEN, tempDir } from './helpers.mjs';
@@ -63,6 +64,37 @@ function runTunnel(env, extra = []) {
   const code = await r.exited;
   check('tunnel fails to start: exits 1 and shows cloudflared\'s error', code === 1 && /didn't start/.test(r.out()) && /no internet \(fake\)/.test(r.out()), r.out().slice(0, 300));
 }
+// Waits for a run that should end by itself; one still running after ms is ended ('still running').
+const endsWithin = async (r, ms) => {
+  const code = await Promise.race([r.exited, new Promise((res) => setTimeout(() => res('still running'), ms))]);
+  if (code === 'still running') { killTree(r.child); await r.exited; }
+  return code;
+};
+{
+  // cloudflared's error names api.trycloudflare.com: that is not the tunnel's address.
+  const r = runTunnel({ CLOUDFLARED: FAKE, FAKE_CF_MODE: 'api-error', PORT: String(await freePort()) });
+  const code = await endsWithin(r, 15000);
+  check('quick-tunnel service error: not taken for the address (no "Tunnel open", exit 1)', code === 1 && /didn't start/.test(r.out()) && !/Tunnel open/.test(r.out()) && !/--url https:\/\/api\./.test(r.out()), `${code} ${r.out().slice(0, 400)}`);
+}
+{
+  // Something already answers on the port (here a stand-in for another board): no tunnel is opened to it.
+  const port = await freePort();
+  const other = http.createServer((_q, s) => s.end(JSON.stringify({ ok: true, app: 'agent-board', pid: 1 })));
+  await new Promise((res) => other.listen(port, res));
+  const argsFile = path.join(tempDir('cf-args-'), 'args.json');
+  const r = runTunnel({ CLOUDFLARED: FAKE, FAKE_CF_ARGS: argsFile, PORT: String(port) });
+  const code = await endsWithin(r, 15000);
+  other.close();
+  check('port already in use: exits 1 before cloudflared starts, says why', code === 1 && !fs.existsSync(argsFile) && /already running on port/.test(r.out()) && !/Tunnel open/.test(r.out()), `${code} ${r.out().slice(0, 400)}`);
+}
+{
+  // The board can't start (another board holds its data folder): the tunnel closes instead of being reported open.
+  const holder = await startBoard();
+  const r = runTunnel({ CLOUDFLARED: FAKE, PORT: String(await freePort()), BOARD_DATA: holder.dataDir, TUNNEL_BOARD_WAIT_MS: '6000' });
+  const code = await endsWithin(r, 25000);
+  await holder.stop();
+  check('board fails to start: tunnel closed, exit 1, never "Tunnel open"', code === 1 && /board didn't start on port/.test(r.out()) && !/Tunnel open/.test(r.out()), `${code} ${r.out().slice(-400)}`);
+}
 {
   const port = await freePort();
   const argsFile = path.join(tempDir('cf-args-'), 'args.json');
@@ -85,7 +117,8 @@ const startNamed = async (env, extra = [], label = 'named') => {
   const port = await freePort();
   const argsFile = path.join(tempDir('cf-args-'), 'args.json');
   const r = runTunnel({ CLOUDFLARED: FAKE, FAKE_CF_ARGS: argsFile, PORT: String(port), TUNNEL_NAMED_WAIT_MS: '15000', ...env }, extra);
-  const up = await r.waitFor(/Keep this window open/);
+  // The tunnel counts as up once the board it started answers (the line after the board's banner).
+  const up = await r.waitFor(/Keep this window open/) && await r.waitFor(/✓ Tunnel (running|open):/);
   let args = []; try { args = JSON.parse(fs.readFileSync(argsFile, 'utf8')); } catch {}
   return { r, port, up, args };
 };

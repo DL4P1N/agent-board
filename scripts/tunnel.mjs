@@ -17,10 +17,12 @@
 //   --quick                             a quick tunnel even if a named one is saved
 //   CLOUDFLARED=/path/to/cloudflared    use that binary instead of the one on PATH
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { killTree } from './lib/board.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 4000);
@@ -28,6 +30,7 @@ const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'))
 const SAVED = path.join(DATA_DIR, 'tunnel.json');
 const START_TIMEOUT_MS = 45_000;
 const NAMED_WAIT_MS = Number(process.env.TUNNEL_NAMED_WAIT_MS || 20_000);
+const BOARD_WAIT_MS = Number(process.env.TUNNEL_BOARD_WAIT_MS || 30_000);
 
 const { values: opts, positionals } = parseArgs({
   options: { setup: { type: 'boolean' }, quick: { type: 'boolean' }, name: { type: 'string' }, hostname: { type: 'string' } },
@@ -116,6 +119,35 @@ const named = opts.quick === true ? null : (() => {
   return { name, hostname };
 })();
 
+// The tunnel publishes whatever answers on the port: if something already does (a board in another window, any
+// other program), this board can't bind it and the tunnel would publish that instead. So stop before cloudflared starts.
+const portTaken = () => new Promise((resolve) => {
+  const s = net.connect({ port: PORT, host: 'localhost' });
+  s.setTimeout(2000, () => { s.destroy(); resolve(true); });
+  s.once('connect', () => { s.destroy(); resolve(true); });
+  s.once('error', () => resolve(false));
+});
+if (await portTaken()) {
+  console.error(`✗ Something is already running on port ${PORT} (another board, or another program), so no tunnel was opened: it would publish that.`);
+  console.error(`  Close it first, or use another port, e.g.:  PORT=${PORT + 1} npm run tunnel`);
+  process.exit(1);
+}
+
+// The board this script started answers on the port: /health comes from the server that wrote this data folder's
+// board.pid after it was started (its pid, this port), as in scripts/lib/board.mjs. False if it exits or never does.
+const PID_FILE = path.join(DATA_DIR, 'board.pid');
+async function boardAnswers(child, since, ms = BOARD_WAIT_MS) {
+  for (const t0 = Date.now(); Date.now() - t0 < ms && child.exitCode === null && child.signalCode === null;) {
+    let o = null;
+    try { o = JSON.parse(fs.readFileSync(PID_FILE, 'utf8')); } catch {}
+    if (o?.port === PORT && Date.parse(o.started) >= since - 2000) {
+      try { if ((await (await fetch(`http://localhost:${PORT}/health`, { signal: AbortSignal.timeout(2000) })).json()).pid === o.pid) return true; } catch {}
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return false;
+}
+
 let board = null;
 let stopping = false;
 let log = '';
@@ -145,7 +177,8 @@ if (named) {
   console.log(`Opening a Cloudflare tunnel to the board on port ${PORT}…`);
   tunnel = spawn(cf.cmd, [...cf.pre, 'tunnel', '--no-autoupdate', '--url', `http://localhost:${PORT}`], { stdio: ['pipe', 'pipe', 'pipe'] });
   publicUrl = await new Promise((resolve) => watchOutput(resolve,
-    (l) => l.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i)?.[0] || null,
+    // Not api.trycloudflare.com: cloudflared names that host (where it asks for an address) in its errors.
+    (l) => l.match(/https:\/\/(?!api\.)[a-z0-9-]+\.trycloudflare\.com/i)?.[0] || null,
     START_TIMEOUT_MS, () => null));
 }
 
@@ -169,9 +202,7 @@ tunnel.on('exit', (code) => {
     : '  To get a public address again, stop the board (Ctrl+C) and run npm run tunnel. The address will be new, so everyone re-runs join.');
 });
 
-console.log(named
-  ? `✓ Tunnel running: ${publicUrl}  (a fixed address: restarting keeps it, so nobody re-joins)`
-  : `✓ Tunnel open: ${publicUrl}  (it can take a few seconds before the address answers)`);
+const boardStarted = Date.now();
 board = spawn(process.execPath, ['--watch-path=src', '--watch-preserve-output', 'src/server.js'], {
   cwd: ROOT, stdio: 'inherit', env: { ...process.env, PUBLIC_URL: publicUrl },
 });
@@ -186,3 +217,18 @@ function stop(code = 0) {
 board.on('exit', (code) => { stop(code ?? 0); });
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => stop(0));
 process.on('exit', () => { tunnel.kill(); board?.kill(); });
+
+// node --watch outlives a server that exits (a port taken meanwhile, a data folder another board holds): then the
+// tunnel would publish nothing, or someone else. Only this board answering counts as open.
+if (!(await boardAnswers(board, boardStarted)) && !stopping) {
+  console.error(`\n✗ The board didn't start on port ${PORT} (its output is above), so the tunnel was closed.`);
+  stopping = true;
+  tunnel.kill();
+  killTree(board);
+  process.exit(1);
+}
+if (!stopping) {
+  console.log(named
+    ? `✓ Tunnel running: ${publicUrl}  (a fixed address: restarting keeps it, so nobody re-joins)`
+    : `✓ Tunnel open: ${publicUrl}  (it can take a few seconds before the address answers)`);
+}
