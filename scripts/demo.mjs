@@ -22,7 +22,7 @@ const flag = (k) => argv.includes(`--${k}`);
 const opt = (k) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
 const STATIC = flag('static');
 const SPEED = Math.max(0.1, Math.min(20, Number(opt('speed')) || 1));
-const TOKEN = 'demo-token';
+const TOKEN = 'demo-board-token';
 const REPO = 'https://github.com/demo-team/showcase-voting';
 
 const board = await startBoard({ token: TOKEN, port: Number(opt('port')) || undefined, prefix: 'agent-board-demo-' });
