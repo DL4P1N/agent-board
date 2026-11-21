@@ -3,6 +3,8 @@
 // checked address, even if the name answers differently a moment later (DNS rebinding).
 // No board needed. Run all suites with: npm test
 import http from 'node:http';
+import https from 'node:https';
+import { EventEmitter } from 'node:events';
 import dnsCb from 'node:dns';
 import { finish } from './helpers.mjs';
 import { isPrivateAddress, checkNotifyUrl, resolveNotifyTarget, postTo, sendWebhook } from '../src/webhook.js';
@@ -88,6 +90,29 @@ try {
   try { unpinned = await postTo(`http://rebind.test:${port}/unpinned`, { body: 'x' }, { timeoutMs: 3000 }); } catch (e) { unpinned = e; }
   check('without a pin the request would follow the new DNS answer (so the pin is what protects it)', systemCalls >= 1 && !got.some((g) => g.url === '/unpinned'), String(unpinned?.message || JSON.stringify(unpinned)));
 } finally { dnsCb.lookup = realLookup; }
+
+// ---- sendWebhook passes its pin on: the https request it makes connects through the checked address ----
+// https.request is swapped for a stand-in that records the options and answers 204, so no TLS server is needed.
+{
+  const realRequest = https.request;
+  const seen = [];
+  https.request = (u, opts, cb) => {
+    seen.push({ host: new URL(u).hostname, opts });
+    const req = new EventEmitter();
+    req.end = () => setImmediate(() => cb({ statusCode: 204, resume() {} }));
+    return req;
+  };
+  const viaLookup = (lookup, all) => new Promise((resolve) => lookup('pinned.test', all ? { all: true } : {}, (e, a, f) => resolve(e ? String(e) : all ? a : [{ address: a, family: f }])));
+  try {
+    lk = fakeDns([{ address: '93.184.216.34', family: 4 }], [{ address: '127.0.0.1', family: 4 }]);
+    const r = await sendWebhook('https://pinned.test/h', { body: '{}' }, { lookup: lk });
+    const lookup = seen.at(-1)?.opts?.lookup;
+    const one = typeof lookup === 'function' ? await viaLookup(lookup, false) : null;
+    const all = typeof lookup === 'function' ? await viaLookup(lookup, true) : null;
+    check('sendWebhook connects through a lookup that answers only the checked address', r.status === 204 && seen.length === 1 && seen[0].host === 'pinned.test' && one?.[0]?.address === '93.184.216.34' && one[0].family === 4 && all?.length === 1 && all[0].address === '93.184.216.34' && lk.calls === 1, JSON.stringify({ r, n: seen.length, one, all, calls: lk.calls }));
+    check('…and it doesn\'t reuse a shared agent (a pooled socket could skip the lookup)', seen.at(-1)?.opts?.agent === false);
+  } finally { https.request = realRequest; }
+}
 
 // Redirects are reported, not followed.
 const redir = http.createServer((req, res) => { res.writeHead(307, { Location: 'http://127.0.0.1:1/internal' }); res.end(); });

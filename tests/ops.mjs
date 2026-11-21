@@ -321,7 +321,39 @@ check('the 3D office\'s hashed chunks are cached for a year, gzipped or not', cz
 check('office/embed.js (no hash in its name) is revalidated', /max-age=0/.test((await raw('/office/embed.js', { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0' })).headers['cache-control']));
 const slashless = await raw('/b/main', { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0' });
 check('/b/<board> without its slash still redirects to /b/<board>/', slashless.status >= 300 && slashless.status < 400 && /\/b\/main\/$/.test(slashless.headers.location || ''), `${slashless.status} ${slashless.headers.location}`);
-check('hidden files and paths outside public/ are not served', (await raw('/../package.json', { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0' })).status === 404 && (await raw('/%2e%2e/package.json', { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0' })).status !== 200);
+{
+  // http.get/fetch tidy "/../" and "%2e%2e" away before sending; http.request with a path sends it as written.
+  // gzip + a browser's User-Agent, so the gzip handler (which reads files itself) is the one answering.
+  const rawPath = (base, p) => new Promise((resolve, reject) => {
+    const u = new URL(base);
+    http.request({ hostname: u.hostname, port: u.port, path: p, headers: { 'Accept-Encoding': 'gzip', 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+      const parts = []; res.on('data', (d) => parts.push(d));
+      res.on('end', () => resolve({ status: res.statusCode, body: res.headers['content-encoding'] === 'gzip' ? zlib.gunzipSync(Buffer.concat(parts)).toString() : Buffer.concat(parts).toString() }));
+    }).on('error', reject).end();
+  });
+  const outside = ['/../package.json', '/%2e%2e/package.json', '/%2E%2E/package.json', '/..%2fpackage.json', '/js/..%2f..%2fpackage.json', '/..%5cpackage.json', '/%5c..%5cpackage.json', '/js/%5c..%5c..%5cpackage.json'];
+  const leaked = [];
+  for (const p of outside) { const x = await rawPath(b2.base, p); if (x.status === 200 || x.body.includes('"name"')) leaked.push(`${p} ${x.status}`); }
+  check('paths outside public/ are not served (raw ../, %2e%2e, ..%2f and %5c targets)', !leaked.length, leaked.join(', '));
+  // Hidden files: public/ has none, so the same handler serves a folder that has one, next to a secret outside it.
+  const top = tempDir('static-root-'); const root = path.join(top, 'site');
+  fs.mkdirSync(path.join(root, '.git'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'index.html'), 'hello');
+  fs.writeFileSync(path.join(root, '.hidden.json'), '{"secret":"dotfile"}');
+  fs.writeFileSync(path.join(root, '.git', 'config.txt'), 'secret-in-dot-folder');
+  fs.writeFileSync(path.join(top, 'outside.json'), '{"secret":"outside"}');
+  const { staticFiles } = await import('../src/static.js');
+  const { default: express } = await import('express');
+  const app = express(); app.use(staticFiles(root));
+  const srv = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+  const sb = `http://127.0.0.1:${srv.address().port}`;
+  const ok = await rawPath(sb, '/index.html');
+  const probes = ['/.hidden.json', '/%2ehidden.json', '/.git/config.txt', '/%2egit%2fconfig.txt', '/../outside.json', '/%2e%2e/outside.json', '/..%2foutside.json', '/..%5coutside.json', '/%5c..%5coutside.json'];
+  const got2 = [];
+  for (const p of probes) { const x = await rawPath(sb, p); if (x.status === 200 || x.body.includes('secret')) got2.push(`${p} ${x.status}`); }
+  srv.close();
+  check('the static handler serves its files but no hidden file, hidden folder or file outside its root', ok.status === 200 && ok.body === 'hello' && !got2.length, `${ok.status} ${got2.join(', ')}`);
+}
 // A JSON-RPC batch would get several wait_for_events past the open-waits limit in one request.
 const wait = (id) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'wait_for_events', arguments: { timeout_s: 1 } } });
 const batch = await fetch(`${b2.base}/mcp?agent=batcher&token=${agentTokenFor(tok3)}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify([wait(1), wait(2), wait(3)]) });
