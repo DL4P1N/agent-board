@@ -7,6 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { onPath, runSync } from './lib/run.mjs';
+import { parseJsonc } from './lib/jsonc.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // What join set up on this laptop: ~/.agent-board.json. Laptops that joined before the rename to Agent Board
@@ -226,9 +227,11 @@ function toolConfig({ tool, dir }) {
     return r.status === 0 ? r.stdout : '';
   }
   if (tool === 'codex') return read(path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'config.toml')).match(/\[mcp_servers\.board\][^[]*/)?.[0] || '';
-  if (tool === 'copilot-cli') return JSON.stringify(JSON.parse(read(path.join(process.env.COPILOT_HOME || path.join(os.homedir(), '.copilot'), 'mcp-config.json')) || '{}').mcpServers?.board || '') || '';
-  if (tool === 'copilot-vscode') return dir ? JSON.stringify(JSON.parse(read(path.join(dir, '.vscode', 'mcp.json')) || '{}').servers?.board || '') : '';
-  const board = (p) => { try { return JSON.stringify(JSON.parse(read(p) || '{}').mcpServers?.board || '') || ''; } catch { return ''; } };
+  // The board entry of a JSON config (comments allowed, as join reads them); '' when it has none or doesn't parse.
+  const entry = (p, key) => { try { return JSON.stringify(parseJsonc(read(p) || '{}')?.[key]?.board || '') || ''; } catch { return ''; } };
+  const board = (p) => entry(p, 'mcpServers');
+  if (tool === 'copilot-cli') return board(path.join(process.env.COPILOT_HOME || path.join(os.homedir(), '.copilot'), 'mcp-config.json'));
+  if (tool === 'copilot-vscode') return dir ? entry(path.join(dir, '.vscode', 'mcp.json'), 'servers') : '';
   if (tool === 'gemini') return board(path.join(geminiHome(), 'settings.json'));
   if (tool === 'cursor') return board(path.join(os.homedir(), '.cursor', 'mcp.json'));
   return null;

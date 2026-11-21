@@ -32,7 +32,8 @@ import { parseArgs as parseArgsUtil } from 'node:util';
 import readline from 'node:readline/promises';
 import { runDoctor, CONFIG_PATH } from './doctor.mjs';
 import { onPath, runSync } from './lib/run.mjs';
-import { agentTokenFor } from '../src/tokens.js';
+import { parseJsonc, isPlainJson } from './lib/jsonc.mjs';
+import { agentTokenFor, writeTokenFile } from '../src/tokens.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEMPLATES = path.join(ROOT, 'templates');
@@ -411,7 +412,7 @@ function setupClaude({ mcpUrl, dir }) {
   }
   const settingsPath = path.join(dir, '.claude', 'settings.local.json');
   const settingsCreated = !fs.existsSync(settingsPath);
-  const settings = readJson(settingsPath, {});
+  const settings = readConfig(settingsPath);
   const hookPath = path.join(ROOT, 'hooks', 'board-stop-hook.mjs').replace(/\\/g, '/');
   settings.hooks ??= {};
   settings.hooks.Stop = (settings.hooks.Stop || []).filter((g) => !JSON.stringify(g).includes('board-stop-hook'));
@@ -515,13 +516,13 @@ function setupOther({ mcpUrl, agent }) {
 function setupCopilotVSCode({ mcpUrl, dir }) {
   if (!dir) throw new Error('Copilot in VS Code is configured per repo: re-run with --repo <path-to-project-repo>.');
   const mcpPath = path.join(dir, '.vscode', 'mcp.json');
-  const created = !fs.existsSync(mcpPath);
-  const cfg = readJson(mcpPath, {});
+  refuseTracked(mcpPath, dir);
+  const cfg = readConfig(mcpPath);
   cfg.servers ??= {};
   cfg.servers.board = { type: 'http', url: mcpUrl };
   writeJson(mcpPath, cfg);
   ok(`connected VS Code to the board (${mcpPath})`);
-  keepOutOfGit(mcpPath, created, dir);
+  keepOutOfGit(mcpPath, true, dir); // it holds the token now, whoever made it
 
   const promptPath = path.join(dir, '.github', 'prompts', 'board.prompt.md');
   const promptCreated = !fs.existsSync(promptPath);
@@ -532,7 +533,7 @@ function setupCopilotVSCode({ mcpUrl, dir }) {
 
 function setupCopilotCli({ mcpUrl }) {
   const cfgPath = path.join(process.env.COPILOT_HOME || path.join(os.homedir(), '.copilot'), 'mcp-config.json');
-  const cfg = readJson(cfgPath, {});
+  const cfg = readConfig(cfgPath);
   cfg.mcpServers ??= {};
   cfg.mcpServers.board = { type: 'http', url: mcpUrl, tools: ['*'] };
   writeJson(cfgPath, cfg);
@@ -555,11 +556,8 @@ If the \`board\` MCP tools (get_playbook, board_status, …) are not available t
 function setupGemini({ mcpUrl }) {
   const home = process.env.GEMINI_CLI_HOME || path.join(os.homedir(), '.gemini');
   const settingsPath = path.join(home, 'settings.json');
-  if (fs.existsSync(settingsPath) && readJson(settingsPath, null) === null) {
-    throw new Error(`${settingsPath} isn't valid JSON, so it was left alone. Fix it (or move it away) and re-run join.`);
-  }
+  const cfg = readConfig(settingsPath);
   backupOnce(settingsPath);
-  const cfg = readJson(settingsPath, {});
   cfg.mcpServers ??= {};
   cfg.mcpServers.board = { httpUrl: mcpUrl, trust: true };
   writeJson(settingsPath, cfg);
@@ -574,11 +572,8 @@ function setupGemini({ mcpUrl }) {
 // (kept out of git like the Copilot files).
 function setupCursor({ mcpUrl, dir }) {
   const mcpPath = path.join(os.homedir(), '.cursor', 'mcp.json');
-  if (fs.existsSync(mcpPath) && readJson(mcpPath, null) === null) {
-    throw new Error(`${mcpPath} isn't valid JSON, so it was left alone. Fix it (or move it away) and re-run join.`);
-  }
+  const cfg = readConfig(mcpPath);
   backupOnce(mcpPath);
-  const cfg = readJson(mcpPath, {});
   cfg.mcpServers ??= {};
   cfg.mcpServers.board = { url: mcpUrl };
   writeJson(mcpPath, cfg);
@@ -622,17 +617,18 @@ function installOurFile(src, dest, what) {
   ok(`installed ${what} (${dest})`);
 }
 
-// Files that contain the board token: keep them out of git without touching the repo's .gitignore.
-function keepOutOfGit(file, createdByUs, dir) {
+// Files join writes into the repo: keep them out of git without touching the repo's .gitignore. `ours`: join
+// created the file, or it now holds the agent token; any other file is the user's to decide on.
+function keepOutOfGit(file, ours, dir) {
   const rel = path.relative(dir, file).replace(/\\/g, '/');
-  const tracked = run('git', ['-C', dir, 'ls-files', '--error-unmatch', rel], true).status === 0;
-  if (tracked) {
-    console.log(`  • ${rel} is tracked by git and now contains the board token. Don't commit that change.`);
+  if (isTracked(rel, dir)) {
+    console.log(`  • ${rel} is tracked by git, so join's change to it shows up in git status. Don't commit that change.`);
     return;
   }
+  if (!ours || run('git', ['-C', dir, 'check-ignore', '-q', '--', rel], true).status === 0) return; // or already ignored
   // Worktrees share the main repo's info/exclude (it lives in the common git dir).
   const gitDir = run('git', ['-C', dir, 'rev-parse', '--git-common-dir'], true);
-  if (gitDir.status !== 0 || !createdByUs) return;
+  if (gitDir.status !== 0) return;
   const exclude = path.resolve(dir, gitDir.stdout.trim(), 'info', 'exclude');
   const cur = fs.existsSync(exclude) ? fs.readFileSync(exclude, 'utf8') : '';
   if (!cur.split(/\r?\n/).includes(rel)) {
@@ -649,12 +645,41 @@ function run(bin, argv, quiet = false) {
 function shown(argv) {
   return argv.map((a) => (/[\s"'$&|<>()]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)).join(' ');
 }
-function readJson(p, def) {
-  try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return def; }
+function isTracked(rel, dir) {
+  return run('git', ['-C', dir, 'ls-files', '--error-unmatch', '--', rel], true).status === 0;
 }
+// A file that will hold the agent token must not be one git tracks: a commit would publish the token.
+function refuseTracked(file, dir) {
+  const rel = path.relative(dir, file).replace(/\\/g, '/');
+  if (!isTracked(rel, dir)) return;
+  throw new Error(`${rel} is tracked by git, so the board's address (it holds the agent token) was not written into it: a commit would publish the token. Untrack it (git rm --cached ${rel}) and re-run join.`);
+}
+// A JSON config join is about to change: {} when there is none. A BOM, comments and trailing commas (VS Code
+// and Gemini allow them) are read; comments can't be kept, so that original is copied aside first and the user
+// told. Anything else that doesn't parse is refused, never overwritten (that would lose the user's other entries).
+function readConfig(p) {
+  let text;
+  try { text = fs.readFileSync(p, 'utf8'); } catch (e) {
+    if (e.code === 'ENOENT') return {};
+    throw new Error(`${p} can't be read (${e.code}), so it was left alone.`);
+  }
+  let cfg;
+  try { cfg = parseJsonc(text); } catch {}
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) {
+    throw new Error(`${p} isn't valid JSON, so it was left alone. Fix it (or move it away) and re-run join.`);
+  }
+  if (!isPlainJson(text.replace(/^﻿/, ''))) {
+    const bak = [`${p}.bak-agent-board`, `${p}.bak-agent-board-${Date.now()}`].find((b) => !fs.existsSync(b));
+    fs.copyFileSync(p, bak);
+    console.log(`  • ${p} has comments, which can't be kept when join updates it. The original was saved as ${bak}`);
+  }
+  return cfg;
+}
+// Through a temp file and a rename (an interrupted write never leaves half a config), and readable by this
+// user only (on POSIX): these files hold the agent token.
 function writeJson(p, obj) {
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.writeFileSync(p, JSON.stringify(obj, null, 2) + '\n');
+  writeTokenFile(p, JSON.stringify(obj, null, 2) + '\n');
 }
 function ok(msg) { console.log(`  ✓ ${msg}`); }
 function bad(msg) { console.error(`  ✗ ${msg}`); }
