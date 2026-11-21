@@ -1,6 +1,6 @@
 // The MCP endpoint of a board (stateless streamable HTTP), at <board>/mcp.
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { callerLaptop } from './board.js';
+import { callerLaptop, RESERVED_NAMES } from './board.js';
 import { buildMcpServer } from './mcp.js';
 import { agentFrom, laptopParam } from './http-util.js';
 import { clientIp } from './request-limits.js';
@@ -24,6 +24,8 @@ export function mountMcp(router, { board, auth, tokenCurrent, agentLimit, holdSl
     if (req.role === 'viewer') return res.status(403).json({ jsonrpc: '2.0', error: { code: -32001, message: 'The viewer token is read-only.' }, id: null });
     // One request per call: a JSON-RPC batch would get past the open-waits limit below (MCP clients don't send them).
     if (Array.isArray(req.body)) return res.status(400).json({ jsonrpc: '2.0', error: { code: -32600, message: 'Batched requests are not supported: send one JSON-RPC request per call.' }, id: null });
+    // "board" is the board's own announcements and "anonymous" a call without a name: no agent is either.
+    if (RESERVED_NAMES.has(agentFrom(req).split('/')[0])) return res.status(400).json({ jsonrpc: '2.0', error: { code: -32602, message: 'This connection needs its own agent name (?agent=<name> on the MCP URL; "board" and "anonymous" are taken). Re-run the join command from the web board.' }, id: null });
     if (!agentLimit(req, res, agentFrom(req), true)) return;
     if (req.body?.method === 'tools/call' && req.body?.params?.name === 'wait_for_events') {
       const who = agentFrom(req).split('/')[0];
@@ -32,15 +34,16 @@ export function mountMcp(router, { board, auth, tokenCurrent, agentLimit, holdSl
     // An agent that just came online: nudge web boards to refresh (SSE {kind:'presence'}).
     // ?probe=1: a connection check (join/doctor), not a running agent, so it doesn't count as presence.
     const probe = req.query.probe === '1';
-    const cameOnline = !probe && board.touch(agentFrom(req), 'agent');
     // Which laptop it runs on (?laptop=, from join; older setups: the network address), to spot one name on two laptops.
     const laptopId = laptopParam(req.query.laptop) || null;
-    const laptopChanged = !probe && board.noteLaptop(agentFrom(req), laptopId || `ip:${clientIp(req).slice(0, 64)}`);
     // One name, one laptop: the first laptop whose agent is online under a name owns it; the second one is
     // told to stop and may not claim or change tasks (needs join's ?laptop=; network addresses vary), nor
-    // change what the board shows about the owner's agent (its tool, plan, person).
+    // change what the board shows about the owner's agent (its tool, plan, person), nor keep it online:
+    // checked before presence, so an absent owner's work can still be taken over.
     const clash = !probe && !!laptopId && !!board.claimName(agentFrom(req), laptopId, req.query.person || null);
     const mine = !probe && !clash;
+    const cameOnline = mine && board.touch(agentFrom(req), 'agent');
+    const laptopChanged = !probe && board.noteLaptop(agentFrom(req), laptopId || `ip:${clientIp(req).slice(0, 64)}`);
     const clientChanged = mine && req.body?.method === 'initialize' && board.setClient(agentFrom(req), clientLabel(req.body.params?.clientInfo));
     // The agent's subscription (join puts ?plan=…&slots=N in the URL): how many tasks it may hold at once.
     const planChanged = mine && (req.query.plan || req.query.slots) && board.setPlan(agentFrom(req), req.query.plan, req.query.slots);

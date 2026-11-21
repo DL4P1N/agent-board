@@ -7,6 +7,8 @@ import { ROOT, killTree, exited, freePort, startBoard as startServer } from '../
 
 export { ROOT, killTree, exited, freePort };
 export const TOKEN = 'testtok';
+// Test boards use short tokens like that one (and the boards the suites start themselves inherit this).
+process.env.BOARD_ALLOW_SHORT_TOKEN ??= '1';
 export { Client } from '@modelcontextprotocol/sdk/client/index.js';
 export { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';

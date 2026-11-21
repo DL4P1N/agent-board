@@ -202,13 +202,14 @@ export function buildMcpServer(board, baseAgent, { tokenCurrent = () => true } =
     'get_task',
     {
       title: 'Get task',
-      description: 'Get one task plus its full discussion/event history.',
+      description: 'Get one task plus its discussion/event history (the newest 200 events, oldest first).',
       inputSchema: { id: z.number().int() },
     },
     wrap(({ id }) => {
       const task = board.getTask(id);
       if (!task) throw new Error(`task #${id} not found`);
-      return { task, history: board.events({ task_id: id, limit: 200 }) };
+      // The newest 200 (a busy task has more): the latest notes matter most.
+      return { task, history: board.events({ task_id: id, before: board.latestEventId() + 1, limit: 200 }) };
     })
   );
 

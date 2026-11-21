@@ -54,7 +54,7 @@ export function createBoardRuntime(slug, dir, { registry, envTokenSlug }) {
   mountApiRoutes(api, { board, slug, registry, tokens, isDefault, prefix, setupInfo, onlineHumans: streams.onlineHumans, closeStreams: streams.closeStreams, muteStreams: streams.muteStreams, later, presence, agentLimit, holdSlot });
 
   const announcements = startAnnouncements({ board, announced, every, later, forget });
-  setupNotifications({ board, slug, api, prefix, humanToken: tokens.humanToken, rawSetting, putSetting });
+  setupNotifications({ board, slug, api, prefix, humanToken: tokens.humanToken, rawSetting, putSetting, tokenCurrent: tokens.current });
   startBackups({ board, dir, slug, every, later });
   const github = startGithubPolling({ board, announced, rawSetting, putSetting, isClosed, presence, every, later });
   // Proposals waiting on a planner who went offline become open tasks.

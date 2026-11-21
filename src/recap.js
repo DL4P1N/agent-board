@@ -5,7 +5,7 @@
 // when the current goal was set (an edit of the goal doesn't restart it; clearing the goal and setting a new one
 // does), or the board's first event when no goal was ever set. States still going at the end (a task still blocked,
 // a question not answered yet) count until that last event.
-import { agentRootOf, normName } from './board.js';
+import { agentRootOf, normName, movedFrom } from './board.js';
 
 const WORK = new Set(['claimed', 'in_progress']);
 const WAIT = new Set(['blocked', 'review']);
@@ -92,8 +92,8 @@ export function recap(board, { since } = {}) {
       const to = String(e.text).match(/assigned to @([\w.-]+)/);
       if (to) owner = normName(to[1]);
       if (/ — unassigned( —|$)/.test(e.text) || status === 'open') owner = null;
-      if (/review → in_progress/.test(e.text)) s.bounces++;
-      if (/review → done/.test(e.text) && inSpan(e.ts)) merges.push(e.task_id);
+      if (movedFrom(e, 'review', 'in_progress')) s.bounces++;
+      if (movedFrom(e, 'review', 'done') && inSpan(e.ts)) merges.push(e.task_id);
     }
     // The first claim: the first move to claimed / in progress, by a claim or a human assigning or moving it.
     if (!s.firstClaim && ['claimed', 'in_progress'].includes(status)) s.firstClaim = e.ts;

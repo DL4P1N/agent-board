@@ -33,6 +33,10 @@ const BROADCAST = ['all', 'everyone', 'humans', 'here'];
 const PASSIVE_TOOLS = new Set(['post', 'wait_for_events', 'read_events', 'board_status', 'get_playbook', 'list_tasks', 'get_task', 'list_locks', 'set_activity']);
 // Names are case-insensitive: "Dana" and "dana" are the same person.
 export const normName = (n) => String(n ?? '').trim().toLowerCase();
+// An agent (or person) name as the board accepts it: 1-64 letters, digits, _ . or -.
+export const NAME_RE = /^[\w.-]{1,64}$/;
+// Names no agent may use: the board's own announcements are "board", a call without a name is "anonymous".
+export const RESERVED_NAMES = new Set(['board', 'anonymous']);
 const PR_RE = /https?:\/\/\S+?\/(?:pull|pulls|merge_requests)\/\d+/i;
 // The laptop id (join's ?laptop=) of the MCP request being handled, set by the server around each request.
 // Board calls outside a request (REST, tests) have none, so the name checks below don't apply to them.
@@ -112,6 +116,8 @@ export class Board {
   // transaction with its PRAGMA user_version bump, so a step is applied fully or not at all.
   migrate() {
     const version = () => this.db.prepare('PRAGMA user_version').get().user_version;
+    // Written by a newer version of the board: its tables may have changed in ways this code doesn't know.
+    if (version() > MIGRATIONS.length) throw new Error(`This board's database was made by a newer version of Agent Board (schema ${version()}; this version knows up to ${MIGRATIONS.length}). Update this folder (git pull, then npm install) and start the board again.`);
     for (let v = version(); v < MIGRATIONS.length; v++) {
       this.tx(() => {
         if (version() !== v) return;
@@ -709,7 +715,8 @@ export class Board {
       channel: 'tasks',
       task_id: id,
       text: `#${id} ${parts.join(' — ') || 'updated'}`,
-      data: { status: next.status },
+      // from: the status before, so a move (e.g. a send-back from review) is read from here, never from the text.
+      data: { status: next.status, from: task.status },
     });
     if (next.status === 'done' || next.status === 'open') this.releaseLocksForTask(id);
     return this.getTask(id);
@@ -810,12 +817,13 @@ export class Board {
     const norm = paths.map(normPath);
     const released = [];
     const refused = [];
+    // "Package.json" and "package.json" are the same file, as for conflicts (lockFiles).
     for (const p of norm) {
-      const l = this.db.prepare('SELECT * FROM locks WHERE path = ?').get(p);
-      if (!l) continue;
-      if (!force && !sameTeam(author, l.owner)) { refused.push({ path: p, owner: l.owner }); continue; }
-      this.db.prepare('DELETE FROM locks WHERE path = ?').run(p);
-      released.push(p);
+      for (const l of this.db.prepare('SELECT * FROM locks WHERE path = ? COLLATE NOCASE').all(p)) {
+        if (!force && !sameTeam(author, l.owner)) { refused.push({ path: l.path, owner: l.owner }); continue; }
+        this.db.prepare('DELETE FROM locks WHERE path = ?').run(l.path);
+        released.push(l.path);
+      }
     }
     if (released.length) {
       this.emit({ author, kind: 'unlock', channel: 'locks', text: `${force ? 'force-' : ''}unlocked ${released.join(', ')}` });
@@ -832,12 +840,15 @@ export class Board {
   ask(author, { question, task_id = null }) {
     question = String(question ?? '').trim();
     if (!question) throw new Error('question is required');
-    const r = this.db
-      .prepare('INSERT INTO questions (asker, question, task_id, created_at) VALUES (?,?,?,?)')
-      .run(author, question, task_id, Date.now());
-    const id = Number(r.lastInsertRowid);
-    this.emit({ author, kind: 'question', channel: 'humans', task_id, text: question, data: { question_id: id } });
-    return { question_id: id };
+    // The question and its event together: a waiting agent never misses one the board shows.
+    return this.tx(() => {
+      const r = this.db
+        .prepare('INSERT INTO questions (asker, question, task_id, created_at) VALUES (?,?,?,?)')
+        .run(author, question, task_id, Date.now());
+      const id = Number(r.lastInsertRowid);
+      this.emit({ author, kind: 'question', channel: 'humans', task_id, text: question, data: { question_id: id } });
+      return { question_id: id };
+    });
   }
 
   answer(author, id, answer) {
@@ -845,14 +856,19 @@ export class Board {
     if (!answer) throw new Error('Type an answer first.');
     const q = this.db.prepare('SELECT * FROM questions WHERE id = ?').get(id);
     if (!q) throw new Error(`question ${id} not found`);
-    this.db.prepare('UPDATE questions SET answer=?, answered_by=?, answered_at=? WHERE id=?').run(answer, author, Date.now(), id);
-    this.emit({
-      author,
-      kind: 'answer',
-      channel: 'humans',
-      task_id: q.task_id,
-      text: `@${q.asker} re "${q.question.slice(0, 80)}": ${answer}`,
-      data: { question_id: id, asker: q.asker },
+    // The agent already got the first answer (and may have acted on it): a second one doesn't replace it.
+    if (q.answer != null) throw Object.assign(new Error(`That question was already answered by ${q.answered_by || 'someone'}: "${String(q.answer).slice(0, 200)}". To add something, post to @${agentRootOf(q.asker)} in the chat.`), { status: 409 });
+    // The answer and its event together: the waiting agent always gets the answer the board shows.
+    this.tx(() => {
+      this.db.prepare('UPDATE questions SET answer=?, answered_by=?, answered_at=? WHERE id=?').run(answer, author, Date.now(), id);
+      this.emit({
+        author,
+        kind: 'answer',
+        channel: 'humans',
+        task_id: q.task_id,
+        text: `@${q.asker} re "${q.question.slice(0, 80)}": ${answer}`,
+        data: { question_id: id, asker: q.asker },
+      });
     });
     return this.db.prepare('SELECT * FROM questions WHERE id = ?').get(id);
   }
@@ -880,6 +896,8 @@ export class Board {
       let val = String(patch[key] ?? '').trim();
       if (key === 'integrator' || key === 'planner') val = normName(val).split('/')[0];
       if (key === 'planner' && val === ANYONE) throw new Error('planner must be one agent (or empty)');
+      // Shown on every human's page: only what an agent name can be (or "*", whoever is free, for the integrator).
+      if ((key === 'integrator' || key === 'planner') && val && val !== ANYONE && !NAME_RE.test(val)) throw new Error(`${key} must be an agent name (1-64 letters, digits, _ . or -)${key === 'integrator' ? ', "*" for whoever is free' : ''} or empty`);
       if (key === 'planner_extra') val = String(Math.max(0, Math.min(5, Math.round(Number(val) || 0))));
       if (HUMAN_ONLY.includes(key) && !human) throw new Error(`Only humans can change ${key} (on the web board).`);
       if (key === 'deadline' && val) {
@@ -1202,7 +1220,8 @@ export class Board {
   // The agent's subscription, as declared by join (?plan=…&slots=N on its MCP URL).
   setPlan(name, plan, slots) {
     const root = agentRootOf(normName(name));
-    const n = Math.max(1, Math.min(5, Math.round(Number(slots) || 0))) || null;
+    // Only a given slots changes them (?plan= alone keeps what the agent has).
+    const n = slots === undefined || slots === null || slots === '' ? null : Math.max(1, Math.min(5, Math.round(Number(slots) || 0)));
     const p = String(plan || '').slice(0, 40) || null;
     if (!root || (!n && !p)) return false;
     const r = this.db.prepare("UPDATE presence_v2 SET plan = COALESCE(?, plan), slots = COALESCE(?, slots) WHERE name = ? AND kind = 'agent' AND (IFNULL(plan,'') != IFNULL(?, plan) OR IFNULL(slots,0) != IFNULL(?, slots))").run(p, n, root, p, n);
@@ -1631,14 +1650,17 @@ export class Board {
 
   // Did someone move this task from review back to in_progress (and the owner hasn't moved it since)?
   wasSentBack(id) {
-    const last = this.db.prepare("SELECT author, text FROM events WHERE task_id = ? AND kind = 'task_updated' AND text LIKE ? ORDER BY id DESC LIMIT 1").get(id, '% → %');
-    return !!last && /review → in_progress/.test(last.text);
+    const rows = this.db.prepare("SELECT kind, text, data FROM events WHERE task_id = ? AND kind = 'task_updated' ORDER BY id DESC").iterate(id);
+    for (const e of rows) if (statusMove(e)) return movedFrom(e, 'review', 'in_progress');
+    return false;
   }
 
   // How often each task came back from review (review → in_progress): {id: n}, only tasks sent back at least once.
   rejectCounts() {
-    const rows = this.db.prepare("SELECT task_id, COUNT(*) AS n FROM events WHERE task_id IS NOT NULL AND kind = 'task_updated' AND text LIKE ? GROUP BY task_id").all('%review → in_progress%');
-    return Object.fromEntries(rows.map((r) => [r.task_id, r.n]));
+    const rows = this.db.prepare("SELECT task_id, kind, text, data FROM events WHERE task_id IS NOT NULL AND kind = 'task_updated' AND text LIKE ?").all('%review → in_progress%');
+    const n = {};
+    for (const e of rows) if (movedFrom(e, 'review', 'in_progress')) n[e.task_id] = (n[e.task_id] || 0) + 1;
+    return n;
   }
 
   // Why claiming is not allowed right now, or '' if it is.
@@ -1671,7 +1693,7 @@ export class Board {
         let next = null;
         if (e.kind === 'task_claimed') { next = 'claimed'; claimers.add(agentRootOf(e.author)); }
         else if (e.kind === 'task_updated' && e.data?.status) next = e.data.status;
-        if (/review → in_progress/.test(e.text)) bounces++;
+        if (movedFrom(e, 'review', 'in_progress')) bounces++;
         if (e.kind === 'task_updated' && next === 'open' && status && !['open', 'proposed'].includes(status)) released++;
         if (['claimed', 'in_progress'].includes(status) && lastAct && e.ts - lastAct > STALE_MS) stale++;
         if (['task_claimed', 'task_updated'].includes(e.kind)) lastAct = e.ts;
@@ -1728,8 +1750,8 @@ export class Board {
     // Reviews: taking a review, sending work back, or merging someone else's task (review → done).
     for (const e of events) {
       if (!e.task_id || e.kind !== 'task_updated') continue;
-      const merge = /review → done/.test(e.text);
-      if (!merge && !/review → in_progress/.test(e.text) && !/^#\d+ reviewing to merge/.test(e.text)) continue;
+      const merge = movedFrom(e, 'review', 'done');
+      if (!merge && !movedFrom(e, 'review', 'in_progress') && !/^#\d+ reviewing to merge/.test(e.text)) continue;
       const owner = tasks.find((t) => t.id === e.task_id)?.assignee;
       if (owner && this.personFor(owner, ctx) === this.personFor(e.author, ctx)) continue;
       P(e.author).reviewed.add(e.task_id);
@@ -1784,7 +1806,7 @@ export class Board {
       const claim = list.find((e) => e.kind === 'task_claimed' || ['claimed', 'in_progress'].includes(status(e)));
       const doneEv = [...list].reverse().find((e) => status(e) === 'done');
       if (claim && doneEv && doneEv.ts > claim.ts) mins[t.size in mins ? t.size : 'M'].push((doneEv.ts - claim.ts) / 60e3);
-      if (list.some((e) => /review → in_progress/.test(e.text))) bounced++;
+      if (list.some((e) => movedFrom(e, 'review', 'in_progress'))) bounced++;
       const toReview = [...list].reverse().find((e) => status(e) === 'review' && (!doneEv || e.ts <= doneEv.ts));
       if (toReview && doneEv) waits.push((doneEv.ts - toReview.ts) / 60e3);
     }
@@ -1901,6 +1923,26 @@ export class Board {
 export function sameTeam(a, b) {
   if (!a || !b) return false;
   return normName(agentRootOf(a)) === normName(agentRootOf(b));
+}
+
+// A task_updated event that moved its task from one status to another (e.g. review → in_progress, a send-back).
+// Events record where the task came from (data.from); older ones only say it in their text, where the move
+// comes first ("#4 review → in_progress — …"). Words in a note never count.
+function eventData(e) {
+  if (typeof e?.data !== 'string') return e?.data || null;
+  try { return JSON.parse(e.data); } catch { return null; }
+}
+export function movedFrom(e, from, to) {
+  if (e?.kind !== 'task_updated') return false;
+  const d = eventData(e);
+  if (d && 'from' in d) return d.from === from && d.status === to;
+  return String(e.text || '').replace(/^#\d+ /, '').split(' — ')[0] === `${from} → ${to}` && (!d?.status || d.status === to);
+}
+// Did this task_updated event change its task's status?
+function statusMove(e) {
+  const d = eventData(e);
+  if (d && 'from' in d) return d.from !== d.status;
+  return /^#\d+ \w+ → \w+( —|$)/.test(String(e.text || ''));
 }
 
 // "alice/auth-worker" -> "alice"

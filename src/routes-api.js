@@ -2,7 +2,7 @@
 // board, the Stop hook and join. The notification routes are in notify.js, the live stream in routes-stream.js.
 import zlib from 'node:zlib';
 import QRCode from 'qrcode';
-import { timeInfo, normName, callerLaptop } from './board.js';
+import { timeInfo, normName, callerLaptop, NAME_RE, RESERVED_NAMES } from './board.js';
 import { agentFrom, h, laptopParam, internalError, wantsGzip, GZIP_VARY } from './http-util.js';
 import { clientIp } from './request-limits.js';
 import { recap } from './recap.js';
@@ -17,6 +17,13 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
   api.use((req, res, next) => (req.role !== 'agent' || agentLimit(req, res, agentFrom(req), false) ? next() : undefined));
   api.use(viewerLimits);
   api.use(humanOnly);
+  // An agent may not speak as the board ("board") or as nobody in particular ("anonymous" is a call without a name).
+  api.use((req, res, next) => {
+    if (req.role !== 'agent') return next();
+    const named = req.get('x-agent') || req.body?.author || req.query.agent;
+    if (named && RESERVED_NAMES.has(agentFrom(req).split('/')[0])) return res.status(400).json({ error: `"${agentFrom(req).split('/')[0]}" is not an agent name. Use your own (BOARD_AGENT, or re-run join).` });
+    next();
+  });
   // The web board sends X-Agent with the human's name. Agents (the Stop hook) send X-Agent too, with the
   // agent token: those must not show up as a human.
   api.use((req, _res, next) => {
@@ -99,7 +106,6 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
   // Is an agent name taken by another laptop? join asks before any agent connects (GET), then reserves the
   // names it sets up (POST {laptop, person?}). laptop: join's laptop id. Same answer shape for both.
   // Names are 1-64 letters, digits, _ . or -; anything else is refused before it reaches the board.
-  const NAME_RE = /^[\w.-]{1,64}$/;
   const badName = (res, what) => { res.status(400); throw new Error(`${what} must be 1-64 letters, digits, _ . or -.`); };
   api.get('/names/:name', h((req, res) => {
     if (!NAME_RE.test(req.params.name)) badName(res, 'The name');
@@ -146,8 +152,21 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     const who = normName(req.get('x-agent') || req.query.agent || req.query.exclude || '').split('/')[0];
     if (holdSlot(req, res, who ? `wait:${who}` : `ip:${clientIp(req)}`, who || 'this address', false)) next();
   };
+  // Query values are text: a repeated one (?exclude=a&exclude=b) is a list, refused like a non-number cursor.
+  const queryText = (req, res, k) => {
+    const v = req.query[k];
+    if (v !== undefined && typeof v !== 'string') { res.status(400); throw new Error(`${k} must be given once.`); }
+    return v;
+  };
+  const queryCount = (req, res, k) => {
+    const v = queryText(req, res, k);
+    if (v !== undefined && v !== '' && !/^\d+$/.test(v)) { res.status(400); throw new Error(`${k} must be a whole number (an event id or seconds).`); }
+    return Number(v || 0);
+  };
   api.get('/events', eventsSlot, h(async (req, res) => {
-    const since = Number(req.query.since || 0);
+    for (const k of ['exclude', 'agent', 'laptop']) queryText(req, res, k);
+    const since = queryCount(req, res, 'since');
+    queryCount(req, res, 'before'); queryCount(req, res, 'wait');
     const before = Math.max(0, Number(req.query.before) || 0) || undefined;
     if (before) return { events: board.events({ before, limit: 200 }) };
     const exclude_author = req.query.exclude || undefined;
@@ -209,11 +228,21 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     res.json(board.exportAll({ direct: req.role === 'human' }));
   });
 
+  // A JSON body's fields are text, numbers or true/false (a list or an object is a malformed request, 400), except `lists`.
+  function scalarFields(req, res, lists = []) {
+    const b = req.body;
+    if (!b || typeof b !== 'object' || Array.isArray(b)) { res.status(400); throw new Error('The request body must be a JSON object.'); }
+    for (const [k, v] of Object.entries(b)) {
+      if (v !== null && typeof v === 'object' && !(lists.includes(k) && Array.isArray(v))) { res.status(400); throw new Error(`${k} must be text or a number, not ${Array.isArray(v) ? 'a list' : 'an object'}.`); }
+    }
+    return b;
+  }
+
   // {text, channel} for the shared chat, or {text, to} for a direct message (to: an agent's name, or "planner").
   api.post('/messages', h((req) => board.post(agentFrom(req), req.body || {}, { human: true })));
-  api.post('/tasks', h((req) => board.createTask(agentFrom(req), req.body || {}, { human: true })));
+  api.post('/tasks', h((req, res) => board.createTask(agentFrom(req), scalarFields(req, res, ['depends_on']), { human: true })));
   api.post('/tasks/:id/decide', h((req) => board.decideProposal(agentFrom(req), Number(req.params.id), req.body || {}, { human: true })));
-  api.patch('/tasks/:id', h((req) => board.updateTask(agentFrom(req), Number(req.params.id), req.body, { human: true })));
+  api.patch('/tasks/:id', h((req, res) => board.updateTask(agentFrom(req), Number(req.params.id), scalarFields(req, res), { human: true })));
   api.post('/tasks/:id/cancel', h((req) => board.cancelTask(agentFrom(req), Number(req.params.id), (req.body || {}).reason, { human: true })));
   api.delete('/tasks/:id', h((req) => board.deleteTask(agentFrom(req), Number(req.params.id))));
   api.post('/questions/:id/answer', h((req) => board.answer(agentFrom(req), Number(req.params.id), req.body.answer)));

@@ -14,6 +14,15 @@ import { createLiveBoards } from './live-boards.js';
 import { createApp } from './app.js';
 import { printBanner, offerHostJoin, handleListenErrors } from './startup.js';
 
+// The agent and viewer tokens are derived from the board token (src/tokens.js), so anyone with the viewer link
+// could try short board tokens offline until one matches. A token the board makes is 16 random characters;
+// BOARD_TOKEN must be at least as long. BOARD_ALLOW_SHORT_TOKEN=1: a throwaway board (the tests, the demo).
+const MIN_TOKEN = 16;
+if (process.env.BOARD_TOKEN && process.env.BOARD_TOKEN.length < MIN_TOKEN && process.env.BOARD_ALLOW_SHORT_TOKEN !== '1') {
+  console.error(`\n✗ BOARD_TOKEN is too short (${process.env.BOARD_TOKEN.length} characters; it needs at least ${MIN_TOKEN}): the agent and viewer links are derived from it, so anyone with the viewer link could guess a short one.`);
+  console.error('  Use a long random one, or leave BOARD_TOKEN unset and the board makes one. (For a throwaway test board only: BOARD_ALLOW_SHORT_TOKEN=1.)');
+  process.exit(1);
+}
 fs.mkdirSync(DATA_DIR, { recursive: true });
 // One server per data folder: a second one would open the same databases and write over the first one's data.
 // (`npm start`'s reload after a change stops the old process before it starts the new one.)

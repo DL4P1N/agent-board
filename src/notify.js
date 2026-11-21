@@ -5,6 +5,7 @@ import { DIRECT } from './board.js';
 import { checkNotifyUrl, resolveNotifyTarget, sendWebhook } from './webhook.js';
 import { bestBase } from './network.js';
 import { h } from './http-util.js';
+import { TOKEN_ROTATED } from './auth.js';
 
 export const NOTIFY_EVENTS = ['questions', 'main', 'blocked', 'conflict', 'freeze', 'limit'];
 function notifyKind(url) {
@@ -28,8 +29,9 @@ function maskUrl(url) {
 const slackEscape = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // One board's notifications: the event listener and the /notify routes on its API router.
-// `humanToken` is the middleware that lets only humans through (the URL is a secret).
-export function setupNotifications({ board, slug, api, prefix, humanToken, rawSetting, putSetting }) {
+// `humanToken` is the middleware that lets only humans through (the URL is a secret); `tokenCurrent(req)`: the
+// request's token is still valid (not retired by a rotation since it came in).
+export function setupNotifications({ board, slug, api, prefix, humanToken, rawSetting, putSetting, tokenCurrent = () => true }) {
   // ---------- notifications to humans away from the laptop (Slack / Discord / ntfy / any webhook) ----------
   // At Kubecon a question waited 31 minutes for a human. Settings `_notify_url` / `_notify_events` are
   // underscore keys, so agents never see them (getSettings hides them).
@@ -96,17 +98,28 @@ export function setupNotifications({ board, slug, api, prefix, humanToken, rawSe
   });
   const notifyInfo = () => { const url = rawSetting('_notify_url'); return { url: maskUrl(url), kind: notifyKind(url), events: notifyEvents() }; };
   api.get('/notify', humanToken, h(() => notifyInfo()));
-  api.put('/notify', humanToken, h(async (req) => {
+  // Moves on every save: a save that waited for DNS doesn't overwrite one made meanwhile (e.g. notifications off).
+  let revision = 0;
+  api.put('/notify', humanToken, h(async (req, res) => {
     const b = req.body || {};
+    const rev = revision;
     if (b.url !== undefined) {
       const url = String(b.url || '').trim();
-      if (url) await resolveNotifyTarget(url);
+      if (url) {
+        await resolveNotifyTarget(url);
+        // The lookup can take a while. Meanwhile the board may have been archived, the token rotated (this
+        // request's sender may no longer change anything), or the settings changed by someone else.
+        if (board.closed) { res.status(410); throw new Error('This board is archived.'); }
+        if (!tokenCurrent(req)) { res.status(401); throw new Error(TOKEN_ROTATED); }
+        if (revision !== rev) { res.status(409); throw new Error('The notification settings were changed while this URL was being checked. Look at them again, then save.'); }
+      }
       putSetting('_notify_url', url ? checkNotifyUrl(url) : '');
     }
     if (b.events !== undefined) {
       const list = (Array.isArray(b.events) ? b.events : String(b.events).split(',')).map((s) => String(s).trim()).filter((s) => NOTIFY_EVENTS.includes(s));
       putSetting('_notify_events', [...new Set(list)].join(','));
     }
+    revision++;
     return notifyInfo();
   }));
   api.post('/notify/test', humanToken, h(async () => {
