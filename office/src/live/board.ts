@@ -112,9 +112,6 @@ export const limitedNow = isLimited;
 // and the classic one (public/present-classic.html). Keep the copies there in sync. ----
 /** Status names, as the board's column headings say them. */
 export const LABEL: Record<TaskStatus, string> = { proposed: 'Proposed', open: 'Open', claimed: 'Claimed', in_progress: 'In progress', blocked: 'Blocked', review: 'Review', done: 'Done' };
-const STALE_MS = 15 * 60e3;
-/** Claimed or in progress with no update for 15+ minutes (the server's flag when it sends one), like isStale() on the board. */
-export const isStale = (t: BoardTask, now = Date.now()): boolean => (t.status === 'claimed' || t.status === 'in_progress') && (typeof t.stale === 'boolean' ? t.stale : now - t.updated_at > STALE_MS);
 /** Tasks per board column. Proposals sit (and count) in Open and claimed tasks in In progress, as on the board (colOf());
  *  "x of y done" leaves proposals out. */
 export function columnCounts(tasks: BoardTask[]): Record<'open' | 'in_progress' | 'blocked' | 'review' | 'done', number> {
@@ -122,17 +119,17 @@ export function columnCounts(tasks: BoardTask[]): Record<'open' | 'in_progress' 
   for (const t of tasks) n[t.status === 'proposed' ? 'open' : t.status === 'claimed' ? 'in_progress' : t.status]++;
   return n;
 }
-/** What waits on a human, by the board's rule: the open questions; blocked tasks WITHOUT an open question (a task blocked
- *  on a question is counted once, as the question); stale tasks; agents out of usage. Keep in sync with needsOf() in
- *  public/present-classic.html and blockedSplit() in public/index.html. */
-export function needsOf(b: BoardState, now = Date.now()): { questions: BoardQuestion[]; blocked: BoardTask[]; stale: BoardTask[]; limited: BoardPresence[] } {
+/** What waits on a human, by the board's rule (its Needs attention): the open questions; blocked tasks WITHOUT an open
+ *  question (a task blocked on a question is counted once, as the question); agents out of usage. Stale tasks aren't
+ *  listed there (the board flags them on their cards). Keep in sync with needsOf() in public/present-classic.html and
+ *  blockedSplit() in public/js/derived.js. */
+export function needsOf(b: BoardState, now = Date.now()): { questions: BoardQuestion[]; blocked: BoardTask[]; limited: BoardPresence[] } {
   const questions = (b.questions || []).filter((q) => !q.answer).sort((x, y) => x.id - y.id);
   const asked = new Set(questions.map((q) => q.task_id).filter(Boolean));
   const tasks = b.tasks || [];
   return {
     questions,
     blocked: tasks.filter((t) => t.status === 'blocked' && !asked.has(t.id)).sort((x, y) => x.priority - y.priority || x.id - y.id),
-    stale: tasks.filter((t) => isStale(t, now)).sort((x, y) => x.id - y.id),
     limited: (b.presence || []).filter((p) => p.kind === 'agent' && !skipName(p.name) && isLimited(p, now)),
   };
 }

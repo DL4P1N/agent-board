@@ -7,7 +7,7 @@ import { agentRoot, columnCounts, countdown, goalHead, hueOf, needsOf, outlook, 
 const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 // The board's logo (three agents), in the board's accent (amber / burnt orange), not the presenter's blue.
 const MARK = '<svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><g transform="translate(-.5 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(18.7 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(6.1 6.8) scale(.76)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="mi"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="mi"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g></svg>';
-const NEEDS_MAX = 4; // rows under the questions line: blocked, stale
+const NEEDS_MAX = 4; // blocked rows under the questions line
 
 export interface OverlayEls { top: HTMLElement; bottom: HTMLElement; msg: HTMLElement; root: HTMLElement }
 
@@ -63,7 +63,7 @@ export class Overlay {
     this.fitted = this.needsSize();
     if (!card || !ul) return;
     let more = ul.querySelector<HTMLElement>('li.more');
-    const rows = [...ul.querySelectorAll('li.b, li.s')];
+    const rows = [...ul.querySelectorAll('li.b')];
     while (card.scrollHeight > card.clientHeight + 1 && rows.length) {
       rows.pop()!.remove();
       if (!more) { more = document.createElement('li'); more.className = 'more'; ul.append(more); }
@@ -88,7 +88,8 @@ export class Overlay {
   render(): boolean {
     const s = this.state;
     const simple = `<a class="simple" href="${esc(this.simpleHref())}" title="The classic presenter: big text, no 3D">Simple view</a>`;
-    const status = `<span class="status"><span class="dot${this.live ? ' on' : ''}" aria-hidden="true"></span>${this.live ? 'Live' : this.note ? esc(this.note) : 'Connecting…'}</span>`;
+    // Not while a message stands in for the board (an expired link, an archived board...): it says what is going on.
+    const status = this.message || !s ? '' : `<span class="status"><span class="dot${this.live ? ' on' : ''}" aria-hidden="true"></span>${this.live ? 'Live' : this.note ? esc(this.note) : 'Connecting…'}</span>`;
     const brand = `<div class="brand-row"><span class="brand">${MARK}Agent Board</span>${status}<span class="sp"></span>${simple}</div>`;
     this.els.root.classList.toggle('has-msg', !!this.message || !s);
     if (this.message || !s) {
@@ -108,8 +109,9 @@ export class Overlay {
     // The verdict and the clock's kind (no time / counting / finished) are part of the layout; the digits are not.
     const cd = countdown(s, now);
     const ol = outlook(s, t, now);
-    // Amber, not red, even when behind: the room (judges, other teams) sees it; it's a pace note for the team.
-    const vd = ol?.label ? `<span class="pill ${ol.verdict === 'ok' ? 'ok' : 'warn'}" id="verdict" title="${esc(ol.why)}.">${esc(ol.label)}</span>` : '';
+    // Amber, not red, even when behind: the room (judges, other teams) sees it; it's a pace note for the team. None during
+    // the feature freeze, as on the board (the clock says "Feature freeze"; "Behind" would only mean those tasks won't start).
+    const vd = ol?.label && !t.frozen ? `<span class="pill ${ol.verdict === 'ok' ? 'ok' : 'warn'}" id="verdict" title="${esc(ol.why)}.">${esc(ol.label)}</span>` : '';
     const top = `${brand}
       <div class="head">
         <h1 class="goal${goal ? '' : ' unset'}" id="goal" title="${esc(goal)}">${esc(head || 'No goal set yet')}</h1>
@@ -124,15 +126,14 @@ export class Overlay {
     const seg = (k: keyof typeof n) => (n[k] ? `<span class="s-${k}" style="width:${(n[k] / total) * 100}%"></span>` : '');
     const key = (k: keyof typeof n, label: string) => `<span><i class="s-${k}" aria-hidden="true"></i>${label} <b>${n[k]}</b></span>`;
     // What needs attention, by the board's rule: the questions (and who asked), then blocked tasks that don't wait on one of
-    // those questions and stale tasks, each with its person. Out of usage isn't listed: nobody in the room can fix it
-    // (the room shows it over the agent).
+    // those questions, each with its person. Stale tasks and out of usage aren't listed, as on the board (the room shows
+    // out of usage over the agent).
     const nd = needsOf(s, now);
     const qs = nd.questions;
     const askers = [...new Set(qs.map((q) => personOf(q.asker, s.presence || [])))];
     const who = (name: string | null, label?: string) => (name ? `<span class="who" style="--h:${hueOf(name, s.presence || [])}">${esc(label ?? personOf(name, s.presence || []))}</span>` : '<span class="who none">nobody</span>');
     const rows = [
       ...nd.blocked.map((x) => `<li class="b"><span class="tag bad">Blocked</span>${who(x.assignee ? agentRoot(x.assignee) : null)}<span class="what">#${x.id} ${esc(x.title)}</span></li>`),
-      ...nd.stale.map((x) => `<li class="s"><span class="tag flag">Stale</span>${who(x.assignee ? agentRoot(x.assignee) : null)}<span class="what">#${x.id} ${esc(x.title)}</span></li>`),
     ];
     const needs = [
       qs.length ? `<li class="q"><span class="tag warn">${plural(qs.length, 'question')} waiting</span><span class="what">${askers.length ? `from ${askers.map((a) => `<span class="who" style="--h:${hueOf(a, s.presence || [])}">${esc(a)}</span>`).join(', ')}` : 'for you'}</span></li>` : '',

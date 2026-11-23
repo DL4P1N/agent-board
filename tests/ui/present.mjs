@@ -64,6 +64,54 @@ async function staleCheck(file) {
   await sp.close();
 }
 
+
+// A stalled /api/state never freezes the page: one answer never comes, and the page gives up on it after 15 s, so the
+// newer change it was asked for in the meantime still shows.
+async function hangCheck(file) {
+  const hp = await browser.newPage();
+  await hp.evaluateOnNewDocument(() => {
+    const f = window.fetch.bind(window);
+    window.fetch = (u, o) => {
+      if (!window.__hang || !/\/api\/state(\?|$)/.test(String(u))) return f(u, o);
+      window.__hang = false; window.__hung = true;
+      return new Promise((_, no) => o?.signal?.addEventListener('abort', () => no(o.signal.reason))); // only the page's own timeout ends it
+    };
+  });
+  const goal0 = (await human('/state')).settings.goal;
+  await hp.goto(`${board.base}/${file}?token=${encodeURIComponent(VIEW)}`);
+  await hp.waitForFunction(() => /\d+ of \d+ done/.test(document.body.innerText), { timeout: 10000, polling: 100 });
+  await hp.evaluate(() => { window.__hang = true; });
+  await human('/settings', 'PUT', { goal: 'Hang A' }); // its reload never gets an answer
+  await hp.waitForFunction(() => window.__hung, { timeout: 8000, polling: 100 }).catch(() => {});
+  await human('/settings', 'PUT', { goal: 'Hang B' }); // asked for while that one hangs
+  const ok = await hp.waitForFunction(() => /Hang B/.test(document.querySelector('h1.goal')?.textContent || ''), { timeout: 25000, polling: 200 }).then(() => true, () => false);
+  check(`${file}: a stalled /api/state is given up after 15 s, and the newer board still shows`, ok, await hp.$eval('h1.goal', (h) => h.textContent).catch(() => ''));
+  await hp.close();
+  await human('/settings', 'PUT', { goal: goal0 });
+}
+
+// Needs attention follows the board's rule: it doesn't list stale tasks (the board flags those on their cards only).
+// Here the page sees every claimed or in-progress task as stale.
+async function staleNeeds(file, sel) {
+  const sp = await browser.newPage();
+  await sp.evaluateOnNewDocument(() => {
+    const f = window.fetch.bind(window); window.__staleN = 0;
+    window.fetch = async (u, o) => {
+      const r = await f(u, o);
+      if (!/\/api\/state(\?|$)/.test(String(u)) || !r.ok) return r;
+      const s = await r.json();
+      for (const t of s.tasks || []) if (t.status === 'claimed' || t.status === 'in_progress') { t.stale = true; window.__staleN++; }
+      return new Response(JSON.stringify(s), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+  });
+  await sp.goto(`${board.base}/${file}?token=${encodeURIComponent(VIEW)}`);
+  await sp.waitForFunction(() => /\d+ of \d+ done/.test(document.body.innerText), { timeout: 10000, polling: 100 });
+  await sleep(500);
+  const r = await sp.evaluate((q) => ({ n: window.__staleN, needs: document.querySelector(q)?.innerText || '' }), sel);
+  check(`${file}: a stale task isn't listed under Needs attention (as on the board)`, r.n > 0 && !/stale/i.test(r.needs), JSON.stringify(r));
+  await sp.close();
+}
+
 try {
   await page.goto(`${board.base}/present-classic.html?token=${encodeURIComponent(VIEW)}`);
   await page.waitForFunction(() => /Leaderboard|Vote API|voting app/i.test(document.body.innerText), { timeout: 8000 });
@@ -101,6 +149,8 @@ try {
   check('just merged: capped at 4', await page.$eval('#h-merged', (h) => h.parentElement.querySelectorAll('li').length) === 4);
   const colsTxt = await page.$eval('.cols', (c) => c.innerText);
   check('claimed counted in In progress, as on the board', /In progress\s*2/.test(colsTxt) && !/Claimed/.test(colsTxt), colsTxt);
+  await staleNeeds('present-classic.html', 'header');
+  check('before the freeze the deadline verdict shows', !!(await page.$('#verdict')));
   // A goal pasted from a doc: plain words, at most 2 lines.
   await human('/settings', 'PUT', { goal: 'Follow the design document: `docs/design.md` and **ship** a [companion app](https://example.com) that every attendee at the conference can use on their phone during the talks, the breaks and the evening events' });
   await page.waitForFunction(() => /Follow the design/.test(document.querySelector('h1.goal')?.textContent || ''), { timeout: 8000 });
@@ -119,6 +169,7 @@ try {
   await human('/settings', 'PUT', { deadline: Date.now() + 30 * 60e3, freeze_minutes: 60 });
   const fz = await page.waitForFunction(() => /Feature freeze/.test(document.getElementById('clock-sub')?.textContent || '') && document.getElementById('clock').className === 'clock warn', { timeout: 8000 }).then(() => true).catch(() => false);
   check('in the feature freeze the countdown is amber (warn), not red', fz, await page.$eval('#clock', (c) => c.className));
+  check('in the feature freeze no deadline verdict ("On track"), as on the board', !(await page.$('#verdict')), await page.$eval('#verdict', (v) => v.textContent).catch(() => ''));
   // Deadline passed.
   await human('/settings', 'PUT', { deadline: Date.now() + 1000, freeze_minutes: 0 }); // a past time is refused: let it pass
   await new Promise((r) => setTimeout(r, 1200));
@@ -189,6 +240,7 @@ try {
     await b.close(); await a.tp.close();
   }
   await staleCheck('present-classic.html');
+  await hangCheck('present-classic.html');
   check('no page errors', !errors.length, errors.join('; '));
 } catch (e) {
   R.push(`CRASH ${e.message}`);

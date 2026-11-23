@@ -58,6 +58,63 @@ async function staleCheck(file) {
   await sp.close();
 }
 
+
+// A stalled /api/state never freezes the page: one answer never comes, and the page gives up on it after 15 s, so the
+// newer change it was asked for in the meantime still shows.
+async function hangCheck(file) {
+  const hp = await browser.newPage();
+  await hp.evaluateOnNewDocument(() => {
+    const f = window.fetch.bind(window);
+    window.fetch = (u, o) => {
+      if (!window.__hang || !/\/api\/state(\?|$)/.test(String(u))) return f(u, o);
+      window.__hang = false; window.__hung = true;
+      return new Promise((_, no) => o?.signal?.addEventListener('abort', () => no(o.signal.reason))); // only the page's own timeout ends it
+    };
+  });
+  const goal0 = (await human('/state')).settings.goal;
+  await hp.goto(`${board.base}/${file}?token=${encodeURIComponent(VIEW)}`);
+  await hp.waitForFunction(() => /\d+ of \d+ done/.test(document.body.innerText), { timeout: 10000, polling: 100 });
+  await hp.evaluate(() => { window.__hang = true; });
+  await human('/settings', 'PUT', { goal: 'Hang A' }); // its reload never gets an answer
+  await hp.waitForFunction(() => window.__hung, { timeout: 8000, polling: 100 }).catch(() => {});
+  await human('/settings', 'PUT', { goal: 'Hang B' }); // asked for while that one hangs
+  const ok = await hp.waitForFunction(() => /Hang B/.test(document.querySelector('h1.goal')?.textContent || ''), { timeout: 25000, polling: 200 }).then(() => true, () => false);
+  check(`${file}: a stalled /api/state is given up after 15 s, and the newer board still shows`, ok, await hp.$eval('h1.goal', (h) => h.textContent).catch(() => ''));
+  await hp.close();
+  await human('/settings', 'PUT', { goal: goal0 });
+}
+
+// Needs attention follows the board's rule: it doesn't list stale tasks (the board flags those on their cards only).
+// Here the page sees every claimed or in-progress task as stale.
+async function staleNeeds(file, sel) {
+  const sp = await browser.newPage();
+  await sp.evaluateOnNewDocument(() => {
+    const f = window.fetch.bind(window); window.__staleN = 0;
+    window.fetch = async (u, o) => {
+      const r = await f(u, o);
+      if (!/\/api\/state(\?|$)/.test(String(u)) || !r.ok) return r;
+      const s = await r.json();
+      for (const t of s.tasks || []) if (t.status === 'claimed' || t.status === 'in_progress') { t.stale = true; window.__staleN++; }
+      return new Response(JSON.stringify(s), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+  });
+  await sp.goto(`${board.base}/${file}?token=${encodeURIComponent(VIEW)}`);
+  await sp.waitForFunction(() => /\d+ of \d+ done/.test(document.body.innerText), { timeout: 10000, polling: 100 });
+  await sleep(500);
+  const r = await sp.evaluate((q) => ({ n: window.__staleN, needs: document.querySelector(q)?.innerText || '' }), sel);
+  check(`${file}: a stale task isn't listed under Needs attention (as on the board)`, r.n > 0 && !/stale/i.test(r.needs), JSON.stringify(r));
+  await sp.close();
+}
+
+// No two agents' name tags (with their bubbles) cover each other.
+const tagsApart = () => {
+  const hit = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+  const r = [...document.querySelectorAll('.ab-labels .ab-tag')].filter((t) => t.style.display !== 'none').map((t) => ({ n: t.querySelector('.ab-name').textContent, b: t.querySelector('.ab-tagin').getBoundingClientRect() }));
+  const bad = [];
+  for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) if (hit(r[i].b, r[j].b)) bad.push(`${r[i].n}/${r[j].n}`);
+  return { n: r.length, bad };
+};
+
 try {
   const page = watch(await browser.newPage());
   await page.goto(`${board.base}/present.html?token=${encodeURIComponent(VIEW)}`);
@@ -75,6 +132,7 @@ try {
     check('done count: 1 of 3 done, with a progress bar', /1 of 3 done/.test(txt) && await page.$eval('[role=progressbar]', (b) => b.getAttribute('aria-valuenow') === '1' && b.getAttribute('aria-valuemax') === '3'), txt.replace(/\s+/g, ' ').slice(0, 160));
     check('countdown to the demo with the freeze time', /^2h 0\dm$/.test(await page.$eval('#clock', (c) => c.textContent)) && /· freeze \d/.test(await page.$eval('#clock-sub', (c) => c.textContent)), await page.$eval('#clock', (c) => c.textContent));
     check('nothing waiting on a human yet', /Nothing needs attention/.test(txt));
+    await staleNeeds('present.html', '#bottom .needs');
     check('body text is at least 14px', await page.evaluate(() => [...document.querySelectorAll('#top, #bottom')].flatMap((r) => [...r.querySelectorAll('*')]).filter((e) => e.childNodes.length && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())).every((e) => parseFloat(getComputedStyle(e).fontSize) >= 14)));
     const s0 = await S(page);
     const a0 = s0.agents.find((a) => a.id === 'ana-claude');
@@ -105,6 +163,16 @@ try {
     // The presenter's room is big: the words stay in speech bubbles over the tags (the board's small docked room folds them into the tags).
     const bubs = () => page.evaluate(() => ({ bub: [...document.querySelectorAll('.ab-labels .ab-bub')].filter((e) => e.offsetWidth).map((e) => e.textContent), folded: [...document.querySelectorAll('.ab-labels .ab-q.say')].filter((e) => e.offsetWidth).length }));
     check('the presenter\'s big room: each agent with a question has a "Question" speech bubble over its tag', await until(page, () => { const b = [...document.querySelectorAll('.ab-labels .ab-bub')].filter((e) => e.offsetWidth); return b.length === 2 && b.every((e) => e.textContent === 'Question') && ![...document.querySelectorAll('.ab-labels .ab-q.say')].some((e) => e.offsetWidth); }), JSON.stringify(await bubs()));
+    // A crowded room with questions on a small screen (a 1024 projector, a phone): the tags never cover each other.
+    for (const n of ['cara-claude', 'dev-codex', 'eli-gemini', 'fay-claude', 'gus-codex', 'hal-claude']) await (await agent(board, n, n.endsWith('codex') ? 'codex-mcp-client' : n.endsWith('gemini') ? 'gemini-cli' : 'claude-code'))('board_status');
+    for (const [w, h] of [[1024, 768], [390, 844]]) {
+      await page.setViewport({ width: w, height: h }); await sleep(400);
+      await until(page, `(${tagsApart})().n >= 8 && !(${tagsApart})().bad.length`, null, 6000);
+      const ap = await page.evaluate(tagsApart);
+      check(`${w}×${h}, 8 agents, 2 with a question: no name tag covers another`, ap.n >= 8 && !ap.bad.length, JSON.stringify(ap));
+      await page.screenshot({ path: path.join(out, `office-tags-${w}.png`) });
+    }
+    await page.setViewport({ width: 1600, height: 900 }); await sleep(300);
     await ana('update_task', { id: t2.id, status: 'review', note: 'pr' });
     check('adapter: a task sent to review flies a paper plane to the inbox', await until(page, () => window.__officeState.flights.some((f) => f.kind === 'pr' && f.to.station === 'inbox')));
     await human(`/tasks/${t2.id}`, 'PATCH', { status: 'done' });
@@ -230,10 +298,17 @@ try {
     await page.setViewport({ width: 1920, height: 1080 }); await sleep(600);
     const tall = await fitAt();
     check('1920×1080: the rows that fit come back (still none cut off)', !tall.cut && tall.rows > short.rows && tall.rows + tall.more === 6, JSON.stringify(tall));
+    // The deadline verdict (two finished M tasks give the board a median) shows before the freeze; in the freeze it
+    // doesn't, as on the board.
+    await human(`/tasks/${t5.id}`, 'PATCH', { status: 'done' });
+    await human('/settings', 'PUT', { deadline: Date.now() + 2 * 3600e3, freeze_minutes: 60 });
+    check('before the freeze the deadline verdict shows', await until(page, () => !!document.getElementById('verdict')), await page.$eval('#clock-sub', (c) => c.textContent));
     // The feature freeze is amber on the presenter, as on the board (a phase, not an error).
     await human('/settings', 'PUT', { deadline: Date.now() + 30 * 60e3, freeze_minutes: 60 });
     check('in the feature freeze the countdown is amber (warn), not red', await until(page, () => /Feature freeze/.test(document.getElementById('clock-sub')?.textContent || '') && document.getElementById('clock').className === 'clock warn'), await page.$eval('#clock', (c) => c.className));
+    check('in the feature freeze no deadline verdict ("On track"), as on the board', !(await page.$('#verdict')), await page.$eval('#verdict', (v) => v.textContent).catch(() => ''));
     await staleCheck('present.html');
+    await hangCheck('present.html');
   }
 
   // No WebGL at all: straight to the classic page, carrying the token from the link.
@@ -253,6 +328,7 @@ try {
   const p3 = watch(await browser.newPage(), []); // the refused token logs its 401: expected here
   await p3.goto(`${board.base}/present.html?token=nope`);
   check('a rejected token: "This presenter link has expired"', await until(p3, () => /presenter link has expired/.test(document.body.innerText)));
+  check('a rejected token: no "Connecting…" in the header next to that message', !/Connecting/.test(await p3.evaluate(() => document.body.innerText)), await p3.$eval('#top', (t) => t.innerText).catch(() => ''));
   check('never holds the board token', await p3.evaluate((t) => !Object.keys(localStorage).some((k) => localStorage.getItem(k) === t), TOKEN));
   await p3.close();
 

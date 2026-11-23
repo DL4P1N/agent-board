@@ -351,22 +351,21 @@ function outlook(now = Date.now()) {
   const mins = Math.max(1, ((frozen ? deadline : freezeAt) - now) / 60e3); const eta = work / slots; const ratio = eta / mins;
   const shortBy = ratio > 1 ? Math.max(1, Math.round(left.length * (1 - mins / eta))) : 0;
   const verdict = ratio <= 0.9 ? 'ok' : ratio <= 1.1 ? 'tight' : 'behind';
-  return { verdict, label: verdict === 'ok' ? 'On track' : verdict === 'tight' ? 'Tight' : `Behind by ~${plural(shortBy, 'task')}`,
+  return { verdict, frozen, label: verdict === 'ok' ? 'On track' : verdict === 'tight' ? 'Tight' : `Behind by ~${plural(shortBy, 'task')}`,
     why: `About ${durWords(eta * 60e3)} of work left (${plural(left.length, 'task')} at this board's median time per size, over ${plural(slots, 'agent slot')} online) and ${durWords(mins * 60e3)} to the ${frozen ? 'demo' : 'freeze'}` };
 }
 // One vocabulary and one counting rule for every view (the board, its 3D view, both presenters). Keep in sync with
-// columnCounts() / needsOf() in office/src/live/board.ts and blockedSplit() / isStale() in public/index.html.
+// columnCounts() / needsOf() in office/src/live/board.ts and blockedSplit() in public/js/derived.js.
 // Tasks per board column: proposals sit (and count) in Open and claimed tasks in In progress, as on the board; "x of y
 // done" leaves proposals out.
 function columnCounts(tasks) { const n = { open: 0, in_progress: 0, blocked: 0, review: 0, done: 0 }; for (const t of tasks) n[t.status === 'proposed' ? 'open' : t.status === 'claimed' ? 'in_progress' : t.status]++; return n; }
-const isStale = (t, now) => ['claimed', 'in_progress'].includes(t.status) && (typeof t.stale === 'boolean' ? t.stale : now - t.updated_at > 15 * 60e3);
-// What waits on a human: open questions; blocked tasks WITHOUT an open question (a task blocked on a question is counted
-// once, as the question); stale tasks; agents out of usage.
+// What waits on a human, by the board's rule (its Needs attention): open questions; blocked tasks WITHOUT an open question
+// (a task blocked on a question is counted once, as the question); agents out of usage. Stale tasks aren't listed there.
 function needsOf(now = Date.now()) {
   const questions = (state.questions || []).filter((q) => !q.answer);
   const asked = new Set(questions.map((q) => q.task_id).filter(Boolean));
   const tasks = state.tasks || [];
-  return { questions, blocked: tasks.filter((t) => t.status === 'blocked' && !asked.has(t.id)), stale: tasks.filter((t) => isStale(t, now)),
+  return { questions, blocked: tasks.filter((t) => t.status === 'blocked' && !asked.has(t.id)),
     limited: (state.presence || []).filter((p) => p.kind === 'agent' && !skipName(p.name) && limitedNow(p, now)) };
 }
 function dur(ms) { const t = Math.max(0, Math.round(ms / 1000)); const h = Math.floor(t / 3600); const m = Math.floor((t % 3600) / 60); const s = t % 60; return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}:${String(s).padStart(2, '0')}`; }
@@ -382,7 +381,8 @@ function load() {
 async function loadOnce() {
   if (!token) return showMsg('Open this from the board: <b>Presenter view</b> in its help (<b>?</b>) or Ctrl+K.');
   try {
-    const r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } });
+    // A stalled answer gives up after 15 s (and counts as can't reach), so the next load can run.
+    const r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout?.(15000) });
     if (r.status === 401 || r.status === 403) { expired = true; es?.close(); try { localStorage.removeItem(VIEW_KEY); } catch {} return showMsg(EXPIRED); }
     // Archived (410), moved to its own address (409) or failed to open (503): say so, keep checking
     // (the 5 s poll), and come back by itself when the board is available again.
@@ -438,14 +438,14 @@ function render() {
   const itemsText = (g) => g.items.map((i) => (i.stuck ? `Blocked: ${i.text}` : i.text)).join('; ');
   const itemsHtml = (g) => g.items.map((i) => (i.stuck ? `<b class="stuck">Blocked</b> ${esc(i.text)}` : esc(i.text))).join('; ');
   const ol = outlook();
-  // Amber, not red, even when behind: the room (judges, other teams) sees it; it's a pace note for the team.
-  const vd = ol ? `<span class="pill ${ol.verdict === 'ok' ? 'ok' : 'warn'}" id="verdict" title="${esc(ol.why)}.">${esc(ol.label)}</span>` : '';
+  // Amber, not red, even when behind: the room (judges, other teams) sees it; it's a pace note for the team. None during
+  // the feature freeze, as on the board (the clock says "Feature freeze"; "Behind" would only mean those tasks won't start).
+  const vd = ol && !ol.frozen ? `<span class="pill ${ol.verdict === 'ok' ? 'ok' : 'warn'}" id="verdict" title="${esc(ol.why)}.">${esc(ol.label)}</span>` : '';
   const nd = needsOf();
   const taskTitle = (id) => (state.tasks || []).find((t) => t.id === id)?.title || '';
   const merges = (state.events || []).filter((e) => e.kind === 'task_updated' && e.data?.status === 'done' && /→ done/.test(e.text || '')).slice(-4).reverse();
   const qOpen = nd.questions.length;
-  const needPills = [qOpen ? `<span class="pill warn">${plural(qOpen, 'question')} waiting</span>` : '', nd.blocked.length ? `<span class="pill bad">${nd.blocked.length} blocked</span>` : '',
-    nd.stale.length ? `<span class="pill">${nd.stale.length} stale</span>` : ''].join(''); // out of usage: in Now working on, next to the person
+  const needPills = [qOpen ? `<span class="pill warn">${plural(qOpen, 'question')} waiting</span>` : '', nd.blocked.length ? `<span class="pill bad">${nd.blocked.length} blocked</span>` : ''].join(''); // out of usage: in Now working on, next to the person
   const ci = state.main_ci;
   const ciPill = !ci ? '' : ci.status === 'fail' ? `<span class="pill bad">main is failing${ci.failing?.length ? `: ${esc(ci.failing.join(', '))}` : ''}</span>` : ci.status === 'pending' ? '<span class="pill">main: checks running…</span>' : '<span class="pill ok">✓ main green</span>';
   const c = columnCounts(state.tasks || []);

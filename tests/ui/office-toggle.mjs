@@ -39,6 +39,15 @@ const until = (page, fn, arg, timeout = 8000) => page.waitForFunction(fn, { time
 const view = (page) => page.evaluate(() => document.documentElement.dataset.boardView);
 const shown = (page, sel) => page.evaluate((s) => { const e = document.querySelector(s); return !!e && !!(e.offsetWidth || e.offsetHeight); }, sel);
 // Each page in its own browser context: its own localStorage, like a separate browser.
+// No two agents' name tags (with their bubbles) cover each other.
+const tagsApart = () => {
+  const hit = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+  const r = [...document.querySelectorAll('.ab-labels .ab-tag')].filter((t) => t.style.display !== 'none').map((t) => ({ n: t.querySelector('.ab-name').textContent, b: t.querySelector('.ab-tagin').getBoundingClientRect() }));
+  const bad = [];
+  for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) if (hit(r[i].b, r[j].b)) bad.push(`${r[i].n}/${r[j].n}`);
+  return { n: r.length, bad };
+};
+
 async function open(url = '/', { phone = false, vp, setup, errs = errors } = {}) {
   const page = await (await browser.createBrowserContext()).newPage();
   const reqs = [];
@@ -783,6 +792,13 @@ try {
     const crowd = await lb.page.evaluate(tags);
     await lb.page.screenshot({ path: path.join(out, 'office-questions-1440.png') });
     check('3D, 1440×900, docked: two agents with a question are one box each, the tag saying "Question" in plain sight (no bubble stacked above it), the two apart', crowd.ok, JSON.stringify(crowd));
+    // Every tag, not only the two asking: none covers another, at 1440 and at 1280.
+    for (const [w, h] of [[1440, 900], [1280, 800]]) {
+      if (w !== 1440) { await lb.page.setViewport({ width: w, height: h }); await sleep(400); }
+      await until(lb.page, `(${tagsApart})().n >= 8 && !(${tagsApart})().bad.length`, null, 6000);
+      const ap = await lb.page.evaluate(tagsApart);
+      check(`3D, ${w}×${h}, docked, two questions: no name tag covers another`, ap.n >= 8 && !ap.bad.length, JSON.stringify(ap));
+    }
     await lb.page.close();
     for (const q of mq) await human(`/questions/${q.question_id}/answer`, 'POST', { answer: 'yes' });
 

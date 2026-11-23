@@ -44,9 +44,13 @@ function fmtMoney(v: number): string { return '$' + (v >= 100 ? v.toFixed(0) : v
 
 interface El {
   root: HTMLDivElement; card: HTMLDivElement; tier: HTMLSpanElement; name: HTMLSpanElement; q: HTMLSpanElement; model: HTMLSpanElement; owner: HTMLSpanElement;
-  skills: HTMLDivElement; more: HTMLDivElement; l1: HTMLDivElement; l2: HTMLDivElement; bub: HTMLDivElement;
+  skills: HTMLDivElement; more: HTMLDivElement; l1: HTMLDivElement; l2: HTMLDivElement; bub: HTMLDivElement; inner: HTMLDivElement;
   key: { [k: string]: string }; lastT: string; seen: number;
+  /** The tag's size (bubble and card), measured again only after its content changed; and this frame's place. */
+  w: number; h: number; dirty: boolean; x: number; y: number; top: number;
 }
+
+const GAP = 2; // px between a tag and the one it moved above
 
 export class LabelLayer {
   root: HTMLDivElement;
@@ -55,6 +59,7 @@ export class LabelLayer {
   private compact = false;
   private fl = new Map<string, { root: HTMLDivElement; inner: HTMLDivElement; seen: number; t: string; txt: string; col: string }>();
   private flFrame = 0;
+  private ro: ResizeObserver | null;
   /** `bindTag` wires an agent's name tag (a plain element, not a Tab stop) to the scene's own pick / camera handling. */
   constructor(host: HTMLElement, private bindTag: ((tag: HTMLElement, id: string) => void) | null = null) {
     if (!document.getElementById('ab-label-css')) {
@@ -66,6 +71,9 @@ export class LabelLayer {
     this.root = document.createElement('div');
     this.root.className = 'ab-labels';
     host.appendChild(this.root);
+    // That scale follows the window: measure the tags again when the room's size changes.
+    this.ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { for (const e of this.els.values()) e.dirty = true; });
+    this.ro?.observe(this.root);
   }
 
   private make(id: string): El {
@@ -92,29 +100,56 @@ export class LabelLayer {
     this.bindTag?.(card, id);
     root.appendChild(inner);
     this.root.appendChild(root);
-    return { root, card, name, q, tier, model, owner, skills, more, l1, l2, bub, key: {}, lastT: '', seen: 0 };
+    return { root, card, name, q, tier, model, owner, skills, more, l1, l2, bub, inner, key: {}, lastT: '', seen: 0, w: 0, h: 0, dirty: true, x: 0, y: 0, top: 0 };
   }
 
-  private set(e: El, k: string, v: string, fn: () => void): void { if (e.key[k] !== v) { e.key[k] = v; fn(); } }
+  private set(e: El, k: string, v: string, fn: () => void): void { if (e.key[k] !== v) { e.key[k] = v; e.dirty = true; fn(); } }
+  private shown: El[] = [];
+
+  /** Tags never cover each other: front tags (lower on screen) keep their place, a tag behind that would overlap one is
+   *  lifted just above it. Sizes are cached, so a frame with no new words reads no layout; n is the agents on screen. */
+  private place(): void {
+    const v = this.shown;
+    // On screen, as drawn: the board and the presenter scale the tags up (CSS), so not offsetWidth.
+    for (const e of v) if (e.dirty) { const r = e.inner.getBoundingClientRect(); e.w = r.width; e.h = r.height; e.dirty = !e.w; }
+    v.sort((a, b) => b.y - a.y);
+    for (let i = 0; i < v.length; i++) {
+      const a = v[i]; let bottom = a.y;
+      // Only ever upward, above one tag at a time, so this ends (each placed tag is passed at most once).
+      for (let moved = true; moved;) {
+        moved = false;
+        for (let j = 0; j < i; j++) {
+          const b = v[j];
+          if (Math.abs(a.x - b.x) * 2 < a.w + b.w && bottom > b.top && bottom - a.h < b.top + b.h) { bottom = b.top - GAP; moved = true; }
+        }
+      }
+      a.top = bottom - a.h;
+      const t = `translate3d(${a.x}px,${bottom}px,0)`;
+      if (t !== a.lastT) { a.lastT = t; a.root.style.transform = t; }
+    }
+  }
 
   /** `fold`: the room is small on screen, so a speech bubble's words go into its agent's name tag (one box per agent,
    *  none stacked over a neighbour's); the bubble itself is drawn only when there's room for it. */
   update(items: LabelItem[], showLabels: boolean, showBubbles: boolean, compact = false, skillFn: SkillFn | null = null, fold = false): void {
     this.frame++;
-    if (compact !== this.compact) { this.compact = compact; this.root.classList.toggle('compact', compact); }
+    if (compact !== this.compact) { this.compact = compact; this.root.classList.toggle('compact', compact); for (const e of this.els.values()) e.dirty = true; }
+    const shown = this.shown; shown.length = 0;
     for (const it of items) {
       let e = this.els.get(it.id);
       if (!e) { e = this.make(it.id); this.els.set(it.id, e); }
       e.seen = this.frame;
       const vis = it.visible && (showLabels || (showBubbles && !!it.bubble));
       if (!vis) { if (e.key.d !== '0') { e.key.d = '0'; e.root.style.display = 'none'; } continue; }
-      if (e.key.d !== '1') { e.key.d = '1'; e.root.style.display = 'block'; }
+      if (e.key.d !== '1') { e.key.d = '1'; e.root.style.display = 'block'; e.dirty = true; }
       // In a small room the bubble's words ride in the tag (see `fold`), and that tag sits over its neighbours' tags.
       const say = fold && showLabels && showBubbles && it.bubble ? it.bubble : '';
-      const t = `translate3d(${Math.round(it.x)}px,${Math.round(it.y)}px,0)`;
-      if (t !== e.lastT) { e.lastT = t; e.root.style.transform = t; }
+      e.x = Math.round(it.x); e.y = Math.round(it.y);
+      // The selected tag (drawn over the rest, and taller) stays at its agent; the others are placed after this loop.
+      if (it.selected) { const t = `translate3d(${e.x}px,${e.y}px,0)`; if (t !== e.lastT) { e.lastT = t; e.root.style.transform = t; } }
+      else shown.push(e);
       const z = String(Math.round(it.y) + (it.selected || say ? 1000 : 0));
-      this.set(e, 'z', z, () => { e.root.style.zIndex = z; });
+      if (e.key.z !== z) { e.key.z = z; e.root.style.zIndex = z; } // not set(): the size stays
       this.set(e, 'cardv', showLabels ? '1' : '0', () => { e.card.style.display = showLabels ? 'flex' : 'none'; });
       if (showLabels) {
         const pc = PROVIDERS[it.provider]?.color ?? '#94a3b8';
@@ -158,6 +193,7 @@ export class LabelLayer {
     for (const [id, e] of this.els) {
       if (e.seen !== this.frame) { e.root.parentNode?.removeChild(e.root); this.els.delete(id); }
     }
+    this.place();
   }
 
   /** Pooled DOM tags following paper airplanes (screen-space css px). */
@@ -182,5 +218,5 @@ export class LabelLayer {
     for (const [k, e] of this.fl) if (e.seen !== this.flFrame) { e.root.parentNode?.removeChild(e.root); this.fl.delete(k); }
   }
 
-  dispose(): void { this.root.parentNode?.removeChild(this.root); }
+  dispose(): void { this.ro?.disconnect(); this.root.parentNode?.removeChild(this.root); }
 }

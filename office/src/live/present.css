@@ -200,7 +200,6 @@ ul.list .what { flex: 1 1 100%; min-width: 0; overflow: hidden; display: -webkit
 .tag { font: 700 var(--fs-label)/1.4 var(--mono); text-transform: uppercase; letter-spacing: .06em; padding: 0 .5em; flex: 0 0 auto; white-space: nowrap; }
 .tag.warn { color: var(--warn); background: var(--warn-soft); }
 .tag.bad { color: var(--bad); background: var(--bad-soft); }
-.tag.flag { color: var(--muted); background: var(--chip); }
 .empty, .more { color: var(--muted); }
 
 /* Name tags and speech bubbles over the agents: the scene draws them at 9-10 px; scale them up for the room. */

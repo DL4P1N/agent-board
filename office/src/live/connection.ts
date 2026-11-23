@@ -55,7 +55,8 @@ export function connect(on: ConnectionEvents): void {
     if (!token) { on.message(NO_TOKEN); return; }
     if (expired) return;
     try {
-      const r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } });
+      // A stalled answer gives up after 15 s (and counts as can't reach), so the next load can run.
+      const r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout?.(15000) });
       if (r.status === 401 || r.status === 403) { expired = true; es?.close(); store.del(VIEW_KEY); on.message(EXPIRED); return; }
       // Archived (410), moved to its own address (409) or failed to open (503): say so, keep checking
       // (the 5 s poll), and come back by itself when the board is available again.
