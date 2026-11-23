@@ -151,7 +151,8 @@ function mergerText() {
 }
 function renderTopbar(si) {
   const S = state.settings;
-  const left = si.steps.find((s) => !s.done);
+  // What Setup names as left to do: not the merger (optional, and the Roles / Merges chip beside it says "not picked").
+  const left = si.steps.find((s) => !s.done && s.key !== 'integrator');
   const T = state.tasks.filter((t) => t.status !== 'proposed'); const done = T.filter((t) => t.status === 'done').length;
   const pct = T.length ? Math.round((done / T.length) * 100) : 0;
   const goal = String(S.goal || '').trim(); const head = goal.split('\n').find((l) => l.trim()) || '';

@@ -166,7 +166,14 @@ try {
   const dc = await agent('dana-claude', 'claude-code'); await dc('board_status');
   await page.evaluate(() => { localStorage.removeItem('board-setup'); ui.forceSetup = false; ui.steps = {}; });
   await reload(page); await sleep(400);
-  check('A collapsed Setup button names what is left', (await txt(page, '[data-act="setup-open"] .o-x')) === 'Setup: pick merger', await txt(page, '[data-act="setup-open"]'));
+  // Only the merger is left: Setup does not repeat the Roles chip beside it ("not picked"), in its text or its name.
+  const sOnly = await page.$eval('[data-act="setup-open"]', (b) => ({ t: b.querySelector('.o-x').innerText.replace(/\s+/g, ' '), title: b.title, label: b.getAttribute('aria-label') || '', roles: document.getElementById('roles-btn').innerText.replace(/\s+/g, ' ') }));
+  check('A collapsed Setup button with only the merger left says just "Setup" (the Roles chip says "not picked")', sOnly.t === 'Setup' && !/merger/.test(sOnly.title + sOnly.label) && /not picked/.test(sOnly.roles), JSON.stringify(sOnly));
+  // Any other step left is named, in its text and its tooltip (no goal opens Setup again: the same chip, now Hide).
+  await page.evaluate(() => { state.settings.goal = ''; render(); });
+  const sGoal = await page.$eval('#topbar .tb-act', (b) => ({ t: b.querySelector('.o-x').innerText.replace(/\s+/g, ' '), title: b.title }));
+  check('A the Setup button names any other step left ("Setup: set the goal")', sGoal.t === 'Setup: set the goal' && sGoal.title === 'Setup: set the goal', JSON.stringify(sGoal));
+  await reload(page); await sleep(300);
   check('A top bar: "Setup" + repo', /Setup/.test(await txt(page, '#topbar')) && /https:\/\/github.com\/team\/vote-app/.test(await page.$eval('#topbar .repo-s', (e) => e.textContent + e.title)), await txt(page, '#topbar'));
   // One task for two idle agents: the low-priority offer asks for more tasks first...
   check('A All good + "2 agents are idle: add tasks…"', /All good/.test(await txt(page, '#now .na')) && /2 agents are idle: add tasks or ask the planner for more/.test(await txt(page, '#now .na2')), await txt(page, '#now'));
