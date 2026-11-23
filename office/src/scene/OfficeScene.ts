@@ -495,7 +495,11 @@ export class OfficeScene {
       L.bubble = a.bubble; L.x = e.sx; L.y = e.sy; L.visible = vis; L.selected = a.id === this.selected;
       items.push(L);
     }
-    this.labels.update(items, this.visual.showLabels, this.visual.showBubbles, this.cam.zoom * (1 + this.visual.focus * 2.6 * (this.selected ? 1 : 0)) < 1.45, this.skills.fn);
+    // A small room on screen (the board's docked view; under ~22 css px a metre, where a bubble over a tag reaches the
+    // tag of the agent at the next desk) folds each bubble's words into its agent's tag; zoomed in, or the presenter's
+    // big room, keeps the speech bubbles.
+    const small = h / (2 * this.cam.halfH) < 22;
+    this.labels.update(items, this.visual.showLabels, this.visual.showBubbles, this.cam.zoom * (1 + this.visual.focus * 2.6 * (this.selected ? 1 : 0)) < 1.45, this.skills.fn, small);
     // flight tags
     const tags = this.flightTags;
     tags.length = 0;

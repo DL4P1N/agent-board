@@ -102,6 +102,9 @@ try {
     // The board's counting rule: a blocked task that waits on an open question is counted once, as the question.
     await bob('ask_human', { question: 'Where is the API key?', task_id: t3.id });
     check('a blocked task with an open question is counted once, as the question (not also as Blocked)', await until(page, () => { const t = document.getElementById('needs')?.innerText || ''; return /2 questions waiting/i.test(t) && !/Blocked/i.test(t); }), (await page.$eval('#needs', (n) => n.innerText).catch(() => '')).replace(/\s+/g, ' '));
+    // The presenter's room is big: the words stay in speech bubbles over the tags (the board's small docked room folds them into the tags).
+    const bubs = () => page.evaluate(() => ({ bub: [...document.querySelectorAll('.ab-labels .ab-bub')].filter((e) => e.offsetWidth).map((e) => e.textContent), folded: [...document.querySelectorAll('.ab-labels .ab-q.say')].filter((e) => e.offsetWidth).length }));
+    check('the presenter\'s big room: each agent with a question has a "Question" speech bubble over its tag', await until(page, () => { const b = [...document.querySelectorAll('.ab-labels .ab-bub')].filter((e) => e.offsetWidth); return b.length === 2 && b.every((e) => e.textContent === 'Question') && ![...document.querySelectorAll('.ab-labels .ab-q.say')].some((e) => e.offsetWidth); }), JSON.stringify(await bubs()));
     await ana('update_task', { id: t2.id, status: 'review', note: 'pr' });
     check('adapter: a task sent to review flies a paper plane to the inbox', await until(page, () => window.__officeState.flights.some((f) => f.kind === 'pr' && f.to.station === 'inbox')));
     await human(`/tasks/${t2.id}`, 'PATCH', { status: 'done' });

@@ -760,6 +760,32 @@ try {
     check('reduced motion: the Goal, Demo, Roles / Planner popovers and the theme chooser open and close at once (no fade)', !pops.length, pops.join(' | '));
     await rm.page.close();
 
+    // The room under the docked Tasks window is small: an agent with a question is one box there, its name tag saying
+    // "Question" (the dock's word) instead of a speech bubble stacked above it, that word in plain sight (not under the
+    // Tasks window or another agent's tag). Two agents ask at once, so two such tags share the room, apart.
+    const maya = await agent(board, 'maya-claude'), jon = await agent(board, 'jon-claude');
+    const mq = [await maya('ask_human', { question: 'Which colour for the vote button?' }), await jon('ask_human', { question: 'One vote per person?' })];
+    const lb = await open('/', { vp: { width: 1440, height: 900 }, setup: () => { try { localStorage.setItem('agent-board-3d', 'on'); } catch {} } });
+    await lb.page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+    await until(lb.page, () => !!document.querySelector('#office-scene canvas') && !$('office-view').classList.contains('loading') && window.__officeState?.agents.filter((a) => a.bubble === 'Question').length === 2, null, 20000);
+    const tags = () => {
+      const hit = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+      const asking = window.__officeState.agents.filter((a) => a.bubble === 'Question').map((a) => a.name);
+      const q = [...document.querySelectorAll('.ab-labels .ab-tag')].filter((t) => t.style.display !== 'none' && asking.includes(t.querySelector('.ab-name').textContent)).map((t) => {
+        const w = t.querySelector('.ab-q'), r = w.getBoundingClientRect();
+        const seen = !!w.offsetWidth && [[0.1, 0.5], [0.5, 0.5], [0.9, 0.5]].every(([x, y]) => t.contains(document.elementFromPoint(r.left + r.width * x, r.top + r.height * y)));
+        return { name: t.querySelector('.ab-name').textContent, word: w.offsetWidth ? w.textContent : '', seen, boxes: [...t.querySelectorAll('.ab-bub, .ab-card')].filter((b) => b.offsetWidth).map((b) => b.getBoundingClientRect()) };
+      });
+      const apart = q.length === 2 && !q[0].boxes.some((b) => q[1].boxes.some((c) => hit(b, c)));
+      return { ok: q.length === 2 && apart && q.every((t) => t.boxes.length === 1 && t.word === 'Question' && t.seen), apart, q: q.map((t) => ({ ...t, boxes: t.boxes.map((b) => [b.left, b.top, b.right, b.bottom].map(Math.round).join(',')) })) };
+    };
+    await until(lb.page, `(${tags})().ok`, null, 6000); // the tags follow the camera: wait for the room to settle
+    const crowd = await lb.page.evaluate(tags);
+    await lb.page.screenshot({ path: path.join(out, 'office-questions-1440.png') });
+    check('3D, 1440×900, docked: two agents with a question are one box each, the tag saying "Question" in plain sight (no bubble stacked above it), the two apart', crowd.ok, JSON.stringify(crowd));
+    await lb.page.close();
+    for (const q of mq) await human(`/questions/${q.question_id}/answer`, 'POST', { answer: 'yes' });
+
     // A hidden tab draws nothing: no WebGL draw calls while another tab is in front; back in front, the room draws again.
     const hd = await open('/', { setup: () => {
       try { localStorage.setItem('agent-board-3d', 'on'); } catch {}

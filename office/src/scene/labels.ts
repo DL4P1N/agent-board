@@ -26,6 +26,8 @@ const CSS = `
 .ab-sk{font-size:7px;line-height:9px;min-width:11px;text-align:center;padding:0 1px;color:#10101c;box-shadow:0 0 0 1px #000;font-weight:800;}
 .ab-labels.compact .ab-card:not(.sel) .ab-r2,.ab-labels.compact .ab-card:not(.sel) .ab-skills{display:none !important;}
 .ab-q{font-size:9px;line-height:9px;padding:0 3px;background:#ffd25a;color:#10141f;box-shadow:0 0 0 1px #000;font-weight:900;display:none;}
+.ab-q.say{font-size:8px;line-height:9px;font-weight:800;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ab-q.bad{background:#ff8a8a;}
 .ab-more{font-size:9px;color:#d8d0f0;font-weight:600;border-top:1px dashed rgba(255,255,255,.2);margin-top:1px;padding-top:2px;display:flex;flex-direction:column;gap:1px;}
 .ab-cost{color:#ffd25a;}
 .ab-tier:empty,.ab-model:empty{display:none;}
@@ -95,7 +97,9 @@ export class LabelLayer {
 
   private set(e: El, k: string, v: string, fn: () => void): void { if (e.key[k] !== v) { e.key[k] = v; fn(); } }
 
-  update(items: LabelItem[], showLabels: boolean, showBubbles: boolean, compact = false, skillFn: SkillFn | null = null): void {
+  /** `fold`: the room is small on screen, so a speech bubble's words go into its agent's name tag (one box per agent,
+   *  none stacked over a neighbour's); the bubble itself is drawn only when there's room for it. */
+  update(items: LabelItem[], showLabels: boolean, showBubbles: boolean, compact = false, skillFn: SkillFn | null = null, fold = false): void {
     this.frame++;
     if (compact !== this.compact) { this.compact = compact; this.root.classList.toggle('compact', compact); }
     for (const it of items) {
@@ -105,15 +109,23 @@ export class LabelLayer {
       const vis = it.visible && (showLabels || (showBubbles && !!it.bubble));
       if (!vis) { if (e.key.d !== '0') { e.key.d = '0'; e.root.style.display = 'none'; } continue; }
       if (e.key.d !== '1') { e.key.d = '1'; e.root.style.display = 'block'; }
+      // In a small room the bubble's words ride in the tag (see `fold`), and that tag sits over its neighbours' tags.
+      const say = fold && showLabels && showBubbles && it.bubble ? it.bubble : '';
       const t = `translate3d(${Math.round(it.x)}px,${Math.round(it.y)}px,0)`;
-      if (t !== e.lastT) { e.lastT = t; e.root.style.transform = t; e.root.style.zIndex = String(Math.round(it.y) + (it.selected ? 1000 : 0)); }
+      if (t !== e.lastT) { e.lastT = t; e.root.style.transform = t; }
+      const z = String(Math.round(it.y) + (it.selected || say ? 1000 : 0));
+      this.set(e, 'z', z, () => { e.root.style.zIndex = z; });
       this.set(e, 'cardv', showLabels ? '1' : '0', () => { e.card.style.display = showLabels ? 'flex' : 'none'; });
       if (showLabels) {
         const pc = PROVIDERS[it.provider]?.color ?? '#94a3b8';
         this.set(e, 'pc', pc, () => { e.card.style.setProperty('--pc', pc); });
-        // The "?" badge only when no bubble says it already (the live office's bubble reads "Question").
-        const hq = (it.phase === 'asking_help' || it.phase === 'awaiting_help') && !(showBubbles && it.bubble) ? '1' : '0';
-        this.set(e, 'q', hq, () => { e.q.style.display = hq === '1' ? 'inline-block' : 'none'; });
+        // The "?" badge only when no bubble says it already (the live office's bubble reads "Question"); in a small room
+        // the badge carries the bubble's own words instead of a bubble above the tag.
+        const hq = say ? 's' + (it.phase === 'blocked' ? 'b' : '') + say : (it.phase === 'asking_help' || it.phase === 'awaiting_help') && !(showBubbles && it.bubble) ? '?' : '';
+        this.set(e, 'q', hq, () => {
+          e.q.textContent = say || '?'; e.q.classList.toggle('say', !!say); e.q.classList.toggle('bad', !!say && it.phase === 'blocked');
+          e.q.style.display = hq ? 'inline-block' : 'none';
+        });
         this.set(e, 'name', it.name, () => { e.name.textContent = it.name; });
         const tc = tierColor(it.tier);
         this.set(e, 'tier', it.tier + tc, () => { e.tier.textContent = it.tier; e.tier.style.setProperty('--tc', tc); });
@@ -140,7 +152,7 @@ export class LabelLayer {
           this.set(e, 'l2', paid ? fmtMoney(it.cost) + '|' + (it.burn > 0.005 ? it.burn.toFixed(2) : '') : '-', () => { e.l2.style.display = paid ? '' : 'none'; e.l2.textContent = paid ? fmtMoney(it.cost) + (it.burn > 0.005 ? `  $${it.burn.toFixed(2)}/min` : '') : ''; });
         }
       }
-      const bt = showBubbles && it.bubble ? it.bubble : '';
+      const bt = showBubbles && it.bubble && !(fold && showLabels) ? it.bubble : '';
       this.set(e, 'bub', bt, () => { e.bub.textContent = bt; e.bub.style.display = bt ? 'block' : 'none'; });
     }
     for (const [id, e] of this.els) {
