@@ -4,6 +4,7 @@
 // can't race a starting server.
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { DATA_DIR, PORT, HOST } from './config.js';
 
 const PID_FILE = path.join(DATA_DIR, 'board.pid');
@@ -13,7 +14,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const readText = () => { try { return fs.readFileSync(PID_FILE, 'utf8'); } catch { return null; } };
 const read = () => { try { return JSON.parse(readText()); } catch { return null; } };
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
-const mine = (port = PORT) => JSON.stringify({ pid: process.pid, port, host: HOST, started: new Date().toISOString() });
+// This server's own mark in board.pid: two containers sharing one data volume both run as pid 1, so the pid alone
+// doesn't say the file is ours.
+const INSTANCE = crypto.randomBytes(8).toString('hex');
+const ours = (o) => o?.pid === process.pid && o?.id === INSTANCE;
+const mine = (port = PORT) => JSON.stringify({ pid: process.pid, id: INSTANCE, port, host: HOST, started: new Date().toISOString() });
 // Where that server answers: the address it listens on (localhost when that is every address); IPv6 in brackets.
 const probeHost = (h) => (!h || h === '0.0.0.0' || h === '::' ? 'localhost' : h.includes(':') ? `[${h}]` : h);
 // Nothing listens on that port (every address tried refused the connection).
@@ -27,7 +32,9 @@ const refused = (e) => { const c = e?.cause; const codes = c?.errors?.length ? c
 // answer in time proves nothing (a busy or suspended server): it keeps the folder.
 export async function otherOwner() {
   const o = read();
-  if (!o || !Number.isInteger(o.pid) || o.pid === process.pid || !alive(o.pid)) return null;
+  // Our pid but not our mark: another container's pid 1 (or this container's before a restart), so the process
+  // check proves nothing: the checks below decide.
+  if (!o || !Number.isInteger(o.pid) || ours(o) || (o.pid !== process.pid && !alive(o.pid))) return null;
   if (Date.now() - Date.parse(o.started) < 60e3) return o;
   // A server writes the port it really got once it listens: still none after a minute, it never did.
   if (!Number.isInteger(o.port) || o.port <= 0) return null;
@@ -83,4 +90,4 @@ export async function takePid() {
 
 // Once listening: the port it really got (PORT=0 picks one).
 export const writePid = (port) => { try { fs.writeFileSync(PID_FILE, mine(port)); } catch {} };
-export const dropPid = () => { if (read()?.pid === process.pid) try { fs.unlinkSync(PID_FILE); } catch {} };
+export const dropPid = () => { if (ours(read())) try { fs.unlinkSync(PID_FILE); } catch {} };

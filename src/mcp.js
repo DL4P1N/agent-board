@@ -2,7 +2,7 @@
 // bound to the calling agent's identity from the X-Agent header.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { normName } from './board.js';
+import { normName, MAX_TEXT } from './board.js';
 import { TOKEN_ROTATED } from './auth.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,8 +11,6 @@ import { fileURLToPath } from 'node:url';
 const MAX_WAIT_S = 90;
 // What a laptop may still do under a name another laptop owns (one name, one laptop): read the board.
 const READ_ONLY_TOOLS = new Set(['board_status', 'get_playbook', 'read_events', 'wait_for_events', 'list_tasks', 'get_task', 'list_locks']);
-// The longest text an agent may send in one field (as long as a task description).
-const MAX_TEXT = 10000;
 const PLAYBOOK_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'templates', 'playbook.md');
 const playbook = () => fs.readFileSync(PLAYBOOK_PATH, 'utf8');
 

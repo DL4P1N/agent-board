@@ -37,6 +37,20 @@ export const normName = (n) => String(n ?? '').trim().toLowerCase();
 export const NAME_RE = /^[\w.-]{1,64}$/;
 // Names no agent may use: the board's own announcements are "board", a call without a name is "anonymous".
 export const RESERVED_NAMES = new Set(['board', 'anonymous']);
+// The longest chat message, note, question, answer or goal (the MCP tools' limit too): a pasted megabyte would
+// otherwise go out in every /api/state.
+export const MAX_TEXT = 10000;
+// Text a caller sent (`what` names it in the refusal): at most `max` characters, else refused (400).
+function capText(text, what, max = MAX_TEXT) {
+  if (text.length > max) throw new Error(`${what} is too long (max ${max} characters)`);
+  return text;
+}
+// An agent name a task is reserved for: its root ("alice" for "alice/ui"), '' for none; refused unless a name.
+function reserveName(v) {
+  const root = agentRootOf(normName(v));
+  if (root && !NAME_RE.test(root)) throw new Error('reserved_for must be an agent name (1-64 letters, digits, _ . or -) or empty');
+  return root;
+}
 const PR_RE = /https?:\/\/\S+?\/(?:pull|pulls|merge_requests)\/\d+/i;
 // The laptop id (join's ?laptop=) of the MCP request being handled, set by the server around each request.
 // Board calls outside a request (REST, tests) have none, so the name checks below don't apply to them.
@@ -84,6 +98,8 @@ const MIGRATIONS = [
   (b) => b.lowercaseNames(),
   (b) => b.backfillPrLinks(),
   (b) => b.normaliseLockPaths(),
+  // Version 5: direct-message threads and the chat channels are read by channel.
+  (b) => b.db.exec('CREATE INDEX IF NOT EXISTS events_channel ON events(channel)'),
 ];
 
 export class Board {
@@ -399,7 +415,7 @@ export class Board {
 
   // A human's message to an agent ("maya-claude") or to the planner ("planner").
   postDirect(author, { text, to }) {
-    text = String(text ?? '').trim();
+    text = capText(String(text ?? '').trim(), 'text');
     if (!text) throw new Error('text is required');
     const name = agentRootOf(normName(to));
     if (!name) throw new Error('Say who the message is for: an agent\'s name, or "planner".');
@@ -414,7 +430,7 @@ export class Board {
   // An agent answers a human in a thread that human wrote in: its own, or the planner's while it is the planner.
   // Agents never start threads: with nothing from that human, it is refused.
   replyDirect(author, { text, to }) {
-    text = String(text ?? '').trim();
+    text = capText(String(text ?? '').trim(), 'text');
     if (!text) throw new Error('text is required');
     const me = agentRootOf(normName(author));
     const human = normName(to);
@@ -528,9 +544,13 @@ export class Board {
   // to: a direct message instead (humans: to an agent or "planner"; agents: a reply to a human, see replyDirect).
   post(author, { text, channel = 'general', task_id = null, to }, { human = false } = {}) {
     if (to) return human ? this.postDirect(author, { text, to }) : this.replyDirect(author, { text, to });
-    if (!text || !text.trim()) throw new Error('text is required');
+    if (typeof text !== 'string' || !text.trim()) throw new Error('text is required');
+    capText(text, 'text');
+    if (typeof channel !== 'string' || !channel) throw new Error('channel must be a channel name, e.g. "general"');
+    capText(channel, 'channel', 40);
     if (channel === DIRECT) throw new Error('Direct messages need "to": who the message is for.');
-    return this.emit({ author, kind: 'message', channel, task_id, text });
+    if (task_id != null && !(Number.isInteger(task_id) || /^\d+$/.test(String(task_id)))) throw new Error('task_id must be a task number');
+    return this.emit({ author, kind: 'message', channel, task_id: task_id == null ? null : Number(task_id), text });
   }
 
   // ---------- tasks ----------
@@ -568,7 +588,7 @@ export class Board {
     const deps = this.checkDeps(depends_on);
     const s = this.getSettings();
     const isPlanner = !!s.planner && sameTeam(author, s.planner);
-    const reserve = reserved_for ? normName(reserved_for).split('/')[0] || null : null;
+    const reserve = reserved_for ? reserveName(reserved_for) || null : null;
     if (reserve && !human && !isPlanner) throw new Error('Only the planner and humans can reserve tasks for an agent.');
     const proposed = !human && !!s.planner && !isPlanner && this.isAvailable(s.planner);
     const now = Date.now();
@@ -643,6 +663,10 @@ export class Board {
 
   updateTask(author, id, { status, note, branch, title, description, priority, assignee, size, reserved_for, pr_url, force }, { human = false } = {}) {
     if (!human) this.assertOwnName(author);
+    if (branch != null && typeof branch !== 'string') throw new Error('branch must be text');
+    if (branch != null) capText(branch, 'branch', 200);
+    if (note) note = capText(String(note), 'note');
+    if (reserved_for !== undefined) reserved_for = reserveName(reserved_for);
     const task = this.getTask(id);
     if (!task) throw new Error(`task #${id} not found`);
     // The owner as stored ("  " is nobody), before any check looks at it.
@@ -679,7 +703,7 @@ export class Board {
       priority: priority !== undefined ? checkPriority(priority) : task.priority,
       size: size !== undefined ? checkSize(size) : task.size,
       assignee: assignee !== undefined ? assignee : task.assignee,
-      reserved_for: reserved_for !== undefined ? normName(reserved_for).split('/')[0] || null : task.reserved_for,
+      reserved_for: reserved_for !== undefined ? reserved_for || null : task.reserved_for,
     };
     // A human hands a task to an agent: it gets a branch, and the agent is told (the event's @mention).
     if (human && assignee && ['claimed', 'in_progress'].includes(next.status) && !next.branch) next.branch = `task/${id}-${slug(task.title)}`;
@@ -809,7 +833,9 @@ export class Board {
       'INSERT INTO locks (path, owner, task_id, reason, expires_at) VALUES (?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET owner=excluded.owner, task_id=excluded.task_id, reason=excluded.reason, expires_at=excluded.expires_at'
     );
     this.tx(() => { for (const p of norm) up.run(p, author, task_id, reason, exp); });
-    this.emit({ author, kind: 'lock', channel: 'locks', task_id, text: `locked ${norm.join(', ')} for ${ttl_s}s${reason ? ` (${reason})` : ''}` });
+    // "for 15 min", as the File locks panel says "expires in 14m" (not "for 900s").
+    const lasts = ttl_s < 60 ? `${ttl_s} s` : `${Math.round(ttl_s / 60)} min`;
+    this.emit({ author, kind: 'lock', channel: 'locks', task_id, text: `locked ${norm.join(', ')} for ${lasts}${reason ? ` (${reason})` : ''}` });
     return { ok: true, locked: norm, expires_in_s: ttl_s };
   }
 
@@ -838,7 +864,7 @@ export class Board {
 
   // ---------- human questions ----------
   ask(author, { question, task_id = null }) {
-    question = String(question ?? '').trim();
+    question = capText(String(question ?? '').trim(), 'question');
     if (!question) throw new Error('question is required');
     // The question and its event together: a waiting agent never misses one the board shows.
     return this.tx(() => {
@@ -852,7 +878,7 @@ export class Board {
   }
 
   answer(author, id, answer) {
-    answer = String(answer ?? '').trim();
+    answer = capText(String(answer ?? '').trim(), 'The answer');
     if (!answer) throw new Error('Type an answer first.');
     const q = this.db.prepare('SELECT * FROM questions WHERE id = ?').get(id);
     if (!q) throw new Error(`question ${id} not found`);
@@ -880,9 +906,11 @@ export class Board {
 
   // ---------- settings: project goal + roles ----------
   getSettings() {
-    const rows = this.db.prepare('SELECT key, value FROM settings').all();
+    // Only these keys: the hidden ones (underscore keys: the webhook, "already announced" marks, one per PR
+    // commit and outcome) grow with the board's history and are read where they're needed (board-settings.js).
+    const rows = this.db.prepare(`SELECT key, value FROM settings WHERE key IN (${SETTING_KEYS.map(() => '?').join(',')})`).all(...SETTING_KEYS);
     const s = { ...DEFAULT_SETTINGS };
-    for (const r of rows) if (!r.key.startsWith('_')) s[r.key] = r.value;
+    for (const r of rows) s[r.key] = r.value;
     return s;
   }
 
@@ -894,6 +922,7 @@ export class Board {
     for (const key of SETTING_KEYS) {
       if (patch[key] === undefined) continue;
       let val = String(patch[key] ?? '').trim();
+      if (key === 'goal' || key === 'repo') capText(val, key, key === 'goal' ? MAX_TEXT : 500);
       if (key === 'integrator' || key === 'planner') val = normName(val).split('/')[0];
       if (key === 'planner' && val === ANYONE) throw new Error('planner must be one agent (or empty)');
       // Shown on every human's page: only what an agent name can be (or "*", whoever is free, for the integrator).
@@ -1807,7 +1836,8 @@ export class Board {
       const doneEv = [...list].reverse().find((e) => status(e) === 'done');
       if (claim && doneEv && doneEv.ts > claim.ts) mins[t.size in mins ? t.size : 'M'].push((doneEv.ts - claim.ts) / 60e3);
       if (list.some((e) => movedFrom(e, 'review', 'in_progress'))) bounced++;
-      const toReview = [...list].reverse().find((e) => status(e) === 'review' && (!doneEv || e.ts <= doneEv.ts));
+      // The last move into review (a note while in review is a task_updated event in review too).
+      const toReview = [...list].reverse().find((e) => status(e) === 'review' && statusMove(e) && (!doneEv || e.ts <= doneEv.ts));
       if (toReview && doneEv) waits.push((doneEv.ts - toReview.ts) / 60e3);
     }
     const minutes = {};

@@ -28,7 +28,17 @@ export function startBackups({ board, dir, slug, every, later }) {
     const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '').replace('T', '-'); // 20261110-153000
     const file = path.join(BACKUP_DIR, `board-${stamp}.db`);
     if (fs.existsSync(file)) return null;
-    board.db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
+    // Into a temp name, renamed once complete: a VACUUM INTO that fails part-way (a full disk) leaves no partial
+    // board-*.db for restore to offer or for the pruning to count among the 24.
+    const tmp = `${file}.tmp`;
+    try { fs.unlinkSync(tmp); } catch {} // VACUUM INTO refuses a file that exists
+    try {
+      board.db.exec(`VACUUM INTO '${tmp.replace(/'/g, "''")}'`);
+      fs.renameSync(tmp, file);
+    } catch (e) {
+      try { fs.unlinkSync(tmp); } catch {}
+      throw e;
+    }
     fs.writeFileSync(lastFile, fp);
     const all = fs.readdirSync(BACKUP_DIR).filter((f) => /^board-\d{8}-\d{6}\.db$/.test(f)).sort();
     for (const f of all.slice(0, Math.max(0, all.length - 24))) { try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch {} }

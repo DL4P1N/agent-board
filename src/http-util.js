@@ -1,7 +1,7 @@
 // Small helpers shared by the route modules (no board involved): reading the token and agent name off a
 // request, comparing secrets, and the JSON handler wrapper.
 import crypto from 'node:crypto';
-import { normName } from './board.js';
+import { normName, NAME_RE, RESERVED_NAMES } from './board.js';
 
 export function tokenFrom(req) {
   const h = req.get('authorization') || '';
@@ -14,6 +14,9 @@ export function safeEq(a, b) {
   const y = Buffer.from(String(b));
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 }
+// The name's root ("alice" for "alice/ui-worker") is not one an agent may use: "board" (the board's own
+// announcements), "anonymous" (a call without a name), or no name at all ("/x").
+export const badRoot = (name) => { const root = name.split('/')[0]; return RESERVED_NAMES.has(root) || !NAME_RE.test(root); };
 export function agentFrom(req) {
   const a = (req.get('x-agent') || req.body?.author || req.query.agent || '').toString().trim();
   // Names are case-insensitive: "Dana" and "dana" are one person.

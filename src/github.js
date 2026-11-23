@@ -179,5 +179,12 @@ export function startGithubPolling({ board, announced, rawSetting, putSetting, i
     every(tick, GH_POLL_MS);
     later(tick, Math.min(3e3, GH_POLL_MS));
   }
-  return { stop: () => ac.abort() };
+  // A task done: its PR's "already told" marks (one per commit and outcome) aren't needed any more.
+  const forgetDone = (e) => {
+    if (e?.kind !== 'task_updated' || e.data?.status !== 'done' || e.data?.from === 'done' || isClosed()) return;
+    const url = board.getTask(e.task_id)?.pr_url;
+    if (url && announced.forget) { announced.forget(`_pr_told_${url}_`); announced.forget(`_pr_conflict_${url}_`); }
+  };
+  board.bus?.on('event', forgetDone);
+  return { stop: () => { ac.abort(); board.bus?.off('event', forgetDone); } };
 }

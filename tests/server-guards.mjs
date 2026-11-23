@@ -3,12 +3,16 @@
 // unlock, ?plan= without slots, review bounces from the event's data, wrong-typed input, get_task's newest
 // history, a slow webhook save racing a change, a newer database, and a short BOARD_TOKEN.
 // Starts its own throwaway boards. Run all suites with: npm test
+import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import dnsp from 'node:dns/promises';
 import { startBoard, finish, rest, tempDir, ROOT, Client, StreamableHTTPClientTransport } from './helpers.mjs';
-import { agentTokenFor } from '../src/tokens.js';
+import { agentTokenFor, writeTokenFile } from '../src/tokens.js';
+import { startGithubPolling } from '../src/github.js';
 import { Board } from '../src/board.js';
 import { recap } from '../src/recap.js';
 import { hiddenSettings } from '../src/board-settings.js';
@@ -86,7 +90,11 @@ const throwsWith = (fn, re) => { try { fn(); return false; } catch (e) { return 
   check('…the same in the recap', bounces[ta.id] === 0 && bounces[tb.id] === 1, JSON.stringify(slow));
   const sent = b.retro().match(/## Sent back from review[\s\S]*?(\n## |$)/)?.[0] || '';
   check('…and in the retro', sent.includes(`#${tb.id} `) && !sent.includes(`#${ta.id} `), sent);
-  check('…and in the task stats', b.computeTaskStats() === null || b.computeTaskStats().bounce_rate <= 0.5, JSON.stringify(b.computeTaskStats()));
+  // The stats need three tasks done: a third one, never sent back.
+  const tc = b.createTask('dana', { title: 'Straight through' }, { human: true });
+  b.updateTask('dana', tc.id, { status: 'done', assignee: 'ana', force: true }, { human: true });
+  const stats = b.computeTaskStats();
+  check('…and in the task stats (3 done, 1 sent back)', stats?.done === 3 && stats.bounce_rate === 0.33, JSON.stringify(stats));
   b.close();
 
   // A database from a newer version of the board isn't opened.
@@ -96,6 +104,144 @@ const throwsWith = (fn, re) => { try { fn(); return false; } catch (e) { return 
   let err = '';
   try { new Board(dir).close(); } catch (e) { err = String(e.message); }
   check('a database with a newer schema version is refused with a clear message', /newer version of Agent Board/.test(err), err || 'it opened');
+}
+
+// ================= text limits, review waits, lock wording, hidden settings, the token file, board.pid =================
+{
+  const b = new Board(tempDir());
+  b.setSettings('dana', { goal: 'Limits' }, { human: true });
+  // Text limits are the board's, not only the MCP tools' (a human's 1.5 MB paste went out in every /api/state).
+  const long = 'x'.repeat(10001);
+  const t = b.createTask('dana', { title: 'Limits' }, { human: true });
+  b.updateTask('dana', t.id, { assignee: 'ana' }, { human: true });
+  b.touch('ana', 'agent');
+  const q = b.ask('ana', { question: 'Which?' });
+  const refused = {
+    message: () => b.post('dana', { text: long }, { human: true }),
+    direct: () => b.post('dana', { text: long, to: 'ana' }, { human: true }),
+    question: () => b.ask('ana', { question: long }),
+    answer: () => b.answer('dana', q.question_id, long),
+    note: () => b.updateTask('ana', t.id, { note: long }),
+    branch: () => b.updateTask('ana', t.id, { branch: 'b'.repeat(201) }),
+    goal: () => b.setSettings('dana', { goal: long }, { human: true }),
+    channel: () => b.post('dana', { text: 'hi', channel: 'c'.repeat(41) }, { human: true }),
+    'reserved_for markup': () => b.createTask('dana', { title: 'r', reserved_for: '<img src=x onerror=alert(1)>' }, { human: true }),
+  };
+  const passed = Object.entries(refused).filter(([, fn]) => !throwsWith(fn, /too long|reserved_for must be/)).map(([k]) => k);
+  check('text over the limits is refused by the board itself (messages, notes, questions, answers, goal, branch, channel, reserved_for)', !passed.length, passed.join(', '));
+  check('…text at the limit is fine', b.post('dana', { text: 'y'.repeat(10000) }, { human: true }).text.length === 10000 && b.updateTask('ana', t.id, { note: 'z'.repeat(10000) }).id === t.id);
+  check('…and wrong-typed message fields are refused, not passed to SQLite', throwsWith(() => b.post('dana', { text: 'x', channel: {} }, { human: true }), /channel must be/) && throwsWith(() => b.post('dana', { text: 'x', task_id: true }, { human: true }), /task_id must be/) && throwsWith(() => b.updateTask('ana', t.id, { branch: true }), /branch must be text/));
+  check('…a task number as text still works', b.post('dana', { text: 'about it', task_id: String(t.id) }, { human: true }).task_id === t.id);
+
+  // The feed's lock message in minutes, as the File locks panel says it.
+  b.lockFiles('ana', { paths: ['src/x.js'] });
+  const lockText = b.events({ limit: 1000 }).filter((e) => e.kind === 'lock').at(-1)?.text;
+  check('a lock says "for 15 min" in the feed, not "for 900s"', lockText === 'locked src/x.js for 15 min', lockText);
+
+  // getSettings reads the board's own settings only: the hidden rows grow with history (one per PR commit and outcome).
+  const { putSetting, announced } = hiddenSettings(b);
+  b.db.prepare("INSERT INTO settings (key, value) VALUES ('legacy', 'x')").run();
+  check('getSettings returns only the known settings', !('legacy' in b.getSettings()) && b.getSettings().goal === 'Limits', JSON.stringify(b.getSettings()));
+  // A task done: its PR's "already told" marks go; another PR's stay.
+  const pr = 'https://github.com/o/r_x/pull/1';
+  for (const k of [`_pr_told_${pr}_abc_fail_null`, `_pr_conflict_${pr}_abc`, `_pr_told_${pr}2_abc_fail_null`, '_notify_url']) putSetting(k, '1');
+  const poll = startGithubPolling({ board: b, announced, rawSetting: () => null, putSetting, isClosed: () => false, presence() {}, every() {}, later() {} });
+  b.updateTask('ana', t.id, { status: 'in_progress' });
+  b.updateTask('ana', t.id, { status: 'review', pr_url: pr });
+  b.updateTask('dana', t.id, { status: 'done' }, { human: true });
+  poll.stop();
+  const hidden = b.db.prepare("SELECT key FROM settings WHERE key LIKE '\\_%' ESCAPE '\\' ORDER BY key").all().map((r) => r.key);
+  check('a done task\'s PR marks are pruned, others kept', hidden.join() === ['_notify_url', `_pr_told_${pr}2_abc_fail_null`].join(), hidden.join());
+  b.close();
+
+  // review_wait_min: from the move to review, not from a later note while in review.
+  const w = new Board(tempDir());
+  for (const title of ['w1', 'w2', 'w3']) {
+    const x = w.createTask('dana', { title }, { human: true });
+    w.updateTask('dana', x.id, { assignee: 'ana' }, { human: true });
+    w.updateTask('ana', x.id, { status: 'in_progress' });
+    w.updateTask('ana', x.id, { status: 'review' });
+    w.updateTask('ana', x.id, { note: 'CI still running' });
+    w.updateTask('dana', x.id, { status: 'done' }, { human: true });
+  }
+  w.db.exec('UPDATE events SET ts = id * 600000'); // 10 minutes apart: review → note → done is 20 minutes
+  const ws = w.computeTaskStats();
+  check('review_wait_min counts from the move to review', ws?.review_wait_min === 20, JSON.stringify(ws));
+  w.close();
+
+  // A token file whose rename fails (here: a folder in the way) leaves no temp copy of the token.
+  const td = tempDir();
+  const target = path.join(td, 'token');
+  fs.mkdirSync(target); fs.writeFileSync(path.join(target, 'x'), '');
+  check('writeTokenFile: a failed rename throws and leaves no temp file', throwsWith(() => writeTokenFile(target, 'secret'), /./) && !fs.readdirSync(td).some((f) => f.endsWith('.tmp')), fs.readdirSync(td).join());
+
+  // board.pid with this pid but another server's mark (two containers on one volume are both pid 1): not ours.
+  const pidData = tempDir();
+  const script = `
+    import fs from 'node:fs'; import path from 'node:path';
+    const { takePid, dropPid } = await import(${JSON.stringify(pathToFileURL(path.join(ROOT, 'src', 'pidfile.js')).href)});
+    const pf = path.join(process.env.BOARD_DATA, 'board.pid');
+    fs.writeFileSync(pf, JSON.stringify({ pid: process.pid, id: 'other-container', port: 1, started: new Date().toISOString() }));
+    const owner = await takePid();
+    dropPid();
+    const kept = JSON.parse(fs.readFileSync(pf, 'utf8')).id;
+    fs.unlinkSync(pf);
+    const free = await takePid();
+    const mine = JSON.parse(fs.readFileSync(pf, 'utf8'));
+    dropPid();
+    console.log(JSON.stringify({ owner: owner?.id, kept, free, mine: mine.pid === process.pid && !!mine.id, dropped: !fs.existsSync(pf) }));`;
+  const pr1 = spawnSync(process.execPath, ['--input-type=module', '-e', script], { env: { ...process.env, BOARD_DATA: pidData }, encoding: 'utf8', timeout: 15000 });
+  let pidOut = {}; try { pidOut = JSON.parse(pr1.stdout.trim().split('\n').at(-1)); } catch {}
+  check('board.pid under our pid with another server\'s id is another owner (not taken, not deleted)', pidOut.owner === 'other-container' && pidOut.kept === 'other-container', pr1.stdout + pr1.stderr);
+  check('…our own board.pid carries our id and is removed on stop', pidOut.free === null && pidOut.mine === true && pidOut.dropped === true, pr1.stdout + pr1.stderr);
+}
+
+// ================= which board events reach the webhook =================
+{
+  const b = new Board(tempDir());
+  const { rawSetting, putSetting } = hiddenSettings(b);
+  const got = [];
+  const hook = http.createServer((req, res) => { let body = ''; req.on('data', (d) => { body += d; }); req.on('end', () => { try { got.push(JSON.parse(body)); } catch {} res.end('ok'); }); });
+  await new Promise((r) => hook.listen(0, '127.0.0.1', r));
+  const local = process.env.BOARD_WEBHOOK_LOCALHOST;
+  process.env.BOARD_WEBHOOK_LOCALHOST = '1';
+  const noop = () => {};
+  setupNotifications({ board: b, slug: 't', api: { get: noop, put: noop, post: noop }, prefix: () => '/b/t', humanToken: noop, rawSetting, putSetting });
+  putSetting('_notify_url', `http://127.0.0.1:${hook.address().port}/hook?kind=generic`);
+  const settle = async (n) => { for (let i = 0; i < 40 && got.length < n; i++) await new Promise((r) => setTimeout(r, 25)); await new Promise((r) => setTimeout(r, 150)); };
+  const kinds = () => got.map((g) => g.kind);
+  try {
+    b.setSettings('dana', { goal: 'Hooks' }, { human: true });
+    const t = b.createTask('dana', { title: 'Hooked' }, { human: true });
+    b.updateTask('dana', t.id, { assignee: 'ana' }, { human: true });
+    b.updateTask('ana', t.id, { status: 'blocked', note: 'need the API key' });
+    b.ask('ana', { question: 'Which key?' });
+    await settle(2);
+    check('a move to blocked and a question reach the webhook', kinds().sort().join() === 'blocked,questions' && got.some((g) => /blocked: need the API key/.test(g.text)), JSON.stringify(got));
+    b.updateTask('ana', t.id, { note: 'tried again → blocked only on the key now' });
+    b.updateTask('bob', t.id, { note: 'FYI in_progress → blocked is fine here' });
+    b.post('ana', { text: '@all main is failing: fake' });
+    b.post('ana', { text: 'cara-claude hit its usage limit' });
+    b.post('dana', { text: '@all main is failing: from a human' }, { human: true });
+    b.touch('ana', 'agent');
+    b.post('dana', { text: 'a direct one → blocked', to: 'ana' }, { human: true });
+    await settle(3);
+    check('notes on a blocked task, chat that looks like an announcement and direct messages don\'t', got.length === 2, JSON.stringify(got.slice(2)));
+    b.emit({ author: 'board', kind: 'message', channel: 'general', text: '@all main is failing: lint on "x"' });
+    await settle(3);
+    check('the board\'s own "main is failing" does', got.length === 3 && got[2].kind === 'main', JSON.stringify(got.slice(2)));
+    // Only the events chosen in the settings.
+    putSetting('_notify_events', 'questions');
+    const t2 = b.createTask('dana', { title: 'Hooked 2' }, { human: true });
+    b.updateTask('dana', t2.id, { assignee: 'ana' }, { human: true });
+    b.updateTask('ana', t2.id, { status: 'blocked', note: 'other key' });
+    b.ask('ana', { question: 'Which other key?' });
+    await settle(4);
+    check('with only "questions" chosen, a move to blocked is not sent', got.length === 4 && got[3].kind === 'questions', JSON.stringify(got.slice(3)));
+  } finally {
+    if (local === undefined) delete process.env.BOARD_WEBHOOK_LOCALHOST; else process.env.BOARD_WEBHOOK_LOCALHOST = local;
+    hook.close(); b.close();
+  }
 }
 
 // ================= a webhook save that waits for DNS =================
@@ -180,6 +326,19 @@ try {
   const restLimit = await raw('/api/agents/board/limit', { method: 'POST', token: AGENT, headers: { 'X-Agent': 'board' }, body: { note: 'x' } });
   check('agent REST calls naming "board" are refused', restBoard.status === 400 && restLimit.status === 400, `${restBoard.status} ${restLimit.status}`);
   check('…an agent REST call with a real name still works', (await raw('/api/next', { token: AGENT, headers: { 'X-Agent': 'ana' } })).status === 200);
+  // A slash-name needs a name before its slash: "/x" would have no presence row, no slot limit, and be one team with "/y".
+  const slashMcp = await callTool(new URLSearchParams({ agent: '/x', token: AGENT }), 'post', { text: 'from slash-x' });
+  const slashRest = await raw('/api/next', { token: AGENT, headers: { 'X-Agent': '/x' } });
+  st = await human('/state');
+  check('MCP and agent REST calls as "/x" (no name before the slash) are refused', slashMcp.status === 400 && slashRest.status === 400 && !st.events.some((e) => e.text === 'from slash-x'), `${slashMcp.status} ${slashRest.status}`);
+  const helperPost = await (await callTool(new URLSearchParams({ agent: 'ana/ui-worker', token: AGENT }), 'post', { text: 'from a helper' })).json();
+  st = await human('/state');
+  check('…a helper name ("ana/ui-worker") still works', !helperPost.result?.isError && st.events.some((e) => e.text === 'from a helper' && e.author === 'ana/ui-worker'), JSON.stringify(helperPost).slice(0, 200));
+  // A human token may not write as "board" either (it would read as the board's announcement and fire the "main" webhook).
+  const humanBoard = await raw('/api/messages', { method: 'POST', headers: { 'X-Agent': 'board' }, body: { text: fake } });
+  const humanBoardRead = await raw('/api/state', { headers: { 'X-Agent': 'board' } });
+  st = await human('/state');
+  check('a human writing as "board" is refused (reading still works)', humanBoard.status === 400 && humanBoardRead.status === 200 && !st.events.some((e) => e.text === fake), `${humanBoard.status} ${humanBoardRead.status}`);
 
   // ---- a refused second laptop doesn't keep the owner online ----
   const alice = await mcpAgent('alice', { laptop: 'lapalice1', person: 'alice' });
@@ -203,6 +362,13 @@ try {
   check('PATCH a task with branch {} → 400', pb.status === 400, pb.status);
   const pt = await raw(`/api/tasks/${t.id}`, { method: 'PATCH', headers: { 'X-Agent': 'dana' }, body: { note: ['a'] } });
   check('PATCH a task with note [] → 400', pt.status === 400, pt.status);
+  const typed = [];
+  for (const [p, method, body] of [['/api/messages', 'POST', { text: 'x', channel: {} }], ['/api/messages', 'POST', { text: 'x', task_id: true }], ['/api/messages', 'POST', { text: 'x', task_id: {} }], ['/api/messages', 'POST', { text: {} }], [`/api/tasks/${t.id}`, 'PATCH', { branch: true }], [`/api/tasks/${t.id}`, 'PATCH', { branch: 5 }]]) {
+    typed.push(`${method} ${p} ${JSON.stringify(body)} ${(await raw(p, { method, headers: { 'X-Agent': 'dana' }, body })).status}`);
+  }
+  check('wrong-typed message and branch fields → 400, not 500', typed.every((x) => x.endsWith(' 400')), typed.join('; '));
+  const big = await raw('/api/messages', { method: 'POST', headers: { 'X-Agent': 'dana' }, body: { text: 'm'.repeat(1_500_000) } });
+  check('a 1.5 MB chat message from a human → 400', big.status === 400, big.status);
   const ex = await raw('/api/events?exclude=a&exclude=b');
   check('/api/events with two exclude= → 400', ex.status === 400, ex.status);
   const si = await raw('/api/events?since=abc');

@@ -85,7 +85,8 @@ export function setupNotifications({ board, slug, api, prefix, humanToken, rawSe
     if (e.channel === DIRECT) return;
     const t = String(e.text || '');
     if (e.kind === 'question') return notify('questions', `${e.author} asks: ${t}`);
-    if (e.kind === 'task_updated' && e.data?.status === 'blocked' && /→ blocked/.test(t)) {
+    // A move to blocked (data.from: the status before), not a note on a task that already was.
+    if (e.kind === 'task_updated' && e.data?.status === 'blocked' && e.data?.from !== 'blocked' && /→ blocked/.test(t)) {
       const note = t.replace(/^#\d+\s*/, '').replace(/^\w+ → blocked(\s+—\s+)?/, '').trim();
       return notify('blocked', `#${e.task_id} blocked${note ? `: ${note}` : ''} (${e.author})`);
     }

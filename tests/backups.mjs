@@ -53,6 +53,24 @@ try {
   run();
   const after = backups();
   check('a change makes a new backup and prunes the next oldest, still 24', after.length === 24 && after.includes(first) && !after.includes(old[7]) && after.includes(old[8]) && after.filter((f) => !old.includes(f)).length === 2, after.join(' '));
+  // A VACUUM INTO that fails part-way (a full disk) leaves no partial board-*.db behind.
+  await sleep(1100);
+  db.exec('UPDATE tasks SET updated_at = 3');
+  const realExec = db.exec.bind(db);
+  db.exec = (sql) => {
+    const m = /^VACUUM INTO '(.+)'$/.exec(sql);
+    if (!m) return realExec(sql);
+    fs.writeFileSync(m[1].replace(/''/g, "'"), 'partial');
+    throw new Error('database or disk is full');
+  };
+  const log = console.error; let logged = '';
+  console.error = (...a) => { logged += a.join(' '); };
+  try { run(); } finally { console.error = log; db.exec = realExec; }
+  const leftovers = fs.readdirSync(bdir).filter((f) => !after.includes(f) && !others.includes(f) && f !== '.last');
+  check('a failed backup leaves no partial file (none counted among the 24, no temp file)', /disk is full/.test(logged) && backups().join() === after.join() && !leftovers.length, leftovers.join(' ') || logged);
+  run();
+  const retried = backups().filter((f) => !after.includes(f));
+  check('…and the next run makes it', retried.length === 1 && backups().length === 24, backups().join(' '));
   process.env.BOARD_BACKUP_MINUTES = '0';
   const off = await import('../src/backup.js?off');
   const none = [];

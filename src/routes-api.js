@@ -3,7 +3,7 @@
 import zlib from 'node:zlib';
 import QRCode from 'qrcode';
 import { timeInfo, normName, callerLaptop, NAME_RE, RESERVED_NAMES } from './board.js';
-import { agentFrom, h, laptopParam, internalError, wantsGzip, GZIP_VARY } from './http-util.js';
+import { agentFrom, badRoot, h, laptopParam, internalError, wantsGzip, GZIP_VARY } from './http-util.js';
 import { clientIp } from './request-limits.js';
 import { recap } from './recap.js';
 import { TOKEN_ROTATED } from './auth.js';
@@ -17,11 +17,15 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
   api.use((req, res, next) => (req.role !== 'agent' || agentLimit(req, res, agentFrom(req), false) ? next() : undefined));
   api.use(viewerLimits);
   api.use(humanOnly);
-  // An agent may not speak as the board ("board") or as nobody in particular ("anonymous" is a call without a name).
+  // An agent may not speak as the board ("board"), as nobody in particular ("anonymous" is a call without a name),
+  // or under a name with nothing before its slash ("/x"). Nor may a human write as "board" or "anonymous" (its
+  // posts would read as the board's announcements and fire its webhooks); reading the board still works.
   api.use((req, res, next) => {
-    if (req.role !== 'agent') return next();
     const named = req.get('x-agent') || req.body?.author || req.query.agent;
-    if (named && RESERVED_NAMES.has(agentFrom(req).split('/')[0])) return res.status(400).json({ error: `"${agentFrom(req).split('/')[0]}" is not an agent name. Use your own (BOARD_AGENT, or re-run join).` });
+    if (!named) return next();
+    const root = agentFrom(req).split('/')[0];
+    if (req.role === 'agent' && badRoot(agentFrom(req))) return res.status(400).json({ error: `"${root || agentFrom(req)}" is not an agent name. Use your own (BOARD_AGENT, or re-run join).` });
+    if (req.role === 'human' && req.method !== 'GET' && RESERVED_NAMES.has(root)) return res.status(400).json({ error: `"${root}" is reserved for the board: pick your own name (the name button at the top of the board).` });
     next();
   });
   // The web board sends X-Agent with the human's name. Agents (the Stop hook) send X-Agent too, with the

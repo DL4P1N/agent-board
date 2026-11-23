@@ -26,6 +26,12 @@ export function newBoardToken() {
 export function writeTokenFile(file, token) {
   const tmp = `${file}.${process.pid}.tmp`;
   // Readable by this user only (on POSIX; Windows ignores the mode, the user's profile folder is private anyway).
-  fs.writeFileSync(tmp, token, { mode: 0o600 });
-  fs.renameSync(tmp, file);
+  // A failed write or rename (e.g. Windows: the file held open by another program) doesn't leave the token behind in the temp file.
+  try {
+    fs.writeFileSync(tmp, token, { mode: 0o600 });
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch {}
+    throw e;
+  }
 }

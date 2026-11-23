@@ -720,6 +720,15 @@ check('PR link backfilled from the owner\'s earlier event', bfT?.pr_url === 'htt
   lb.close();
   check('older lock paths are normalised once (duplicates merged, the longest kept; outside-repo paths dropped)', lrows.join() === 'README.md:ola,src/config.js:ola,src/win/path.js:pia' && open(locks, version) === latest, lrows.join());
   check('…so an older src/sub/../config.js lock conflicts with and unlocks as src/config.js', conflict.ok === false && conflict.conflicts?.[0]?.owner === 'ola' && unlocked.released.join() === 'src/config.js', JSON.stringify([conflict, unlocked]));
+
+  // Version 5: events are read by channel (direct-message threads): an index, on new boards and upgraded ones.
+  const indexes = (d) => d.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'events'").all().map((r) => r.name);
+  const v4 = tempDir();
+  reopen(v4);
+  open(v4, (d) => d.exec('DROP INDEX IF EXISTS events_channel; PRAGMA user_version = 4'));
+  reopen(v4);
+  const plan = open(v4, (d) => d.prepare("EXPLAIN QUERY PLAN SELECT * FROM events WHERE channel = 'direct' ORDER BY id DESC LIMIT 5").all().map((r) => r.detail).join(' '));
+  check('events(channel) index: on a new board, and added to a schema-4 board', open(fresh, indexes).includes('events_channel') && open(v4, indexes).includes('events_channel') && open(v4, version) === latest && /events_channel/.test(plan), `${open(v4, indexes)} ${plan}`);
 }
 
 // ================= 15. board internals: one transaction per write, the stats cache, files closed on failure =================

@@ -1,8 +1,8 @@
 // The MCP endpoint of a board (stateless streamable HTTP), at <board>/mcp.
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { callerLaptop, RESERVED_NAMES } from './board.js';
+import { callerLaptop } from './board.js';
 import { buildMcpServer } from './mcp.js';
-import { agentFrom, laptopParam } from './http-util.js';
+import { agentFrom, badRoot, laptopParam } from './http-util.js';
 import { clientIp } from './request-limits.js';
 
 // Friendly name for the AI tool behind an MCP connection (from initialize's clientInfo.name).
@@ -24,8 +24,9 @@ export function mountMcp(router, { board, auth, tokenCurrent, agentLimit, holdSl
     if (req.role === 'viewer') return res.status(403).json({ jsonrpc: '2.0', error: { code: -32001, message: 'The viewer token is read-only.' }, id: null });
     // One request per call: a JSON-RPC batch would get past the open-waits limit below (MCP clients don't send them).
     if (Array.isArray(req.body)) return res.status(400).json({ jsonrpc: '2.0', error: { code: -32600, message: 'Batched requests are not supported: send one JSON-RPC request per call.' }, id: null });
-    // "board" is the board's own announcements and "anonymous" a call without a name: no agent is either.
-    if (RESERVED_NAMES.has(agentFrom(req).split('/')[0])) return res.status(400).json({ jsonrpc: '2.0', error: { code: -32602, message: 'This connection needs its own agent name (?agent=<name> on the MCP URL; "board" and "anonymous" are taken). Re-run the join command from the web board.' }, id: null });
+    // "board" is the board's own announcements and "anonymous" a call without a name: no agent is either; nor is
+    // "/x" (no name before the slash: no presence row, no slot limit, and every such name one team).
+    if (badRoot(agentFrom(req))) return res.status(400).json({ jsonrpc: '2.0', error: { code: -32602, message: 'This connection needs its own agent name (?agent=<name> on the MCP URL; "board" and "anonymous" are taken). Re-run the join command from the web board.' }, id: null });
     if (!agentLimit(req, res, agentFrom(req), true)) return;
     if (req.body?.method === 'tools/call' && req.body?.params?.name === 'wait_for_events') {
       const who = agentFrom(req).split('/')[0];
