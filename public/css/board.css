@@ -225,8 +225,8 @@ button.bell.blocked .slash { display: inline; }
 .phases ol { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1); list-style: none; margin: 0; padding: 0; flex: 1 1 0; min-width: 0; }
 .phases li { display: inline-flex; align-items: center; gap: var(--s1); }
 
-/* Questions: the one thing that must not be missed, under a dashed rule, one card each. A long one shows 4 lines until
-   you answer it (its whole text is read out either way). */
+/* Questions: the one thing that must not be missed, under a dashed rule, one card each, each in full (a long one makes
+   the column scroll). */
 .nyou > .attn { padding-top: var(--s4); margin-top: var(--s4); border-top: 2px dashed var(--line); }
 .nyou:has(> #q-panel:not([hidden])) > .now { padding-bottom: var(--s3); }
 .now:not(:has(> :not(.nl))) + .attn { border-top: 0; margin-top: 0; padding-top: 0; }
@@ -234,7 +234,6 @@ button.bell.blocked .slash { display: inline; }
 .qcard { background: var(--raised); border-radius: var(--r-md); padding: var(--s3) var(--s4); min-width: 0; }
 .qcard .qh { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); align-items: baseline; font-size: var(--fs-meta); }
 .qcard .qt { white-space: pre-wrap; overflow-wrap: anywhere; margin: var(--s1) 0 var(--s2); font-size: var(--fs-body); }
-.qcard:not(:focus-within) .qt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
 .qcard form { display: flex; gap: var(--s3); align-items: flex-end; }
 .qcard textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 

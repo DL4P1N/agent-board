@@ -315,6 +315,12 @@ try {
   await A.bob('ask_human', { question: 'Is a 10 votes per person cap fine?' });
   await until(p, () => /New question from bob/.test(document.getElementById('announcer').textContent));
   check('B live region announces the new question once', /New question from bob/.test(await p.$eval('#announcer', (a) => a.textContent)));
+  // A long question is read in full before answering it: nothing is clipped while its answer box is not focused.
+  await A.chen('ask_human', { question: 'Long question: the leaderboard can refresh every second over a websocket, or every ten seconds by polling the REST API. The websocket is nicer in the demo but needs a sticky session behind the load balancer, which we have not set up yet. Polling works today and is simpler to test. Which one should we ship for the demo, and is a ten second delay acceptable to the judges?' });
+  await until(p, () => [...document.querySelectorAll('.qcard .qt')].some((q) => q.textContent.startsWith('Long question')));
+  await p.evaluate(() => document.activeElement?.blur());
+  const lq = await p.evaluate(() => { const q = [...document.querySelectorAll('.qcard .qt')].find((e) => e.textContent.startsWith('Long question')); return q && { sh: q.scrollHeight, ch: q.clientHeight, focus: q.closest('.qcard').matches(':focus-within') }; });
+  check('B a long question shows in full while its answer box is not focused (not clipped)', !!lq && !lq.focus && lq.ch > 0 && lq.sh <= lq.ch + 1, JSON.stringify(lq));
   check('B #conn is not re-announced (no change → no DOM write)', await p.evaluate(() => { const c = $('conn'); let n = 0; new MutationObserver(() => n++).observe(c, { childList: true, characterData: true, subtree: true }); setConn('live'); setConn('live'); return new Promise((r) => setTimeout(() => r(n === 0), 50)); }));
 
   // Task dialog: conflict only for fields I edited; Esc asks before discarding
