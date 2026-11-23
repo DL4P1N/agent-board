@@ -138,7 +138,9 @@ try {
   await page.click('#o3d');
   const office = await until(() => document.documentElement.dataset.boardView === 'office', null, 10000);
   if (!office) {
-    check('no WebGL in this browser: the 3D view checks are skipped', true);
+    // CI has software WebGL (SwiftShader): there the 3D view must open, so a broken office bundle fails instead of skipping.
+    check('no 3D view in this browser (no WebGL): its checks are skipped', !process.env.CI, 'CI must run them');
+    console.log('NOTE direct: the 3D view did not open (no WebGL?), so its checks were skipped');
   } else {
     check('3D view: the Direct tab and the open thread are still there', await until(() => ui.tab === 'direct' && $('o-act').contains($('dmbar')) && !$('dmbar').hidden && $('dmbar').offsetParent !== null));
     await page.click('[data-dm-back]');

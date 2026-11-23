@@ -141,6 +141,10 @@ try {
     await until(page, () => document.getElementById('conn')?.classList.contains('live'));
     await until(page, () => { const v = document.getElementById('office-view'); return v && !v.classList.contains('loading') && v.querySelector('canvas'); }, null, 15000);
     const scene = await page.evaluate(() => (document.querySelector('#office-view canvas') ? 'WebGL' : 'no WebGL'));
+    // CI has software WebGL (SwiftShader): there the scene must start, so a broken office bundle fails instead of passing
+    // on the board without it.
+    if (process.env.CI) check('CI: the 3D view scene started (WebGL), so its checks ran', scene === 'WebGL');
+    else if (scene !== 'WebGL') console.log('NOTE hostile: the 3D scene did not start (no WebGL?), so the 3D view was checked without it');
     await sleep(600);
     await page.evaluate(() => document.querySelector('.o-agent')?.click());
     // Unfold the Tasks window, so its cards are drawn too.
@@ -171,6 +175,9 @@ try {
     await until(page, (m) => document.body.innerText.includes(m), MARK);
     await sleep(600);
     await page.screenshot({ path: path.join(out, '05-present-3d.png') });
+    const fell = page.url().includes('classic');
+    if (process.env.CI) check('CI: the 3D presenter started (no fallback to the classic page)', !fell, page.url());
+    else if (fell) console.log('NOTE hostile: the 3D presenter fell back to the classic page (no WebGL?)');
     check(`3D presenter (${page.url().includes('classic') ? 'fell back to classic' : 'office'}): hostile text shows as text`, (await page.evaluate(() => document.body.innerText)).includes(MARK));
     verdict('3D presenter', await scan(page), errs);
   }

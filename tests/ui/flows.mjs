@@ -388,7 +388,8 @@ await page.screenshot({ path: `${out}/v2-desktop-light.png` });
   await page.waitForFunction((id) => !!taskById(id), { timeout: 5000 }, dragT.id);
   await page.click('#o3d');
   const in3d = await page.waitForFunction(() => document.documentElement.dataset.boardView === 'office', { timeout: 8000 }).then(() => true, () => false);
-  if (!in3d) check('3D drag skipped: no WebGL in this browser', true);
+  // CI has software WebGL (SwiftShader): there the 3D view must open, so a broken office bundle fails instead of skipping.
+  if (!in3d) { check('3D drag skipped: the 3D view did not open (no WebGL?)', !process.env.CI, 'CI must run it'); console.log('NOTE flows: the 3D view did not open (no WebGL?), so the 3D drag checks were skipped'); }
   else {
     await page.evaluate(() => { if ($('o-tasks').classList.contains('folded')) $('o-tasks-fold').click(); });
     await page.waitForSelector(`#o-tasks-b .col[data-status="open"] .card[data-id="${dragT.id}"]`, { timeout: 5000 });
