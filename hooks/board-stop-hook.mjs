@@ -50,7 +50,7 @@ function lockState() {
   }
 }
 
-// The hook's memory for one board + agent: read once, saved with save(patch). reset: the cursor may go back
+// The hook's memory for one board + agent: read once, saved with save(patch), which says whether it saved. reset: the cursor may go back
 // (the board was started fresh), but only while the cursor on disk is still the one read here; otherwise a cursor
 // or nudge time saved meanwhile by another hook of this agent (one that didn't wait as long) is kept when it's
 // further along.
@@ -59,7 +59,7 @@ function hookState(key) {
   const entry = { ...(read()[key] || {}) };
   const startCursor = entry.cursor;
   const save = (patch, { reset = false } = {}) => {
-    if (!lockState()) return;
+    if (!lockState()) return false;
     const tmp = `${STATE_FILE}.${process.pid}.tmp`;
     try {
       // Read again just before writing, and change only what this hook changed: other hooks may have saved meanwhile.
@@ -74,7 +74,8 @@ function hookState(key) {
       for (const k of Object.keys(all)) if (!(now - (all[k]?.seen || 0) < KEEP_MS)) delete all[k];
       fs.writeFileSync(tmp, JSON.stringify(all));
       fs.renameSync(tmp, STATE_FILE);
-    } catch { try { fs.unlinkSync(tmp); } catch {} }
+      return true;
+    } catch { try { fs.unlinkSync(tmp); } catch {} return false; }
     finally { try { fs.unlinkSync(LOCK_FILE); } catch {} }
   };
   return { entry, save };
@@ -122,7 +123,9 @@ async function main() {
   if (fresh) since = Math.max(0, latest - 50);
 
   const { events, cursor } = await get(`/api/events?since=${since}&exclude=${encodeURIComponent(agent)}&wait=${wait}`);
-  state.save({ cursor }, { reset: fresh });
+  // Not saved (a held lock, a read-only or full disk): the cursor stays put, so every stop would report the same
+  // events again. On a continued stop, let Claude stop instead, so the hook can never trap the agent.
+  if (!state.save({ cursor }, { reset: fresh }) && continuing) return;
 
   // The board leaves out this agent's own events; its own subagents' (<agent>/<name>) are left out here.
   const own = (e) => String(e.author || '').toLowerCase().startsWith(agent + '/');

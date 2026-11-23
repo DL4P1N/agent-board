@@ -69,7 +69,7 @@ check('a bad reset time is refused', r.status === 400 && /until must be a time/.
 // ================= 2. the Stop hook sees the limit in the transcript =================
 const tmp = tempDir('board-hook-');
 const line = (o) => JSON.stringify({ timestamp: new Date().toISOString(), ...o });
-function runHook(transcript, agentName = 'ana', extra = {}, nodeArgs = []) {
+function runHook(transcript, agentName = 'ana', extra = {}, nodeArgs = [], { continuing = false } = {}) {
   const tp = path.join(tmp, `t-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`);
   fs.writeFileSync(tp, transcript.join('\n') + '\n');
   return new Promise((resolve) => {
@@ -79,7 +79,7 @@ function runHook(transcript, agentName = 'ana', extra = {}, nodeArgs = []) {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     let out = ''; child.stdout.on('data', (d) => { out += d; }); child.stderr.on('data', (d) => { out += d; });
-    child.stdin.end(JSON.stringify({ transcript_path: tp, stop_hook_active: false }));
+    child.stdin.end(JSON.stringify({ transcript_path: tp, stop_hook_active: continuing }));
     child.on('exit', (code) => resolve({ code, out }));
   });
 }
@@ -207,6 +207,11 @@ check('hook: entries unused for 30 days are dropped, newer ones kept', !hookStat
   // Saving without the lock could undo another hook's save: it skips the save (the next stop reports the event again).
   check('hook: a held state lock doesn\'t hold it up: it skips the save and leaves the lock to its owner',
     h.code === 0 && /while the lock is held/.test(h.out) && took < 5000 && fs.existsSync(lock) && readState()[anaKey].cursor === before, `${took}ms ${readState()[anaKey].cursor} vs ${before} ${h.out.slice(0, 200)}`);
+  // A failed save on a continued stop (stop_hook_active) lets Claude stop: otherwise every stop would be blocked with
+  // the same events, trapping the agent for as long as the state file can't be saved.
+  h = await runHook([], 'ana', {}, [], { continuing: true });
+  check('hook: a failed save on a continued stop lets Claude stop (never traps the agent)',
+    h.code === 0 && !/"decision"\s*:\s*"block"/.test(h.out) && readState()[anaKey].cursor === before, `${readState()[anaKey].cursor} vs ${before} ${h.out.slice(0, 200)}`);
   fs.rmSync(lock, { force: true });
   h = await runHook([]);
   check('hook: …and the next stop reports it again and saves', /while the lock is held/.test(h.out) && readState()[anaKey].cursor === await latest(), h.out.slice(0, 200));
