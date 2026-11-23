@@ -61,6 +61,9 @@ try {
     const b = await open({ w: 1280, h: 800 });
     const c = await b.evaluate(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(); return { left: r('o-left').right, tasks: [r('o-tasks').left, r('o-tasks').right], rcol: r('o-rcol').left, sw: !!document.getElementById('o3d').offsetWidth }; });
     check('1280px, 3D off: three columns (Needs attention, the Tasks panel, Agents and Activity side by side) and the switch', c.left < c.tasks[0] && c.tasks[1] < c.rcol && c.sw, JSON.stringify(c));
+    // The narrowest three-column window: with Done folded, each of the four task columns keeps room for a short title on one line.
+    const k = await b.evaluate(() => { const bd = document.getElementById('board'); return { folded: bd.classList.contains('done-closed'), cols: [...bd.querySelectorAll(':scope > .col:not(.collapsed)')].map((c) => Math.round(c.getBoundingClientRect().width)), over: bd.scrollWidth - bd.clientWidth, page: document.documentElement.scrollWidth - innerWidth }; });
+    check('1280px, Done folded: the four task columns at least 164px wide, nothing scrolls sideways', k.folded && k.cols.length === 4 && k.cols.every((w) => w >= 164) && k.over <= 0 && k.page <= 0, JSON.stringify(k));
     await b.screenshot({ path: `${out}/board-1280.png` });
     await close(b);
   });

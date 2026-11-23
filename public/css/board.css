@@ -793,7 +793,10 @@ button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
 main { --dock: clamp(272px, 20vw, 340px); --top: calc(var(--hdr, 54px) + var(--edge)); isolation: isolate;
   display: grid; grid-template-columns: var(--dock) minmax(0, 1fr) var(--dock); grid-template-areas: "left centre right" "left foot right"; grid-template-rows: 1fr auto; gap: 0 var(--gutter); align-items: start;
   padding: var(--edge); }
-@media (max-width: 1400px) { main { --dock: clamp(256px, 20vw, 280px); } }
+/* The narrowest three columns (1280 to 1400px): the side columns go from 240px at 1280 to 280px at 1400, and below
+   1400 the task columns sit a little closer with a narrower folded Done rail, so four columns keep room for a title. */
+@media (max-width: 1400px) { main { --dock: clamp(240px, 240px + (100vw - 1280px) / 3, 280px); } }
+@media (min-width: 1280px) and (max-width: 1399px) { .board { gap: var(--s3); } .board.done-closed { grid-template-columns: repeat(4, minmax(0, 1fr)) 40px; } }
 #o-left { grid-area: left; } .centre { grid-area: centre; } .o-rcol { grid-area: right; }
 .centre { position: relative; display: flex; flex-direction: column; gap: var(--gutter); min-width: 0; }
 .office-view { display: none; }
