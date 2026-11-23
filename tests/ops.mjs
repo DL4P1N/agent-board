@@ -135,9 +135,14 @@ check('an unknown backup name is refused', rs.status === 1 && /No backup called/
 {
   const pidFile = path.join(board.dataDir, 'board.pid');
   // A live process (this test itself) in board.pid: refused, whatever the port.
-  fs.writeFileSync(pidFile, JSON.stringify({ pid: process.pid, port: 1, started: Date.now() }));
+  fs.writeFileSync(pidFile, JSON.stringify({ pid: process.pid, port: 1, started: new Date().toISOString() }));
   rs = restore(latestBackup);
   check('restore refuses while board.pid names a live process', rs.status === 1 && /is running \(process/.test(rs.stderr), rs.stdout + rs.stderr);
+  // A live pid that isn't the board (the pid was handed out again after a crash): written over a minute ago and
+  // nothing listens on its port, so the file is stale, as the server itself decides (src/pidfile.js).
+  fs.writeFileSync(pidFile, JSON.stringify({ pid: process.pid, port: await freePort(), started: new Date(Date.now() - 5 * 60e3).toISOString() }));
+  rs = restore(latestBackup);
+  check('a board.pid whose pid now belongs to another program is ignored as stale', rs.status === 0 && /stale/.test(rs.stdout) && /Restored/.test(rs.stdout), rs.stdout + rs.stderr);
   // A dead pid: a stale file from a crash, ignored with a note.
   const dead = spawnSync(process.execPath, ['-e', 'process.exit(0)']).pid;
   fs.writeFileSync(pidFile, JSON.stringify({ pid: dead, port: 1, started: Date.now() }));

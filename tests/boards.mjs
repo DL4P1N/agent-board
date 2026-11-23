@@ -132,6 +132,18 @@ check('after a restart, imported and new boards are served', oldSt.board?.slug =
 check('archived boards stay archived after a restart', (await fetch(`${board.base}/b/second/api/state`)).status === 410);
 check('cli refuses changes while the server runs (except list)', (() => { const r = cli('new', 'While Running'); return r.status === 1 && /running/i.test(r.stderr); })());
 check('cli list works while the server runs', cli('list').status === 0);
+// board.pid naming a process this user may not signal (EPERM: another user's, or a service's): it exists, so the
+// server counts as running. Its own data folder, so the real server's board.pid isn't in the way.
+{
+  const permPid = process.platform === 'win32' ? 4 : process.getuid?.() !== 0 ? 1 : 0;
+  let eperm = false; try { process.kill(permPid, 0); } catch (e) { eperm = e.code === 'EPERM'; }
+  if (permPid && eperm) {
+    const data = tempDir('cb-eperm-');
+    fs.writeFileSync(path.join(data, 'board.pid'), JSON.stringify({ pid: permPid, port: 1, started: new Date().toISOString() }));
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'boards.mjs'), 'new', 'While Running'], { env: { ...process.env, BOARD_DATA: data, PORT: '1' }, encoding: 'utf8' });
+    check('cli: a board.pid process it may not signal (EPERM) counts as running', r.status === 1 && /running/i.test(r.stderr), r.stdout + r.stderr);
+  }
+}
 
 // ================= regressions from the multi-board review =================
 // 1. Archiving while a long-poll waits must not crash the server.

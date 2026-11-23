@@ -11,6 +11,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { boardEntryProblem } from '../src/boards.js';
+import { otherOwner } from '../src/pidfile.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'));
@@ -66,15 +67,14 @@ if (!src) fail(arg === 'latest' ? `Board "${board.slug}" has no backups yet.` : 
 
 // A running board would keep writing to the old database (and overwrite the restore).
 // The server writes board.pid in the data folder while it runs (one for all boards): that works whatever port it's on.
+// Whether it's stale is decided as the server decides it (src/pidfile.js): a live pid that isn't the board (handed
+// out again after a crash) doesn't block a restore forever.
 const pidFile = path.join(DATA_DIR, 'board.pid');
 if (fs.existsSync(pidFile)) {
-  let info = null;
-  try { info = JSON.parse(fs.readFileSync(pidFile, 'utf8')); } catch {}
-  const pid = Number(info?.pid);
-  let alive = false;
-  if (pid > 0) { try { process.kill(pid, 0); alive = true; } catch (e) { alive = e.code === 'EPERM'; } }
-  if (alive) fail(`A board is running (process ${pid}${info?.port ? `, port ${info.port}` : ''}). Stop it first (Ctrl+C in its window), then run this again.`);
-  console.log(`  (Ignoring a stale ${path.basename(pidFile)}: process ${pid || '?'} isn't running.)`);
+  const owner = await otherOwner();
+  if (owner) fail(`A board is running (process ${owner.pid}${owner.port ? `, port ${owner.port}` : ''}). Stop it first (Ctrl+C in its window), then run this again.`);
+  let pid = null; try { pid = JSON.parse(fs.readFileSync(pidFile, 'utf8'))?.pid; } catch {}
+  console.log(`  (Ignoring a stale ${path.basename(pidFile)}: process ${pid || '?'} isn't the board.)`);
 }
 let running = false;
 try { running = !!(await (await fetch(`http://localhost:${PORT}/health`, { signal: AbortSignal.timeout(1500) })).json())?.app; } catch {}

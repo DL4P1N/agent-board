@@ -16,6 +16,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { Registry, boardToken, checkSlug, slugify } from '../src/boards.js';
 import { writeTokenFile } from '../src/tokens.js';
+import { otherOwner } from '../src/pidfile.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'));
@@ -29,14 +30,9 @@ const [cmd = 'list', ...rest] = argv;
 const fail = (msg) => { console.error(`✗ ${msg}`); process.exit(1); };
 const ok = (msg) => console.log(`✓ ${msg}`);
 
-// A running server (data/board.pid with a live process) owns the registry.
-function serverRunning() {
-  try {
-    const { pid, port } = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'board.pid'), 'utf8'));
-    process.kill(pid, 0);
-    return { pid, port };
-  } catch { return null; }
-}
+// A running server (data/board.pid naming a live process: EPERM counts, it exists) owns the registry. The
+// server's own test (src/pidfile.js), so a pid handed out again after a crash isn't taken for the server.
+const serverRunning = otherOwner;
 
 let reg;
 try { reg = new Registry(DATA_DIR); } catch (e) { fail(e.message); }
@@ -51,7 +47,7 @@ const usedTokens = (except) => reg.list().filter((x) => x.slug !== except && !re
   try { const f = path.join(reg.dirOf(x), 'token'); if (fs.existsSync(f)) out.push({ slug: x.slug, token: fs.readFileSync(f, 'utf8').trim() }); } catch {}
   return out;
 });
-const running = serverRunning();
+const running = await serverRunning();
 if (running && cmd !== 'list' && cmd !== 'token') {
   fail(`The server is running (process ${running.pid}, port ${running.port}). Manage boards on its page instead:\n  http://localhost:${running.port}/boards?admin=<the admin token printed when it started, also in ${path.join(DATA_DIR, 'admin-token')}>\nor stop it (Ctrl+C in its window) and run this again.`);
 }
