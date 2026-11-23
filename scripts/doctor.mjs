@@ -98,7 +98,12 @@ export async function runDoctor({ header = true } = {}) {
       bad(`there's no board at ${url}.`, 'Check the address with the host (boards live at /b/<name>), and run the join command again.');
       return b;
     }
-    try { const s = st?.ok ? await st.json() : null; b.name = s?.board?.name || s?.board?.slug || null; } catch {}
+    // Any other failure (a 5xx, a timeout, no answer): the server is up, but this board isn't usable.
+    if (!st?.ok) {
+      bad(`the board at ${url} didn't answer (${st ? `HTTP ${st.status}` : 'no reply in time'}).`, 'Ask the host to check the npm start window for errors; if it shows none, run doctor again in a minute.');
+      return b;
+    }
+    try { const s = await st.json(); b.name = s?.board?.name || s?.board?.slug || null; } catch {}
     ok(`board${b.name ? ` "${b.name}"` : ''} reachable at ${url}`);
     b.ok = true;
     return b;

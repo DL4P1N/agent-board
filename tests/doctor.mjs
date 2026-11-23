@@ -4,7 +4,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import http from 'node:http';
+import { spawn, spawnSync } from 'node:child_process';
 import { startBoard, finish, ROOT, TOKEN, tempDir } from './helpers.mjs';
 
 const R = [];
@@ -63,6 +64,28 @@ for (const a of cfg4.agents) a.token = 'rotated-away';
 fs.writeFileSync(cfgPath, JSON.stringify(cfg4));
 const d4 = doctor();
 check('JOIN-14: a rejected token says it changed (rotated or a new board) and to ask the host', d4.status === 1 && /The board's token changed \(the host rotated it or started a new board\)\. Ask the host for the new join command and run it\./.test(d4.out) && !/started a fresh board/.test(d4.out), d4.out);
+
+// ---- a board whose /health answers but /api/state fails (a 500): not "reachable" ----
+{
+  const health = await (await fetch(`${board.base}/health`)).text();
+  const fake = http.createServer((req, res) => {
+    if (req.url === '/health') { res.setHeader('Content-Type', 'application/json'); res.end(health); return; }
+    res.statusCode = 500; res.end('{"error":"boom"}');
+  });
+  await new Promise((r) => fake.listen(0, '127.0.0.1', r));
+  const fakeUrl = `http://127.0.0.1:${fake.address().port}`;
+  const cfg5 = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfg5.url = fakeUrl; for (const a of cfg5.agents) { a.url = fakeUrl; a.token = TOKEN; }
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg5));
+  // Not spawnSync: the fake board answers from this process.
+  const d5 = await new Promise((resolve) => {
+    const c = spawn(process.execPath, [path.join(ROOT, 'scripts', 'doctor.mjs')], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = ''; c.stdout.on('data', (d) => { out += d; }); c.stderr.on('data', (d) => { out += d; });
+    c.on('close', (status) => resolve({ status, out }));
+  });
+  fake.close();
+  check('a board whose /api/state fails is not reported reachable', d5.status === 1 && !/reachable at/.test(d5.out) && /500/.test(d5.out), `${d5.status} ${d5.out}`);
+}
 
 try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
 await finish(R, { board });
