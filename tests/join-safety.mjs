@@ -50,6 +50,25 @@ const ja = join('copilot-vscode', a);
 const aNow = read(path.join(a, '.vscode', 'mcp.json'));
 check('tracked mcp.json: left as it was (no token), join says why and fails', aNow === trackedText && !aNow.includes(agentToken()) && /mcp\.json is tracked by git, so the board's address/.test(ja.out) && ja.status === 1, ja.out.slice(-600));
 
+// ---- one tracked under another case (.vscode/MCP.json): the same file where the file system ignores case ----
+const ci = newRepo('tracked-case', { '.vscode/MCP.json': trackedText }, ['.vscode/MCP.json']);
+const ignoreCase = git('-C', ci, 'config', '--type=bool', 'core.ignorecase').stdout.trim() === 'true';
+if (ignoreCase) {
+  const jci = join('copilot-vscode', ci);
+  const ciNow = read(path.join(ci, '.vscode', 'MCP.json'));
+  check('tracked MCP.json (another case, case-insensitive file system): left as it was, join refuses', ciNow === trackedText && /mcp\.json is tracked by git/i.test(jci.out) && jci.status === 1, jci.out.slice(-600));
+}
+
+// ---- --repo is a subfolder of the git repo (a monorepo package): the exclude entry is anchored at the repo's top ----
+const mono = newRepo('mono', { 'README.md': 'x\n' }, ['README.md']);
+const pkg = path.join(mono, 'packages', 'app'); fs.mkdirSync(pkg, { recursive: true });
+const jm = join('copilot-vscode', pkg);
+const excludes = (read(path.join(mono, '.git', 'info', 'exclude')) || '').split(/\r?\n/).filter((l) => l && !l.startsWith('#'));
+git('-C', mono, 'add', '-A');
+const staged = git('-C', mono, 'diff', '--cached', '--name-only').stdout;
+check('--repo in a subfolder: the token file is kept out of git (exclude entry relative to the repo top, with a leading /)',
+  read(path.join(pkg, '.vscode', 'mcp.json'))?.includes(agentToken()) && excludes.includes('/packages/app/.vscode/mcp.json') && !/mcp\.json|board\.prompt/.test(staged), `${JSON.stringify(excludes)} staged: ${staged} ${jm.out.slice(-300)}`);
+
 // ---- an existing untracked one with a BOM, comments and a trailing comma: read, kept out of git ----
 const jsonc = '﻿{\n  // my servers\n  "servers": {\n    "mine": { "type": "stdio", "command": "my-server" }, /* keep */\n  },\n}\n';
 const b = newRepo('untracked', { '.vscode/mcp.json': jsonc });

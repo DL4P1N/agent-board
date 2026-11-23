@@ -626,14 +626,17 @@ function keepOutOfGit(file, ours, dir) {
     return;
   }
   if (!ours || run('git', ['-C', dir, 'check-ignore', '-q', '--', rel], true).status === 0) return; // or already ignored
-  // Worktrees share the main repo's info/exclude (it lives in the common git dir).
+  // Worktrees share the main repo's info/exclude (it lives in the common git dir). Its patterns are relative to the
+  // repo's top folder, which dir (--repo) may be below: the entry is that folder's prefix + rel, anchored with a leading /.
   const gitDir = run('git', ['-C', dir, 'rev-parse', '--git-common-dir'], true);
-  if (gitDir.status !== 0) return;
+  const prefix = run('git', ['-C', dir, 'rev-parse', '--show-prefix'], true);
+  if (gitDir.status !== 0 || prefix.status !== 0) return;
   const exclude = path.resolve(dir, gitDir.stdout.trim(), 'info', 'exclude');
+  const entry = `/${prefix.stdout.trim()}${rel}`;
   const cur = fs.existsSync(exclude) ? fs.readFileSync(exclude, 'utf8') : '';
-  if (!cur.split(/\r?\n/).includes(rel)) {
+  if (!cur.split(/\r?\n/).includes(entry)) {
     fs.mkdirSync(path.dirname(exclude), { recursive: true });
-    fs.appendFileSync(exclude, `${cur && !cur.endsWith('\n') ? '\n' : ''}${rel}\n`);
+    fs.appendFileSync(exclude, `${cur && !cur.endsWith('\n') ? '\n' : ''}${entry}\n`);
   }
 }
 
@@ -645,8 +648,12 @@ function run(bin, argv, quiet = false) {
 function shown(argv) {
   return argv.map((a) => (/[\s"'$&|<>()]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)).join(' ');
 }
+// Where the file system ignores case (git sets core.ignorecase there: Windows, macOS), a tracked .vscode/MCP.json is
+// the very file join writes as .vscode/mcp.json, so the match ignores case too.
 function isTracked(rel, dir) {
-  return run('git', ['-C', dir, 'ls-files', '--error-unmatch', '--', rel], true).status === 0;
+  const ic = run('git', ['-C', dir, 'config', '--type=bool', 'core.ignorecase'], true);
+  const icase = ic.status === 0 ? ic.stdout.trim() === 'true' : ['win32', 'darwin'].includes(process.platform);
+  return run('git', ['-C', dir, 'ls-files', '--error-unmatch', '--', `${icase ? ':(icase)' : ''}${rel}`], true).status === 0;
 }
 // A file that will hold the agent token must not be one git tracks: a commit would publish the token.
 function refuseTracked(file, dir) {
