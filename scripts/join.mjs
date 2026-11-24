@@ -34,6 +34,7 @@ import { runDoctor, CONFIG_PATH } from './doctor.mjs';
 import { onPath, runSync } from './lib/run.mjs';
 import { parseJsonc, isPlainJson } from './lib/jsonc.mjs';
 import { agentTokenFor, writeTokenFile } from '../src/tokens.js';
+import { isRepoUrl, printable } from '../src/repo-url.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEMPLATES = path.join(ROOT, 'templates');
@@ -254,7 +255,11 @@ for (const t of tools) {
 }
 
 // The team's project repo (if the host set it on the board): suggest an existing copy next to this folder, or offer to clone it.
-const projectUrl = boardState?.settings?.repo || '';
+// Only a plain git address is cloned (a board, or an older one, could hand out "--upload-pack=<command>"): anything
+// else is skipped with a note, printed without control characters.
+const boardRepo = String(boardState?.settings?.repo || '');
+const projectUrl = isRepoUrl(boardRepo) ? boardRepo : '';
+if (boardRepo && !projectUrl) console.log(`  • the board's project repo setting isn't a plain git address, so join won't clone it: ${JSON.stringify(printable(boardRepo).slice(0, 200))}`);
 const projectName = projectUrl ? path.basename(projectUrl.replace(/\.git$/, '').replace(/[\\/]+$/, '')) : '';
 const sibling = projectName ? path.resolve(ROOT, '..', projectName) : '';
 if (!args.repo) {
@@ -270,7 +275,7 @@ if (!args.repo) {
   for (let i = 0; i < 3 && !r && rl && /^required/.test(why) && !(projectUrl && !fs.existsSync(sibling)); i++) r = await ask(`A repo path is ${why}. Path to your copy of the project repo`, def);
   if (r) args.repo = r.replace(/^["']|["']$/g, '');
   else if (projectUrl && rl && !fs.existsSync(sibling)) {
-    const c = run('git', ['clone', projectUrl, sibling]);
+    const c = run('git', ['clone', '--', projectUrl, sibling]);
     if (c.status === 0) { ok(`cloned ${projectUrl} → ${sibling}`); args.repo = sibling; }
     else bad(`git clone failed: ${(c.stderr || '').trim().split('\n').pop()}`);
   }

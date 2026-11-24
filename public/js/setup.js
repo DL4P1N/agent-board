@@ -83,6 +83,12 @@ function boardLink() {
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   return local && best && best.ip !== 'localhost' ? best.web_url : `${location.origin}${BASE}/?token=${encodeURIComponent(token)}`;
 }
+// The repo setting as one shell word, safe to paste into a terminal: as it is when it holds only characters a
+// shell reads literally (the server accepts no others), else single-quoted, without control characters.
+const shellArg = (v) => {
+  const s = String(v).replace(/[\u0000-\u001f\u007f-\u009f]/g, '');
+  return /^[A-Za-z0-9._~:/@%+=-]+$/.test(s) ? s : "'" + s.replace(/'/g, "'\\''") + "'";
+};
 // One ready-to-paste message for the team chat.
 function inviteText() {
   const su = state.setup || {}; const best = su.join_commands?.[0]; const S = state.settings;
@@ -91,7 +97,7 @@ function inviteText() {
   let n = 1;
   L.push(`${n++}. First time only, get the board tool:`, `   ${su.clone_command || 'git clone https://github.com/DL4P1N/agent-board && cd agent-board'}`, '   (already have an agent-board folder, or an older claude-board one? run git pull in it)');
   L.push(`${n++}. In the agent-board folder, connect your laptop (it asks your name, AI tool and project folder):`, `   ${join}`);
-  if (S.repo) L.push(`${n++}. Get the project repo (if you don't have it yet):`, `   git clone ${S.repo}`);
+  if (S.repo) L.push(`${n++}. Get the project repo (if you don't have it yet):`, `   git clone ${shellArg(S.repo)}`);
   L.push(`${n++}. Then open your AI tool in the project repo and type /board`, `   (Codex: $board · Copilot CLI: start it with  ${copilotLaunch()}  then type /board)`);
   L.push('   (Gemini CLI: /board · Cursor: /board in the Agent chat)');
   L.push('', `Just watching? Open ${boardLink()}`);

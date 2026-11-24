@@ -6,6 +6,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
 import { STATUSES, countOf, slotText, claimRefusal, updateRefusal } from './task-rules.js';
+import { isRepoUrl } from './repo-url.js';
 
 const STALE_MS = 15 * 60 * 1000;
 const AGENT_ONLINE_MS = 10 * 60 * 1000;
@@ -931,6 +932,8 @@ export class Board {
       if (patch[key] === undefined) continue;
       let val = String(patch[key] ?? '').trim();
       if (key === 'goal' || key === 'repo') capText(val, key, key === 'goal' ? MAX_TEXT : 500);
+      // What teammates' laptops run `git clone` on (join, the invite text): a plain git address only (src/repo-url.js).
+      if (key === 'repo' && !isRepoUrl(val)) throw new Error('repo must be a git address, e.g. https://github.com/team/project or git@github.com:team/project.git (no spaces, quotes or shell characters, and not starting with -)');
       if (key === 'integrator' || key === 'planner') val = normName(val).split('/')[0];
       if (key === 'planner' && val === ANYONE) throw new Error('planner must be one agent (or empty)');
       // Shown on every human's page: only what an agent name can be (or "*", whoever is free, for the integrator).
