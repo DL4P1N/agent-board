@@ -2,7 +2,7 @@
 // first), an agent's Message button opening its thread, sending, the agent's reply with an unread count, drafts kept
 // apart from the shared chat, the planner thread before and after there is a planner, and every theme's contrast.
 // Acts as human "dana". Starts its own throwaway board. Run all suites with: npm test
-import { startBoard, launchBrowser, shotsDir, finish, agent, rest as restOf, openLink } from '../helpers.mjs';
+import { startBoard, launchBrowser, shotsDir, finish, agent, rest as restOf } from '../helpers.mjs';
 import { scanText } from '../fixtures/scan-text.mjs';
 
 const board = await startBoard();
@@ -27,7 +27,7 @@ try {
   const emil = await agent(board, 'emil-codex', 'codex-mcp-client'); await emil('board_status');
   await rest('dana', '/messages', 'POST', { text: 'Morning all, shared chat here.' });
 
-  await openLink(page, `${board.base}/?token=${board.token}&name=dana`);
+  await page.goto(`${board.base}/?token=${board.token}&name=dana`);
   await page.waitForSelector('#app:not([hidden])');
   await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 8000 });
 

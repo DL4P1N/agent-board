@@ -1,5 +1,5 @@
 // Task text filter, Columns | Table view, and the Problems / Merges and reviews feed tabs.
-import { startBoard, launchBrowser, finish, agent, rest as restOf, openLink } from '../helpers.mjs';
+import { startBoard, launchBrowser, finish, agent, rest as restOf } from '../helpers.mjs';
 
 const board = await startBoard();
 const results = [];
@@ -27,7 +27,7 @@ try {
   await rest('dana', `/tasks/${c.id}`, 'PATCH', { status: 'done' });
   await rest('dana', '/agents/bob-claude', 'PATCH', { limited: true, note: 'weekly limit' });
 
-  await openLink(page, `${board.base}/?token=${board.token}&name=dana`);
+  await page.goto(`${board.base}/?token=${board.token}&name=dana`);
   await page.waitForSelector('#app:not([hidden])');
   await page.waitForFunction(() => document.querySelectorAll('.card').length >= 2, { timeout: 5000 });
 

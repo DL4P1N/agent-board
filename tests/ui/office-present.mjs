@@ -3,7 +3,7 @@
 // Chrome runs with SwiftShader (software WebGL) so this works on CI runners without a GPU; if WebGL is still
 // missing there, the fallback is what gets tested. Run all suites with: npm test
 import path from 'node:path';
-import { startBoard, launchBrowser, shotsDir, finish, agent, rest, TOKEN, openLink } from '../helpers.mjs';
+import { startBoard, launchBrowser, shotsDir, finish, agent, rest, TOKEN } from '../helpers.mjs';
 
 const board = await startBoard();
 const R = [];
@@ -446,7 +446,7 @@ try {
 
   // The board's header link still opens this page with the viewer token.
   const mp = await browser.newPage();
-  await openLink(mp, `${board.base}/?token=${TOKEN}&name=dana`);
+  await mp.goto(`${board.base}/?token=${TOKEN}&name=dana`);
   await mp.waitForSelector('#app:not([hidden])', { timeout: 8000 });
   await until(mp, () => !document.getElementById('present-link').hidden);
   const href = await mp.$eval('#present-link', (a) => a.getAttribute('href'));

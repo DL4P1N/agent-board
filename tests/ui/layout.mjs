@@ -8,7 +8,7 @@
 // Run all suites with: npm test
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { ROOT, launchBrowser, shotsDir, finish, openLink } from '../helpers.mjs';
+import { ROOT, launchBrowser, shotsDir, finish } from '../helpers.mjs';
 
 const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
@@ -38,7 +38,7 @@ async function open({ w, h, view = 'board', theme = 'dusk', contrast = false }) 
   await page.setViewport({ width: w, height: h });
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }, { name: 'prefers-reduced-motion', value: 'reduce' }, ...(contrast ? [{ name: 'prefers-contrast', value: 'more' }] : [])]);
   await page.evaluateOnNewDocument((c) => { try { localStorage.setItem('agent-board-3d', c.view === 'office' ? 'on' : 'off'); localStorage.setItem('board-theme', c.theme); localStorage.setItem('board-setup', 'closed'); } catch {} }, { view, theme });
-  await openLink(page, url, { waitUntil: 'load' }); // the demo's link: its name fills in the sign-in form
+  await page.goto(url, { waitUntil: 'load' });
   await until(page, () => document.getElementById('conn')?.classList.contains('live') && document.querySelectorAll('#board .card').length > 10, null, 15000);
   if (view === 'office') webgl = await until(page, () => document.documentElement.dataset.boardView === 'office' && !document.querySelector('.office-view.loading'), null, 20000);
   await settle(page);

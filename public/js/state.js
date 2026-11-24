@@ -42,8 +42,12 @@ let token = pending.get() || store.get('board-token') || '';
 // Names are case-insensitive, and the server keeps only a-z, digits, _ . and - (the sign-in form shows the result first).
 const NAME_MAX = 32; // a person's name; agents' names (with the tool and laptop) may be longer
 const cleanName = (n) => String(n ?? '').trim().toLowerCase().replace(/[^\w.\-]/g, '');
-// ?name=<person> (join prints the board link with it) only fills in the sign-in form: a link never changes who you are.
-const linkName = cleanName(qs.get('name')).slice(0, NAME_MAX);
+// ?name=<person> (join prints the board link with it). A link never replaces a saved name: with none saved, a name the
+// rule leaves as it is signs in at once (saved once the board accepts the token as a person's, data.js); otherwise it
+// only fills in the sign-in form (boot.js), showing what the rule made of it.
+const linkRaw = String(qs.get('name') ?? '').trim().toLowerCase();
+const linkName = cleanName(linkRaw).slice(0, NAME_MAX);
+const linkNameAsIs = !!linkName && linkName === linkRaw && linkName !== 'board' && linkName !== 'anonymous';
 let me = (store.get('board-name') || '').toLowerCase();
 const DEFAULT_SETTINGS = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '', planner_extra: '2' };
 const ANYONE = '*'; // settings.integrator: whoever is free merges
@@ -65,5 +69,5 @@ function setState(s) { state = s; }
 function setSeenMention(id) { seenMention = id; }
 
 export { $, ACTIVE, AGENT_ONLINE_MS, ALL_PHASES, ANYONE, BASE, cleanName, COL_DESC, COL_EMPTY, COL_SHOWN, COLS, DEFAULT_SETTINGS,
-  DONE_SHOWN, FROZEN_DESC, HINT, HOLDING, HUES, LABEL, linkName, me, NAME_MAX, nsKey, oSave, oUi, pending, qs, reduceMotion, seenMention,
+  DONE_SHOWN, FROZEN_DESC, HINT, HOLDING, HUES, LABEL, linkName, linkNameAsIs, me, NAME_MAX, nsKey, oSave, oUi, pending, qs, reduceMotion, seenMention,
   setMe, setSeenMention, setState, setToken, SIZE_TIP, SLUG, smooth, STALE_MS, state, STATUSES, store, token, ui };

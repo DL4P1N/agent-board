@@ -166,6 +166,35 @@ try {
       check('M6 own link: no page errors', !errs.length, errs.join(' | '));
       await page.close();
     }
+    // A first-time link (nothing saved): one step, as before; saved once the board accepts the token.
+    {
+      const { page, errs } = await open({ signedIn: false, path: '/?token=testtok&name=newbie' });
+      const ok = await until(page, () => document.getElementById('conn')?.classList.contains('live'));
+      const r = await saved(page);
+      check('M6 a first-time link (nothing saved) signs straight in, and keeps the token and name once accepted', ok && r.app && !r.gate && r.tok === 'testtok' && r.name === 'newbie' && !r.pend, JSON.stringify(r));
+      check('M6 first-time link: no page errors', !errs.length, errs.join(' | '));
+      await page.close();
+    }
+    {
+      const { page, errs } = await open({ signedIn: false, path: '/?token=not-the-token&name=newbie' });
+      await page.waitForSelector('#gate:not([hidden])');
+      await sleep(300);
+      const r = await saved(page);
+      check('M6 a first-time link with a wrong token shows the form, nothing saved', r.gate && !r.tok && !r.name && /rejected/.test(await page.$eval('#g-err', (e) => e.textContent)), JSON.stringify(r));
+      check('M6 first-time wrong token: no page errors', !errs.length, errs.join(' | '));
+      await page.close();
+    }
+    {
+      const { page, errs } = await open({ signedIn: false, path: '/?token=testtok&name=' + encodeURIComponent('Renée') });
+      await page.waitForSelector('#gate:not([hidden])');
+      const r = { ...(await saved(page)), field: await page.$eval('#g-name', (e) => e.value), err: await page.$eval('#g-err', (e) => e.textContent) };
+      check('UM12 a first-time link whose name the rule changes shows the form with the result ("rene") first', r.gate && r.field === 'rene' && /"rene"/.test(r.err) && !r.name, JSON.stringify(r));
+      await page.click('#g-go');
+      const ok = await until(page, () => document.getElementById('conn')?.classList.contains('live'));
+      check('UM12 and one Enter signs in as it', ok && (await saved(page)).name === 'rene');
+      check('UM12 link: no page errors', !errs.length, errs.join(' | '));
+      await page.close();
+    }
     // UM12: a name the server would strip is shown as it becomes before it is used; 70 characters are too long.
     {
       const { page, errs } = await open({ signedIn: false, path: '/?token=testtok' });

@@ -219,6 +219,8 @@ async function loadOnce() {
     if (!s.setup) return dropPending(NOT_HUMAN) ? loadOnce() : false;
     store.set('board-token', token); pending.set('');
   }
+  // A first-time link's name (boot.js) is kept once the board has accepted a person's token too.
+  if (s.setup && me && !store.get('board-name')) store.set('board-name', me);
   for (const fn of hooks.state) await fn(s);
   setState(s); state.loaded = true; setConn(esOpen ? 'live' : 'connecting');
   paint();

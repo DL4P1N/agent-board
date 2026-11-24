@@ -4,7 +4,7 @@
 // office, panels, palette, boot.
 
 import './palette.js';
-import { $, HUES, linkName, me, nsKey, oSave, oUi, qs, SLUG, state, store, token, ui } from './state.js';
+import { $, HUES, linkName, linkNameAsIs, me, nsKey, oSave, oUi, qs, setMe, SLUG, state, store, token, ui } from './state.js';
 import { ago, clock, fullTime, hue, knownPeople, nameHash, taskById, toast, when } from './helpers.js';
 import { connect, es, esOpen, load, onEvent, onPaint, onRequest, onSignIn, onState, paint, recheck, retrying, setConn, setLoad,
   showGate, unavailable, unavailableStatus } from './data.js';
@@ -30,13 +30,17 @@ onEvent(feedOnEvent);
 onPaint((quiet) => (quiet ? renderQuiet() : render()));
 
 let started = false;
-// A link's ?name= that isn't who you are signed in as shows the sign-in form, filled in from the link (once).
-let askName = !!linkName && linkName !== me;
+// A link's ?name= (state.js): with no name saved, one the server's rule leaves as it is signs in at once (it is saved
+// once the board accepts the token as a person's, data.js). The sign-in form shows instead, filled in from the link
+// (once), when another name is saved or the rule changed the link's one ("Renée" is "rene"), so the result is seen.
+let askName = !!linkName && (me ? linkName !== me : !linkNameAsIs);
+const NAME_NOTE = `Names keep only a-z, 0-9, . - and _, so the link's name is "${linkName}" here. Enter to use it, or change it.`;
+if (!me && linkNameAsIs) setMe(linkName);
 async function start() {
   // A link's ?token= and ?name= (read in state.js) leave the address bar at once, also when the sign-in form shows (the
   // token stays in this tab, pending, until the board accepts it: state.js, data.js).
   if (qs.get('token') || qs.get('name')) history.replaceState(null, '', location.pathname);
-  if (!token || !me || askName) { askName = false; return showGate('', { name: linkName }); }
+  if (!token || !me || askName) { const note = askName && !linkNameAsIs ? NAME_NOTE : ''; askName = false; return showGate(note, { name: linkName }); }
   $('gate').hidden = true; $('app').hidden = false;
   // Which board this is (several can share a server), and the host's way back to the list of boards.
   if (SLUG) { const b = $('bname'); b.hidden = false; b.textContent = SLUG; b.title = `Board "${SLUG}" on this server`; }
