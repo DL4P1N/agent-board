@@ -134,6 +134,7 @@ docker run -d -p 4000:4000 -v agent-board-data:/data -e PUBLIC_URL=https://board
 - Other boards live in `/data/boards/`.
 - The container runs as the unprivileged `node` user (uid 1000). A named volume is writable by it from the start. For a bind mount (`-v /srv/board:/data`), make the folder writable by uid 1000 first: `chown 1000:1000 /srv/board`. A volume from an older image was written by root: run `docker run --rm -v agent-board-data:/data --user root agent-board chown -R node:node /data` once.
 - The image has a health check (`docker ps` shows `healthy`), which asks the board's `/health`.
+- One server per data volume: a second container started on the same volume refuses to start while the first one runs. The running server touches `/data/board.pid` every 30 s. A container recreated after a crash takes the folder back by itself once that file has gone 2 minutes without an update, or at once if you delete it. A restarted container (same hostname) takes it back straight away. A server paused for more than 2 minutes (for example `docker pause`) can lose the folder to one started meanwhile.
 - The image has no `gh`, so PR and CI checks are off there.
 
 ## Backups

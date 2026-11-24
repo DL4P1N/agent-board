@@ -212,9 +212,9 @@ const throwsWith = (fn, re) => { try { fn(); return false; } catch (e) { return 
     const ago = (ms) => new Date(Date.now() - ms);
     const age = () => Date.now() - fs.statSync(pf).mtimeMs;
     const res = {};
-    const cases = [['fresh', process.pid, 'other-host', 0], ['freshDeadPid', dead, 'other-host', 0], ['quiet', process.pid, 'other-host', 3 * 60e3], ['sameHost', process.pid, os.hostname(), 0]];
-    for (const [k, pid, hostname, beat] of cases) {
-      const text = JSON.stringify({ pid, id: 'other-container', port, host: '127.0.0.1', hostname, started: old.toISOString() });
+    const cases = [['fresh', process.pid, 'other-host', 0], ['freshDeadPid', dead, 'other-host', 0], ['quiet', process.pid, 'other-host', 3 * 60e3], ['sameHost', process.pid, os.hostname(), 0], ['sameHostNew', process.pid, os.hostname(), 0, new Date()]];
+    for (const [k, pid, hostname, beat, started = old] of cases) {
+      const text = JSON.stringify({ pid, id: 'other-container', port, host: '127.0.0.1', hostname, started: started.toISOString() });
       fs.writeFileSync(pf, text); fs.utimesSync(pf, ago(beat), ago(beat));
       const o = await takePid();
       res[k] = { refused: !!o, kept: fs.readFileSync(pf, 'utf8') === text, hint: o ? foreignHint(o) : '' };
@@ -238,6 +238,7 @@ const throwsWith = (fn, re) => { try { fn(); return false; } catch (e) { return 
   check('…also when its pid is dead here (another pid namespace)', fOut.freshDeadPid?.refused && fOut.freshDeadPid.kept, pr2.stdout + pr2.stderr);
   check('…with no heartbeat for over 2 minutes (a hard-killed container) it is stale: taken', fOut.quiet?.refused === false && fOut.quiet.hint === '', pr2.stdout + pr2.stderr);
   check('…from this host (pid 1 before a restart, old, port dead) it is stale as before: taken, no hint', fOut.sameHost?.refused === false && fOut.sameHost.hint === '', pr2.stdout + pr2.stderr);
+  check('…from this host under our own pid, written seconds ago (a pid 1 that crash-restarted at once), it is stale straight away, without the 60s wait', fOut.sameHostNew?.refused === false, pr2.stdout + pr2.stderr);
   check('…our own board.pid records our hostname, and the heartbeat touches it', fOut.mine === true && fOut.beat === true, pr2.stdout + pr2.stderr);
   check('…the heartbeat leaves another server\'s board.pid alone', fOut.notTheirs === true, pr2.stdout + pr2.stderr);
 }

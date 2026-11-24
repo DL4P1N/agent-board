@@ -49,8 +49,11 @@ const refused = (e) => { const c = e?.cause; const codes = c?.errors?.length ? c
 export async function otherOwner() {
   const o = read();
   if (o && Number.isInteger(o.pid) && !ours(o) && foreign(o)) return beatAge() < BEAT_STALE_MS ? o : null;
-  // Our pid but not our mark: another container's pid 1 (or this container's before a restart), so the process
-  // check proves nothing: the checks below decide.
+  // Our pid and our hostname but not our mark: written on this machine or container under the pid we hold now, so
+  // that server has stopped (one pid can't be two live processes here): this container's pid 1 before a restart.
+  if (o && o.pid === process.pid && !ours(o) && o.hostname === HOSTNAME) return null;
+  // Our pid but not our mark, with no hostname (a file from before hostnames were recorded): another container's
+  // pid 1 or this one's before a restart, so the process check proves nothing: the checks below decide.
   if (!o || !Number.isInteger(o.pid) || ours(o) || (o.pid !== process.pid && !alive(o.pid))) return null;
   if (Date.now() - Date.parse(o.started) < 60e3) return o;
   // A server writes the port it really got once it listens: still none after a minute, it never did.
