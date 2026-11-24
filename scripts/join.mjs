@@ -135,10 +135,13 @@ try {
 // AGENT_BOARD_JOIN_ASK=1 (or the older CLAUDE_BOARD_JOIN_ASK=1) asks even without a terminal (the tests answer through a pipe).
 const interactive = (process.stdin.isTTY || process.env.AGENT_BOARD_JOIN_ASK === '1' || process.env.CLAUDE_BOARD_JOIN_ASK === '1') && !args.yes;
 const rl = interactive ? readline.createInterface({ input: process.stdin, output: process.stdout }) : null;
+// The input ending (Ctrl+D, a closed pipe) at a question stops join cleanly; without this the question never settles and Node prints a warning.
+const inputEnded = rl && new Promise((resolve) => rl.once('close', () => resolve(null)));
 const ask = async (q, def) => {
   if (!rl) return def;
-  const a = (await rl.question(`${q}${def ? ` [${def}]` : ''}: `)).trim();
-  return a || def;
+  const a = await Promise.race([rl.question(`${q}${def ? ` [${def}]` : ''}: `), inputEnded]);
+  if (a === null) { console.error('\n  ✗ The input ended before every question was answered. Nothing was set up. Run join again, or give the answers as options (see the usage line above).'); process.exit(1); }
+  return a.trim() || def;
 };
 
 // Names already on this board that this laptop didn't set up before (so re-running join is fine).

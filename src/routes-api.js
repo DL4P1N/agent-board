@@ -97,7 +97,7 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
       presence: board.presence(onlineHumans()),
       // Which board this is (several can run on one server).
       board: { slug, name: registry.get(slug)?.name || slug, default: isDefault(), path: prefix() },
-      ...(human ? { setup: { ...setupInfo(), viewer_token: tokens.viewerToken } } : {}),
+      ...(human ? { setup: { ...setupInfo(), viewer_token: tokens.viewerToken, token_from_env: !!envToken } } : {}),
       // CI on the project's main branch (GitHub Actions via gh), or null.
       main_ci: board.mainCi || null,
       // How long tasks take on this board so far (null until 3 are done): for the planner and the retro.
@@ -206,7 +206,10 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     // moment (open pages reconnect with the new one).
     muteStreams();
     later(closeStreams, 50);
-    return { token: t, setup: { ...setupInfo(), viewer_token: tokens.viewerToken } };
+    const setup = { ...setupInfo(), viewer_token: tokens.viewerToken, token_from_env: false };
+    // The host's window says it too (the web page's toast is the only other place): the new join command to send round.
+    console.log(`Token rotated for board "${slug}" at ${new Date().toLocaleTimeString()}: the old links and join commands stop working.\n  New join command: ${setup.join_commands?.[0]?.command || '(see the web board)'}`);
+    return { token: t, setup };
   }));
 
   // A QR code (SVG) for any text, e.g. the join command or the board link, to scan from a phone.

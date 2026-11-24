@@ -39,6 +39,11 @@ const off = run(l1.env, ['--url', 'http://localhost:1', '--token', TOKEN, '--nam
 check('--offline sets up anyway, and exits 1 because doctor finds problems', off.status === 1 && /Setting up anyway \(--offline\)/.test(off.out) && fs.existsSync(path.join(l1.home, '.agent-board.json')), off.out.slice(-500));
 check('summary: "1 problem" / "N problems", never "problem(s)"', /⚠ \d+ problems? above\./.test(off.out) && !/problem\(s\)/.test(off.out), (off.out.match(/⚠.*$/m) || [''])[0]);
 
+// ---- the input ending at a question (Ctrl+D, a closed pipe): a plain message, not a Node warning with a stack ----
+const lEof = envFor('eof');
+const eof = spawnSync(process.execPath, [JOIN, '--url', board.base, '--token', TOKEN, '--wait', '0'], { cwd: ROOT, env: { ...lEof.env, AGENT_BOARD_JOIN_ASK: '1' }, encoding: 'utf8', input: '', timeout: 60e3 });
+check('EOF at a question: says the input ended and nothing was set up, exit 1, no stack or Node warning', eof.status === 1 && /The input ended before every question was answered\. Nothing was set up/.test(eof.stderr) && !/unsettled|top-level await|\n\s+at /.test(eof.stderr) && !fs.existsSync(path.join(lEof.home, '.agent-board.json')), `${eof.status} ${eof.stderr.slice(-400)}`);
+
 // ---- JOIN-2: address typos ----
 const l2 = envFor('typos');
 const noScheme = run(l2.env, ['--url', `localhost:${port}`, '--token', TOKEN, '--name', 'bea', ...base]);

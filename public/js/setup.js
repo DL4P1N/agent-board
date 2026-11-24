@@ -11,7 +11,7 @@ import { render } from './render.js';
 import { ciPill } from './tasks.js';
 import { copyText } from './actions.js';
 
-// ---------- export: write-up + backup ----------
+// ---------- export: write-up + export (the JSON isn't a backup: restoring uses the automatic ones) ----------
 async function fetchExport(kind) {
   let r;
   try { r = await fetch(BASE + '/api/' + (kind === 'json' ? 'export' : kind === 'retro' ? 'retro' : 'summary'), { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); }
@@ -19,7 +19,7 @@ async function fetchExport(kind) {
   const body = await r.clone().json().catch(() => ({}));
   if (unavailableStatus(r.status, body)) throw new Error('Token rejected');
   if (r.status === 401) { showGate(tokenError(body)); throw new Error('Token rejected'); }
-  if (!r.ok) throw new Error(`Could not get the ${kind === 'json' ? 'backup' : kind === 'retro' ? 'retro' : 'summary'} (${r.status})`);
+  if (!r.ok) throw new Error(`Could not get the ${kind === 'json' ? 'export' : kind === 'retro' ? 'retro' : 'summary'} (${r.status})`);
   return r.text();
 }
 async function exportFile(kind, btn) {
@@ -30,14 +30,14 @@ async function exportFile(kind, btn) {
     const day = new Date().toISOString().slice(0, 10);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([text], { type: kind === 'json' ? 'application/json' : 'text/markdown' }));
-    a.download = kind === 'json' ? `agent-board-backup-${day}.json` : kind === 'retro' ? `agent-board-retro-${day}.md` : `agent-board-summary-${day}.md`;
+    a.download = kind === 'json' ? `agent-board-export-${day}.json` : kind === 'retro' ? `agent-board-retro-${day}.md` : `agent-board-summary-${day}.md`;
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-    toast(kind === 'json' ? 'Backup downloaded (JSON).' : kind === 'retro' ? 'Retro downloaded (markdown): what took long, review bounces, where it got stuck.' : 'Summary downloaded (markdown).');
+    toast(kind === 'json' ? 'Export downloaded (JSON). It is for reading or keeping: a board is restored from its automatic backups (npm run restore).' : kind === 'retro' ? 'Retro downloaded (markdown): what took long, review bounces, where it got stuck.' : 'Summary downloaded (markdown).');
   } catch (e) { if (e.message !== 'Token rejected') toast(e.message, true); }
   finally { if (btn) { btn.disabled = false; btn.focus({ preventScroll: true }); } }
 }
-const exportBtns = (k) => `<button type="button" data-act="export-md" data-fk="${k}-md">Download summary (.md)</button><button type="button" class="ghost" data-act="export-copy" data-fk="${k}-cp">Copy summary</button><button type="button" class="ghost" data-act="export-retro" data-fk="${k}-rt" title="For the team: time per task, review bounces, where work got stuck">Download retro (.md)</button><button type="button" class="ghost" data-act="export-json" data-fk="${k}-js">Download backup (JSON)</button>`;
+const exportBtns = (k) => `<button type="button" data-act="export-md" data-fk="${k}-md">Download summary (.md)</button><button type="button" class="ghost" data-act="export-copy" data-fk="${k}-cp">Copy summary</button><button type="button" class="ghost" data-act="export-retro" data-fk="${k}-rt" title="For the team: time per task, review bounces, where work got stuck">Download retro (.md)</button><button type="button" class="ghost" data-act="export-json" data-fk="${k}-js" title="Everything on the board as JSON, to read or keep. It can't be restored from here: the host restores the automatic backups with npm run restore.">Download export (JSON)</button>`;
 function renderSetup(si) {
   const el = $('setup');
   el.hidden = !setupShown(si);
@@ -77,7 +77,7 @@ function chips(si, laptops = false) {
   }).join('')}</div>`;
 }
 // Friendlier wording for the server's address labels; the adapter name stays in the tooltip.
-const addrText = (a) => a.ip === 'localhost' ? 'Only works on this laptop' : /^same wifi/i.test(a.label) ? 'Works for teammates on the same wifi' : /^Tailscale/i.test(a.label) ? 'Works across networks (Tailscale)' : /^Cloudflare/i.test(a.label) ? 'Works from any network (Cloudflare tunnel)' : /^virtual/i.test(a.label) ? 'Virtual adapter: probably not reachable' : a.label;
+const addrText = (a) => a.ip === 'localhost' ? 'Only works on this laptop' : /^same wifi/i.test(a.label) ? 'Works for teammates on the same wifi' : /^same network/i.test(a.label) ? 'Works for teammates on the same network (wired)' : /^Tailscale/i.test(a.label) ? 'Works across networks (Tailscale)' : /^Cloudflare/i.test(a.label) ? 'Works from any network (Cloudflare tunnel)' : /^virtual/i.test(a.label) ? 'Virtual adapter: probably not reachable' : a.label;
 function boardLink() {
   const best = state.setup?.join_commands?.[0];
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
@@ -97,6 +97,8 @@ function inviteText() {
   let n = 1;
   L.push(`${n++}. First time only, get the board tool:`, `   ${su.clone_command || 'git clone https://github.com/DL4P1N/agent-board && cd agent-board'}`, '   (already have an agent-board folder, or an older claude-board one? run git pull in it)');
   L.push(`${n++}. In the agent-board folder, connect your laptop (it asks your name, AI tool and project folder):`, `   ${join}`);
+  // The same board on this laptop's other addresses (a wired and a wifi one): for a teammate whose network can't reach the first.
+  for (const a of (su.join_commands || []).slice(1).filter((x) => x.ip !== 'localhost' && !/^virtual/i.test(x.label))) L.push(`   If that doesn't connect (${addrText(a).replace(/^Works /, 'works ')}):`, `   ${a.command}`);
   if (S.repo) L.push(`${n++}. Get the project repo (if you don't have it yet):`, `   git clone ${shellArg(S.repo)}`);
   L.push(`${n++}. Then open your AI tool in the project repo and type /board`, `   (Codex: $board · Copilot CLI: start it with  ${copilotLaunch()}  then type /board)`);
   L.push('   (Gemini CLI: /board · Cursor: /board in the Agent chat)');
@@ -166,7 +168,9 @@ function securityBox() {
     <p class="hint m0">The board token is in every join command and board link. Rotating it locks out everyone who has the old one.</p>
     ${ui.rotateArm ? `<div class="rot note" role="alert"><span><b>Everyone will have to re-run join</b> with the new command (and reopen the board). Agents connected now lose access until they do.</span>
       <button type="button" class="danger" data-act="rotate-yes" data-fk="rot-yes">Rotate now</button><button type="button" class="ghost" data-act="rotate-no" data-fk="rot-no">Keep the token</button></div>`
-      : '<div class="rot"><button type="button" class="ghost" data-act="rotate" data-fk="rot">Rotate token…</button></div>'}`;
+      : state.setup?.token_from_env
+        ? '<div class="rot"><button type="button" class="ghost" disabled data-fk="rot" aria-describedby="rot-why">Rotate token…</button><span class="hint" id="rot-why">Not available: this board\'s token comes from BOARD_TOKEN. Change it there and restart the board.</span></div>'
+        : '<div class="rot"><button type="button" class="ghost" data-act="rotate" data-fk="rot">Rotate token…</button></div>'}`;
 }
 // One rotation at a time: a second click would send the token the first one just retired (a 401 locks the page out).
 let rotating = false;

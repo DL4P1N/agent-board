@@ -61,10 +61,12 @@ export async function startBoard({ env = {}, port: wantPort, token, prefix = 'ag
   const once = async () => {
     const child = board.child = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js')], {
       env: { ...process.env, PORT: String(board.port), BOARD_TOKEN: token, BOARD_DATA: board.dataDir, BOARD_NO_JOIN: '1', ...env },
-      stdio: ['ignore', 'ignore', 'pipe'],
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
     let err = '';
     child.stderr.on('data', (d) => { err = (err + d).slice(-600); });
+    board.out = ''; // what the server printed (the host's terminal), last 4000 characters
+    child.stdout.on('data', (d) => { board.out = (board.out + d).slice(-4000); });
     onChild(child);
     for (let i = 0; i < 150 && child.exitCode === null && child.signalCode === null; i++) {
       try { if ((await (await fetch(`${board.base}/health`, { signal: AbortSignal.timeout(2000) })).json()).pid === child.pid) return true; } catch {}

@@ -7,9 +7,12 @@ export function startAnnouncements({ board, announced, every, later, forget }) {
   // Remembered in the board's data, so a restart (or `--watch` reload) doesn't announce twice;
   // a different freeze time (to the nearest 5 min) is announced again.
   const flagKey = (k, t) => `_announced_${k}_${Math.round(t.freezeAt / 300e3)}`;
+  // Was the board frozen the last time we looked? (A demo time moved later, or cleared, lifts it: say so.)
+  let wasFrozen = timeInfo(board.getSettings()).frozen;
   const check = () => {
     if (board.closed) return;
     const t = timeInfo(board.getSettings());
+    if (t.frozen) wasFrozen = true;
     if (!t.deadline) return;
     const key = (k) => flagKey(k, t);
     const now = Date.now();
@@ -44,6 +47,12 @@ export function startAnnouncements({ board, announced, every, later, forget }) {
   board.bus.on('event', (e) => {
     if (e?.kind !== 'settings') return;
     const t = timeInfo(board.getSettings());
+    if (wasFrozen && !t.frozen) {
+      board.emit({ author: 'board', kind: 'message', channel: 'general', text: t.deadline
+        ? `@all The feature freeze is lifted: the demo time moved to ${t.deadlineLabel}. New tasks can be claimed again until the freeze at ${t.freezeLabel}.`
+        : '@all The feature freeze is lifted: the demo time was cleared. New tasks can be claimed again.' });
+    }
+    wasFrozen = t.frozen;
     const key = t.deadline ? `${t.deadline}|${t.freezeAt}` : '';
     if (key === scheduledFor) return;
     scheduledFor = key;

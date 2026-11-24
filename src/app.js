@@ -7,6 +7,10 @@ import { PUBLIC_DIR, VERSION } from './config.js';
 import { tokenFrom, safeEq, internalError } from './http-util.js';
 import { createAdminRouter } from './admin.js';
 
+const escHtml = (x) => String(x).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+// A small page for someone who followed a link that doesn't lead to a board (not found, archived, failed to open): calm, in light or dark.
+const notePage = (title, heading, text) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escHtml(title)}</title><style>body{font:16px/1.5 system-ui,sans-serif;max-width:36rem;margin:4rem auto;padding:0 1rem;color:#222;background:#f6f6f7}h1{font-size:1.4rem;margin:0 0 .5rem}p{margin:.5rem 0}.mute{color:#666}@media (prefers-color-scheme:dark){body{color:#e6e7ea;background:#0c0d0f}.mute{color:#9a9ca3}}</style><body><h1>${escHtml(heading)}</h1>${text}</body></html>`;
+
 export function createApp({ registry, live, adminToken }) {
   const { runtimes, failures, defaultRuntime } = live;
   const app = express();
@@ -55,14 +59,14 @@ export function createApp({ registry, live, adminToken }) {
     const failed = failures.get(slug) || (b && registry.problem(slug));
     if (b && b.status === 'live' && failed) {
       if (isData) return res.status(503).json({ error: `This board failed to open: ${failed}` });
-      return res.status(503).type('text/plain').send(`This board failed to open: ${failed}\nAsk the host to check the server's window.`);
+      return res.status(503).type('html').send(notePage('Board unavailable', 'This board failed to open', `<p>${escHtml(failed)}</p><p class="mute">Ask the host to check the server's window.</p>`));
     }
     if (b && b.status === 'archived') {
       if (isData) return res.status(410).json({ error: 'This board is archived.' });
-      return res.status(410).type('html').send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Board archived</title><body style="font:16px/1.5 system-ui,sans-serif;max-width:36rem;margin:4rem auto;padding:0 1rem;color:#222"><h1 style="font-size:1.4rem">This board is archived</h1><p>"${String(b.name).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)}" isn't being served any more. Ask the host to restore it, or to send you the link to the current board.</p></body>`);
+      return res.status(410).type('html').send(notePage('Board archived', 'This board is archived', `<p>"${escHtml(b.name)}" isn't being served any more. Ask the host to restore it, or to send you the link to the current board.</p>`));
     }
     if (isData) return res.status(404).json({ error: `No board called "${slug}".` });
-    return res.status(404).type('text/plain').send(`No board called "${slug}".`);
+    return res.status(404).type('html').send(notePage('Board not found', 'No board here', `<p>This server has no board called "${escHtml(slug)}".</p><p class="mute">Check the link, or ask the host for the current one.</p>`));
   });
 
   // ---------- the default board at the root (/, /api, /mcp) ----------

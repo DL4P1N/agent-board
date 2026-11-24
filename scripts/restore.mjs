@@ -114,6 +114,20 @@ try {
   if (!fs.existsSync(db)) for (const [from, to] of moved.reverse()) { try { fs.renameSync(to, from); } catch {} }
   fail(`Restore failed: ${e.message}. The backup copy is at ${tmp}.`);
 }
+// A note in the restored board's feed, so nobody wonders why tasks or answers from after the backup are gone.
+// Written into the restored database itself (the server is stopped), so it shows when the board starts.
+try {
+  const d = new DatabaseSync(db);
+  try {
+    const cols = d.prepare('PRAGMA table_info(events)').all().map((c) => c.name);
+    if (cols.includes('author') && cols.includes('text')) {
+      const text = `@all The board was restored from a backup made ${when(path.basename(src))} UTC: anything done after that is gone. If your agent looks lost, run /board again.`;
+      const row = { ts: Date.now(), author: 'board', kind: 'message', channel: 'general', text, data: JSON.stringify({ mentions: ['all'] }) };
+      const use = Object.keys(row).filter((k) => cols.includes(k));
+      d.prepare(`INSERT INTO events (${use.join(', ')}) VALUES (${use.map(() => '?').join(', ')})`).run(...use.map((k) => row[k]));
+    }
+  } finally { d.close(); }
+} catch (e) { console.log(`  (Couldn't leave a note in the board's feed: ${e.message})`); }
 console.log(`✓ Restored board "${board.slug}" from ${path.basename(src)} (${when(path.basename(src))}).`);
 if (kept) console.log(`  The previous board is kept as ${path.basename(kept)}.`);
 console.log('  Start the board again: npm start (or npm run tunnel). Agents reconnect by themselves.');

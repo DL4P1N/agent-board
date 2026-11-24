@@ -94,7 +94,18 @@ try {
   await page.click('[data-act="copy-invite"]'); await sleep(200);
   check('A copy invite gives feedback', /Invite copied/.test(await txt(page, '#toasts')));
   const hasLan = st1.setup.join_commands[0].label.startsWith('same wifi');
-  if (hasLan) check('A address wording: "Works for teammates on the same wifi" (adapter in tooltip)', await page.evaluate(() => [...document.querySelectorAll('#step-invite .hint')].some((h) => /^Works for teammates on the same wifi/.test(h.textContent) && /same wifi\/LAN — /.test(h.title))) && !/same wifi\/LAN —/.test(await txt(page, '#step-invite')));
+  if (hasLan) check('A address wording: "Works for teammates on the same wifi" (adapter in tooltip)', await page.evaluate(() => [...document.querySelectorAll('#step-invite .hint')].some((h) => /^Works for teammates on the same wifi/.test(h.textContent) && /same wifi — /.test(h.title))) && !/same wifi\/LAN —/.test(await txt(page, '#step-invite')));
+
+  // The token of this board comes from BOARD_TOKEN: Rotate isn't offered (it could only fail after the confirm), and says why.
+  const rot = await page.evaluate(() => { const b = document.querySelector('#board-sec [data-fk="rot"]'); return { disabled: !!b?.disabled, act: b?.dataset.act || '', why: document.getElementById('board-sec').innerText }; });
+  check('Rotate is disabled on a BOARD_TOKEN board, with the reason beside it', rot.disabled && !rot.act && /comes from BOARD_TOKEN/.test(rot.why), JSON.stringify(rot));
+  // A host with a wifi and a wired address: the invite message carries both join commands (not the virtual one or localhost).
+  const inv2 = await page.evaluate(() => {
+    const keep = state.setup.join_commands; const c = (ip, label) => ({ ip, label, command: `npm run join -- --url http://${ip}:4000/b/main --token T`, web_url: `http://${ip}:4000/b/main/?token=T` });
+    state.setup.join_commands = [c('10.0.0.5', 'same wifi — Wi-Fi'), c('10.0.1.7', 'same network (wired or other) — Ethernet'), c('172.20.0.1', 'virtual adapter, probably NOT reachable — vEthernet'), c('localhost', 'this machine only')];
+    const t = inviteText(); state.setup.join_commands = keep; return t;
+  });
+  check('the invite carries the wired address too, not the virtual adapter or localhost', /--url http:\/\/10\.0\.0\.5:4000/.test(inv2) && /If that doesn't connect \(works for teammates on the same network \(wired\)\):\s+npm run join -- --url http:\/\/10\.0\.1\.7:4000/.test(inv2) && !/172\.20\.0\.1/.test(inv2) && !/localhost:4000/.test(inv2), inv2.slice(0, 600));
 
   // Step 3: Copilot CLI gets two commands
   await openStep(page, 'start');

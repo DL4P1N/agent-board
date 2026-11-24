@@ -27,9 +27,11 @@ function reachableAddresses() {
       if (i.family !== 'IPv4' || i.internal || i.address.startsWith('169.254.')) continue;
       const tailscale = /tailscale/i.test(name) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(i.address);
       const lan = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(i.address);
-      const virtual = /vEthernet|WSL|VirtualBox|VMware|Hyper-V|docker|br-/i.test(name);
-      const rank = tailscale ? 0 : virtual ? 3 : lan ? 1 : 2;
-      const label = tailscale ? `Tailscale (works across networks) — ${name}` : virtual ? `virtual adapter, probably NOT reachable — ${name}` : `same wifi/LAN — ${name}`;
+      const virtual = /vEthernet|WSL|VirtualBox|VMware|Hyper-V|docker|br-|veth|\btap[-\d ]|\btun\d|bluetooth/i.test(name);
+      // What teammates are most likely on is the wifi (a wired adapter comes just after it); the label says which it is.
+      const wifi = /wi-?fi|wlan|wireless|^wl|airport/i.test(name) || (process.platform === 'darwin' && name === 'en0');
+      const rank = tailscale ? 0 : virtual ? 3 : lan ? (wifi ? 1 : 1.5) : 2;
+      const label = tailscale ? `Tailscale (works across networks) — ${name}` : virtual ? `virtual adapter, probably NOT reachable — ${name}` : wifi ? `same wifi — ${name}` : `same network (wired or other) — ${name}`;
       out.push({ ip: i.address, label, rank });
     }
   }

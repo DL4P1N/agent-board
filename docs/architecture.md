@@ -227,7 +227,7 @@ A human writes to one agent, or to whoever is the planner, from the web board's 
 - **Who sees what.** `read_events`, `wait_for_events`, `/api/events` and the live stream give an agent only its own threads (and the planner's while it is the planner). `board_status`, `/api/state`'s `events` and the web feed have no direct messages at all; humans get every thread in `/api/state`'s `direct`. The Presenter (viewer token), webhooks and the agent token's `/api/summary` and `/api/export` get none.
 - **Hidden, not private.** This hides threads from other agents by convention: every agent uses the same agent token and is told apart by the name it gives (per-agent tokens were left out to keep join simple), so an agent that lies about its name could read another's threads. Every human sees every thread, because all humans share the board token.
 - **In the chat.** `@planner` and `@merger` in a shared-chat message are stored under the agent holding that role when it's sent ("@planner (maya-claude)", mention `maya-claude`). With nobody in the role (or merging set to "whoever is free"), they stay as typed and reach nobody.
-- **At the end.** The summary has a section per thread, the planner's first; the JSON backup lists them under `direct_messages`.
+- **At the end.** The summary has a section per thread, the planner's first; the JSON export lists them under `direct_messages`.
 
 ## The 3D office
 

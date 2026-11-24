@@ -159,4 +159,14 @@ await new Promise((r) => setTimeout(r, 21000));
 const after = await count();
 check('freeze announced once, not again after a restart', before === 1 && after === 1, `${before} → ${after}`);
 
+// ---- a demo time moved later lifts the freeze, and says so ----
+const lifts = async () => (await human('/state')).events.filter((e) => e.author === 'board' && /freeze is lifted/.test(e.text));
+check('(setup) the board is frozen: the claim is refused', /Feature freeze/.test(err(await cx1('claim_task', { id: (await max('create_task', { title: 'after the freeze', priority: 2, size: 'S' })).id }))));
+check('no "lifted" message while it is frozen', (await lifts()).length === 0);
+await human('/settings', 'PUT', { deadline: new Date(Date.now() + 5 * 3600e3).toISOString(), freeze_minutes: 60 });
+await new Promise((r) => setTimeout(r, 300));
+const lifted = (await lifts())[0];
+check('moving the demo time later says the freeze is lifted, with the new time', !!lifted && /demo time moved to/.test(lifted.text) && (lifted.data?.mentions || []).includes('all'), JSON.stringify(lifted));
+await human('/settings', 'PUT', { freeze_minutes: 90 });
+check('another settings change says nothing more', (await lifts()).length === 1);
 await finish(R, { board });

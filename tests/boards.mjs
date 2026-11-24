@@ -23,6 +23,16 @@ check('default board still works at the root (/api/state)', Array.isArray(st0.ta
 check('the default board\'s join command uses its canonical /b/main address', st0.setup.join_commands.every((c) => /\/b\/main /.test(c.command)), st0.setup.join_commands[0].command);
 check('registry written with the legacy board "main" in the data folder itself', JSON.parse(fs.readFileSync(path.join(board.dataDir, 'boards.json'), 'utf8')).boards[0].dir === '.');
 
+// ---- a link to a board that doesn't exist: a small, styled page, not bare text ----
+{
+  const r = await fetch(`${board.base}/b/nope/`); const h = await r.text();
+  check('/b/<unknown>/ is a 404 page in HTML, with a title and a word on what to do', r.status === 404 && /^text\/html/.test(r.headers.get('content-type') || '') && /<title>Board not found<\/title>/.test(h) && /<h1[^>]*>No board here<\/h1>/.test(h) && /no board called "nope"/.test(h) && /ask the host/i.test(h), `${r.status} ${h.slice(0, 200)}`);
+  check('...in the page colours of light and dark, and it adapts to a phone', /prefers-color-scheme:dark/.test(h) && /name="viewport"/.test(h));
+  const x = await (await fetch(`${board.base}/b/%3Cimg%20src=x%3E/`)).text();
+  check('...the name from the link is escaped', !/<img/.test(x) && /&#60;img/.test(x), x.slice(0, 300));
+  check('...its API and MCP still answer in JSON', (await fetch(`${board.base}/b/nope/api/state`)).headers.get('content-type')?.includes('json') === true);
+}
+
 // ---- admin auth ----
 check('admin API needs the admin token', (await admin('/boards', 'GET', undefined, null)).status === 401);
 check('a board token is not an admin token', (await admin('/boards', 'GET', undefined, TOKEN)).status === 401);

@@ -165,4 +165,17 @@ const startNamed = async (env, extra = [], label = 'named') => {
   check('a run-time --hostname that is not a hostname: exit 1 with an explanation', (await badHost.exited) === 1 && /Not a valid tunnel name and hostname/.test(badHost.out()), badHost.out().slice(0, 200));
 }
 
+// ---- address ranking and labels: wifi before wired, a wired adapter isn't called wifi, virtual ones last ----
+{
+  const real = os.networkInterfaces;
+  const nic = (address) => [{ family: 'IPv4', internal: false, address }];
+  os.networkInterfaces = () => ({ 'vEthernet (WSL)': nic('172.22.0.1'), Ethernet: nic('192.168.1.20'), 'Wi-Fi': nic('192.168.1.30'), Tailscale: nic('100.101.102.103'), 'Loopback': [{ family: 'IPv4', internal: true, address: '127.0.0.1' }] });
+  try {
+    const { serverAddresses } = await import('../src/network.js');
+    const a = serverAddresses();
+    check('addresses: Tailscale, then wifi, then wired, then virtual', a.map((x) => x.ip).join() === '100.101.102.103,192.168.1.30,192.168.1.20,172.22.0.1', a.map((x) => `${x.ip} ${x.label}`).join(' | '));
+    check('a wired adapter is not called wifi', /^same wifi — Wi-Fi/.test(a[1].label) && /^same network \(wired or other\) — Ethernet/.test(a[2].label) && !/wifi/.test(a[2].label), a[2].label);
+  } finally { os.networkInterfaces = real; }
+}
+
 await finish(R);

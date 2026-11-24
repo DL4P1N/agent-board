@@ -176,6 +176,7 @@ await board.relaunch();
 const after = await call('/state');
 check('the restored board starts and has the backed-up tasks', after.status === 200 && after.body.tasks.some((t) => t.title === 'Login form'), JSON.stringify(after.body?.tasks?.map((t) => t.title)));
 check('…without what came after the backup', !after.body.tasks.some((t) => t.id === later.body.id), latestBackup);
+check('the restore leaves a note in the feed for everyone, with the backup time', after.body.events.some((e) => e.author === 'board' && e.kind === 'message' && /restored from a backup made \d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC/.test(e.text) && (e.data?.mentions || []).includes('all')), JSON.stringify(after.body.events.slice(-3).map((e) => e.text)));
 
 // ================= token rotation =================
 r = await call('/token/rotate', 'POST');
@@ -189,6 +190,7 @@ const c2 = (p, method = 'GET', body, token) => fetch(`${b2.base}/api${p}`, { met
 r = await c2('/token/rotate', 'POST', undefined, oldTok);
 const newTok = r.body?.token;
 check('rotate returns a new token and the join commands', r.status === 200 && newTok && newTok !== oldTok && r.body.setup?.join_commands?.[0]?.command.includes(newTok), JSON.stringify(r).slice(0, 200));
+check('the host terminal says the token was rotated, with the new join command', await (async () => { for (let i = 0; i < 20 && !/Token rotated for board "main"/.test(b2.out); i++) await new Promise((x) => setTimeout(x, 100)); return /Token rotated for board "main"/.test(b2.out) && b2.out.slice(b2.out.indexOf('Token rotated')).includes(`--token ${newTok}`) && !b2.out.slice(b2.out.indexOf('Token rotated')).includes(oldTok); })(), b2.out.slice(-300));
 check('the old token stops working', (await c2('/state', 'GET', undefined, oldTok)).status === 401);
 check('the old agent token stops working', (await c2('/state', 'GET', undefined, agentTokenFor(oldTok))).status === 401);
 const st2 = await c2('/state', 'GET', undefined, newTok);
