@@ -236,12 +236,15 @@ try {
     await until(sp, () => $('conn').classList.contains('live'), undefined, 8000);
     await sp.evaluate(() => { window.__stall = true; load(); });
     const t0 = Date.now();
+    // load() is async: wait for its /api/state fetch to be sent (and held) before looking at its signal.
+    await until(sp, () => !!window.__stalled, undefined, 5000);
     check('E4 the board state request carries a timeout', await sp.evaluate(() => window.__stalled instanceof AbortSignal && !window.__stalled.aborted));
     const aborted = await until(sp, () => !!window.__stalled?.aborted, undefined, 17000);
     const late = await alice('create_task', { title: 'After the stall' });
     const shown = await until(sp, (id) => !!document.querySelector(`.card[data-id="${id}"]`), late.id, 8000);
     check('E4 a stalled state request gives up after about 15s, and the next update shows', aborted && shown && Date.now() - t0 < 25000, JSON.stringify({ aborted, shown, s: Math.round((Date.now() - t0) / 1000) }));
-    await sp.close();
+    // The main page is behind the one just closed: bring it back, or focus() there does nothing (focus stays on body).
+    await sp.close(); await page.bringToFront();
   }
   const p3 = await browser.newPage(); watch(p3); await signIn(p3);
   await p3.goto(board.base + '/?view=office');
