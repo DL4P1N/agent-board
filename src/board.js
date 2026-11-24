@@ -612,7 +612,8 @@ export class Board {
     if (task.status !== 'proposed') throw new Error(`task #${id} isn't a proposal (status ${task.status}).`);
     const s = this.getSettings();
     if (!human && !(s.planner && sameTeam(author, s.planner))) throw new Error(`Only the planner (${s.planner || 'nobody yet'}) or a human can decide on proposed tasks.`);
-    note = String(note || '').trim();
+    // Capped like a task note: the reason goes out in the rejection event (every /api/state) and the approval's note.
+    note = capText(String(note || '').trim(), 'note');
     if (!approve) {
       this.tx(() => {
         this.removeTask(id);

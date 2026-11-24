@@ -100,6 +100,13 @@ check('planner rejects: task deleted', rj.rejected === p2.id && /not found/.test
 st = await state();
 const rev = st.events.find((e) => e.task_id === p2.id && e.kind === 'task_deleted');
 check('rejection @mentions the proposer with the reason', /@w1/.test(rev?.text || '') && /duplicate of #1/.test(rev?.text || ''), rev?.text);
+// A rejection's reason goes out in the feed: capped like a task note (10000), over REST and MCP, the proposal kept.
+const p4 = await w1('create_task', { title: 'long reason' });
+const longRest = await http(`/tasks/${p4.id}/decide`, 'POST', { approve: false, note: 'x'.repeat(10001) });
+check('REST: a rejection note over 10000 characters is refused (400, says the limit), the proposal kept', longRest.status === 400 && /note is too long \(max 10000 characters\)/.test(longRest.body.error || '') && (await state()).tasks.some((t) => t.id === p4.id && t.status === 'proposed'), JSON.stringify(longRest).slice(0, 200));
+check('MCP: a rejection note over 10000 characters is refused', /10000|too_big|too long/i.test(err(await pl('decide_proposal', { id: p4.id, approve: false, note: 'x'.repeat(10001) }))) && (await state()).tasks.some((t) => t.id === p4.id));
+const atCap = await http(`/tasks/${p4.id}/decide`, 'POST', { approve: false, note: 'y'.repeat(10000) });
+check('…a rejection note at the limit is fine', atCap.status === 200 && atCap.body.rejected === p4.id, JSON.stringify(atCap).slice(0, 200));
 const p3 = await w2('create_task', { title: 'human approves this' });
 const hd = await human(`/tasks/${p3.id}/decide`, 'POST', { approve: true });
 check('human can approve a proposal on the web board', hd.status === 'open', JSON.stringify(hd).slice(0, 200));
