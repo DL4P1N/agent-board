@@ -145,16 +145,18 @@ try {
   await rest('dana', '/notify', 'PUT', { url: 'http://localhost:9/hook-secret' });
   await page.evaluate(() => { ui.steps.invite = true; ui.nf.open = true; ui.nf.loaded = false; render(); });
   await page.waitForSelector('#nf-saved');
+  // Clicked in the middle of the screen: near the top, the sticky header would be over it.
+  const clickIn = async (sel) => { await page.$eval(sel, (b) => b.scrollIntoView({ block: 'center' })); await page.click(sel); };
   const saved = await page.evaluate(() => ({ t: $('nf-saved').innerText, input: !!$('nf-url'), change: !!document.querySelector('[data-act="nf-change"]'), remove: document.querySelector('[data-act="nf-off"]')?.textContent }));
   check('NO-6 saved URL shown as text, no input', /localhost/.test(saved.t) && !saved.input && saved.change && saved.remove === 'Remove', JSON.stringify(saved));
-  await page.click('[data-act="nf-change"]');
+  await clickIn('[data-act="nf-change"]');
   check('NO-6 Change shows an empty field, focused', await page.evaluate(() => !!$('nf-url') && document.activeElement === $('nf-url') && !$('nf-url').value && !$('nf-saved')));
-  await page.click('[data-act="nf-keep"]');
+  await clickIn('[data-act="nf-keep"]');
   check('NO-6 Keep goes back to the saved text', !!(await page.$('#nf-saved')));
-  await page.click('[data-fk="nf-save"]');
+  await clickIn('[data-fk="nf-save"]');
   await page.waitForFunction(() => /Saved\./.test(document.getElementById('toasts').innerText), { timeout: 5000 });
   check('NO-6 Save without a field keeps the URL (events only)', !!(await rest('dana', '/notify')).url);
-  await page.click('[data-act="nf-off"]');
+  await clickIn('[data-act="nf-off"]');
   await page.waitForSelector('#nf-url');
   check('NO-6 Remove clears it', !(await rest('dana', '/notify')).url && !(await page.$('#nf-saved')));
 
