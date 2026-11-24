@@ -141,6 +141,8 @@ $('gate').addEventListener('submit', async (ev) => {
   const t = $('g-token').value.trim(); const n = $('g-name').value.trim().toLowerCase().replace(/[^\w.\-]/g, '');
   if (!t) { $('g-err').textContent = 'Enter the board token.'; return $('g-token').focus(); }
   if (!n) { $('g-err').textContent = 'Enter your name (letters, numbers, . - _).'; return $('g-name').focus(); }
+  // The board speaks as "board", and "anonymous" is a call without a name: the server refuses both as a writer.
+  if (n === 'board' || n === 'anonymous') { $('g-err').textContent = `"${n}" is reserved. Use your own name.`; return $('g-name').focus(); }
   const r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
   if (!r) { $('g-err').textContent = 'Cannot reach the board server. Is it still running?'; return; }
   if (r.status === 401) { const b = await r.json().catch(() => ({})); $('g-err').textContent = tokenError(b); return $('g-token').focus(); }
