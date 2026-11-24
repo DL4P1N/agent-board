@@ -31,8 +31,9 @@ onPaint((quiet) => (quiet ? renderQuiet() : render()));
 
 let started = false;
 async function start() {
-  if (!token || !me) return showGate();
+  // A link's ?token= and ?name= (read in state.js) leave the address bar at once, also when the sign-in form shows.
   if (qs.get('token') || qs.get('name')) history.replaceState(null, '', location.pathname);
+  if (!token || !me) return showGate();
   store.set('board-token', token);
   $('gate').hidden = true; $('app').hidden = false;
   // Which board this is (several can share a server), and the host's way back to the list of boards.

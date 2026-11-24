@@ -192,6 +192,44 @@ try {
   check('WB-4 needs badges are muted', await page.$eval('#needs', (e) => e.classList.contains('quiet')));
   await page.screenshot({ path: `${out}/h-event-over.png` });
 
+  // ---- U6: the name button opens the sign-in form with a way back (Back to the board, Esc), the token masked ----
+  for (const how of ['Esc', 'Back to the board']) {
+    await page.click('#me-btn');
+    const g = await page.evaluate(() => ({ gate: !$('gate').hidden, back: !!$('g-back')?.offsetWidth, masked: $('g-token').type === 'password' && $('g-token').value === 'testtok' }));
+    check(`U6 the name button opens the sign-in form with "Back to the board", the token masked (${how})`, g.gate && g.back && g.masked, JSON.stringify(g));
+    if (how === 'Esc') await page.keyboard.press('Escape'); else await page.click('#g-back');
+    const ok = await page.waitForFunction(() => $('gate').hidden && !$('app').hidden && $('conn').classList.contains('live'), { timeout: 8000 }).then(() => true, () => false);
+    check(`U6 ${how} goes back to the board, live again, focus on the name button`, ok && await page.evaluate(() => document.activeElement === $('me-btn')));
+  }
+
+  // ---- E3: rotating the token doesn't sign out the host: a load sent with the old token meanwhile (401) goes again ----
+  {
+    const rp = await (await browser.createBrowserContext()).newPage();
+    rp.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+    await rp.evaluateOnNewDocument(() => {
+      try { localStorage.setItem('board-token', 'testtok'); localStorage.setItem('board-name', 'dana'); } catch {}
+      // The test board's token can't rotate (BOARD_TOKEN): the rotation is played here, 500ms on its way, and /api/state
+      // answers 401 token_rotated meanwhile, as the server does for a request sent with the retired token.
+      const f = window.fetch.bind(window); window.__old401 = 0; let mid = false;
+      const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+      window.fetch = async (u, o) => {
+        const url = String(u);
+        if (/\/api\/token\/rotate$/.test(url)) { mid = true; await new Promise((r) => setTimeout(r, 500)); mid = false; return json({ token: 'testtok' }); }
+        if (mid && /\/api\/state(\?|$)/.test(url)) { window.__old401++; return json({ error: 'bad or missing token', reason: 'token_rotated' }, 401); }
+        return f(u, o);
+      };
+    });
+    await rp.goto(BASE + '/');
+    await rp.waitForFunction(() => $('conn').classList.contains('live'), { timeout: 8000 });
+    await rp.evaluate(() => { ui.rotateArm = true; if ($('setup').hidden) document.querySelector('[data-act="setup-open"]')?.click(); render(); });
+    await rp.waitForSelector('[data-fk="rot-yes"]', { timeout: 5000 });
+    await rp.evaluate(() => { document.querySelector('[data-fk="rot-yes"]').click(); setTimeout(() => load(), 100); }); // a live event's load, mid-rotation
+    await rp.waitForFunction(() => [...document.querySelectorAll('#toasts .toast')].some((t) => /Token rotated/.test(t.textContent)) || !$('gate').hidden, { timeout: 8000 }).catch(() => {});
+    const r = await rp.evaluate(() => ({ old401: window.__old401, gate: !$('gate').hidden, app: !$('app').hidden }));
+    check('E3 a load that got 401 during this page\'s own rotation waits for the new token and goes again: the host stays signed in', r.old401 > 0 && !r.gate && r.app, JSON.stringify(r));
+    await rp.browserContext().close();
+  }
+
   // ---- ER-2: a token rotation sends open pages to the sign-in with the reason ----
   // The test board's token comes from BOARD_TOKEN (can't rotate), so the server's 401s are played here:
   // with the reason the server sends after a rotation, and as a plain 401 from an older server.

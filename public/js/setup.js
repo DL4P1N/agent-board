@@ -4,7 +4,7 @@
 import './topbar.js';
 import { $, ANYONE, BASE, me, setToken, state, store, token, ui } from './state.js';
 import { agentRoot, ago, canMove, cmdBox, esc, hs, motion, nameTag, patch, plural, root, toast, when, youTag } from './helpers.js';
-import { api, connect, load, showGate, tokenError, unavailableStatus } from './data.js';
+import { api, connect, load, showGate, tokenChange, tokenError, unavailableStatus } from './data.js';
 import { agentState, approvalWait, capText, clientOf, copilotLaunch, dlSkipped, notStartedText, setupShown, startCmd,
   stepOpen, teamCapacity, timeNow } from './derived.js';
 import { render } from './render.js';
@@ -168,9 +168,15 @@ async function rotateToken() {
   if (rotating) return;
   rotating = true;
   try {
-    const r = await api('/token/rotate', { method: 'POST', body: '{}' });
-    if (!r?.token) throw new Error('The server didn\'t return a new token.');
-    setToken(r.token); store.set('board-token', token);
+    // Requests sent with the old token meanwhile wait for the new one (tokenChange), then go again with it.
+    const turn = (async () => {
+      const x = await api('/token/rotate', { method: 'POST', body: '{}', once: true });
+      if (!x?.token) throw new Error('The server didn\'t return a new token.');
+      setToken(x.token); store.set('board-token', token);
+      return x;
+    })();
+    tokenChange(turn);
+    const r = await turn;
     if (r.setup) state.setup = r.setup;
     ui.rotateArm = false; ui.steps.invite = true;
     connect(); await load();

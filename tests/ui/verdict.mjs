@@ -45,6 +45,8 @@ try {
   const txt = (sel) => page.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' ').trim()).catch(() => '');
   const reload = async () => { await page.evaluate(() => load()); await sleep(250); };
   const pill = () => page.$eval('#clock', (e) => ({ t: e.querySelector('.o-x').textContent.replace(/\s+/g, ' ').trim(), tip: e.title, label: e.getAttribute('aria-label'), vd: e.querySelector('.vd')?.className || '' }));
+  // The verdict word as shown: on screen (not hidden by the width rules) and not cut.
+  const shownWord = () => page.$eval('#clock', (e) => { const v = e.querySelector('.vd'), r = e.querySelector('.rest'); return { shown: !!v?.getClientRects().length, cut: !!r && r.scrollWidth > r.clientWidth + 1, w: innerWidth }; });
   await page.goto(BASE + '/');
   await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 5000 });
   await sleep(300);
@@ -68,11 +70,16 @@ try {
   check('2 tasks left: "on track" follows the time in the pill', /^in (?:2h 5\dm|3h 0m)(?: · freeze .+)? · on track$/.test(c.t) && /\bok\b/.test(c.vd), c.t);
   check('verdict tooltip explains the estimate', /About 30m of work left \(2 tasks .*2 agent slots online\) and (?:1h 5\dm|2h 0m) to the freeze/.test(c.tip), c.tip);
   check('aria-label carries the verdict', /^Demo in .* · On track\. /.test(c.label), c.label);
+  // 1101-1699px: "on track" is the time's colour (the word is the tooltip); tight and behind keep their word (U3).
+  const ow = await shownWord();
+  check('1440px: "on track" is the time\'s colour (the word is in the tooltip)', !ow.shown && await page.$eval('#clock .tm', (t) => getComputedStyle(t).color !== getComputedStyle(t.closest('.tbc')).color), JSON.stringify(ow));
 
   // 8 tasks = 240 min / 2 = 120 min against ~120: tight.
   await openTasks(6); await reload();
   c = await pill();
   check('8 tasks left: "Tight"', /^in .* · tight$/.test(c.t) && /tight/.test(c.vd), c.t);
+  const tw = await shownWord();
+  check('U3 1440px: "tight" is shown as a word, not only amber', tw.shown && !tw.cut, JSON.stringify(tw));
   check('tight: no "won\'t make it" item yet', !/won't make it/.test(await txt('#now')), await txt('#now'));
 
   // 16 tasks = 240 min of team time against 120: behind by ~8; 5 of them are unstarted P3s.
@@ -82,10 +89,11 @@ try {
   let now = await txt('#now');
   check('behind: What to do now names the P3s that won\'t make it', /5 P3 tasks probably won't make it/.test(now), now);
   // One header row with the verdict, at the widths people use.
-  for (const w of [1366, 1600]) {
+  for (const w of [1280, 1366, 1600]) {
     await page.setViewport({ width: w, height: 900 }); await sleep(250);
-    const hd = await page.evaluate(() => { const h = document.querySelector('#app > header'); const c = $('clock').getBoundingClientRect(); const g = $('goal-btn').getBoundingClientRect(); const s = $('topbar').querySelector('[data-fk="s-open"]').getBoundingClientRect(); return { h: h.offsetHeight, tb: $('topbar').offsetHeight, same: Math.abs(c.top - g.top) < 4 && Math.abs(c.bottom - s.bottom) < 12, vd: getComputedStyle($('clock').querySelector('.vd')).display !== 'none' }; });
-    check(`${w}px: the header and the top bar each stay one row, with the verdict in the Demo chip`, hd.same && hd.h < 70 && hd.tb < 56 && hd.vd, JSON.stringify(hd));
+    const hd = await page.evaluate(() => { const h = document.querySelector('#app > header'); const c = $('clock').getBoundingClientRect(); const g = $('goal-btn').getBoundingClientRect(); const s = $('topbar').querySelector('[data-fk="s-open"]').getBoundingClientRect(); return { h: h.offsetHeight, tb: $('topbar').offsetHeight, same: Math.abs(c.top - g.top) < 4 && Math.abs(c.bottom - s.bottom) < 12 }; });
+    const vw = await shownWord();
+    check(`${w}px: the header and the top bar each stay one row, with the verdict word ("behind by ~8") in the Demo chip, not cut (U3)`, hd.same && hd.h < 70 && hd.tb < 56 && vw.shown && !vw.cut, JSON.stringify({ ...hd, ...vw }));
     await page.screenshot({ path: `${out}/behind-header-${w}.png`, clip: { x: 0, y: 0, width: w, height: 200 } });
   }
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await sleep(300);

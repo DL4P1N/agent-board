@@ -56,8 +56,9 @@ function fieldError(msg) {
   if (/reserve/i.test(m)) return { el: 'td-res', text: m };
   return { el: null, text: m };
 }
+// A title error shows under Title; any other under the form's fields.
 function showFieldError(msg) {
-  const f = fieldError(msg); $('td-err').textContent = f.text;
+  const f = fieldError(msg); $(f.el === 'td-name' ? 'td-name-err' : 'td-err').textContent = f.text;
   if (!f.el) return;
   const n = $(f.el); if (n.closest('[hidden]')) return;
   n.setAttribute('aria-invalid', 'true'); n.focus();
@@ -87,7 +88,7 @@ function openTask(id, { discard = false } = {}) {
   $('td-deps-wrap').hidden = !!t;
   $('td-deps').value = '';
   shown = {}; if (editing) for (const f of Object.keys(FIELDS)) noteShown(f);
-  $('td-err').textContent = ''; $('td-status-hint').textContent = t ? HINT[t.status] + '.' : ''; $('td-status-hint').classList.add('vh'); $('td-status').title = t ? HINT[t.status] : '';
+  $('td-err').textContent = ''; $('td-name-err').textContent = ''; $('td-status-hint').textContent = t ? HINT[t.status] + '.' : ''; $('td-status-hint').classList.add('vh'); $('td-status').title = t ? HINT[t.status] : '';
   for (const n of ['td-name', 'td-deps', 'td-prio', 'td-size', 'td-res']) $(n).removeAttribute('aria-invalid');
   $('td-conflict').hidden = true; $('td-discard').hidden = true;
   $('td-save').textContent = t ? 'Save changes' : 'Create task';
@@ -306,9 +307,9 @@ $('task-form').addEventListener('submit', async (ev) => {
 });
 async function saveTask() {
   const approve = approving && editing?.status === 'proposed'; approving = false;
-  const err = $('td-err'); err.textContent = '';
+  const err = $('td-err'); err.textContent = ''; $('td-name-err').textContent = '';
   const title = $('td-name').value.trim();
-  if (!title) { err.textContent = 'Give the task a title.'; $('td-name').setAttribute('aria-invalid', 'true'); return $('td-name').focus(); }
+  if (!title) { $('td-name-err').textContent = 'Give the task a title.'; $('td-name').setAttribute('aria-invalid', 'true'); return $('td-name').focus(); }
   const description = $('td-desc').value; const priority = Number($('td-prio').value);
   const size = $('td-size').value; const reserved_for = $('td-res').value || null;
   const btn = $('td-save'); const btnText = btn.textContent; btn.disabled = true; btn.textContent = editing ? 'Saving…' : 'Creating…';

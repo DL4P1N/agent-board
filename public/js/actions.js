@@ -69,7 +69,7 @@ function goMention(eid) {
   oShow('act');
   ui.tab = 'me'; store.set('board-tab', 'me'); $('feed')._html = undefined; render();
   const n = $('feed').querySelector(`[data-eid="${eid}"]`);
-  $('feed').scrollIntoView({ behavior: smooth(), block: 'center' });
+  $('feed').scrollIntoView({ behavior: smooth(), block: 'nearest' });
   if (n) $('feed').scrollTop = n.offsetTop - 8;
   $('feed').focus({ preventScroll: true });
 }
@@ -93,9 +93,9 @@ function goWrapup() {
   (n.querySelector('[data-act^="export"]') || n).focus({ preventScroll: true });
 }
 // The way to the chat ("/", Skip to chat, the phone's chat icon, Also's links) is the shared chat's message box, not a
-// direct thread's (or the thread list, which has none).
+// direct thread's (or the thread list, which has none). The page scrolls only if the box is out of view (nearest).
 function toChatTab() { if (ui.tab === 'direct') { ui.tab = 'all'; store.set('board-tab', 'all'); $('feed')._html = undefined; render(); } }
-function goChat(behavior) { oShow('act'); toChatTab(); $('msg').scrollIntoView({ behavior, block: 'center' }); $('msg').focus({ preventScroll: true }); }
+function goChat(behavior) { oShow('act'); toChatTab(); $('msg').scrollIntoView({ behavior, block: 'nearest' }); $('msg').focus({ preventScroll: true }); }
 function skipTo(where) {
   if (where === 'now') { oShow('left'); $('nyou').scrollIntoView({ block: 'start' }); return focusNow(); }
   if (where === 'chat') return goChat('auto');
@@ -158,7 +158,7 @@ document.addEventListener('click', (ev) => {
   if ('unlockNo' in d) { ui.confirmLock = null; return render(); }
   if (d.unlockYes) { const p = d.unlockYes; ui.confirmLock = null; act(api('/locks/release', { method: 'POST', body: JSON.stringify({ paths: [p] }) }), `Released lock on ${p}`).catch(() => {}); return render(); }
   if (d.go === 'questions') { oShow('left'); $('q-panel').scrollIntoView({ behavior: smooth(), block: 'start' }); return $('questions').querySelector('textarea')?.focus({ preventScroll: true }); }
-  if (d.go === 'mentions') { ui.tab = 'me'; store.set('board-tab', 'me'); $('feed')._html = undefined; render(); return oAct(); }
+  if (d.go === 'mentions') { ui.tab = 'me'; store.set('board-tab', 'me'); $('feed')._html = undefined; render(); oAct(); return $('feed').scrollIntoView({ behavior: smooth(), block: 'nearest' }); }
   if (d.go === 'blocked') {
     // The Blocked list under the questions in Needs attention, with why.
     oShow('left');
@@ -181,7 +181,7 @@ document.addEventListener('click', (ev) => {
     oShow('act'); mention(pl); const m = $('msg');
     if (!/idle/.test(m.value)) m.value += `${plural(c.idle.length, 'agent is', 'agents are')} idle and only ${plural(c.forIdle, 'task is', 'tasks are')} ready to claim. Please add more tasks for the goal.`;
     growMsg();
-    m.scrollIntoView({ behavior: smooth(), block: 'center' }); m.focus({ preventScroll: true }); m.setSelectionRange(m.value.length, m.value.length);
+    m.scrollIntoView({ behavior: smooth(), block: 'nearest' }); m.focus({ preventScroll: true }); m.setSelectionRange(m.value.length, m.value.length);
     return toast('Message drafted to the planner: edit it or press Enter to send. Or add a task yourself with + New task.');
   }
   if (d.go === 'wrapup') return goWrapup();
@@ -218,7 +218,7 @@ document.addEventListener('input', (ev) => {
   if (['dl-in', 'o-dl-in'].includes(ev.target.id) && ui.dlErr) { ui.dlErr = ''; ev.target.removeAttribute('aria-invalid'); for (const e of document.querySelectorAll('#dl-err, #o-dl-err')) e.textContent = ''; }
   if (/^qa-\d+$/.test(ev.target.id) && ui.qErr?.[ev.target.id.slice(3)]) { delete ui.qErr[ev.target.id.slice(3)]; ev.target.removeAttribute('aria-invalid'); const e = $('qe-' + ev.target.id.slice(3)); if (e) e.textContent = ''; }
   if (ev.target.id === 'repo-in' && ui.repoErr) { ui.repoErr = ''; ev.target.removeAttribute('aria-invalid'); $('repo-err').textContent = ''; }
-  if (['td-name', 'td-deps'].includes(ev.target.id) && ev.target.getAttribute('aria-invalid')) ev.target.removeAttribute('aria-invalid');
+  if (['td-name', 'td-deps'].includes(ev.target.id) && ev.target.getAttribute('aria-invalid')) { ev.target.removeAttribute('aria-invalid'); if (ev.target.id === 'td-name') $('td-name-err').textContent = ''; }
   if (['td-prio', 'td-size', 'td-res', 'td-asg'].includes(ev.target.id) && ev.target.getAttribute('aria-invalid')) { ev.target.removeAttribute('aria-invalid'); $('td-err').textContent = ''; }
 });
 // Every form sends once at a time (once(), keyed by the form): Enter pressed again while it's on its way does nothing.

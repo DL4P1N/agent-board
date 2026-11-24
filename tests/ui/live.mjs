@@ -222,6 +222,27 @@ try {
   await page.screenshot({ path: `${out}/live-board.png` });
 
   // ---- 3D: A1 (Setup closes when focus leaves it) and A2 (focus kept when 3D turns off) ----
+  // ---- E4: a stalled /api/state gives up after 15s, so live updates don't freeze behind it ----
+  {
+    const sp = await browser.newPage(); watch(sp); await signIn(sp);
+    await sp.evaluateOnNewDocument(() => {
+      const f = window.fetch.bind(window); window.__stall = false; window.__stalled = null;
+      window.fetch = (u, o) => {
+        if (window.__stall && /\/api\/state(\?|$)/.test(String(u))) { window.__stall = false; window.__stalled = o?.signal || null; return new Promise((res, rej) => o?.signal?.addEventListener('abort', () => rej(o.signal.reason))); }
+        return f(u, o);
+      };
+    });
+    await sp.goto(board.base + '/');
+    await until(sp, () => $('conn').classList.contains('live'), undefined, 8000);
+    await sp.evaluate(() => { window.__stall = true; load(); });
+    const t0 = Date.now();
+    check('E4 the board state request carries a timeout', await sp.evaluate(() => window.__stalled instanceof AbortSignal && !window.__stalled.aborted));
+    const aborted = await until(sp, () => !!window.__stalled?.aborted, undefined, 17000);
+    const late = await alice('create_task', { title: 'After the stall' });
+    const shown = await until(sp, (id) => !!document.querySelector(`.card[data-id="${id}"]`), late.id, 8000);
+    check('E4 a stalled state request gives up after about 15s, and the next update shows', aborted && shown && Date.now() - t0 < 25000, JSON.stringify({ aborted, shown, s: Math.round((Date.now() - t0) / 1000) }));
+    await sp.close();
+  }
   const p3 = await browser.newPage(); watch(p3); await signIn(p3);
   await p3.goto(board.base + '/?view=office');
   const office = await until(p3, () => document.documentElement.dataset.boardView === 'office', undefined, 8000);

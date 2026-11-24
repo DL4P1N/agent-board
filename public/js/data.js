@@ -25,18 +25,28 @@ const TOKEN_REJECTED = 'That token was rejected. Ask the host for the board link
 const tokenError = (body) => (body?.reason === 'token_rotated' ? TOKEN_CHANGED : TOKEN_REJECTED);
 let savingN = 0;
 function savingCount(d) { savingN = Math.max(0, savingN + d); $('conn').toggleAttribute('data-saving', savingN > 0); }
+// This page rotating the token (setup.js): a request sent with the old token meanwhile gets a 401, waits for the new
+// token and is sent again with it, instead of signing the host out.
+let tokenTurn = null;
+function tokenChange(p) { const q = tokenTurn = p.catch(() => {}).finally(() => { if (tokenTurn === q) tokenTurn = null; }); }
+// opts.once: no second try after a 401 (the rotation itself, and a request already sent again).
 async function api(path, opts = {}) {
   let r;
+  const sent = token;
   for (const fn of hooks.request) fn(path, opts);
   // A slow save (bad wifi): the header says "Saving…" until the server answers.
   let slowOn = false; const slow = opts.method && opts.method !== 'GET' ? setTimeout(() => { slowOn = true; savingCount(1); }, 700) : 0;
   try {
     // no-store: a 410 (archived) is cacheable by default, so a restored board would still look archived.
     r = await fetch(BASE + '/api' + path, { cache: 'no-store', ...opts, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, 'X-Agent': me, ...(opts.headers || {}) } });
-  } catch { throw new Error('Cannot reach the board server. Is it still running?'); }
+  } catch (e) { throw new Error(e?.name === 'TimeoutError' ? 'The board server is not answering.' : 'Cannot reach the board server. Is it still running?'); }
   finally { clearTimeout(slow); if (slowOn) savingCount(-1); }
   const body = await r.json().catch(() => ({}));
   if (unavailableStatus(r.status, body)) throw new Error('Token rejected');
+  if (r.status === 401 && !opts.once) {
+    const turn = tokenTurn; if (turn) await turn;
+    if (turn || token !== sent) return api(path, { ...opts, once: true });
+  }
   if (r.status === 401) { showGate(tokenError(body)); throw new Error('Token rejected'); }
   if (!r.ok) throw new Error(body.error || r.statusText || 'Request failed');
   return body;
@@ -97,13 +107,20 @@ async function recoverOnce() {
   const kind = r.status === 410 ? 'archived' : r.status === 409 ? 'moved' : r.status === 503 ? 'failed' : null;
   if (kind && kind !== unavailable) unavailableStatus(r.status, body);
 }
-function showGate(err = '') {
+// back: opened from the name button by someone signed in, who can go back to the board (Back, Esc) as they were.
+function showGate(err = '', { back = false } = {}) {
   es?.close(); esOpen = false; clearTimeout(retryT); retryT = 0;
   clearInterval(recoverTimer); unavailable = null; for (const id of UNAVAILABLE) $(id).hidden = true;
-  $('app').hidden = true; $('gate').hidden = false;
+  $('app').hidden = true; $('gate').hidden = false; $('g-back').hidden = !back;
   $('g-token').value = token; $('g-name').value = me; $('g-err').textContent = err;
   (token ? $('g-name') : $('g-token')).focus();
   gateNames();
+}
+async function backToBoard() {
+  if ($('gate').hidden || $('g-back').hidden) return;
+  $('gate').hidden = true; $('g-back').hidden = true; $('g-err').textContent = '';
+  $('app').hidden = false; $('me-btn').focus({ preventScroll: true });
+  if (await load() && !unavailable && !$('app').hidden) connect();
 }
 // Names already on the board, offered in the name box, so people pick theirs instead of typing a new one.
 async function gateNames() {
@@ -135,7 +152,9 @@ $('gate').addEventListener('submit', async (ev) => {
 // What signing in starts (boot.js's start(), handed over from there: this module doesn't import the entry point).
 let signedIn = null;
 function onSignIn(fn) { signedIn = fn; }
-$('me-btn').onclick = () => showGate();
+$('me-btn').onclick = () => showGate('', { back: true });
+$('g-back').onclick = backToBoard;
+$('gate').addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !$('g-back').hidden) { ev.preventDefault(); backToBoard(); } });
 
 // ---------- data ----------
 // One /api/state at a time: a load asked for while one is on its way runs once it is back (it fetches what changed
@@ -154,7 +173,8 @@ const loadSettled = () => loading || Promise.resolve();
 async function loadOnce() {
   let s;
   try {
-    s = await api('/state');
+    // A stalled answer gives up after 15s, so the next load (a live event, the 20s timer) can run.
+    s = await api('/state', { signal: AbortSignal.timeout(15000) });
     s.settings = { ...DEFAULT_SETTINGS, ...(s.settings || {}) };
     s.presence = s.presence || []; s.phase = s.phase || (s.tasks.length ? 'building' : 'needs_goal');
   } catch (e) { if (e.message !== 'Token rejected') setConn('down', e.message); return false; }
@@ -234,4 +254,4 @@ async function recheck() {
 }
 
 export { act, api, connect, es, esOpen, load, loadSettled, onEvent, onPaint, onRequest, onSignIn, onState, paint, recheck, retrying,
-  scheduleReload, setConn, setLoad, showGate, tokenError, unavailable, unavailableStatus };
+  scheduleReload, setConn, setLoad, showGate, tokenChange, tokenError, unavailable, unavailableStatus };

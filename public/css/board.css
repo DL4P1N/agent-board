@@ -458,6 +458,7 @@ html[data-board-view="office"] .pagefoot { display: none; }
 .ttable tbody tr { cursor: pointer; }
 .ttable tbody tr:hover { background: var(--chip); }
 .ttable td.tt { max-width: 340px; overflow-wrap: anywhere; }
+.ttable td.tu { white-space: nowrap; } /* "55m ago" on one line */
 .ttable td.tt button { text-align: left; }
 .tt-empty { padding: var(--s5); }
 .ttable tbody tr.tt-ask, .ttable tbody tr.tt-ask:hover { cursor: default; background: none; }
@@ -520,7 +521,7 @@ html[data-board-view="office"] .pagefoot { display: none; }
 .ac .ak { margin-left: auto; font-size: var(--fs-micro); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ac .ak.on { width: auto; height: auto; border-radius: 0; background: none; color: var(--ok); }
 .locks { list-style: none; margin: 0; padding: 0; }
-.lock code { background: none; padding: 0; } /* a path in mono, not a box */
+.lock code { background: none; padding: 0; overflow-wrap: break-word; } /* a path in mono, not a box; it wraps after a slash (<wbr>), inside a name only if that alone is too long */
 .lock { display: flex; justify-content: space-between; align-items: center; gap: var(--s4); font-size: var(--fs-meta); padding: var(--s3) 0; border-top: 1px solid var(--line); }
 .lock:first-child { border-top: 0; }
 .lock > div:first-child { min-width: 0; }
@@ -684,11 +685,12 @@ button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
   .topbar .tb-goal .o-x { min-width: 10ch; }
 }
 /* Narrower screens drop extras first: the repo (it is in Setup), the progress bar and main's green / running CI pill
-   (a failing one becomes a red dot), the freeze time, then the verdict word (its colour stays on the time, the words are the tooltip). */
+   (a failing one becomes a red dot), the freeze time, then "on track" (its colour stays on the time, the words are the
+   tooltip); tight and behind keep their word, as both are amber. */
 @media (max-width: 2199px) { .topbar .repo-s { display: none; } }
 @media (max-width: 1879px) { .clock:has(.vd) .fz { display: none; } }
 @media (max-width: 1799px) { .topbar .stat .mbar, .topbar .tb-merge .ci-pill, .clock .fz { display: none; } } /* a failing main stays as a red dot */
-@media (min-width: 1101px) and (max-width: 1699px) { .clock .vdw { display: none; } .clock.v-ok .tm { color: var(--ok); } .clock:is(.v-tight, .v-behind) .tm { color: var(--warn); } }
+@media (min-width: 1101px) and (max-width: 1699px) { .clock.v-ok .vdw { display: none; } .clock.v-ok .tm { color: var(--ok); } }
 /* Below 1600px Planner and Merges are one Roles chip (phones too). */
 @media (max-width: 1599px) { .topbar :is(.tb-plan, .tb-merge) { display: none; } .topbar .tb-roles { display: inline-flex; } }
 /* The narrowest centre column (three columns at 1280-1439px): chips and gaps a step tighter. Only if the row still
@@ -777,6 +779,7 @@ button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
 
 /* Activity: filters, the feed, the chat. File locks: folded to their title bar (with the count) by default. */
 .o-act > .o-body { display: flex; flex-direction: column; overflow: hidden; }
+.o-act > .o-body > :is(.composer, #chat-hint, #dm-hint) { order: 1; } /* under the feed, though first in the Tab order */
 /* Four filters spread across the panel's row; in a wide panel (one column, below 1000px) together at the left. */
 .o-act .tabs { justify-content: space-between; margin: 0 0 var(--s3); flex: 0 0 auto; flex-wrap: nowrap; gap: 0; overflow-x: auto; scrollbar-width: none; }
 .o-act .tabs button { flex: 0 0 auto; padding: 0 var(--s2); min-width: var(--ctl-xs); } /* at least 24px each, like every control */
@@ -790,12 +793,14 @@ button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
    panel leaves its title bar across the column, which keeps its width (nothing shifts or turns on its side); the
    folded panels stack at the top. The panels sit --edge from the window's edges (and under the header) and --gutter
    apart (focus rings are drawn inside each control, so nothing needs room around it). */
-main { --dock: clamp(272px, 20vw, 340px); --top: calc(var(--hdr, 54px) + var(--edge)); isolation: isolate;
+/* --dock (the side columns' width) is on the root: the toasts (outside main) keep clear of the side columns with it. */
+:root { --dock: clamp(272px, 20vw, 340px); }
+main { --top: calc(var(--hdr, 54px) + var(--edge)); isolation: isolate;
   display: grid; grid-template-columns: var(--dock) minmax(0, 1fr) var(--dock); grid-template-areas: "left centre right" "left foot right"; grid-template-rows: 1fr auto; gap: 0 var(--gutter); align-items: start;
   padding: var(--edge); }
 /* The narrowest three columns (1280 to 1400px): the side columns go from 240px at 1280 to 280px at 1400, and below
    1400 the task columns sit a little closer with a narrower folded Done rail, so four columns keep room for a title. */
-@media (max-width: 1400px) { main { --dock: clamp(240px, 240px + (100vw - 1280px) / 3, 280px); } }
+@media (max-width: 1400px) { :root { --dock: clamp(240px, 240px + (100vw - 1280px) / 3, 280px); } }
 @media (min-width: 1280px) and (max-width: 1399px) { .board { gap: var(--s3); } .board.done-closed { grid-template-columns: repeat(4, minmax(0, 1fr)) 40px; } }
 #o-left { grid-area: left; } .centre { grid-area: centre; } .o-rcol { grid-area: right; }
 .centre { position: relative; display: flex; flex-direction: column; gap: var(--gutter); min-width: 0; }
@@ -815,6 +820,13 @@ html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top)
 .o-rcol > :is(.o-right, .o-act, .o-locks).folded { flex: 0 0 auto; min-height: 0; }
 .o-rcol > .o-act.folded ~ .o-locks:not(.folded) { max-height: none; }
 @media (max-height: 760px) { .o-rcol > .o-right { max-height: 34%; } } /* short screens: Activity keeps room for a few events */
+/* Three columns on a laptop screen (under 900px tall): Agents up to about five rows (it scrolls, fading at its edges),
+   and Activity at least its feed's 260px plus its title bar, filters and chat box, so the feed isn't a sliver; with
+   File locks open too, Agents and File locks give way. */
+@media (min-width: 1280px) and (max-height: 899px) {
+  .o-rcol > .o-right { max-height: min(45%, calc(var(--bar) + 4px + var(--s4) + var(--s5) + 5 * (var(--ctl-sm) + var(--s1)))); }
+  .o-rcol > .o-act:not(.folded) { min-height: min(calc(260px + 166px), 62%); }
+}
 /* Three columns (both views): where Activity can be short (a short window, or File locks open below it) the chat hint
    is the message box's description only (read out, and its tooltip), so the feed keeps the room. */
 @media (min-width: 1280px) and (max-height: 900px) { .o-act :is(#chat-hint, #dm-hint) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
@@ -850,13 +862,17 @@ html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top)
 .gate label { margin-top: var(--s6); }
 .gate input { min-height: var(--ctl); font-size: var(--fs-body); }
 .gate button { margin-top: var(--s6); width: 100%; min-height: var(--ctl); font-size: var(--fs-body); }
+.gate #g-back { margin-top: var(--s4); }
 .gate a.btn { display: flex; align-items: center; justify-content: center; margin-top: var(--s6); min-height: var(--ctl); border-radius: var(--r-md); border: 2px solid var(--outline); background: var(--accent); color: var(--accent-ink); font-weight: 700; text-decoration: none; }
 .gate a.btn:hover { filter: brightness(1.08); }
 .gate #moved-link { overflow-wrap: anywhere; }
 @media (max-width: 440px) { .gate { margin: var(--s7) var(--s6); padding: var(--s6); } }
 
 /* ---------- toasts ---------- */
+/* At the foot of the centre column, at its right end (away from the Open column): never over the side columns, whose
+   controls (Send, File locks, an answer box) stay put while the board scrolls under the toasts. */
 #toasts { position: fixed; bottom: var(--s6); left: var(--s6); right: var(--s6); display: flex; flex-direction: column; align-items: flex-end; gap: var(--s3); z-index: 50; pointer-events: none; }
+@media (min-width: 1280px) { #toasts { left: calc(var(--edge) + var(--dock) + var(--gutter)); right: calc(var(--edge) + var(--dock) + var(--gutter)); } }
 .toast { background: var(--toast); color: var(--toast-ink); border: 2px solid var(--border); padding: var(--s4) var(--s5); border-radius: var(--r-md); font-size: var(--fs-sm); max-width: 420px; box-shadow: var(--e2); pointer-events: none; overflow-wrap: anywhere; display: flex; align-items: center; gap: var(--s4);
   transition: opacity var(--t-base) var(--ease), transform var(--t-slow) var(--ease); }
 @starting-style { .toast { opacity: 0; transform: translateY(8px); } }
@@ -897,10 +913,13 @@ button.tochat { display: none; } /* phones only (below) */
 }
 
 /* ---------- touch: every control at least 32px tall ---------- */
+/* Hints about keys and dragging (.kb) are for a mouse and keyboard; a touch screen gets its own words (.touch). */
+.touch { display: none; }
 @media (hover: none) and (pointer: coarse) {
+  .kb { display: none; } .touch { display: inline; }
   .needs button, .step-h { min-height: var(--ctl-sm); }
-  /* Names and #ids inside text: a taller hit area that doesn't move the text. */
-  #feed button.link, #locks button.link, #questions button.link, #now .link, #now-more .link, .o-helpers button.link, #o-blocked button.link { padding: var(--s4) var(--s3); margin: calc(-1 * var(--s4)) calc(-1 * var(--s3)); }
+  /* Names, #ids and links (a PR) inside text: a taller hit area that doesn't move the text. */
+  #feed a[href], #feed button.link, #locks button.link, #questions button.link, #now .link, #now-more .link, .o-helpers button.link, #o-blocked button.link { padding: var(--s4) var(--s3); margin: calc(-1 * var(--s4)) calc(-1 * var(--s3)); }
   /* The boxed rows in What to do now are big enough as they are. */
   #now .na.link, #now .also .link, #now-more .also .link { margin: 0; min-height: var(--ctl-sm); }
   #now .na.link { padding: var(--s3) 0 var(--s3) 20px; }

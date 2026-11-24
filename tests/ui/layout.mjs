@@ -191,6 +191,19 @@ try {
     await close(p);
   });
 
+  // ---- U5: a laptop screen (1280×800): Agents about five rows, Activity's feed at least 260px (File locks open too) ----
+  await block('U5 1280x800', async () => {
+    const p = await open({ w: 1280, h: 800 });
+    // Agents: its title bar and padding (about 64px) plus five rows of 26px and their 2px gaps.
+    const m = () => p.evaluate(() => ({ feed: Math.round($('feed').getBoundingClientRect().height), agents: Math.round($('o-right').getBoundingClientRect().height), row: Math.round(document.querySelector('#people .o-agent').getBoundingClientRect().height), col: Math.round($('o-rcol').getBoundingClientRect().height), sum: Math.round([...$('o-rcol').children].reduce((s, e) => s + e.getBoundingClientRect().height, 0)) }));
+    const a = await m();
+    check('U5 1280×800: Agents is about five rows tall (it scrolls), Activity\'s feed at least 260px', a.agents <= 5 * (a.row + 2) + 64 && a.agents >= 4 * (a.row + 2) + 40 && a.feed >= 258, JSON.stringify(a));
+    await p.click('#l-tog'); await settle(p);
+    const b = await m();
+    check('U5 1280×800, File locks open: the feed keeps its 260px, the column still fits', b.feed >= 258 && b.sum <= b.col, JSON.stringify(b));
+    await close(p);
+  });
+
   // ---- V1: the feed ends above the composer, File locks open, both views, laptop and desktop heights ----
   for (const [w, h] of [[1280, 720], [1440, 900]]) {
     for (const view of ['board', 'office']) {

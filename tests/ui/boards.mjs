@@ -185,6 +185,13 @@ try {
     check('once it is no longer the default, the old default can be archived', await until((s) => !!document.querySelector(`#arch [data-board="${s}"]`), other.slug));
   }
 
+  // ---- U10: a long address is cut inside its card, in full in its tooltip ----
+  const longSlug = 'w'.repeat(40);
+  await adminApi('/boards', 'POST', { name: 'Long address', slug: longSlug });
+  await page.reload(); await page.waitForSelector(`[data-board="${longSlug}"]`, { timeout: 5000 });
+  const lo = await page.$eval(`[data-board="${longSlug}"]`, (c) => { const s = c.querySelector('.slug'); return { over: Math.round(s.getBoundingClientRect().right - c.getBoundingClientRect().right), tip: s.title }; });
+  check('U10 a long board address stays inside its card (cut, in full in its tooltip)', lo.over <= 0 && lo.tip === `/b/${longSlug}/`, JSON.stringify(lo));
+
   // ---- delete: a board made for it (the original board lives in the data folder and stays) ----
   await adminApi('/boards', 'POST', { name: 'Throwaway', slug: 'throwaway' });
   await adminApi('/boards/throwaway/archive', 'POST');

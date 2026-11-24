@@ -31,6 +31,7 @@ try {
 // gate
 await page.goto(`${BASE}/?token=testtok`);
 await page.waitForSelector('#gate:not([hidden])');
+check('E12 the link\'s ?token= leaves the address bar while the sign-in form shows; the form has it, masked (U6)', !/token=/.test(page.url()) && await page.$eval('#g-token', (e) => e.value === 'testtok' && e.type === 'password'), page.url());
 await page.type('#g-name', 'dana');
 await page.keyboard.press('Enter');
 await page.waitForSelector('#app:not([hidden])');
@@ -99,6 +100,18 @@ const mBadge2 = await page.$eval('[data-tab="me"]', (e) => e.innerText);
 check('mentions view filters + clears unread', meFeed >= 2 && !/\d/.test(mBadge2), `${meFeed} items, tab "${mBadge2}"`);
 await domClick('[data-tab="all"]');
 
+// U2: "/" and Skip to chat scroll the page only when the message box is out of view.
+await page.setViewport({ width: 1280, height: 800 }); await sleep(300);
+for (const how of ['/', 'Skip to chat']) {
+  await page.evaluate(() => { scrollTo(0, 0); document.activeElement.blur(); }); await sleep(150);
+  const inView = await page.$eval('#msg', (m) => { const r = m.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; });
+  if (how === '/') await page.keyboard.press('/'); else await page.evaluate(() => document.querySelector('[data-skip="chat"]').click());
+  await sleep(500);
+  const r = await page.evaluate(() => ({ y: scrollY, f: document.activeElement.id }));
+  check(`U2 ${how}: the message box is in view, so the page doesn't scroll`, inView && r.y === 0 && r.f === 'msg', JSON.stringify({ inView, ...r }));
+}
+await page.setViewport({ width: 1440, height: 1000 }); await sleep(300);
+
 // chat + click-to-mention
 await page.keyboard.press('Escape');
 await page.evaluate(() => document.activeElement.blur());
@@ -116,7 +129,11 @@ await page.evaluate(() => document.activeElement.blur());
 await page.keyboard.press('n');
 await page.waitForSelector('#task-dlg[open]');
 check('"n" opens new task dialog with title focused', await page.evaluate(() => document.activeElement.id === 'td-name'));
+await page.click('#td-save'); await sleep(150);
+const te = await page.evaluate(() => { const n = $('td-name').getBoundingClientRect(), e = [...document.querySelectorAll('#task-dlg .err')].find((x) => /Give the task a title/.test(x.textContent)); const r = e?.getBoundingClientRect(); return { gap: r ? Math.round(r.top - n.bottom) : null, inv: $('td-name').getAttribute('aria-invalid'), focus: document.activeElement.id }; });
+check('U14 an empty title: the error shows right under Title, which has focus', te.gap !== null && te.gap >= 0 && te.gap < 24 && te.inv === 'true' && te.focus === 'td-name', JSON.stringify(te));
 await page.type('#td-name', 'Seed demo data');
+check('U14 typing a title clears that error', !/Give the task a title/.test(await page.$eval('#task-dlg', (d) => d.innerText)));
 await page.type('#td-desc', 'Three teams, ten submissions');
 await page.type('#td-deps', '1, 99');
 await page.click('#td-save');
@@ -296,10 +313,10 @@ const lt = await rest('dana', '/tasks', 'POST', { title: longTitle });
 await page.waitForSelector(`.card[data-id="${lt.id}"]`, { timeout: 5000 });
 const ltm = await page.$eval(`.card[data-id="${lt.id}"] .ct`, (e) => ({ h: e.getBoundingClientRect().height, lh: parseFloat(getComputedStyle(e).lineHeight), tip: e.title }));
 check('WB-17 long title clamped to 3 lines with a tooltip', ltm.h <= ltm.lh * 3 + 2 && ltm.tip === longTitle.slice(0, 200), JSON.stringify(ltm));
-// WB-26: toasts sit at the bottom right
+// WB-26, U1: toasts sit at the foot of the centre column, at its right end (away from the Open column)
 await page.evaluate(() => toast('position check'));
-const tr = await page.evaluate(() => { const t = [...document.querySelectorAll('#toasts .toast')].at(-1).getBoundingClientRect(); return { l: t.left, r: t.right, w: window.innerWidth }; });
-check('WB-26 toasts are on the right, away from the Open column', tr.l > tr.w / 2, JSON.stringify(tr));
+const tr = await page.evaluate(() => { const t = [...document.querySelectorAll('#toasts .toast')].at(-1).getBoundingClientRect(), c = $('centre').getBoundingClientRect(); return { l: Math.round(t.left), r: Math.round(t.right), cl: Math.round(c.left), cr: Math.round(c.right) }; });
+check('WB-26 toasts sit over the centre column, at its right end, away from the Open column', tr.l >= tr.cl - 1 && tr.r <= tr.cr + 1 && tr.r > tr.cr - 40 && tr.l > (tr.cl + tr.cr) / 2 - 1, JSON.stringify(tr));
 // A new toast pushes the older ones up in step: in the first frame they are still where they were, then they slide.
 await sleep(400);
 const push = await page.evaluate(async () => {
@@ -320,7 +337,20 @@ check('WB-14 Open column is capped with "Show N more"', capN < allOpen && capN >
 await page.click('[data-show-col="open"]'); await sleep(200);
 check('WB-14 "Show more" shows every card', (await page.$$eval('#col-open .card', (c) => c.length)) === allOpen && (await page.$eval('[data-show-col="open"]', (b) => b.textContent)) === 'Show fewer');
 await page.click('[data-show-col="open"]'); await sleep(200);
-// Toasts now sit bottom right, over the side column: clear the Undo toasts so the clicks below hit their buttons.
+// U1: Undo toasts never cover the side columns: Send and File locks' button take their clicks with two of them shown.
+await page.evaluate(() => { document.getElementById('toasts').replaceChildren(); for (const n of [1, 2]) toast(`#${n} moved to Review`, false, { label: 'Undo', run() {} }); });
+for (const [w, h] of [[1280, 800], [1440, 900], [1920, 1080]]) {
+  await page.setViewport({ width: w, height: h }); await sleep(300);
+  const hit = await page.evaluate(() => {
+    const ts = [...document.querySelectorAll('#toasts .toast')].map((t) => t.getBoundingClientRect());
+    const over = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const sides = ['o-left', 'o-rcol'].map((id) => $(id).getBoundingClientRect());
+    const clear = ['send', 'l-tog'].filter((id) => { const r = $(id).getBoundingClientRect(); return !document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('#' + id); });
+    return { n: ts.length, overSides: ts.some((t) => sides.some((s) => over(t, s))), covered: clear };
+  });
+  check(`U1 ${w}x${h}: two Undo toasts stay off the side columns (Send and File locks take their clicks)`, hit.n === 2 && !hit.overSides && !hit.covered.length, JSON.stringify(hit));
+}
+await page.setViewport({ width: 1440, height: 1000 }); await sleep(300);
 await page.evaluate(() => document.getElementById('toasts').replaceChildren());
 
 // locks: release with inline confirm
@@ -328,6 +358,7 @@ const lockCount = await page.$$eval('#locks .lock', (l) => l.length);
 // File locks fold to their title bar (with the count); open them to release one. Open is remembered.
 check('file locks start folded, with the count in their title bar', await page.evaluate((n) => $('o-locks').classList.contains('folded') && !$('l-body').offsetHeight && new RegExp(`${n} held`).test($('l-count').textContent) && $('l-tog').getAttribute('aria-expanded') === 'false' && $('o-locks').querySelector('.o-head').contains($('l-tog')), lockCount));
 await page.click('#l-tog');
+check('U15 a lock path wraps after a slash, not inside a name or its extension', await page.evaluate(() => { const c = [...document.querySelectorAll('#locks code')].find((x) => x.textContent === 'db/migrations/001_init.sql'); return !!c && c.querySelectorAll('wbr').length === 2 && getComputedStyle(c).overflowWrap === 'break-word'; }));
 check('the title bar opens the locks (remembered with the other panels)', await page.evaluate(() => !$('o-locks').classList.contains('folded') && $('l-tog').getAttribute('aria-expanded') === 'true' && JSON.parse(localStorage.getItem('board-office-ui') || '{}').locks === false));
 await page.$eval('[data-unlock="package.json"]', (b) => b.scrollIntoView({ block: 'center' })); await sleep(300); const hit = await page.evaluate(() => { const b = document.querySelector('[data-unlock="package.json"]').getBoundingClientRect(); const el = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return el.outerHTML.slice(0, 120); }); console.log('debug: element at release button = ' + hit);
 await page.click('[data-unlock="package.json"]');

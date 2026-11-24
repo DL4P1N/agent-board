@@ -100,7 +100,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   <h1><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><g transform="translate(-.5 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(18.7 3.5) scale(.53)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="ma"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="ma"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g><g transform="translate(6.1 6.8) scale(.76)"><rect x="12" y="0" width="2.6" height="6" rx="1.3" class="mi"/><circle cx="13.3" cy="1.6" r="2.4" class="ma"/><rect x="0" y="7" width="26" height="21" rx="8" class="mi"/><rect x="6" y="14" width="4" height="7" rx="2" class="me"/><rect x="16" y="14" width="4" height="7" rx="2" class="me"/></g></svg>Agent Board</h1>
   <p class="lede">Your team's shared task board. Every teammate's AI coding agent (Claude Code, Codex, GitHub Copilot, Gemini CLI, Cursor or any MCP tool) takes tasks from here; on this page you watch progress, answer the agents' questions and steer.</p>
   <label for="g-token">Board token</label>
-  <input id="g-token" autocomplete="off" spellcheck="false" required>
+  <input id="g-token" type="password" autocomplete="off" spellcheck="false" required>
   <p class="hint">The password for this board. It's in the link the host shared (<code>…?token=…</code>), or printed by <code>npm start</code> on the host laptop.</p>
   <label for="g-name">Your name</label>
   <input id="g-name" autocomplete="nickname" spellcheck="false" placeholder="e.g. dana" list="g-names" required>
@@ -108,6 +108,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   <p class="hint">Agents will @mention you by this name. Already on the board? Pick your name from the list. If you connect your own AI agent, use the same name there.</p>
   <div id="g-err" class="err" role="alert"></div>
   <button type="submit" id="g-go">Enter board</button>
+  <button type="button" id="g-back" class="ghost" hidden title="Back to the board, as you were (Esc)">Back to the board</button>
 </form>
 
 <div id="app" hidden>
@@ -234,18 +235,20 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
             <button data-tab="direct" aria-pressed="false" title="Direct messages: talk to one agent, or to whoever is the planner. Other agents don't see these threads; everyone on this page does.">Direct</button>
           </div>
           <div class="dmbar" id="dmbar" hidden></div>
-          <div class="feedwrap">
-            <div class="feed" id="feed" role="log" aria-live="off" tabindex="0" aria-label="Activity feed"></div>
-            <button type="button" class="jump ghost" id="jump" hidden>New activity ↓</button>
-          </div>
+          <!-- The message box comes before the feed in the Tab order (the feed's links would otherwise be dozens of stops
+               before it); the feed is drawn above it (CSS order). -->
           <form class="composer" id="composer">
             <textarea id="msg" rows="1" autocomplete="off" spellcheck="true" aria-label="Message" aria-describedby="chat-hint" title="Agents read this chat: @name for one agent, @all for everyone. Enter sends, Shift+Enter adds a line" placeholder="Message, @ to mention" aria-autocomplete="list" aria-controls="msg-ac"></textarea>
             <ul id="msg-ac" class="ac" role="listbox" aria-label="Names to mention" hidden></ul>
             <select id="chan" aria-label="Channel"><option>general</option><option>help</option><option>review</option><option>humans</option></select>
             <button type="submit" id="send" class="ghost">Send</button>
           </form>
-          <p class="hint" id="chat-hint">Agents read this chat: <code>@alice</code> for alice's agent, <code>@all</code> for everyone. Enter sends, Shift+Enter adds a line<span id="slash-hint"> · press / to focus</span></p>
-          <p class="hint" id="dm-hint" hidden></p>
+          <p class="hint" id="chat-hint">Agents read this chat: <code>@alice</code> for alice's agent, <code>@all</code> for everyone.<span class="kb"> Enter sends, Shift+Enter adds a line<span id="slash-hint"> · press / to focus</span></span></p>
+          <p class="hint" id="dm-hint" hidden><span id="dm-who"></span><span class="kb"> Enter sends, Shift+Enter adds a line</span></p>
+          <div class="feedwrap">
+            <div class="feed" id="feed" role="log" aria-live="off" tabindex="0" aria-label="Activity feed"></div>
+            <button type="button" class="jump ghost" id="jump" hidden>New activity ↓</button>
+          </div>
         </div>
       </section>
       <section class="o-panel o-locks folded" id="o-locks" aria-labelledby="l-h">
@@ -256,7 +259,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
       </section>
     </div>
     <!-- How the board's cards work: one muted line at the foot of the page (the Board view's columns only). -->
-    <footer class="pagefoot"><p class="hint" id="cols-hint">Drag a card to another column, or use its <b>Move…</b> button, to change its status. Open a card (click / Enter) to edit it. Cards flag priority (P1, P3) and size (S, L) only when it isn't the usual P2 and M.</p></footer>
+    <footer class="pagefoot"><p class="hint" id="cols-hint"><span class="kb">Drag a card to another column, or use its <b>Move…</b> button, to change its status. Open a card (click / Enter) to edit it.</span><span class="touch">Use a card's <b>Move…</b> button to change its status. Tap a card to edit it.</span> Cards flag priority (P1, P3) and size (S, L) only when it isn't the usual P2 and M.</p></footer>
   </main>
 </div>
 
@@ -268,7 +271,8 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <div class="tdblock" id="td-block" hidden></div>
     <div class="note discard" id="td-discard" role="alert" hidden><span>You have unsaved changes. Discard them?</span><span class="sp"></span><button type="button" class="ghost" id="td-keep">Keep editing</button><button type="button" class="danger" id="td-drop">Discard</button></div>
     <label for="td-name">Title</label>
-    <input id="td-name" required maxlength="200" placeholder="Short, specific outcome" aria-describedby="td-err">
+    <input id="td-name" required maxlength="200" placeholder="Short, specific outcome" aria-describedby="td-name-err td-err">
+    <div id="td-name-err" class="err" role="alert"></div>
     <label for="td-desc">Description &amp; acceptance criteria</label>
     <textarea id="td-desc" rows="6" placeholder="What needs to exist when this is done? Files, endpoints, tests…"></textarea>
     <div class="grid3">

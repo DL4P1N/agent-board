@@ -85,7 +85,17 @@ try {
   const a2 = await page.$eval('#activity-live', (a) => a.textContent);
   check('A11Y-1 after the gap, the queued updates are announced together', /^2 updates\./.test(a2) && new RegExp(`#${ids.lb.id} is blocked`).test(a2) && /bob mentioned you/.test(a2), a2);
 
+  // ---- U8: the message box comes before the feed's links in the Tab order (a PR link in the feed is a Tab stop) ----
+  await rest(board, 'chen', '/messages', 'POST', { text: 'Opened https://github.com/team/vote/pull/49 and https://github.com/team/vote/pull/50 for review' });
+  await until(page, () => document.querySelectorAll('#feed a[href*="/pull/"]').length >= 2);
+  await page.evaluate(() => document.querySelector('#tabs [data-tab="direct"]').focus());
+  await page.keyboard.press('Tab');
+  check('U8 Tab from Activity\'s filters goes to the message box, before the feed and its links', await page.evaluate(() => document.activeElement === $('msg')), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
+  const order = await page.evaluate(() => { const r = $('feed').getBoundingClientRect(), m = $('msg').getBoundingClientRect(); return { feedAbove: r.bottom <= m.top + 1 }; });
+  check('U8 the feed is still drawn above the message box', order.feedAbove, JSON.stringify(order));
+
   await page.screenshot({ path: `${out}/desktop.png` });
+  check('U13 with a mouse, the chat hint names the keys', /Shift\+Enter/.test(await page.$eval('#chat-hint', (e) => e.innerText)));
   check('MO-2 no Chat button on desktop', await page.$eval('#tochat', (b) => getComputedStyle(b).display === 'none'));
 
   // ---- Phone: badges, chat button, touch targets ----
@@ -108,7 +118,9 @@ try {
     .filter((e) => e.offsetParent && !e.closest('.vh') && !e.classList.contains('skip'))
     .map((e) => ({ e, r: e.getBoundingClientRect() })).filter(({ r }) => r.height < 32)
     .map(({ e, r }) => `${e.className || e.tagName} "${e.textContent.trim().slice(0, 16)}" ${Math.round(r.width)}x${Math.round(r.height)}`));
-  check('MO-3 phone: every visible control is at least 32px tall', !small.length, small.slice(0, 8).join(' | '));
+  check('MO-3 phone: every visible control is at least 32px tall (a PR link in the feed too)', !small.length && await page.$$eval('#feed a[href*="/pull/"]', (l) => l.length >= 2), small.slice(0, 8).join(' | '));
+  const hints = await page.evaluate(() => ({ chat: $('chat-hint').innerText, foot: $('cols-hint').innerText }));
+  check('U13 phone: no keyboard-only or drag hints (Enter, Shift+Enter, "/", drag); the foot says Move… and tap', !/Enter|press \/|Drag/.test(hints.chat + hints.foot) && /Move… button/.test(hints.foot) && /Tap a card/.test(hints.foot), JSON.stringify(hints));
 
   // ---- A desktop-sized touch screen (a tablet in landscape, a touch laptop): the touch sizes, not the phone layout ----
   // The other suites run with a mouse; this is the touch pass at a desktop width.

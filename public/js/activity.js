@@ -161,8 +161,8 @@ function syncComposer() {
   if (m.getAttribute('aria-describedby') !== (dm ? 'dm-hint' : 'chat-hint')) m.setAttribute('aria-describedby', dm ? 'dm-hint' : 'chat-hint');
   if (!dm) return;
   const who = ui.dm === DM_PLANNER ? (r ? `Goes to ${r}, the planner (it follows the role)` : 'Waits for the first agent that becomes planner') : `Goes to ${ui.dm} only`;
-  const t = `${who}. Other agents don't see it; everyone on this page does. Enter sends, Shift+Enter adds a line`;
-  if ($('dm-hint').textContent !== t) $('dm-hint').textContent = t;
+  const t = `${who}. Other agents don't see it; everyone on this page does.`;
+  if ($('dm-who').textContent !== t) $('dm-who').textContent = t;
 }
 // Open an agent's thread (its Message button) or the planner's, with the message box focused.
 function openDm(name, focus = true) {
@@ -370,7 +370,8 @@ function renderLocks() {
     const confirming = ui.confirmLock === l.path;
     // Locks over an hour block teammates for a long time: make them stand out.
     const long = (l.expires_in_s ?? (l.expires_at - Date.now()) / 1000) > 3600;
-    return `<li class="lock"><div><code>${esc(l.path)}</code>${long ? ` <span class="pill warn" title="Locked for over an hour by ${esc(l.owner)}. If someone is waiting on it, ask ${esc(agentRoot(l.owner))} to release it, or release it here.">long lock</span>` : ''}
+    // A long path wraps after a slash, not inside a name (or its extension).
+    return `<li class="lock"><div><code>${esc(l.path).replace(/\//g, '/<wbr>')}</code>${long ? ` <span class="pill warn" title="Locked for over an hour by ${esc(l.owner)}. If someone is waiting on it, ask ${esc(agentRoot(l.owner))} to release it, or release it here.">long lock</span>` : ''}
       <div class="muted mt-1">${who(l.owner, true)}${l.task_id ? ` · <button type="button" class="link tref" data-open-task="${l.task_id}" data-fk="lt-${esc(l.path)}">#${l.task_id}</button>` : ''} · expires in ${mins}m${l.reason ? ` · ${esc(l.reason)}` : ''}</div></div>
       <div class="la">${confirming
         ? `<button class="danger" data-unlock-yes="${esc(l.path)}" data-fk="uy-${esc(l.path)}">Force release</button><button class="ghost" data-unlock-no data-fk="un-${esc(l.path)}">Keep</button>`

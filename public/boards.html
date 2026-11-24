@@ -285,7 +285,7 @@
   .card.archived { background: var(--sunken); box-shadow: none; }
   .ch { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--s4); min-width: 0; }
   .ch h3 { font-size: var(--fs-lead); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100%; }
-  .ch .slug { white-space: nowrap; font: var(--fs-meta) var(--mono); color: var(--muted); }
+  .ch .slug { white-space: nowrap; font: var(--fs-meta) var(--mono); color: var(--muted); min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; } /* a long address is cut, in full in its tooltip */
   .pill { display: inline-block; font-size: var(--fs-micro); font-weight: 600; line-height: 20px; padding: 0 6px; border-radius: var(--r-full); background: var(--chip); color: var(--muted); white-space: nowrap; }
   .pill.live { background: var(--ok-soft); color: var(--ok); }
   .pill.bad { background: var(--bad-soft); color: var(--bad); }
@@ -425,7 +425,7 @@ function card(b) {
   else if (b.status === 'failed') acts = `<p class="failerr" role="note"><b>Couldn't open this board:</b> ${esc(b.error || 'unknown error')}. Fix its data (e.g. <code>npm run restore -- latest --board ${k}</code> with the server stopped), or archive it.</p><div class="acts">${b.default ? '' : `<button type="button" class="ghost sm" data-act="archive" data-slug="${k}">Archive…</button>`}</div>${b.default ? '<p class="hint">This is the default board, so it can\'t be archived. Make another board the default first.</p>' : ''}`;
   else acts = `<div class="acts"><button type="button" class="sm" data-act="open" data-slug="${k}" aria-label="Open ${esc(b.name)} (new tab)">Open</button><button type="button" class="ghost sm" data-act="copy-join" data-slug="${k}">Copy join command</button><button type="button" class="ghost sm" data-act="copy-link" data-slug="${k}">Copy link</button>${b.default ? '' : `<button type="button" class="ghost sm" data-act="default" data-slug="${k}" title="Also serve this board at the server's root address">Make default</button>`}${b.default ? '' : `<button type="button" class="ghost sm" data-act="archive" data-slug="${k}">Archive…</button>`}</div>${b.default ? '<p class="hint">This is the default board, so it can\'t be archived. To archive it, make another board the default first.</p>' : ''}`;
   return `<li class="card ${b.status === 'archived' ? 'archived' : ''}" data-board="${k}">
-    <div class="ch"><h3 title="${esc(b.name)}">${esc(b.name)}</h3><span class="slug">/b/${k}/</span></div>
+    <div class="ch"><h3 title="${esc(b.name)}">${esc(b.name)}</h3><span class="slug" title="/b/${k}/">/b/${k}/</span></div>
     <div>${b.status === 'archived' ? `<span class="pill">archived${b.archived_at ? ' ' + esc(ago(b.archived_at)) : ''}</span>` : b.status === 'failed' ? '<span class="pill bad">failed to open</span>' : '<span class="pill live">live</span>'} ${b.default ? '<span class="pill def" title="Also served at the server\'s root address">default</span>' : ''}</div>
     <div class="facts"><span><b class="num">${b.done || 0}</b> of <b class="num">${b.tasks || 0}</b> tasks done</span>${b.status === 'live' ? `<span><b class="num">${b.agents_online || 0}</b> agent${b.agents_online === 1 ? '' : 's'} online</span>` : ''}<span>${esc(ago(b.last_activity))}</span></div>
     <div class="bar" role="img" aria-label="${pct}% of tasks done"><i style="width:${pct}%"></i></div>

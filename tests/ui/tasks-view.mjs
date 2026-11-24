@@ -54,6 +54,8 @@ try {
   await page.click('[data-view="table"]');
   const rows = () => page.$$eval('#tasktable tbody tr', (l) => l.map((x) => x.dataset.id));
   check('table shows all tasks, board hidden', (await rows()).length === 3 && (await page.$eval('#board', (x) => x.hidden)), (await rows()).join());
+  const upd = await page.$$eval('#tasktable tbody tr[data-id] td:last-child', (l) => l.map((td) => { const r = document.createRange(); r.selectNodeContents(td); return { ws: getComputedStyle(td).whiteSpace, lines: new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size }; }));
+  check('U9 the Updated column stays on one line ("55m ago" never wraps)', upd.length === 3 && upd.every((u) => u.ws === 'nowrap' && u.lines === 1), JSON.stringify(upd));
   check('toggle aria-pressed', (await page.$eval('[data-view="table"]', (x) => x.getAttribute('aria-pressed'))) === 'true');
   await page.click('[data-tsort="priority"]');
   check('sort by priority ascending', (await rows())[0] === String(a.id) && (await page.$eval('[data-tsort="priority"]', (x) => x.parentElement.getAttribute('aria-sort'))) === 'ascending', (await rows()).join());
