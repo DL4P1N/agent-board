@@ -39,6 +39,13 @@ const until = (page, fn, arg, timeout = 8000) => page.waitForFunction(fn, { time
 const view = (page) => page.evaluate(() => document.documentElement.dataset.boardView);
 const shown = (page, sel) => page.evaluate((s) => { const e = document.querySelector(s); return !!e && !!(e.offsetWidth || e.offsetHeight); }, sel);
 // Each page in its own browser context: its own localStorage, like a separate browser.
+// Every visible name tag (and its bubble) lies inside the room, which clips whatever leaves it.
+const tagsInside = () => {
+  const room = document.querySelector('.ab-labels').getBoundingClientRect();
+  const out = [...document.querySelectorAll('.ab-labels .ab-tag')].filter((t) => t.style.display !== 'none').map((t) => ({ n: t.querySelector('.ab-name').textContent, b: t.querySelector('.ab-tagin').getBoundingClientRect() }))
+    .filter(({ b }) => b.left < room.left - 1 || b.top < room.top - 1 || b.right > room.right + 1 || b.bottom > room.bottom + 1);
+  return { out: out.map((t) => `${t.n} ${Math.round(t.b.left)},${Math.round(t.b.top)},${Math.round(t.b.right)},${Math.round(t.b.bottom)}`), room: [room.left, room.top, room.right, room.bottom].map(Math.round).join(',') };
+};
 // No two agents' name tags (with their bubbles) cover each other.
 const tagsApart = () => {
   const hit = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
@@ -798,6 +805,29 @@ try {
       await until(lb.page, `(${tagsApart})().n >= 8 && !(${tagsApart})().bad.length`, null, 6000);
       const ap = await lb.page.evaluate(tagsApart);
       check(`3D, ${w}×${h}, docked, two questions: no name tag covers another`, ap.n >= 8 && !ap.bad.length, JSON.stringify(ap));
+    }
+    // Selecting an agent (its tag grows to show the task) keeps that tag at its agent and never lands it on a neighbour's
+    // tag; the others move around it, only where they must. Each agent in turn, then a short room, where several agents
+    // stand near the top edge: every tag stays whole inside the room.
+    for (const [w, h] of [[1440, 900], [1280, 800], [1280, 420], [1280, 300]]) {
+      await lb.page.setViewport({ width: w, height: h }); await sleep(500);
+      await until(lb.page, `(${tagsApart})().n >= 8 && (${h < 400 ? 'true' : `!(${tagsApart})().bad.length`}) && !(${tagsInside})().out.length`, null, 6000);
+      const names = await lb.page.evaluate(() => [...document.querySelectorAll('.ab-labels .ab-tag')].filter((t) => t.style.display !== 'none').map((t) => t.querySelector('.ab-name').textContent));
+      const idleIn = await lb.page.evaluate(tagsInside);
+      check(`3D, ${w}×${h}, docked, 8 agents: every name tag stays inside the room`, names.length >= 8 && !idleIn.out.length, JSON.stringify(idleIn));
+      const bad = { overlap: [], outside: [], unselected: [] };
+      for (const n of names) {
+        await lb.page.evaluate((n) => { window.pickAgent(n); }, n);
+        if (!await until(lb.page, (n) => [...document.querySelectorAll('.ab-labels .ab-card.sel .ab-name')].some((e) => e.textContent === n), n, 3000)) { bad.unselected.push(n); continue; }
+        await sleep(250);
+        const ap = await lb.page.evaluate(tagsApart), ins = await lb.page.evaluate(tagsInside);
+        // (In a room as short as 300px, 12 tags cannot all be apart: there only the room's edges are held.)
+        if (ap.bad.length && h >= 400) bad.overlap.push(`${n}: ${ap.bad.join(' ')}`);
+        if (ins.out.length) bad.outside.push(`${n}: ${ins.out.join(' ')}`);
+      }
+      await lb.page.evaluate(() => window.pickAgent(null));
+      check(`3D, ${w}×${h}, docked: selecting each agent in turn never puts its tag over another's, and every tag stays inside the room`, !bad.unselected.length && !bad.overlap.length && !bad.outside.length, JSON.stringify(bad));
+      await lb.page.screenshot({ path: path.join(out, `office-tags-select-${w}x${h}.png`) });
     }
     await lb.page.close();
     for (const q of mq) await human(`/questions/${q.question_id}/answer`, 'POST', { answer: 'yes' });

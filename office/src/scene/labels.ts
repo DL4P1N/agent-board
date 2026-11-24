@@ -47,10 +47,10 @@ interface El {
   skills: HTMLDivElement; more: HTMLDivElement; l1: HTMLDivElement; l2: HTMLDivElement; bub: HTMLDivElement; inner: HTMLDivElement;
   key: { [k: string]: string }; lastT: string; seen: number;
   /** The tag's size (bubble and card), measured again only after its content changed; and this frame's place. */
-  w: number; h: number; dirty: boolean; x: number; y: number; top: number;
+  w: number; h: number; dirty: boolean; x: number; y: number; top: number; px: number; sel: boolean;
 }
 
-const GAP = 2; // px between a tag and the one it moved above
+const GAP = 2; // px between a tag and the one it moved around
 
 export class LabelLayer {
   root: HTMLDivElement;
@@ -60,6 +60,8 @@ export class LabelLayer {
   private fl = new Map<string, { root: HTMLDivElement; inner: HTMLDivElement; seen: number; t: string; txt: string; col: string }>();
   private flFrame = 0;
   private ro: ResizeObserver | null;
+  /** The room's size on screen (tags are kept inside it), measured again when it changes. */
+  private bw = 0; private bh = 0; private boundsDirty = true;
   /** `bindTag` wires an agent's name tag (a plain element, not a Tab stop) to the scene's own pick / camera handling. */
   constructor(host: HTMLElement, private bindTag: ((tag: HTMLElement, id: string) => void) | null = null) {
     if (!document.getElementById('ab-label-css')) {
@@ -72,7 +74,7 @@ export class LabelLayer {
     this.root.className = 'ab-labels';
     host.appendChild(this.root);
     // That scale follows the window: measure the tags again when the room's size changes.
-    this.ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { for (const e of this.els.values()) e.dirty = true; });
+    this.ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { this.boundsDirty = true; for (const e of this.els.values()) e.dirty = true; });
     this.ro?.observe(this.root);
   }
 
@@ -100,31 +102,50 @@ export class LabelLayer {
     this.bindTag?.(card, id);
     root.appendChild(inner);
     this.root.appendChild(root);
-    return { root, card, name, q, tier, model, owner, skills, more, l1, l2, bub, inner, key: {}, lastT: '', seen: 0, w: 0, h: 0, dirty: true, x: 0, y: 0, top: 0 };
+    return { root, card, name, q, tier, model, owner, skills, more, l1, l2, bub, inner, key: {}, lastT: '', seen: 0, w: 0, h: 0, dirty: true, x: 0, y: 0, top: 0, px: 0, sel: false };
   }
 
   private set(e: El, k: string, v: string, fn: () => void): void { if (e.key[k] !== v) { e.key[k] = v; e.dirty = true; fn(); } }
   private shown: El[] = [];
 
-  /** Tags never cover each other: front tags (lower on screen) keep their place, a tag behind that would overlap one is
-   *  lifted just above it. Sizes are cached, so a frame with no new words reads no layout; n is the agents on screen. */
+  /** Tags never cover each other and stay inside the room (it clips what leaves it). The selected tag keeps its spot and
+   *  the others move around it; then front tags (lower on screen) keep theirs, and a tag behind that would overlap one is
+   *  lifted just above it, or put below it when there is no room above. Sizes are cached, so a frame with no new words
+   *  reads no layout. */
   private place(): void {
     const v = this.shown;
     // On screen, as drawn: the board and the presenter scale the tags up (CSS), so not offsetWidth.
     for (const e of v) if (e.dirty) { const r = e.inner.getBoundingClientRect(); e.w = r.width; e.h = r.height; e.dirty = !e.w; }
-    v.sort((a, b) => b.y - a.y);
+    if (this.boundsDirty || !this.bw || !this.bh) { const r = this.root.getBoundingClientRect(); this.bw = r.width; this.bh = r.height; this.boundsDirty = !r.width || !r.height; }
+    const W = this.bw, H = this.bh;
+    // The selected tag first (it stays at its agent), then the rest front to back.
+    v.sort((a, b) => (a.sel === b.sel ? b.y - a.y : a.sel ? -1 : 1));
     for (let i = 0; i < v.length; i++) {
-      const a = v[i]; let bottom = a.y;
-      // Only ever upward, above one tag at a time, so this ends (each placed tag is passed at most once).
-      for (let moved = true; moved;) {
-        moved = false;
-        for (let j = 0; j < i; j++) {
-          const b = v[j];
-          if (Math.abs(a.x - b.x) * 2 < a.w + b.w && bottom > b.top && bottom - a.h < b.top + b.h) { bottom = b.top - GAP; moved = true; }
+      const a = v[i];
+      // Inside the room: a tag's anchor is its bottom centre. A room too small for the tag leaves it at its agent.
+      let x = a.x, y = a.y;
+      if (W > a.w) x = Math.min(Math.max(x, a.w / 2), W - a.w / 2);
+      if (H > a.h) y = Math.min(Math.max(y, a.h), H);
+      a.px = x;
+      // Candidate bottoms: its own spot, just above or just below each tag already placed, and the room's edges. The one
+      // that covers least (none, where there's space) and moves least wins; above beats below on a tie.
+      let best = y, bestOver = Infinity, bestMove = Infinity;
+      if (!a.sel) {
+        const cands = [y, a.h, H];
+        for (let j = 0; j < i; j++) { const b = v[j]; cands.push(b.top - GAP, b.top + b.h + GAP + a.h); }
+        for (const c of cands) {
+          if (H > a.h && (c < a.h - 0.5 || c > H + 0.5)) continue;
+          let over = 0;
+          for (let j = 0; j < i; j++) {
+            const b = v[j];
+            if (Math.abs(x - b.px) * 2 < a.w + b.w) over += Math.max(0, Math.min(c, b.top + b.h) - Math.max(c - a.h, b.top));
+          }
+          const move = Math.abs(c - y) + (c > y ? 0.01 : 0);
+          if (over < bestOver - 0.5 || (over < bestOver + 0.5 && move < bestMove)) { best = c; bestOver = over; bestMove = move; }
         }
       }
-      a.top = bottom - a.h;
-      const t = `translate3d(${a.x}px,${bottom}px,0)`;
+      a.top = best - a.h;
+      const t = `translate3d(${x}px,${best}px,0)`;
       if (t !== a.lastT) { a.lastT = t; a.root.style.transform = t; }
     }
   }
@@ -145,9 +166,8 @@ export class LabelLayer {
       // In a small room the bubble's words ride in the tag (see `fold`), and that tag sits over its neighbours' tags.
       const say = fold && showLabels && showBubbles && it.bubble ? it.bubble : '';
       e.x = Math.round(it.x); e.y = Math.round(it.y);
-      // The selected tag (drawn over the rest, and taller) stays at its agent; the others are placed after this loop.
-      if (it.selected) { const t = `translate3d(${e.x}px,${e.y}px,0)`; if (t !== e.lastT) { e.lastT = t; e.root.style.transform = t; } }
-      else shown.push(e);
+      // The selected tag (drawn over the rest, and taller) keeps its agent's spot; `place` moves the others around it.
+      e.sel = it.selected; shown.push(e);
       const z = String(Math.round(it.y) + (it.selected || say ? 1000 : 0));
       if (e.key.z !== z) { e.key.z = z; e.root.style.zIndex = z; } // not set(): the size stays
       this.set(e, 'cardv', showLabels ? '1' : '0', () => { e.card.style.display = showLabels ? 'flex' : 'none'; });

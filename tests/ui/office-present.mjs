@@ -106,6 +106,13 @@ async function staleNeeds(file, sel) {
   await sp.close();
 }
 
+// Every visible name tag (and its bubble) lies inside the room, which clips whatever leaves it.
+const tagsInside = () => {
+  const room = document.querySelector('.ab-labels').getBoundingClientRect();
+  const out = [...document.querySelectorAll('.ab-labels .ab-tag')].filter((t) => t.style.display !== 'none').map((t) => ({ n: t.querySelector('.ab-name').textContent, b: t.querySelector('.ab-tagin').getBoundingClientRect() }))
+    .filter(({ b }) => b.left < room.left - 1 || b.top < room.top - 1 || b.right > room.right + 1 || b.bottom > room.bottom + 1);
+  return { out: out.map((t) => `${t.n} ${Math.round(t.b.left)},${Math.round(t.b.top)},${Math.round(t.b.right)},${Math.round(t.b.bottom)}`), room: [room.left, room.top, room.right, room.bottom].map(Math.round).join(',') };
+};
 // No two agents' name tags (with their bubbles) cover each other.
 const tagsApart = () => {
   const hit = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
@@ -170,6 +177,8 @@ try {
       await until(page, `(${tagsApart})().n >= 8 && !(${tagsApart})().bad.length`, null, 6000);
       const ap = await page.evaluate(tagsApart);
       check(`${w}×${h}, 8 agents, 2 with a question: no name tag covers another`, ap.n >= 8 && !ap.bad.length, JSON.stringify(ap));
+      const inside = await page.evaluate(tagsInside);
+      check(`${w}×${h}, 8 agents: every name tag stays inside the room`, !inside.out.length, JSON.stringify(inside));
       await page.screenshot({ path: path.join(out, `office-tags-${w}.png`) });
     }
     await page.setViewport({ width: 1600, height: 900 }); await sleep(300);
