@@ -195,6 +195,18 @@ try {
     hook.close();
   }
 
+  // ---- L10: behind a reverse proxy listed in BOARD_TRUSTED_PROXIES, the address is the one it adds to X-Forwarded-For ----
+  {
+    const b3 = await startBoard({ env: { BOARD_TRUSTED_PROXIES: '127.0.0.1,::1', BOARD_ADMIN_TOKEN: ADMIN } });
+    const adm = (token, headers) => fetch(`${b3.base}/api/admin/boards`, { headers: { 'X-Admin-Token': token, ...headers } }).then((r) => r.status);
+    const st = [];
+    for (let i = 0; i < 11; i++) st.push(await adm(`wrong-${i}`, { 'X-Forwarded-For': `10.9.9.${i}, 198.51.100.80` }));
+    check('L10: the last X-Forwarded-For address is the caller (what the client wrote before it is not)', st.slice(0, 10).every((x) => x === 401) && st[10] === 429, st.join());
+    check('L10: CF-Connecting-IP is not believed then (a client could send it through the proxy)', await adm(ADMIN, { 'X-Forwarded-For': '198.51.100.80', 'CF-Connecting-IP': '198.51.100.99' }) === 429);
+    check('L10: another address behind the proxy is served', await adm(ADMIN, { 'X-Forwarded-For': '198.51.100.80, 198.51.100.81' }) === 200);
+    await b3.stop();
+  }
+
   // ---- L6 (POSIX): the data folder and the database are this user's only, also when they were made wider ----
   if (process.platform !== 'win32') {
     fs.chmodSync(board.dataDir, 0o755);

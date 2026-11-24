@@ -22,10 +22,23 @@ const ipRate = new RateLimiter(LIMITS.ipPerMinute);
 // Per network address, across boards (one laptop or script is the same load on any board).
 const ipSlots = new Slots(LIMITS.waitsPerIp, 0);
 setInterval(() => { agentRate.sweep(); ipRate.sweep(); }, 60e3).unref();
+// Reverse proxies whose X-Forwarded-For is believed (BOARD_TRUSTED_PROXIES: their addresses, comma-separated), e.g. a
+// Caddy or nginx in front of the board on a server. Without it every request through such a proxy would share the
+// proxy's address in the limits, and a header sent by the client could not be told from one the proxy added.
+const TRUSTED_PROXIES = new Set(String(process.env.BOARD_TRUSTED_PROXIES || '').split(',').map((s) => s.trim().replace(/^::ffff:/, '')).filter(Boolean));
 // Who's calling. Behind `npm run tunnel` every request comes from cloudflared on this machine, so Cloudflare's
-// header names the real address (trusted only from this machine itself).
+// header names the real address (trusted only from this machine itself). With BOARD_TRUSTED_PROXIES set, a request
+// from one of those proxies is from the address its X-Forwarded-For names last, after any further trusted proxies (the
+// entries before that are the client's own word); CF-Connecting-IP is not used then, as a client could send it through.
 export function clientIp(req) {
   const peer = String(req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+  if (TRUSTED_PROXIES.size) {
+    if (!TRUSTED_PROXIES.has(peer)) return peer || 'unknown';
+    const hops = String(req.get('x-forwarded-for') || '').split(',').map((s) => s.trim().replace(/^::ffff:/, '')).filter(Boolean);
+    while (hops.length && TRUSTED_PROXIES.has(hops.at(-1))) hops.pop();
+    const last = hops.at(-1);
+    return last && net.isIP(last) ? last : peer;
+  }
   const cf = String(req.get('cf-connecting-ip') || '').trim();
   if (cf && (peer === '127.0.0.1' || peer === '::1') && net.isIP(cf)) return cf;
   return peer || 'unknown';
