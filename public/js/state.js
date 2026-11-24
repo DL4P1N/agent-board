@@ -33,15 +33,18 @@ const SLUG = BASE ? decodeURIComponent(BASE.slice(3)) : '';
 const nsKey = (k) => (BASE && k.startsWith('board-') && k !== 'board-admin-token' ? `${k}@${BASE}` : k);
 const store = { get: (k) => { try { return localStorage.getItem(nsKey(k)); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(nsKey(k), v); } catch {} } };
 const qs = new URLSearchParams(location.search);
-// A link's token leaves the address bar (boot.js's start()), but a reload before the name is typed would lose it: this
-// tab keeps it until sign-in completes (it then lives in the saved token). A newer link's token replaces an older one.
+// A link's token leaves the address bar (boot.js's start()) and is held in this tab, pending, until the board accepts it
+// as a human's (data.js): only then does it replace the saved token, so a bad or viewer link can't wipe or downgrade it.
+// A reload before that keeps it. A newer link's token replaces an older pending one.
 const pending = { get: () => { try { return sessionStorage.getItem(nsKey('board-pending-token')); } catch { return null; } }, set: (v) => { try { v ? sessionStorage.setItem(nsKey('board-pending-token'), v) : sessionStorage.removeItem(nsKey('board-pending-token')); } catch {} } };
 if (qs.get('token')) pending.set(qs.get('token'));
-let token = qs.get('token') || pending.get() || store.get('board-token') || '';
-// names are case-insensitive. ?name=<person> (join prints the board link with it) signs in as that person.
-const nameParam = String(qs.get('name') || '').trim().toLowerCase().replace(/[^\w.\-]/g, '');
-if (nameParam) store.set('board-name', nameParam);
-let me = (nameParam || store.get('board-name') || '').toLowerCase();
+let token = pending.get() || store.get('board-token') || '';
+// Names are case-insensitive, and the server keeps only a-z, digits, _ . and - (the sign-in form shows the result first).
+const NAME_MAX = 32; // a person's name; agents' names (with the tool and laptop) may be longer
+const cleanName = (n) => String(n ?? '').trim().toLowerCase().replace(/[^\w.\-]/g, '');
+// ?name=<person> (join prints the board link with it) only fills in the sign-in form: a link never changes who you are.
+const linkName = cleanName(qs.get('name')).slice(0, NAME_MAX);
+let me = (store.get('board-name') || '').toLowerCase();
 const DEFAULT_SETTINGS = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '', planner_extra: '2' };
 const ANYONE = '*'; // settings.integrator: whoever is free merges
 let state = { tasks: [], locks: [], questions: [], events: [], settings: { ...DEFAULT_SETTINGS }, phase: 'needs_goal', presence: [], setup: null };
@@ -61,6 +64,6 @@ function setMe(n) { me = n; }
 function setState(s) { state = s; }
 function setSeenMention(id) { seenMention = id; }
 
-export { $, ACTIVE, AGENT_ONLINE_MS, ALL_PHASES, ANYONE, BASE, COL_DESC, COL_EMPTY, COL_SHOWN, COLS, DEFAULT_SETTINGS,
-  DONE_SHOWN, FROZEN_DESC, HINT, HOLDING, HUES, LABEL, me, nsKey, oSave, oUi, pending, qs, reduceMotion, seenMention,
+export { $, ACTIVE, AGENT_ONLINE_MS, ALL_PHASES, ANYONE, BASE, cleanName, COL_DESC, COL_EMPTY, COL_SHOWN, COLS, DEFAULT_SETTINGS,
+  DONE_SHOWN, FROZEN_DESC, HINT, HOLDING, HUES, LABEL, linkName, me, NAME_MAX, nsKey, oSave, oUi, pending, qs, reduceMotion, seenMention,
   setMe, setSeenMention, setState, setToken, SIZE_TIP, SLUG, smooth, STALE_MS, state, STATUSES, store, token, ui };

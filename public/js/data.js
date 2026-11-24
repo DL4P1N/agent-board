@@ -5,7 +5,7 @@
 // the UI modules' handlers), so the modules that show the board import this one and not the other way round.
 
 import './helpers.js';
-import { $, BASE, DEFAULT_SETTINGS, me, setMe, setState, setToken, SLUG, state, store, token } from './state.js';
+import { $, BASE, cleanName, DEFAULT_SETTINGS, me, NAME_MAX, pending, setMe, setState, setToken, SLUG, state, store, token } from './state.js';
 import { esc, knownPeople, toast } from './helpers.js';
 
 const hooks = { request: [], state: [], event: [], paint: [] };
@@ -23,6 +23,17 @@ const TOKEN_CHANGED = 'The board\'s link changed. Ask the host for the new link.
 // Only a 401 that says the token was rotated means the link changed; any other 401 is a token the board doesn't know.
 const TOKEN_REJECTED = 'That token was rejected. Ask the host for the board link.';
 const tokenError = (body) => (body?.reason === 'token_rotated' ? TOKEN_CHANGED : TOKEN_REJECTED);
+// A token the board accepts, but not a person's: the presenter's (viewer) or the agents' token.
+const NOT_HUMAN = "That is the presenter's or the agents' token, not the board link. Ask the host for the board link.";
+// A link's token (pending, state.js) the board didn't accept as a person's: it is forgotten. With a saved token the page
+// goes on with that one and says so (returns true); without one the sign-in form shows why.
+function dropPending(msg) {
+  pending.set('');
+  const saved = store.get('board-token') || '';
+  if (saved && saved !== token && me) { setToken(saved); toast("The link's token didn't work here, so the board kept your saved one.", true); return true; }
+  showGate(msg);
+  return false;
+}
 let savingN = 0;
 function savingCount(d) { savingN = Math.max(0, savingN + d); $('conn').toggleAttribute('data-saving', savingN > 0); }
 // This page rotating the token (setup.js): a request sent with the old token meanwhile gets a 401, waits for the new
@@ -56,6 +67,10 @@ async function api(path, opts = {}) {
   finally { clearTimeout(slow); if (slowOn) savingCount(-1); }
   const body = await r.json().catch(() => ({}));
   if (unavailableStatus(r.status, body)) throw new Error('Token rejected');
+  if (r.status === 401 && sent === pending.get()) {
+    if (dropPending(tokenError(body))) return api(path, { ...opts, once: true });
+    throw new Error('Token rejected');
+  }
   if (r.status === 401 && !opts.once) {
     const turn = tokenTurn; if (turn) await awaitTurn(turn, opts.signal);
     if (turn || token !== sent) return api(path, { ...opts, once: true });
@@ -122,11 +137,12 @@ async function recoverOnce() {
   if (kind && kind !== unavailable) unavailableStatus(r.status, body);
 }
 // back: opened from the name button by someone signed in, who can go back to the board (Back, Esc) as they were.
-function showGate(err = '', { back = false } = {}) {
+// name: the name to fill in (a link's ?name=), instead of yours.
+function showGate(err = '', { back = false, name = '' } = {}) {
   es?.close(); esOpen = false; clearTimeout(retryT); retryT = 0;
   clearInterval(recoverTimer); unavailable = null; for (const id of UNAVAILABLE) $(id).hidden = true;
   $('app').hidden = true; $('gate').hidden = false; $('g-back').hidden = !back;
-  $('g-token').value = token; $('g-name').value = me; $('g-err').textContent = err;
+  $('g-token').value = token; $('g-name').value = name || me; $('g-err').textContent = err;
   (token ? $('g-name') : $('g-token')).focus();
   gateNames();
 }
@@ -152,17 +168,21 @@ async function gateNames() {
 $('g-token').addEventListener('change', gateNames);
 $('gate').addEventListener('submit', async (ev) => {
   ev.preventDefault();
-  const t = $('g-token').value.trim(); const n = $('g-name').value.trim().toLowerCase().replace(/[^\w.\-]/g, '');
+  const t = $('g-token').value.trim(); const typed = $('g-name').value.trim().toLowerCase(); const n = cleanName(typed);
   if (!t) { $('g-err').textContent = 'Enter the board token.'; return $('g-token').focus(); }
   if (!n) { $('g-err').textContent = 'Enter your name (letters, numbers, . - _).'; return $('g-name').focus(); }
+  if (n.length > NAME_MAX) { $('g-err').textContent = `Keep your name to ${NAME_MAX} characters.`; return $('g-name').focus(); }
+  // Names keep only a-z, digits, . - _ (the server's rule): show the name it becomes before signing in with it.
+  if (n !== typed) { $('g-name').value = n; $('g-err').textContent = `Names keep only a-z, 0-9, . - and _, so yours would be "${n}". Enter again to use it, or change it.`; return $('g-name').focus(); }
   // The board speaks as "board", and "anonymous" is a call without a name: the server refuses both as a writer.
   if (n === 'board' || n === 'anonymous') { $('g-err').textContent = `"${n}" is reserved. Use your own name.`; return $('g-name').focus(); }
   const r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
   if (!r) { $('g-err').textContent = 'Cannot reach the board server. Is it still running?'; return; }
   if (r.status === 401) { const b = await r.json().catch(() => ({})); $('g-err').textContent = tokenError(b); return $('g-token').focus(); }
+  if (r.ok && !(await r.json().catch(() => ({}))).setup) { $('g-err').textContent = NOT_HUMAN; return $('g-token').focus(); }
   // A board that is unavailable (archived, moved, failed to open) signs in too, as a page opened with a saved token
   // does: start() shows why and starts the timers, so the page is all there once the board comes back.
-  setToken(t); setMe(n); store.set('board-token', token); store.set('board-name', me);
+  setToken(t); setMe(n); store.set('board-token', token); store.set('board-name', me); pending.set('');
   signedIn?.();
 });
 // What signing in starts (boot.js's start(), handed over from there: this module doesn't import the entry point).
@@ -194,6 +214,11 @@ async function loadOnce() {
     s.settings = { ...DEFAULT_SETTINGS, ...(s.settings || {}) };
     s.presence = s.presence || []; s.phase = s.phase || (s.tasks.length ? 'building' : 'needs_goal');
   } catch (e) { if (e.message !== 'Token rejected') setConn('down', e.message); return false; }
+  // A link's token (pending) is kept once the board accepts it as a person's; a presenter's or agents' token isn't.
+  if (token === pending.get()) {
+    if (!s.setup) return dropPending(NOT_HUMAN) ? loadOnce() : false;
+    store.set('board-token', token); pending.set('');
+  }
   for (const fn of hooks.state) await fn(s);
   setState(s); state.loaded = true; setConn(esOpen ? 'live' : 'connecting');
   paint();

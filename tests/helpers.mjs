@@ -143,6 +143,15 @@ export function shotsDir(suite) {
   return dir;
 }
 
+// Opens a board link (…?token=…&name=…) the way a person does: a link's name only fills in the sign-in form (unless
+// this browser is already signed in as that name), so "Enter board" is pressed when the form shows.
+export async function openLink(page, url, opts) {
+  const res = await page.goto(url, opts);
+  await page.waitForSelector('#gate:not([hidden]), #app:not([hidden])', { timeout: 8000 });
+  if (await page.$('#gate:not([hidden])')) await page.click('#g-go');
+  return res;
+}
+
 // Prints the results, stops the board, and exits non-zero if anything failed.
 export async function finish(results, { browser, board } = {}) {
   console.log(results.join('\n'));

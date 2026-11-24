@@ -6,7 +6,7 @@ import os from 'node:os';
 import net from 'node:net';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { ROOT, launchBrowser, shotsDir, finish, tempDir } from '../helpers.mjs';
+import { ROOT, launchBrowser, shotsDir, finish, tempDir, openLink } from '../helpers.mjs';
 
 const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' ? ' — ' + x : ''}`);
@@ -89,7 +89,7 @@ try {
   const bp = await browser.newPage();
   bp.on('pageerror', (e) => errors.push(e.message));
   const btxt = (sel) => bp.$eval(sel, (e) => e.innerText).catch(() => '');
-  await bp.goto(`${BASE}/b/spring-hackathon/?token=${encodeURIComponent(open.token)}&name=dana`);
+  await openLink(bp, `${BASE}/b/spring-hackathon/?token=${encodeURIComponent(open.token)}&name=dana`);
   await bp.waitForSelector('#app:not([hidden])', { timeout: 5000 });
   check('board page under /b/<slug>/ loads its state', await bp.waitForFunction(() => typeof state !== 'undefined' && Array.isArray(state.tasks) && !!state.setup, { timeout: 5000, polling: 250 }).then(() => true).catch(() => false));
   // The header and title use the board's name from /api/state (board.name).
@@ -160,7 +160,7 @@ try {
   const rootCtx = await browser.createBrowserContext();
   const mp = await rootCtx.newPage();
   mp.on('pageerror', (e) => errors.push(e.message));
-  await mp.goto(`${BASE}/?token=testtok&name=dana`);
+  await openLink(mp, `${BASE}/?token=testtok&name=dana`);
   await mp.waitForSelector('#app:not([hidden])', { timeout: 5000 });
   const oldDefault = (await (await adminApi('/boards')).json()).find((b) => b.default)?.slug;
   await page.bringToFront(); // clicks on a background tab can stall in headless Chrome

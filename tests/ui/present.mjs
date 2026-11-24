@@ -2,7 +2,7 @@
 // (public/present.html, tests/ui/office-present.mjs) falls back to it without WebGL and links to it as "Simple view".
 // Starts its own throwaway board. Run all suites with: npm test
 import path from 'node:path';
-import { startBoard, launchBrowser, shotsDir, finish, agent, rest, TOKEN } from '../helpers.mjs';
+import { startBoard, launchBrowser, shotsDir, finish, agent, rest, TOKEN, openLink } from '../helpers.mjs';
 
 const board = await startBoard();
 const R = [];
@@ -281,7 +281,7 @@ try {
   check('no token: explains how to open it', /Presenter view/.test(await p2.evaluate(() => document.body.innerText)) && !e2.length, e2.join('; '));
   // The main board's "Presenter view" link uses the viewer token.
   const mp = await browser.newPage();
-  await mp.goto(`${board.base}/?token=${TOKEN}&name=dana`);
+  await openLink(mp, `${board.base}/?token=${TOKEN}&name=dana`);
   await mp.waitForSelector('#app:not([hidden])', { timeout: 8000 });
   await mp.waitForFunction(() => !document.getElementById('present-link').hidden, { timeout: 8000 }).catch(() => {});
   const href = await mp.$eval('#present-link', (a) => a.getAttribute('href'));

@@ -1,7 +1,7 @@
 // The activity feed and composer: board actions as status lines, "Load earlier activity", long posts
 // clamped, a feed that's only as tall as its content, mention ordering, "someone saved over you",
 // the saved webhook shown as text, and the invite / QR code. Acts as human "dana".
-import { startBoard, launchBrowser, shotsDir, finish, agent, rest as restOf } from '../helpers.mjs';
+import { startBoard, launchBrowser, shotsDir, finish, agent, rest as restOf, openLink } from '../helpers.mjs';
 
 // Its webhooks go to a server on 127.0.0.1 (refused unless the host allows localhost).
 const board = await startBoard({ env: { BOARD_WEBHOOK_LOCALHOST: '1' } });
@@ -23,7 +23,7 @@ try {
   const bx = await agent(board, 'bob-codex', 'codex-mcp-client'); await bx('board_status');
   await rest('alice/db-worker', '/messages', 'POST', { text: 'helper says hi' });
 
-  await page.goto(`${board.base}/?token=${board.token}&name=dana`);
+  await openLink(page, `${board.base}/?token=${board.token}&name=dana`);
   await page.waitForSelector('#app:not([hidden])');
   await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 5000 });
 

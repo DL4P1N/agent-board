@@ -40,14 +40,14 @@ const wrap = () => {
     return r;
   };
 };
-async function open({ signedIn = true } = {}) {
+async function open({ signedIn = true, path = '/' } = {}) {
   const page = await (await browser.createBrowserContext()).newPage();
   const errs = [];
   page.on('pageerror', (e) => errs.push(e.message));
   page.on('dialog', (d) => { errs.push('dialog: ' + d.message()); d.dismiss(); });
   await page.evaluateOnNewDocument(wrap);
   if (signedIn) await page.evaluateOnNewDocument(() => { try { localStorage.setItem('board-token', 'testtok'); localStorage.setItem('board-name', 'dana'); } catch {} });
-  await page.goto(board.base + '/');
+  await page.goto(board.base + path);
   return { page, errs };
 }
 
@@ -123,6 +123,68 @@ try {
     check('and its timers run (the 20 s refresh and the 30 s clock), the sign-in kept', r.iv.includes(20000) && r.iv.includes(30000) && r.tok, JSON.stringify(r));
     check('gate page: no page errors', !errs.length, errs.join(' | '));
     await page.close();
+  }
+
+  // ---- a link's ?token= and ?name= (review round 4, M6): held until the board accepts them ----
+  {
+    const viewer = (await human('/state')).setup.viewer_token;
+    const saved = (page) => page.evaluate(() => ({ tok: localStorage.getItem('board-token'), name: localStorage.getItem('board-name'), pend: sessionStorage.getItem('board-pending-token'), gate: !document.getElementById('gate').hidden, app: !document.getElementById('app').hidden }));
+    for (const [what, t] of [['a wrong token', 'not-the-token'], ["the presenter's (viewer) token", viewer]]) {
+      const { page, errs } = await open({ path: '/?token=' + encodeURIComponent(t) });
+      const ok = await until(page, () => document.getElementById('conn')?.classList.contains('live') && /kept your saved one/.test(document.getElementById('toasts')?.textContent || ''));
+      const r = await saved(page);
+      check(`M6 a link with ${what} doesn't replace the saved token: the board goes on with it, and says so`, ok && r.tok === 'testtok' && !r.pend && r.app, JSON.stringify(r));
+      check(`M6 ${what}: no page errors`, !errs.length, errs.join(' | '));
+      await page.close();
+    }
+    {
+      const { page, errs } = await open({ signedIn: false, path: '/?token=' + encodeURIComponent(viewer) + '&name=vic' });
+      await page.waitForSelector('#gate:not([hidden])');
+      await page.click('#g-go');
+      const err = await until(page, () => /presenter's or the agents' token/.test(document.getElementById('g-err').textContent));
+      const r = await saved(page);
+      check('M6 signing in with the viewer token is refused at the form, nothing saved', err && r.gate && !r.tok && !r.name, JSON.stringify(r));
+      check('M6 viewer at the form: no page errors', !errs.length, errs.join(' | '));
+      await page.close();
+    }
+    {
+      const { page, errs } = await open({ path: '/?name=eve' });
+      await page.waitForSelector('#gate:not([hidden])');
+      const r = { ...(await saved(page)), field: await page.$eval('#g-name', (e) => e.value) };
+      check("M6 a link's ?name= for someone else only fills in the sign-in form; the saved name stays", r.gate && r.field === 'eve' && r.name === 'dana' && !/name=/.test(page.url()), JSON.stringify(r));
+      await page.click('#g-go');
+      await until(page, () => document.getElementById('conn')?.classList.contains('live'));
+      const r2 = await saved(page);
+      check('M6 and entering it there signs in as that name', r2.app && r2.name === 'eve', JSON.stringify(r2));
+      check('M6 name link: no page errors', !errs.length, errs.join(' | '));
+      await page.close();
+    }
+    {
+      const { page, errs } = await open({ path: '/?token=testtok&name=dana' });
+      const ok = await until(page, () => document.getElementById('conn')?.classList.contains('live'));
+      check('M6 a link with your own token and name opens the board as before', ok && (await saved(page)).app);
+      check('M6 own link: no page errors', !errs.length, errs.join(' | '));
+      await page.close();
+    }
+    // UM12: a name the server would strip is shown as it becomes before it is used; 70 characters are too long.
+    {
+      const { page, errs } = await open({ signedIn: false, path: '/?token=testtok' });
+      await page.waitForSelector('#gate:not([hidden])');
+      await page.type('#g-name', 'Renée');
+      await page.click('#g-go'); await sleep(300);
+      const r = { ...(await saved(page)), field: await page.$eval('#g-name', (e) => e.value), err: await page.$eval('#g-err', (e) => e.textContent) };
+      check("UM12 a name with letters the server drops shows what it becomes first, and doesn't sign in yet", r.gate && r.field === 'rene' && /would be "rene"/.test(r.err) && !r.name, JSON.stringify(r));
+      await page.$eval('#g-name', (e) => { e.value = 'x'.repeat(70); });
+      await page.click('#g-go'); await sleep(300);
+      const r2 = { ...(await saved(page)), err: await page.$eval('#g-err', (e) => e.textContent), max: await page.$eval('#g-name', (e) => e.maxLength) };
+      check('a 70-character name is refused (32 at most), and the field stops at 32', r2.gate && /32 characters/.test(r2.err) && r2.max === 32 && !r2.name, JSON.stringify(r2));
+      await page.$eval('#g-name', (e) => { e.value = 'rene'; });
+      await page.click('#g-go');
+      const ok = await until(page, () => document.getElementById('conn')?.classList.contains('live'));
+      check('UM12 entering again signs in as the name shown', ok && (await saved(page)).name === 'rene');
+      check('UM12 page: no page errors', !errs.length, errs.join(' | '));
+      await page.close();
+    }
   }
 } catch (e) { R.push('CRASH ' + (e.stack || e)); }
 await finish(R, { browser, board });

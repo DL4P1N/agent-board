@@ -148,12 +148,15 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 // Several boards can share a server: /b/<slug>/ has its own API under /b/<slug>/api. The default board is at the root.
 const BASE = (location.pathname.match(/^\/b\/[^/]+/) || [''])[0];
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
-// The read-only viewer token, as for the presenter view (the same key): the board's link carries it once, then it's kept
-// in this browser and taken out of the address bar. ?since=<ms or ISO date> stays: it picks the span's start.
+// The read-only viewer token, as for the presenter view (the same keys): the board's link carries it once, and it is
+// taken out of the address bar at once. It is held in this tab (pending) until the board accepts it, and only then kept
+// in this browser, so a bad link can't wipe the saved one. ?since=<ms or ISO date> stays: it picks the span's start.
 const qs = new URLSearchParams(location.search);
 const VIEW_KEY = 'board-view-token' + (BASE ? '@' + BASE : '');
-const token = qs.get('token') || store.get(VIEW_KEY) || '';
-if (qs.get('token')) { store.set(VIEW_KEY, token); qs.delete('token'); history.replaceState(null, '', location.pathname + (qs.toString() ? '?' + qs : '')); }
+const PEND_KEY = 'board-view-pending' + (BASE ? '@' + BASE : '');
+const pend = { get: () => { try { return sessionStorage.getItem(PEND_KEY); } catch { return null; } }, set: (v) => { try { v ? sessionStorage.setItem(PEND_KEY, v) : sessionStorage.removeItem(PEND_KEY); } catch {} } };
+if (qs.get('token')) { pend.set(qs.get('token')); qs.delete('token'); history.replaceState(null, '', location.pathname + (qs.toString() ? '?' + qs : '')); }
+let token = pend.get() || store.get(VIEW_KEY) || '';
 const since = qs.get('since') || '';
 
 const HUES = [45, 75, 110, 145, 175, 200, 222, 245, 270, 295, 320];
@@ -237,10 +240,16 @@ async function load() {
   if (!token) return showMsg('Open this from the board: <b>Session recap</b> in its help (<b>?</b>) or Ctrl+K.');
   try {
     const r = await fetch(BASE + '/api/recap' + (since ? '?since=' + encodeURIComponent(since) : ''), { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } });
-    if (r.status === 401 || r.status === 403) { stopped = true; try { localStorage.removeItem(VIEW_KEY); } catch {} return showMsg('This recap link has expired: open a new one from the board (<b>Session recap</b> in its help, <b>?</b>, or Ctrl+K).'); }
+    if (r.status === 401 || r.status === 403) {
+      // A link's token that doesn't work: forget it and go on with the saved one, if there is one.
+      if (token === pend.get()) { pend.set(''); const saved = store.get(VIEW_KEY) || ''; if (saved && saved !== token) { token = saved; return load(); } }
+      stopped = true; if (store.get(VIEW_KEY) === token) try { localStorage.removeItem(VIEW_KEY); } catch {}
+      return showMsg('This recap link has expired: open a new one from the board (<b>Session recap</b> in its help, <b>?</b>, or Ctrl+K).');
+    }
     if (r.status === 410) return showMsg('This board is archived.');
     const body = await r.json().catch(() => ({}));
     if (!r.ok) return showMsg(esc(body.error || r.statusText || 'The recap could not be loaded.'));
+    if (token === pend.get()) { store.set(VIEW_KEY, token); pend.set(''); }
     $('rc-status').hidden = true; render(body);
   } catch {
     // A recap already on the page stays, and the status line says it may be behind until a reload gets through.

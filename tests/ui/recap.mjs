@@ -138,6 +138,19 @@ try {
     check('a wrong token: the link has expired', /expired/.test(await np.evaluate(() => document.body.innerText)));
     await np.close();
   }
+  // ---- M6: a link's token is kept only once the board accepts it; a bad link doesn't wipe the saved one ----
+  {
+    const { page: vp, errs: ve } = await open(`/recap.html?token=${encodeURIComponent(VIEW)}`);
+    await ready(vp);
+    const kept = () => vp.evaluate(() => localStorage.getItem('board-view-token'));
+    await vp.goto(`${board.base}/recap.html?token=wrong`);
+    check('M6 recap: a link with a wrong token still shows the recap with the saved one, and keeps it', await ready(vp) && await kept() === VIEW, await kept());
+    await vp.goto(`${board.base}/present-classic.html?token=wrong`);
+    const shown = await vp.waitForFunction(() => !/expired/.test(document.body.innerText) && !!document.querySelector('#app > :not(.msg)'), { timeout: 8000 }).then(() => true).catch(() => false);
+    check('M6 presenter: a link with a wrong token goes on with the saved one, and keeps it', shown && await kept() === VIEW && !/token=/.test(vp.url()), await vp.evaluate(() => document.body.innerText.slice(0, 200)));
+    check('M6 pages: no console errors', !ve.length, ve.join(' | '));
+    await vp.close();
+  }
 } catch (e) {
   check('recap UI suite ran', false, e.stack);
 }
