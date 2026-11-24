@@ -388,6 +388,17 @@ try {
   check('a rejected token: no "Connecting…" in the header next to that message', !/Connecting/.test(await p3.evaluate(() => document.body.innerText)), await p3.$eval('#top', (t) => t.innerText).catch(() => ''));
   check('never holds the board token', await p3.evaluate((t) => !Object.keys(localStorage).some((k) => localStorage.getItem(k) === t), TOKEN));
   await p3.close();
+  // M6: a link's key is saved once the board has answered with it. A bad link doesn't replace the key the screen holds.
+  const p4 = watch(await browser.newPage(), []);
+  await p4.evaluateOnNewDocument((k) => { try { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('board-view-token', k); } } catch {} }, VIEW);
+  await p4.goto(`${board.base}/present.html?token=nope`);
+  check('M6: a rejected link: the key the screen already held is still saved', await until(p4, () => /presenter link has expired/.test(document.body.innerText)) && await p4.evaluate(() => localStorage.getItem('board-view-token')) === VIEW);
+  await p4.close();
+  const p5 = watch(await browser.newPage(), []);
+  await p5.evaluateOnNewDocument(() => { try { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.clear(); } } catch {} });
+  await p5.goto(`${board.base}/present.html?token=${encodeURIComponent(VIEW)}`);
+  check('M6: a good link: the key is saved once the board has loaded, and the address bar is clean', await until(p5, () => /voting app/.test(document.body.innerText)) && await p5.evaluate(() => localStorage.getItem('board-view-token')) === VIEW && !/token=/.test(p5.url()));
+  await p5.close();
 
   // The board's header link still opens this page with the viewer token.
   const mp = await browser.newPage();

@@ -17,8 +17,12 @@ const store = {
 // board's token so a projector laptop never holds the full board token.
 export const VIEW_KEY = 'board-view-token' + (BASE ? '@' + BASE : '');
 const qs = new URLSearchParams(location.search);
-let token = qs.get('token') || store.get(VIEW_KEY) || '';
-if (qs.get('token')) { store.set(VIEW_KEY, token); history.replaceState(null, '', location.pathname); }
+// A key from the link leaves the address bar at once but is saved only once the board has answered with it: a mistyped or
+// expired link never replaces the key this screen already holds.
+const fromLink = qs.get('token') || '';
+let token = fromLink || store.get(VIEW_KEY) || '';
+let unsaved = !!fromLink;
+if (fromLink) history.replaceState(null, '', location.pathname);
 /** The token this page runs with (for the "Simple view" link and the WebGL fallback, which open the classic page). */
 export const viewToken = (): string => token;
 
@@ -57,7 +61,7 @@ export function connect(on: ConnectionEvents): void {
     try {
       // A stalled answer gives up after 15 s (and counts as can't reach), so the next load can run.
       const r = await fetch(BASE + '/api/state', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout?.(15000) });
-      if (r.status === 401 || r.status === 403) { expired = true; es?.close(); store.del(VIEW_KEY); on.message(EXPIRED); return; }
+      if (r.status === 401 || r.status === 403) { expired = true; es?.close(); if (!unsaved) store.del(VIEW_KEY); on.message(EXPIRED); return; }
       // Archived (410), moved to its own address (409) or failed to open (503): say so, keep checking
       // (the 5 s poll), and come back by itself when the board is available again.
       if (r.status === 410 || r.status === 409 || r.status === 503) {
@@ -73,6 +77,7 @@ export function connect(on: ConnectionEvents): void {
       }
       if (!r.ok) throw new Error(r.statusText);
       const s = (await r.json()) as BoardState;
+      if (unsaved) { store.set(VIEW_KEY, token); unsaved = false; }
       lastErr = '';
       if (unavailable || !have) { unavailable = 0; on.message(null); }
       have = true;
