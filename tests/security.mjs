@@ -100,6 +100,16 @@ try {
     let asked = []; try { asked = fs.readFileSync(log, 'utf8').split('\n').filter((l) => l.startsWith('["pr","view"')).map((l) => JSON.parse(l)[2]); } catch {}
     check('M1: the PR poll asks gh about the github.com link only', asked.length === 1 && asked[0] === 'https://github.com/o/r/pull/7', JSON.stringify(asked));
   }
+
+  // ---- M5: a request without a valid token is refused before its body is read ----
+  {
+    const big = '{"x":"' + 'a'.repeat(1.5e6) + '"';  // not even valid JSON: reading it would say so (400)
+    const post = (p, token) => fetch(`${board.base}${p}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: big });
+    const a = await post('/api/messages'); const b = await post('/mcp?agent=x'); const c = await post('/api/messages', 'wrong-token');
+    check('M5: a tokenless or wrong-token POST is refused (401) without its body being parsed', [a, b, c].every((r) => r.status === 401), [a, b, c].map((r) => r.status).join());
+    const d = await post('/api/messages', board.token);
+    check('M5: with the token the body is still read (and bad JSON is a 400)', d.status === 400, String(d.status));
+  }
 } catch (e) {
   check('suite ran without throwing', false, e?.stack || String(e));
 }

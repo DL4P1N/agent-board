@@ -40,10 +40,11 @@ export function createBoardRuntime(slug, dir, { registry, envTokenSlug }) {
   router.use((req, res, next) => (closed ? res.status(410).json({ error: 'This board is archived.' }) : next()));
   // Board calls per network address (all tokens), and per agent once we know it's one.
   const { ipLimit, agentLimit, holdSlot } = createRequestLimits(slug);
-  // The JSON body is read after the per-address limit (see app.js).
+  // The JSON body is read after the per-address limit and the token check (see app.js): a request without a valid
+  // token never has its body (up to 2 MB) parsed, so tokenless posts can't keep the server busy reading them.
   const json = express.json({ limit: '2mb' });
-  router.use('/mcp', ipLimit(true), json);
-  router.use('/api', ipLimit(false), json);
+  router.use('/mcp', ipLimit(true), tokens.auth, json);
+  router.use('/api', ipLimit(false), tokens.auth, json);
 
   // ---------- MCP (stateless streamable HTTP) ----------
   mountMcp(router, { board, auth: tokens.auth, tokenCurrent: tokens.current, agentLimit, holdSlot, presence });

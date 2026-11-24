@@ -20,7 +20,7 @@ export function createApp({ registry, live, adminToken }) {
     next();
   });
   // Request bodies (JSON) are read further in, only where they're used: a board's /api and /mcp after its
-  // per-address limit (runtime.js), and the admin API after its token check. A request for nothing that exists
+  // per-address limit and its token check (runtime.js), and the admin API after its token check. A request for nothing that exists
   // never has its body read or decompressed.
 
   // app stays 'claude-board' (the name before the rename to Agent Board): older join/doctor/start scripts and
