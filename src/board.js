@@ -827,8 +827,9 @@ export class Board {
   lockFiles(author, { paths, ttl_s = 900, task_id = null, reason = '' }) {
     // At most an hour: long locks caused stand-offs. Re-lock to renew.
     ttl_s = Math.max(30, Math.min(3600, Math.round(Number(ttl_s) || 900)));
+    reason = capText(String(reason ?? ''), 'reason', 300);
     this.purgeLocks();
-    const norm = [...new Set(paths.map(normPath).filter(Boolean))];
+    const norm = [...new Set(lockPathList(paths).map(normPath).filter(Boolean))];
     if (!norm.length) throw new Error('give at least one path');
     // "src/db/" covers "src/db/schema.sql"; "Package.json" and "package.json" are the same file.
     const all = this.db.prepare('SELECT * FROM locks').all();
@@ -844,12 +845,12 @@ export class Board {
     this.tx(() => { for (const p of norm) up.run(p, author, task_id, reason, exp); });
     // "for 15 min", as the File locks panel says "expires in 14m" (not "for 900s").
     const lasts = ttl_s < 60 ? `${ttl_s} s` : `${Math.round(ttl_s / 60)} min`;
-    this.emit({ author, kind: 'lock', channel: 'locks', task_id, text: `locked ${norm.join(', ')} for ${lasts}${reason ? ` (${reason})` : ''}` });
+    this.emit({ author, kind: 'lock', channel: 'locks', task_id, text: `locked ${pathsText(norm)} for ${lasts}${reason ? ` (${reason})` : ''}` });
     return { ok: true, locked: norm, expires_in_s: ttl_s };
   }
 
   unlockFiles(author, { paths, force = false }) {
-    const norm = paths.map(normPath);
+    const norm = [...new Set(lockPathList(paths).map(normPath))];
     const released = [];
     const refused = [];
     // "Package.json" and "package.json" are the same file, as for conflicts (lockFiles).
@@ -861,7 +862,7 @@ export class Board {
       }
     }
     if (released.length) {
-      this.emit({ author, kind: 'unlock', channel: 'locks', text: `${force ? 'force-' : ''}unlocked ${released.join(', ')}` });
+      this.emit({ author, kind: 'unlock', channel: 'locks', text: `${force ? 'force-' : ''}unlocked ${pathsText(released)}` });
     }
     return { released, refused };
   }
@@ -2013,6 +2014,16 @@ export function guessPerson(name, known = new Set()) {
   if (i > 0 && known.has(root.slice(0, i))) return root.slice(0, i);
   return root;
 }
+
+// The paths of one lock or unlock call: a list of at most 200, each at most 500 characters (the lock_files limits).
+function lockPathList(paths) {
+  if (!Array.isArray(paths)) throw new Error('paths must be a list of repo paths');
+  if (paths.length > 200) throw new Error('at most 200 paths at once');
+  if (paths.some((p) => String(p ?? '').length > 500)) throw new Error('a path is too long (max 500 characters)');
+  return paths;
+}
+// Paths in an event's text: the first 10, then how many more (the event goes to every page and agent).
+const pathsText = (list) => (list.length > 10 ? `${list.slice(0, 10).join(', ')} and ${list.length - 10} more` : list.join(', '));
 
 // A lock path as one spelling: forward slashes, relative to the repo root, without . and .. parts
 // (src/./a.js and src/sub/../a.js are src/a.js). A path outside the repo is refused.

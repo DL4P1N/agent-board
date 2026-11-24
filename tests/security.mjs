@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { startBoard, finish, ROOT, TOKEN, tempDir } from './helpers.mjs';
+import { startBoard, finish, ROOT, TOKEN, tempDir, agent } from './helpers.mjs';
 import { isRepoUrl } from '../src/repo-url.js';
 
 const R = [];
@@ -124,6 +124,21 @@ try {
     delete env.BOARD_ALLOW_SHORT_TOKEN; delete env.BOARD_TOKEN;
     const r = spawnSync(process.execPath, [path.join(ROOT, 'src', 'server.js')], { env, encoding: 'utf8', timeout: 20e3 });
     check('L1: a server with a short BOARD_ADMIN_TOKEN refuses to start, saying why', r.status === 1 && /BOARD_ADMIN_TOKEN is too short/.test(r.stderr), `${r.status} ${r.stderr}`.slice(0, 300));
+  }
+
+  // ---- L2: lock and unlock calls are bounded, and so is the text of their events ----
+  {
+    const ag = await agent(board, 'locker');
+    const many = Array.from({ length: 200 }, (_, i) => `src/${'d'.repeat(450)}/f${i}.js`);
+    const locked = await ag('lock_files', { paths: many, reason: 'big refactor' });
+    const events = await (await api('/events?since=0')).json();
+    const ev = events.events.filter((e) => e.kind === 'lock').at(-1);
+    check('L2: locking 200 long paths works, and its event names 10 of them and how many more', locked?.ok === true && ev && ev.text.length < 6000 && / and 190 more for /.test(ev.text), `${JSON.stringify(locked).slice(0, 200)} ${ev?.text.length}`);
+    const tooMany = await ag('unlock_files', { paths: Array.from({ length: 5000 }, (_, i) => `x${i}`) });
+    check('L2: unlocking more than 200 paths at once is refused', /at most 200 paths/.test(JSON.stringify(tooMany)), JSON.stringify(tooMany).slice(0, 200));
+    const unlocked = await ag('unlock_files', { paths: many });
+    const uev = (await (await api('/events?since=0')).json()).events.filter((e) => e.kind === 'unlock').at(-1);
+    check('L2: unlocking them: the event text is short too', unlocked?.released?.length === 200 && uev && uev.text.length < 6000 && / and 190 more$/.test(uev.text), `${uev?.text.length}`);
   }
 } catch (e) {
   check('suite ran without throwing', false, e?.stack || String(e));

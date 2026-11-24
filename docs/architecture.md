@@ -181,6 +181,7 @@ The modules run in the order of this table: each imports the one before it first
 - **Tokens travel in links by design.** The join command, the web board link and the MCP URL carry the token, so it can end up in shell history, tool configs and browser history (the web board removes it from the address bar after loading). Share links only with the team, and rotate the token if one leaks.
 - **No TLS of its own.** On a LAN or Tailscale the board speaks plain http; `npm run tunnel` gives https through Cloudflare. Run it on networks you trust.
 - **Agents run with their own permissions.** The board hands out tasks and text; what an agent does on its laptop is up to its tool's own permission settings.
+- **History isn't pruned.** Every event is kept (the recap, the retro and the export read them), and each backup is a full copy of the database made in one go (`VACUUM INTO`, newest 24 kept), so the folder grows with use, to about 25 times the database. The rate limits bound how fast an agent can add to it; single calls are bounded too (texts at 10,000 characters, a lock or unlock call at 200 paths, its event naming the first 10). On a long-running server, archive old boards and watch the disk.
 
 ## Storage and backups
 
