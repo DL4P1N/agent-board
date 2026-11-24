@@ -1,6 +1,6 @@
 // The MCP endpoint of a board (stateless streamable HTTP), at <board>/mcp.
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { callerLaptop } from './board.js';
+import { callerLaptop, callerRole } from './board.js';
 import { buildMcpServer } from './mcp.js';
 import { agentFrom, badRoot, laptopParam } from './http-util.js';
 import { clientIp } from './request-limits.js';
@@ -27,6 +27,10 @@ export function mountMcp(router, { board, auth, tokenCurrent, agentLimit, holdSl
     // "board" is the board's own announcements and "anonymous" a call without a name: no agent is either; nor is
     // "/x" (no name before the slash: no presence row, no slot limit, and every such name one team).
     if (badRoot(agentFrom(req))) return res.status(400).json({ jsonrpc: '2.0', error: { code: -32602, message: 'This connection needs its own agent name (?agent=<name> on the MCP URL; "board" and "anonymous" are taken). Re-run the join command from the web board.' }, id: null });
+    // A human's name isn't an agent's to take (its posts would read as that person's), unless it is that person's own
+    // agent (join with one tool names the agent after its person, ?person=).
+    const posing = board.roleClash(agentFrom(req), 'agent', req.query.person);
+    if (posing) return res.status(409).json({ jsonrpc: '2.0', error: { code: -32001, message: posing }, id: null });
     if (!agentLimit(req, res, agentFrom(req), true)) return;
     if (req.body?.method === 'tools/call' && req.body?.params?.name === 'wait_for_events') {
       // A connection check (?probe=1, below) leaves no trace on the board, so it may not hold a wait open either.
@@ -60,10 +64,11 @@ export function mountMcp(router, { board, auth, tokenCurrent, agentLimit, holdSl
       server.close();
     });
     try {
-      await callerLaptop.run(laptopId, async () => {
+      // Every event this call writes is stamped as an agent's (events.role).
+      await callerRole.run('agent', () => callerLaptop.run(laptopId, async () => {
         await server.connect(transport);
         await transport.handleRequest(req, res, req.body);
-      });
+      }));
     } catch (e) {
       console.error('mcp error', e);
       if (!res.headersSent) res.status(500).json({ jsonrpc: '2.0', error: { code: -32603, message: 'internal error' }, id: null });

@@ -2,7 +2,7 @@
 // board, the Stop hook and join. The notification routes are in notify.js, the live stream in routes-stream.js.
 import zlib from 'node:zlib';
 import QRCode from 'qrcode';
-import { timeInfo, normName, callerLaptop, NAME_RE, RESERVED_NAMES } from './board.js';
+import { timeInfo, normName, callerLaptop, callerRole, NAME_RE, RESERVED_NAMES } from './board.js';
 import { agentFrom, badRoot, h, laptopParam, internalError, wantsGzip, GZIP_VARY } from './http-util.js';
 import { clientIp } from './request-limits.js';
 import { recap } from './recap.js';
@@ -14,6 +14,8 @@ const STATE_TTL_MS = 1000;
 export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, prefix, setupInfo, onlineHumans, closeStreams, muteStreams, later, presence, agentLimit, holdSlot }) {
   const { auth, viewerLimits, humanOnly, humanToken, envToken } = tokens;
   api.use(auth);
+  // Every event a request writes records the role of its token (events.role): 'human', 'agent' (the Stop hook's usage-limit report).
+  api.use((req, _res, next) => callerRole.run(req.role, next));
   api.use((req, res, next) => (req.role !== 'agent' || agentLimit(req, res, agentFrom(req), false) ? next() : undefined));
   api.use(viewerLimits);
   api.use(humanOnly);
@@ -26,6 +28,13 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     const root = agentFrom(req).split('/')[0];
     if (req.role === 'agent' && badRoot(agentFrom(req))) return res.status(400).json({ error: `"${root || agentFrom(req)}" is not an agent name. Use your own (BOARD_AGENT, or re-run join).` });
     if (req.role === 'human' && req.method !== 'GET' && RESERVED_NAMES.has(root)) return res.status(400).json({ error: `"${root}" is reserved for the board: pick your own name (the name button at the top of the board).` });
+    if (req.role === 'human' && req.method !== 'GET') {
+      // A person's name as the board keeps it, never cut short: two long names would otherwise become one.
+      if (!NAME_RE.test(normName(named))) return res.status(400).json({ error: 'Your name must be 1-64 letters, digits, _ . or -: pick a shorter one (the name button at the top of the board).' });
+      // Nor another person's agent's name: what this human writes would read as that agent's.
+      const posing = board.roleClash(root, 'human');
+      if (posing) return res.status(409).json({ error: posing });
+    }
     next();
   });
   // The web board sends X-Agent with the human's name. Agents (the Stop hook) send X-Agent too, with the
