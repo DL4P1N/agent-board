@@ -11,7 +11,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { boardEntryProblem } from '../src/boards.js';
-import { otherOwner } from '../src/pidfile.js';
+import { otherOwner, foreignHint } from '../src/pidfile.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'));
@@ -72,7 +72,7 @@ if (!src) fail(arg === 'latest' ? `Board "${board.slug}" has no backups yet.` : 
 const pidFile = path.join(DATA_DIR, 'board.pid');
 if (fs.existsSync(pidFile)) {
   const owner = await otherOwner();
-  if (owner) fail(`A board is running (process ${owner.pid}${owner.port ? `, port ${owner.port}` : ''}). Stop it first (Ctrl+C in its window), then run this again.`);
+  if (owner) fail(`A board is running (process ${owner.pid}${owner.port ? `, port ${owner.port}` : ''}). Stop it first (Ctrl+C in its window), then run this again.${foreignHint(owner)}`);
   let pid = null; try { pid = JSON.parse(fs.readFileSync(pidFile, 'utf8'))?.pid; } catch {}
   console.log(`  (Ignoring a stale ${path.basename(pidFile)}: process ${pid || '?'} isn't the board.)`);
 }

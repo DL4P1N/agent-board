@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import os from 'node:os';
 import { DATA_DIR, PORT, HOST } from './config.js';
 
 const PID_FILE = path.join(DATA_DIR, 'board.pid');
@@ -18,7 +19,14 @@ const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { 
 // doesn't say the file is ours.
 const INSTANCE = crypto.randomBytes(8).toString('hex');
 const ours = (o) => o?.pid === process.pid && o?.id === INSTANCE;
-const mine = (port = PORT) => JSON.stringify({ pid: process.pid, id: INSTANCE, port, host: HOST, started: new Date().toISOString() });
+// The machine or container it runs on: another one's pids and ports can't be checked from here.
+const HOSTNAME = os.hostname();
+const foreign = (o) => typeof o?.hostname === 'string' && !!o.hostname && o.hostname !== HOSTNAME;
+const mine = (port = PORT) => JSON.stringify({ pid: process.pid, id: INSTANCE, port, host: HOST, hostname: HOSTNAME, started: new Date().toISOString() });
+// For the refusal: what to do when the owner is on another machine or container ('' when it is on this one).
+export const foreignHint = (o) => (foreign(o)
+  ? ` It runs on another machine or container (${o.hostname}), which can't be checked from here: if that server has stopped, delete ${PID_FILE} and try again.`
+  : '');
 // Where that server answers: the address it listens on (localhost when that is every address); IPv6 in brackets.
 const probeHost = (h) => (!h || h === '0.0.0.0' || h === '::' ? 'localhost' : h.includes(':') ? `[${h}]` : h);
 // Nothing listens on that port (every address tried refused the connection).
@@ -30,8 +38,11 @@ const refused = (e) => { const c = e?.cause; const codes = c?.errors?.length ? c
 // answers /health there (another pid, or not a board). Then the pid was taken by an unrelated process after a
 // crash or a hard stop (Windows hands pids out again quickly), and the file is stale. A /health that doesn't
 // answer in time proves nothing (a busy or suspended server): it keeps the folder.
+// A file written on another machine or container (another hostname: a second container on a shared data volume)
+// always keeps it: that server's pid and port aren't this one's to probe (a local port that refuses says nothing).
 export async function otherOwner() {
   const o = read();
+  if (o && Number.isInteger(o.pid) && !ours(o) && foreign(o)) return o;
   // Our pid but not our mark: another container's pid 1 (or this container's before a restart), so the process
   // check proves nothing: the checks below decide.
   if (!o || !Number.isInteger(o.pid) || ours(o) || (o.pid !== process.pid && !alive(o.pid))) return null;

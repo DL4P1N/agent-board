@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import { Registry, adminToken } from './boards.js';
 import { PORT, HOST, DATA_DIR } from './config.js';
-import { takePid, writePid, dropPid } from './pidfile.js';
+import { takePid, writePid, dropPid, foreignHint } from './pidfile.js';
 import { createLiveBoards } from './live-boards.js';
 import { createApp } from './app.js';
 import { printBanner, offerHostJoin, handleListenErrors } from './startup.js';
@@ -32,7 +32,7 @@ if (owner?.error) {
   process.exit(1);
 }
 if (owner) {
-  console.error(`\n✗ Another board server (process ${owner.pid}, port ${owner.port}) is already using the data folder ${DATA_DIR}.`);
+  console.error(`\n✗ Another board server (process ${owner.pid}, port ${owner.port}) is already using the data folder ${DATA_DIR}.${foreignHint(owner)}`);
   console.error(`  Use that one, or stop it first (Ctrl+C in its window). To run a second, separate server, give it its own folder:  BOARD_DATA=<folder> PORT=<port> npm start`);
   process.exit(1);
 }

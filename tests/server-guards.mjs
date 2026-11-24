@@ -194,6 +194,35 @@ const throwsWith = (fn, re) => { try { fn(); return false; } catch (e) { return 
   let pidOut = {}; try { pidOut = JSON.parse(pr1.stdout.trim().split('\n').at(-1)); } catch {}
   check('board.pid under our pid with another server\'s id is another owner (not taken, not deleted)', pidOut.owner === 'other-container' && pidOut.kept === 'other-container', pr1.stdout + pr1.stderr);
   check('…our own board.pid carries our id and is removed on stop', pidOut.free === null && pidOut.mine === true && pidOut.dropped === true, pr1.stdout + pr1.stderr);
+
+  // board.pid written on another machine or container (another hostname, a shared data volume): its pid and port
+  // can't be checked from here, so it keeps the folder however old it is, with a way out in the refusal. Written on
+  // this host (a container's pid 1 before a restart), the old checks still find it stale.
+  const fData = tempDir();
+  const fScript = `
+    import fs from 'node:fs'; import path from 'node:path'; import os from 'node:os'; import net from 'node:net'; import { spawnSync } from 'node:child_process';
+    const { takePid, dropPid, foreignHint } = await import(${JSON.stringify(pathToFileURL(path.join(ROOT, 'src', 'pidfile.js')).href)});
+    const pf = path.join(process.env.BOARD_DATA, 'board.pid');
+    const srv = net.createServer(); await new Promise((r) => srv.listen(0, '127.0.0.1', r)); const port = srv.address().port; await new Promise((r) => srv.close(r));
+    const dead = spawnSync(process.execPath, ['-e', '0']).pid;
+    const old = new Date(Date.now() - 5 * 60e3).toISOString();
+    const res = {};
+    for (const [k, pid, hostname] of [['ourPid', process.pid, 'other-host'], ['deadPid', dead, 'other-host'], ['sameHost', process.pid, os.hostname()]]) {
+      const text = JSON.stringify({ pid, id: 'other-container', port, host: '127.0.0.1', hostname, started: old });
+      fs.writeFileSync(pf, text);
+      const o = await takePid();
+      res[k] = { refused: !!o, kept: fs.readFileSync(pf, 'utf8') === text, hint: o ? foreignHint(o) : '' };
+      if (!o) dropPid();
+      try { fs.unlinkSync(pf); } catch {}
+    }
+    await takePid(); res.mine = JSON.parse(fs.readFileSync(pf, 'utf8')).hostname === os.hostname(); dropPid();
+    console.log(JSON.stringify(res));`;
+  const pr2 = spawnSync(process.execPath, ['--input-type=module', '-e', fScript], { env: { ...process.env, BOARD_DATA: fData }, encoding: 'utf8', timeout: 30000 });
+  let fOut = {}; try { fOut = JSON.parse(pr2.stdout.trim().split('\n').at(-1)); } catch {}
+  check('board.pid from another host (our pid, old, its port dead here) is another owner: refused, kept, the refusal says to delete board.pid', fOut.ourPid?.refused && fOut.ourPid.kept && /another machine or container \(other-host\).*delete .*board\.pid/.test(fOut.ourPid.hint), pr2.stdout + pr2.stderr);
+  check('…also when its pid is dead here (another pid namespace)', fOut.deadPid?.refused && fOut.deadPid.kept, pr2.stdout + pr2.stderr);
+  check('…from this host (pid 1 before a restart, old, port dead) it is still stale: taken, no hint', fOut.sameHost?.refused === false && fOut.sameHost.hint === '', pr2.stdout + pr2.stderr);
+  check('…and our own board.pid records our hostname', fOut.mine === true, pr2.stdout + pr2.stderr);
 }
 
 // ================= which board events reach the webhook =================

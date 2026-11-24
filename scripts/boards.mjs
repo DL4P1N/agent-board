@@ -16,7 +16,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { Registry, boardToken, checkSlug, slugify } from '../src/boards.js';
 import { writeTokenFile } from '../src/tokens.js';
-import { otherOwner } from '../src/pidfile.js';
+import { otherOwner, foreignHint } from '../src/pidfile.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_DIR = path.resolve(process.env.BOARD_DATA || path.join(ROOT, 'data'));
@@ -49,7 +49,7 @@ const usedTokens = (except) => reg.list().filter((x) => x.slug !== except && !re
 });
 const running = await serverRunning();
 if (running && cmd !== 'list' && cmd !== 'token') {
-  fail(`The server is running (process ${running.pid}, port ${running.port}). Manage boards on its page instead:\n  http://localhost:${running.port}/boards?admin=<the admin token printed when it started, also in ${path.join(DATA_DIR, 'admin-token')}>\nor stop it (Ctrl+C in its window) and run this again.`);
+  fail(`The server is running (process ${running.pid}, port ${running.port}). Manage boards on its page instead:\n  http://localhost:${running.port}/boards?admin=<the admin token printed when it started, also in ${path.join(DATA_DIR, 'admin-token')}>\nor stop it (Ctrl+C in its window) and run this again.${foreignHint(running)}`);
 }
 
 const when = (iso) => (iso ? new Date(iso).toLocaleString() : '');
