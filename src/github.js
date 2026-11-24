@@ -69,6 +69,23 @@ function githubRepo(repo) {
   const m = String(repo || '').trim().match(/^(?:https?:\/\/(?:www\.)?github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i);
   return m ? `${m[1]}/${m[2]}` : null;
 }
+// The host of the project repo setting (https://host/…, ssh://[user@]host[:port]/…, git@host:…), lower case, or ''.
+function repoHost(repo) {
+  const r = String(repo || '').trim();
+  const scp = r.match(/^[\w.-]+@([A-Za-z0-9][\w.-]*):/);
+  if (scp) return scp[1].toLowerCase();
+  try { const u = new URL(r); return /^(https?|ssh|git):$/.test(u.protocol) ? u.hostname.toLowerCase() : ''; } catch { return ''; }
+}
+// A PR link gh may be asked about: https on github.com or the project repo's own host (GitHub Enterprise), no port or
+// user, the path of a pull request. `gh pr view <url>` connects to the URL's host (and sends a token there if it has
+// one for it), so a link an agent set on another host must never reach gh: the board would call that host, and the
+// host could make up the PR's status and reviews.
+export function pollablePr(url, repo) {
+  let u; try { u = new URL(String(url || '')); } catch { return false; }
+  const host = u.hostname.toLowerCase();
+  const allowed = host === 'github.com' || host === 'www.github.com' || (!!repoHost(repo) && host === repoHost(repo));
+  return u.protocol === 'https:' && allowed && !u.port && !u.username && !u.password && /^\/[\w.-]+\/[\w.-]+\/pull\/\d+\/?$/.test(u.pathname);
+}
 const branchOf = new Map();
 // How often gh is asked about PRs (and main's CI, about every other time). GH_POLL_MS makes tests fast.
 export const GH_POLL_MS = Math.min(3600e3, Math.max(200, Number(process.env.GH_POLL_MS) || 60e3));
@@ -82,7 +99,8 @@ export function startGithubPolling({ board, announced, rawSetting, putSetting, i
   // Shown on review cards; the author is told once when checks fail or changes are requested, with
   // the failing checks and what reviewers (people or bots) said, so it doesn't have to dig.
   async function pollPrs() {
-    const urls = [...new Set(board.listTasks({ status: 'review' }).map((t) => t.pr_url).filter(Boolean))];
+    const repo = board.getSettings().repo;
+    const urls = [...new Set(board.listTasks({ status: 'review' }).map((t) => t.pr_url).filter((u) => pollablePr(u, repo)))];
     let changed = false;
     for (const url of urls) {
       // Archived meanwhile: no more gh calls for it.

@@ -62,6 +62,44 @@ try {
     for (const d of [ROOT, path.dirname(ROOT)]) { try { fs.rmSync(path.join(d, `${name}-PWNED`), { force: true }); } catch {} }
     check('H1: join skips a repo setting that is a git option, says so, and runs nothing', !pwned && !fs.existsSync(sibling) && /isn't a plain git address/.test(out) && !/git clone failed/.test(out), out.slice(-800));
   }
+
+  // ---- M1: gh is only asked about PR links on github.com or the project repo's host ----
+  {
+    const { pollablePr, startGithubPolling } = await import('../src/github.js');
+    const repo = 'https://ghe.example.com/team/app';
+    const ok = ['https://github.com/o/r/pull/7', 'https://www.github.com/o/r/pull/7/', 'https://ghe.example.com/team/app/pull/3'];
+    const no = ['https://127.0.0.1:4443/o/r/pull/1', 'https://evil.example/o/r/pull/1', 'http://github.com/o/r/pull/1', 'https://github.com.evil.example/o/r/pull/1',
+      'https://user@github.com/o/r/pull/1', 'https://github.com:8443/o/r/pull/1', 'https://gitlab.com/o/r/-/merge_requests/1', 'https://github.com/o/r/pull/1/../../../x', 'not a url'];
+    check('M1: PR links on github.com or the repo\'s host are polled', ok.every((u) => pollablePr(u, repo)), ok.filter((u) => !pollablePr(u, repo)).join(' '));
+    check('M1: PR links on any other host, port, user or scheme are not', !no.some((u) => pollablePr(u, repo)), no.filter((u) => pollablePr(u, repo)).join(' '));
+    check('M1: without a repo setting only github.com counts', !pollablePr('https://ghe.example.com/team/app/pull/3', '') && pollablePr('https://github.com/o/r/pull/7', ''));
+
+    // One PR poll in this process, with a fake gh first on PATH that logs what it was asked.
+    const bin = tempDir('agent-board-fakegh-');
+    fs.copyFileSync(path.join(ROOT, 'tests', 'fixtures', 'fake-gh.cjs'), path.join(bin, 'fake-gh.cjs'));
+    const st = path.join(bin, 'state.json'); const log = path.join(bin, 'calls.log');
+    fs.writeFileSync(st, JSON.stringify({ auth: true, prs: {} }));
+    const saved = { ...process.env };
+    const pathKey = Object.keys(process.env).find((k) => k.toLowerCase() === 'path') || 'PATH';
+    if (process.platform === 'win32') {
+      const exe = path.join(bin, 'gh.exe');
+      try { fs.linkSync(process.execPath, exe); } catch { fs.copyFileSync(process.execPath, exe); }
+      process.env.NODE_OPTIONS = `--require "${path.join(bin, 'fake-gh.cjs').split(path.sep).join('/')}"`;
+    } else {
+      fs.writeFileSync(path.join(bin, 'gh'), `#!/bin/sh\nexec "${process.execPath}" "${path.join(bin, 'fake-gh.cjs')}" "$@"\n`, { mode: 0o755 });
+    }
+    Object.assign(process.env, { FAKE_GH_STATE: st, FAKE_GH_LOG: log, [pathKey]: bin + path.delimiter + (saved[pathKey] || '') });
+    const urls = [...no, 'https://github.com/o/r/pull/7'];
+    let tick = null;
+    const fakeBoard = { listTasks: () => urls.map((u, i) => ({ id: i + 1, pr_url: u, status: 'review', assignee: 'ana' })), prStatus: new Map(), mainCi: null, emit() {}, getSettings: () => ({ repo: '' }) };
+    const poll = startGithubPolling({ board: fakeBoard, announced: { has: () => true, add() {} }, rawSetting: () => null, putSetting() {}, isClosed: () => false, presence() {}, every() {}, later: (fn) => { tick ??= fn; } });
+    await tick?.();
+    poll.stop();
+    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
+    Object.assign(process.env, saved);
+    let asked = []; try { asked = fs.readFileSync(log, 'utf8').split('\n').filter((l) => l.startsWith('["pr","view"')).map((l) => JSON.parse(l)[2]); } catch {}
+    check('M1: the PR poll asks gh about the github.com link only', asked.length === 1 && asked[0] === 'https://github.com/o/r/pull/7', JSON.stringify(asked));
+  }
 } catch (e) {
   check('suite ran without throwing', false, e?.stack || String(e));
 }
