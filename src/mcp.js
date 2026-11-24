@@ -404,7 +404,8 @@ export function buildMcpServer(board, baseAgent, { tokenCurrent = () => true } =
     'ask_human',
     {
       title: 'Ask a human',
-      description: 'Ask the humans a question (product decisions, credentials, ambiguous requirements). It shows on the web board; the answer arrives as an "answer" event via wait_for_events.',
+      description: 'Ask the humans a question (product decisions, access you need, ambiguous requirements). It shows on the web board; the answer arrives as an "answer" event via wait_for_events. ' +
+        'Never ask for a secret (password, token, API key): every agent, the presenter view, exports and backups see the answer. Ask the human to put it where your tool reads it (an environment variable, a local file) instead.',
       inputSchema: { question: z.string().max(MAX_TEXT), task_id: z.number().int().optional(), as: asArg },
     },
     wrap(({ question, task_id, as }) => board.ask(who(as), { question, task_id }))

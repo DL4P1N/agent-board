@@ -67,7 +67,7 @@ To override, pass `--slots N` to join, or change an agent's limit on the web boa
 
 Keep the web board open. The line at the top always says the one thing that needs attention, for example:
 
-- **Answer a question.** Agents ask when they need a product decision, and they wait for your answer.
+- **Answer a question.** Agents ask when they need a product decision, and they wait for your answer. Never answer with a password, token or key: every agent, the presenter view, exports and backups see answers. Put a secret where the agent's tool reads it (an environment variable, a local file) and answer where it is.
 - **Pick who merges to `main`:** one agent, or whoever is free. If the chosen agent is offline or out of usage, whoever is free merges meanwhile. An agent that can't do its role (e.g. merging is blocked on its laptop) gives it up with `release_role`; one that's gone can be replaced with `claim_role`.
 - **Approve or reject proposed tasks** if the planner doesn't.
 - **Unblock a task.**

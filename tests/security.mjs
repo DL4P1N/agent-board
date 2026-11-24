@@ -162,6 +162,13 @@ try {
     const startup = fs.readFileSync(path.join(ROOT, 'src', 'startup.js'), 'utf8');
     check('L4: npm start runs join without the token in its arguments', /AGENT_BOARD_JOIN_TOKEN: TOKEN/.test(startup) && !/'--token', TOKEN\]/.test(startup));
   }
+
+  // ---- L5: ask_human doesn't invite secrets (its answer is visible to everyone and kept in backups) ----
+  {
+    const r = await fetch(`${board.base}/mcp?agent=reader&token=${TOKEN}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) });
+    const d = (await r.json()).result?.tools?.find((t) => t.name === 'ask_human')?.description || '';
+    check('L5: ask_human says never to ask for secrets, and no longer suggests credentials', /Never ask for a secret/.test(d) && !/credentials/.test(d), d);
+  }
 } catch (e) {
   check('suite ran without throwing', false, e?.stack || String(e));
 }
