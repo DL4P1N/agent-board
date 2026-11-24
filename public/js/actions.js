@@ -5,7 +5,7 @@ import './activity.js';
 import { $, ANYONE, LABEL, seenMention, setSeenMention, smooth, state, store, ui } from './state.js';
 import { agentRoot, ago, announce, clock, dropDrafts, esc, focusMark, glide, isStale, refocusAfter, mentionsMe, plural, snapCards, taskById, toast, when } from './helpers.js';
 import { act, api, load, scheduleReload } from './data.js';
-import { agentInfoNow, bouncedTasks, cutTasks, filterRoot, openQuestions, setupInfo, setupOpen, stepOpen,
+import { agentInfoNow, bouncedTasks, colOf, cutTasks, filterRoot, openQuestions, setupInfo, setupOpen, stepOpen,
   teamCapacity } from './derived.js';
 import { render } from './render.js';
 import { toggleNotify } from './topbar.js';
@@ -36,8 +36,13 @@ function moveAskHtml(t, pre = '') {
 // The first button of that question, in the view on screen.
 const focusMoveAsk = () => [...document.querySelectorAll('.mvask button')].find((b) => b.offsetParent)?.focus({ preventScroll: true });
 // A task's card in the view on screen (the Board's card or the 3D Tasks window's), or its row in the Table view.
+// A card cut from its column (behind "Show N more") is drawn for this (ui.landId keeps it); in a folded Done column,
+// focus goes to the column's button, never to the page.
 function focusTask(id) {
-  const c = [document.querySelector(`.card[data-id="${id}"]`), document.querySelector(`#tasktable [data-fk="tt-${id}"]`)].find((n) => n?.offsetParent);
+  const find = () => [document.querySelector(`.card[data-id="${id}"]`), document.querySelector(`#tasktable [data-fk="tt-${id}"]`)].find((n) => n?.offsetParent);
+  let c = find();
+  if (!c && taskById(id)) { ui.landId = id; render(); c = find(); }
+  if (!c) { const t = taskById(id); c = t && $('col-' + colOf(t))?.querySelector('.dtog, .more'); }
   if (c) { c.focus({ preventScroll: true }); c.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
 }
 // Needs attention's links to tasks of a kind (in Review, stale, a proposal): the first card (or the column), or in the
@@ -103,7 +108,7 @@ function goWrapup() {
 // The way to the chat ("/", Skip to chat, the phone's chat icon, Also's links) is the shared chat's message box, not a
 // direct thread's (or the thread list, which has none). The page scrolls only if the box is out of view (nearest).
 function toChatTab() { if (ui.tab === 'direct') { ui.tab = 'all'; store.set('board-tab', 'all'); $('feed')._html = undefined; render(); } }
-function goChat(behavior) { oShow('act'); toChatTab(); $('msg').scrollIntoView({ behavior, block: 'nearest' }); $('msg').focus({ preventScroll: true }); }
+function goChat(behavior) { oShow('act'); toChatTab(); $('composer').scrollIntoView({ behavior, block: 'nearest' }); $('msg').focus({ preventScroll: true }); } // the whole box: Send too
 function skipTo(where) {
   if (where === 'now') { oShow('left'); $('nyou').scrollIntoView({ block: 'start' }); return focusNow(); }
   if (where === 'chat') return goChat('auto');

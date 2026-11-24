@@ -245,12 +245,13 @@ function renderBoardNow() {
     }
     let more = '';
     if (s === 'done') {
-      if (!ui.showAllDone && items.length > DONE_SHOWN) { more = `<button class="ghost more" data-show-done data-fk="more-done">Show ${items.length - DONE_SHOWN} older</button>`; items = items.slice(0, DONE_SHOWN); }
+      if (!ui.showAllDone && items.length > DONE_SHOWN) { more = `<button class="ghost more" data-show-done data-fk="more-done">Show ${items.length - DONE_SHOWN} older</button>`; items = items.filter((t, i) => i < DONE_SHOWN || t.id === ui.landId); }
       else if (ui.showAllDone && items.length > DONE_SHOWN) more = `<button class="ghost more" data-show-done data-fk="more-done">Show fewer</button>`;
     } else if (items.length > COL_SHOWN + 3) {
-      // Long columns: the first COL_SHOWN, plus any card that needs a human (proposed, stale, question, open menu).
+      // Long columns: the first COL_SHOWN, plus any card that needs a human (proposed, stale, question, open menu), and
+      // the card focus is going to (ui.landId: moved, Undo, back from its dialog).
       const all = (ui.showCols ||= new Set()).has(s);
-      const keep = (t, i) => all || i < COL_SHOWN || t.status === 'proposed' || isStale(t) || ui.moveMenu === t.id || ui.moveAsk?.id === t.id || !!questionFor(t.id);
+      const keep = (t, i) => all || i < COL_SHOWN || t.status === 'proposed' || isStale(t) || ui.moveMenu === t.id || ui.moveAsk?.id === t.id || t.id === ui.landId || !!questionFor(t.id);
       const shown = items.filter(keep);
       more = `<button class="ghost more" data-show-col="${s}" data-fk="more-${s}">${all ? 'Show fewer' : `Show ${items.length - shown.length} more`}</button>`;
       items = shown;

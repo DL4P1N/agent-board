@@ -109,8 +109,13 @@ function openTask(id, { discard = false } = {}) {
   renderDialogLive(); syncSave();
   // Pinned where it opened: what opens inside it later (a reason field, a note) makes it grow downward, never jump.
   const top = dlg.offsetTop; dlg.style.marginTop = top + 'px'; dlg.style.maxHeight = `calc(100vh - ${top + 12}px)`;
-  // A blocked task with a question: the answer box is the job; otherwise the title.
-  ($('td-block').querySelector('textarea') || $('td-name')).focus();
+  // A blocked task with a question: the answer box is the job; otherwise the title, showing its start (a long title
+  // would open scrolled to its end). On a touch screen an existing task opens on its heading: a focused field would
+  // pop the keyboard up over it.
+  const ans = $('td-block').querySelector('textarea'); const n = $('td-name');
+  if (ans) ans.focus();
+  else if (t && matchMedia('(hover: none) and (pointer: coarse)').matches) { const h = $('td-title'); h.tabIndex = -1; h.focus(); }
+  else { n.focus(); if (t) { n.setSelectionRange(0, 0); n.scrollLeft = 0; } }
 }
 function renderDialogLive() {
   const t = editing && taskById(editing.id);

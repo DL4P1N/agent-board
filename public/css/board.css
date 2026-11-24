@@ -192,7 +192,7 @@ button.bell.blocked .slash { display: inline; }
 /* ---------- page ---------- */
 /* A section's heading line (the task dialog's "Activity on this task"): the panels' title style (see .o-head h2). */
 .sec-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s1) var(--s4); margin-bottom: var(--s4); }
-.step, .o-panel, .col, #now { scroll-margin-top: calc(var(--hdr, 54px) + var(--edge)); }
+.step, .o-panel, .col, #now, #board, #board-empty, #tasktable, .card { scroll-margin-top: calc(var(--hdr, 54px) + var(--edge)); } /* clear of the sticky header (Skip to tasks, a card brought into view) */
 
 /* Needs attention (the left panel): the line that leads (the most urgent thing, bigger, with a status flag), what's
    next under it, the agents' questions with Answer under a dashed rule, then what's blocked. */
@@ -931,6 +931,18 @@ button.tochat { display: none; } /* phones only (below) */
   #now .na.link { padding: var(--s3) 0 var(--s3) 20px; }
   #now .na.link::before { top: calc(var(--s3) + .65em - 4px); }
   #now .also .link, #now-more .also .link { padding: var(--s2) 0; }
+  .ac li { min-height: var(--ctl-sm); } /* the @ names to pick */
+}
+/* A phone's browser zooms the page into a field whose text is under 16px when it is focused: these stay 16px. */
+@media (hover: none) and (pointer: coarse) and (max-width: 999px) {
+  input:not([type=checkbox]), textarea, select, .composer :is(#msg, select) { font-size: 16px; }
+}
+/* Windows High Contrast (forced colours): the system draws the colours, so what colour alone said gets an edge. */
+@media (forced-colors: active) {
+  :focus-visible, button:is(:not([class]), [class="sm"]):focus-visible { outline-color: Highlight; }
+  .card, .o-panel, .qcard, .toast, .o-agent, .tbc, .pill, .chip { border: 1px solid CanvasText; }
+  :is(.tabs button, .o-agent, [aria-pressed])[aria-pressed="true"], .ac li[aria-selected="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
+  .tdot, .sw, .tp-grid * { forced-color-adjust: none; } /* a tool dot and the theme swatches: the colour is the point */
 }
 
 /* Narrow phones: the logo stands for the wordmark (still read out), so the header stays one row. */

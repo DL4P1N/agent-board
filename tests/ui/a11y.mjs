@@ -114,6 +114,32 @@ try {
   check('UM13 Ctrl+Z while the Undo toast shows undoes the move', back && vs !== 'blocked' && await page.evaluate(() => !document.querySelector('#toasts .toast:not(.out) [data-undo]')), vs);
   await sleep(800); await page.evaluate(() => document.getElementById('toasts').replaceChildren());
 
+
+  // ---- Accessibility lows of the 2026-11-24 real-use review ----
+  // A long title opens showing its start.
+  const longT = await rest(board, 'dana', '/tasks', 'POST', { title: 'A very long task title that keeps going on and on about the voting widget and its leaderboard and the rate limit and the colours, until it ends HERE' });
+  await until(page, (id) => !!taskById(id), longT.id);
+  await page.evaluate((id) => openTask(id), longT.id); await page.waitForSelector('#task-dlg[open]'); await sleep(200);
+  const lt = await page.evaluate(() => ({ focus: document.activeElement?.id, sel: $('td-name').selectionStart, left: $('td-name').scrollLeft }));
+  check('a long title opens showing its start (caret at 0, not scrolled to its end)', lt.focus === 'td-name' && lt.sel === 0 && lt.left === 0, JSON.stringify(lt));
+  await page.keyboard.press('Escape'); await sleep(200);
+  // The message box is a combobox for its @ names; Esc in a direct thread goes back to the threads.
+  await page.focus('#msg'); await page.keyboard.type('@'); await sleep(200);
+  const cb = await page.evaluate(() => ({ role: $('msg').getAttribute('role'), exp: $('msg').getAttribute('aria-expanded'), list: !$('msg-ac').hidden }));
+  await page.keyboard.press('Escape'); await page.evaluate(() => { $('msg').value = ''; });
+  check('the message box is a combobox, aria-expanded while its @ names show', cb.role === 'combobox' && cb.exp === 'true' && cb.list && await page.evaluate(() => $('msg').getAttribute('aria-expanded') === 'false'), JSON.stringify(cb));
+  await page.evaluate(() => document.querySelector('#tabs [data-tab="direct"]').click()); await sleep(200);
+  await page.evaluate(() => document.querySelector('.dmrow')?.click()); await sleep(200);
+  const inDm = await page.evaluate(() => !!ui.dm);
+  await page.focus('#msg'); await page.keyboard.press('Escape'); await sleep(200);
+  check('Esc in a direct thread\'s message box goes back to the list of threads', inDm && await page.evaluate(() => !ui.dm), String(inDm));
+  await page.evaluate(() => document.querySelector('#tabs [data-tab="all"]').click()); await sleep(200);
+  // Windows High Contrast: cards keep an edge.
+  await page.emulateMediaFeatures([{ name: 'forced-colors', value: 'active' }]); await sleep(100);
+  const fc = await page.evaluate(() => ({ card: getComputedStyle(document.querySelector('.card')).borderTopStyle, mq: matchMedia('(forced-colors: active)').matches }));
+  await page.emulateMediaFeatures([{ name: 'forced-colors', value: 'none' }]);
+  check('forced colours (High Contrast): cards keep a drawn edge', fc.mq && fc.card === 'solid', JSON.stringify(fc));
+
   // ---- Phone: badges, chat button, touch targets ----
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
   await page.evaluate(() => window.scrollTo(0, 0)); await sleep(400);
@@ -134,7 +160,7 @@ try {
   check('MO-2 phone: Chat jumps to the message box', chat.focus && chat.top >= 0 && chat.bottom <= chat.h, JSON.stringify(chat));
 
   // A toast (Undo lasts 8s) never hides the foot of the page: while two show, the page scrolls the last item clear of them.
-  await page.evaluate(() => { document.getElementById('toasts').replaceChildren(); for (const n of [1, 2]) toast(`#${n} moved to Review`, false, { label: 'Undo', run() {} }); });
+  await page.evaluate(() => { document.activeElement?.blur(); document.getElementById('toasts').replaceChildren(); for (const n of [1, 2]) toast(`#${n} moved to Review`, false, { label: 'Undo', run() {} }); });
   await sleep(500); await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await sleep(200);
   const tg = await page.evaluate(() => { const t = document.getElementById('toasts').getBoundingClientRect(); const last = Math.max(...[...document.querySelector('main').children].filter((e) => e.offsetHeight).map((e) => e.getBoundingClientRect().bottom)); return { toasts: document.querySelectorAll('#toasts .toast').length, top: Math.round(t.top), last: Math.round(last), atEnd: Math.round(scrollY + innerHeight) >= document.documentElement.scrollHeight - 1 }; });
   check('phone: with toasts showing, the last item in the column scrolls fully clear of them', tg.toasts === 2 && tg.atEnd && tg.last <= tg.top, JSON.stringify(tg));
@@ -147,6 +173,19 @@ try {
     .map((e) => ({ e, r: e.getBoundingClientRect() })).filter(({ r }) => r.height < 32)
     .map(({ e, r }) => `${e.className || e.tagName} "${e.textContent.trim().slice(0, 16)}" ${Math.round(r.width)}x${Math.round(r.height)}`));
   check('MO-3 phone: every visible control is at least 32px tall (a PR link in the feed too)', !small.length && await page.$$eval('#feed a[href*="/pull/"]', (l) => l.length >= 2), small.slice(0, 8).join(' | '));
+  // Phone fields are 16px (a phone's browser zooms into smaller ones), the @ names are 32px rows, and a card opens
+  // without popping the keyboard up.
+  const pf = await page.evaluate(() => ({ msg: getComputedStyle($('msg')).fontSize, ans: getComputedStyle(document.querySelector('#questions textarea') || $('msg')).fontSize, search: getComputedStyle($('tsearch')).fontSize }));
+  check('phone: text fields are 16px (no zoom on focus)', Object.values(pf).every((v) => v === '16px'), JSON.stringify(pf));
+  await page.focus('#msg'); await page.keyboard.type('@'); await sleep(200);
+  const acH = await page.evaluate(() => Math.min(...[...document.querySelectorAll('#msg-ac li')].map((l) => l.getBoundingClientRect().height)));
+  await page.keyboard.press('Escape'); await page.evaluate(() => { $('msg').value = ''; $('msg').blur(); });
+  check('phone: the @ names to pick are at least 32px tall', acH >= 31.5, acH + 'px');
+  const tapId = await page.evaluate(() => document.querySelector('#board .card')?.dataset.id);
+  await page.tap(`#board .card[data-id="${tapId}"] h4, #board .card[data-id="${tapId}"]`); await sleep(400);
+  const tap = await page.evaluate(() => ({ open: $('task-dlg').open, focus: document.activeElement?.tagName + '#' + document.activeElement?.id }));
+  check('phone: tapping a card opens it without focusing a text field (no keyboard popping up)', tap.open && !/^(INPUT|TEXTAREA)/.test(tap.focus), JSON.stringify(tap));
+  await page.evaluate(() => $('task-dlg').close()); await sleep(200);
   const hints = await page.evaluate(() => ({ chat: $('chat-hint').innerText, foot: $('cols-hint').innerText }));
   check('U13 phone: no keyboard-only or drag hints (Enter, Shift+Enter, "/", drag); the foot says Move… and tap', !/Enter|press \/|Drag/.test(hints.chat + hints.foot) && /Move… button/.test(hints.foot) && /Tap a card/.test(hints.foot), JSON.stringify(hints));
 
@@ -162,6 +201,26 @@ try {
     .map(({ e, r }) => `${e.id || e.dataset.fk || e.className || e.tagName} "${e.textContent.trim().slice(0, 16)}" ${Math.round(r.width)}x${Math.round(r.height)}`));
   check('touch at 1440px: every visible control is at least 32px tall', !smallT.length, smallT.slice(0, 8).join(' | '));
   await page.screenshot({ path: `${out}/touch-1440.png` });
+
+  // ---- A card behind "Show N more": focus coming back to it shows it, never drops to the page ----
+  {
+    const ps = await browser.newPage();
+    await ps.evaluateOnNewDocument(() => { try { localStorage.setItem('board-token', 'testtok'); localStorage.setItem('board-name', 'dana'); localStorage.setItem('board-setup', 'closed'); } catch {} });
+    for (let i = 0; i < 18; i++) await rest(board, 'dana', '/tasks', 'POST', { title: `Filler task ${i + 1}` });
+    await ps.goto(board.base + '/');
+    await ps.waitForFunction(() => document.getElementById('conn').classList.contains('live') && !!document.querySelector('#col-open [data-show-col]'), { timeout: 8000 });
+    const hid = await ps.evaluate(() => state.tasks.filter((t) => t.status === 'open').map((t) => t.id).find((id) => !document.querySelector(`.card[data-id="${id}"]`)));
+    await ps.evaluate((id) => openTask(id), hid); await ps.waitForSelector('#task-dlg[open]');
+    await ps.keyboard.press('Escape');
+    const land = await until(ps, (id) => document.activeElement?.dataset?.id === String(id), hid);
+    check('a card behind "Show N more": closing its dialog brings focus to it (shown), not to the page', !!hid && land, await ps.evaluate(() => document.activeElement?.tagName + ' ' + (document.activeElement?.dataset?.id || '')));
+    // Skip to tasks: the columns (their heads and first cards) land clear of the sticky header.
+    await ps.evaluate(() => window.scrollTo(0, 400));
+    await ps.evaluate(() => document.querySelector('[data-skip="tasks"]').click()); await sleep(300);
+    const sk = await ps.evaluate(() => { const c = document.activeElement; const h = document.querySelector('#app > header').getBoundingClientRect(); const r = c?.getBoundingClientRect(); return { card: !!c?.classList.contains('card'), top: Math.round(Math.min(r?.top ?? -1, $('board').getBoundingClientRect().top)), hdr: Math.round(getComputedStyle(document.querySelector('#app > header')).position === 'sticky' ? h.bottom : 0) }; });
+    check('Skip to tasks: the columns and the first card land below the sticky header, not under it', sk.card && sk.top >= sk.hdr, JSON.stringify(sk));
+    await ps.close();
+  }
 } catch (e) { results.push('CRASH ' + e.stack); }
 check('no page/console errors or native dialogs', errors.length === 0, errors.join(' | '));
 await finish(results, { browser, board });
