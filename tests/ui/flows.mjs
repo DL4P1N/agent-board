@@ -29,6 +29,7 @@ await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }
 
 try {
 // gate
+await page.goto(`${BASE}/`); await page.evaluate(() => localStorage.setItem('board-token', 'oldtok')); // an older saved token: the link's replaces it
 await page.goto(`${BASE}/?token=testtok`);
 await page.waitForSelector('#gate:not([hidden])');
 check('E12 the link\'s ?token= leaves the address bar while the sign-in form shows; the form has it, masked (U6)', !/token=/.test(page.url()) && await page.$eval('#g-token', (e) => e.value === 'testtok' && e.type === 'password'), page.url());
@@ -37,11 +38,15 @@ await page.keyboard.press('Enter');
 await sleep(300);
 check('the sign-in form refuses a reserved name ("board") with a message, and stays open', await page.$eval('#g-err', (e) => /reserved/.test(e.textContent)) && await page.$eval('#app', (e) => e.hidden), await page.$eval('#g-err', (e) => e.textContent));
 check('the chat box is capped at the server\'s 10000 characters', await page.$eval('#msg', (e) => e.maxLength === 10000));
+// A reload at the sign-in form keeps the token (held in this tab, not in the address bar) until the name is entered.
+await page.reload(); await page.waitForSelector('#gate:not([hidden])');
+check('a reload at the sign-in form keeps the token from the link (not in the address bar), masked, replacing the older saved one', !/token=/.test(page.url()) && await page.$eval('#g-token', (e) => e.value === 'testtok' && e.type === 'password'), page.url());
 await page.click('#g-name', { count: 3 }); await page.type('#g-name', 'dana');
 await page.keyboard.press('Enter');
 await page.waitForSelector('#app:not([hidden])');
 await page.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 5000 });
 check('gate submits with Enter, SSE live', true, page.url());
+check('signing in clears the held token and saves it', await page.evaluate(() => sessionStorage.getItem('board-pending-token') === null && localStorage.getItem('board-token') === 'testtok'));
 
 // questions
 const qCount = await page.$$eval('.qcard', (q) => q.length);

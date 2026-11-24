@@ -4,7 +4,7 @@
 // office, panels, palette, boot.
 
 import './palette.js';
-import { $, HUES, me, nsKey, oSave, oUi, qs, SLUG, state, store, token, ui } from './state.js';
+import { $, HUES, me, nsKey, oSave, oUi, pending, qs, SLUG, state, store, token, ui } from './state.js';
 import { ago, clock, fullTime, hue, knownPeople, nameHash, taskById, toast, when } from './helpers.js';
 import { connect, es, esOpen, load, onEvent, onPaint, onRequest, onSignIn, onState, paint, recheck, retrying, setConn, setLoad,
   showGate, unavailable, unavailableStatus } from './data.js';
@@ -31,10 +31,10 @@ onPaint((quiet) => (quiet ? renderQuiet() : render()));
 
 let started = false;
 async function start() {
-  // A link's ?token= and ?name= (read in state.js) leave the address bar at once, also when the sign-in form shows.
+  // A link's ?token= and ?name= (read in state.js) leave the address bar at once, also when the sign-in form shows (the token stays in this tab until sign-in, state.js).
   if (qs.get('token') || qs.get('name')) history.replaceState(null, '', location.pathname);
   if (!token || !me) return showGate();
-  store.set('board-token', token);
+  store.set('board-token', token); pending.set('');
   $('gate').hidden = true; $('app').hidden = false;
   // Which board this is (several can share a server), and the host's way back to the list of boards.
   if (SLUG) { const b = $('bname'); b.hidden = false; b.textContent = SLUG; b.title = `Board "${SLUG}" on this server`; }

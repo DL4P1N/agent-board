@@ -33,7 +33,11 @@ const SLUG = BASE ? decodeURIComponent(BASE.slice(3)) : '';
 const nsKey = (k) => (BASE && k.startsWith('board-') && k !== 'board-admin-token' ? `${k}@${BASE}` : k);
 const store = { get: (k) => { try { return localStorage.getItem(nsKey(k)); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(nsKey(k), v); } catch {} } };
 const qs = new URLSearchParams(location.search);
-let token = qs.get('token') || store.get('board-token') || '';
+// A link's token leaves the address bar (boot.js's start()), but a reload before the name is typed would lose it: this
+// tab keeps it until sign-in completes (it then lives in the saved token). A newer link's token replaces an older one.
+const pending = { get: () => { try { return sessionStorage.getItem(nsKey('board-pending-token')); } catch { return null; } }, set: (v) => { try { v ? sessionStorage.setItem(nsKey('board-pending-token'), v) : sessionStorage.removeItem(nsKey('board-pending-token')); } catch {} } };
+if (qs.get('token')) pending.set(qs.get('token'));
+let token = qs.get('token') || pending.get() || store.get('board-token') || '';
 // names are case-insensitive. ?name=<person> (join prints the board link with it) signs in as that person.
 const nameParam = String(qs.get('name') || '').trim().toLowerCase().replace(/[^\w.\-]/g, '');
 if (nameParam) store.set('board-name', nameParam);
@@ -58,5 +62,5 @@ function setState(s) { state = s; }
 function setSeenMention(id) { seenMention = id; }
 
 export { $, ACTIVE, AGENT_ONLINE_MS, ALL_PHASES, ANYONE, BASE, COL_DESC, COL_EMPTY, COL_SHOWN, COLS, DEFAULT_SETTINGS,
-  DONE_SHOWN, FROZEN_DESC, HINT, HOLDING, HUES, LABEL, me, nsKey, oSave, oUi, qs, reduceMotion, seenMention, setMe,
-  setSeenMention, setState, setToken, SIZE_TIP, SLUG, smooth, STALE_MS, state, STATUSES, store, token, ui };
+  DONE_SHOWN, FROZEN_DESC, HINT, HOLDING, HUES, LABEL, me, nsKey, oSave, oUi, pending, qs, reduceMotion, seenMention,
+  setMe, setSeenMention, setState, setToken, SIZE_TIP, SLUG, smooth, STALE_MS, state, STATUSES, store, token, ui };
