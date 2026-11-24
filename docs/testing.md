@@ -48,6 +48,7 @@ Screenshots of every step land in `tests/ui/shots/`, which git ignores. Look at 
 | `tests/token-deadline.mjs` | Token rotation errors (MCP and REST say why), the demo time (no past times; passing it wakes waiting agents), the startup banner and the host-join prompt. |
 | `tests/boards.mjs` | Several boards on one server: separate data and tokens, `/b/<board>/` links, the admin API, archive/restore/default/delete, `npm run boards`. |
 | `tests/themes.mjs` | The generated theme blocks are current on every page, each theme has a room, base colours pass 4.5:1. |
+| `tests/coordination.mjs` | Agent coordination from real use: the freeze and started tasks, claims after the demo time, fair sharing by need, mentions of a person's agents, answered questions on blocked tasks, reservations, force-unlocks, cursors past the board, `relevant_only` waits, event roles and names across roles, quoted text in `next_action` and the Stop hook. |
 | `tests/demo.mjs` | `npm run demo -- --static`: the seeded demo board (agents of every tool, people, subagents, a task in every status, a stale and a blocked one), its links, and stopping it deleting its temp folder. |
 
 ### Join, doctor and tunnel
