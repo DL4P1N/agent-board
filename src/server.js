@@ -12,6 +12,7 @@ import { PORT, HOST, DATA_DIR } from './config.js';
 import { takePid, writePid, dropPid, foreignHint, heartbeat } from './pidfile.js';
 import { createLiveBoards } from './live-boards.js';
 import { createApp } from './app.js';
+import { keepPrivate } from './tokens.js';
 import { printBanner, offerHostJoin, handleListenErrors } from './startup.js';
 
 // The agent and viewer tokens are derived from the board token (src/tokens.js), so anyone with the viewer link
@@ -29,7 +30,8 @@ if (process.env.BOARD_ADMIN_TOKEN && process.env.BOARD_ADMIN_TOKEN.length < MIN_
   console.error('  Use a long random one, or leave BOARD_ADMIN_TOKEN unset and the server makes one (data/admin-token). (For a throwaway test server only: BOARD_ALLOW_SHORT_TOKEN=1.)');
   process.exit(1);
 }
-fs.mkdirSync(DATA_DIR, { recursive: true });
+fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+keepPrivate(DATA_DIR);
 // One server per data folder: a second one would open the same databases and write over the first one's data.
 // (`npm start`'s reload after a change stops the old process before it starts the new one.)
 const owner = await takePid();

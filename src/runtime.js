@@ -2,6 +2,7 @@
 // together from the modules next to this file. close() stops it.
 import express from 'express';
 import { Board } from './board.js';
+import { keepPrivate } from './tokens.js';
 import { publicFiles } from './static.js';
 import { hiddenSettings } from './board-settings.js';
 import { startGithubPolling } from './github.js';
@@ -19,6 +20,8 @@ import { createStreams } from './routes-stream.js';
 // `registry` is the boards list; `envTokenSlug` is the board that BOARD_TOKEN belongs to (or null).
 export function createBoardRuntime(slug, dir, { registry, envTokenSlug }) {
   const board = new Board(dir);
+  // Its folder and database files: this user's only (POSIX).
+  keepPrivate(dir);
   const isDefault = () => registry.defaultSlug === slug;
   // This board's canonical address: always /b/<slug>, also for the default board. The root (/, /api, /mcp)
   // stays an alias for whichever board is the default, so links and joins from before keep working,

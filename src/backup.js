@@ -22,7 +22,7 @@ export function startBackups({ board, dir, slug, every, later }) {
     const lastFile = path.join(BACKUP_DIR, '.last');
     let last = ''; try { last = fs.readFileSync(lastFile, 'utf8').trim(); } catch {}
     if (fp === last) return null;
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    fs.mkdirSync(BACKUP_DIR, { recursive: true, mode: 0o700 });
     // UTC time in the name (same board-YYYYMMDD-HHMMSS shape restore expects): sorting stays right
     // across daylight-saving changes.
     const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '').replace('T', '-'); // 20261110-153000

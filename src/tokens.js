@@ -35,3 +35,14 @@ export function writeTokenFile(file, token) {
     throw e;
   }
 }
+
+// A data folder holds the tokens, the database and its backups: on POSIX, the folder is this user's only (0700) and
+// its database files are readable by this user only (0600), whatever the umask made them. Windows ignores modes (the
+// user's profile folder is private anyway). Best effort: a folder this user doesn't own is left as it is.
+export function keepPrivate(dir) {
+  if (process.platform === 'win32') return;
+  try { fs.chmodSync(dir, 0o700); } catch {}
+  let names = [];
+  try { names = fs.readdirSync(dir); } catch {}
+  for (const f of names) if (/^board\.db(-wal|-shm)?$/.test(f)) { try { fs.chmodSync(`${dir}/${f}`, 0o600); } catch {} }
+}

@@ -169,6 +169,15 @@ try {
     const d = (await r.json()).result?.tools?.find((t) => t.name === 'ask_human')?.description || '';
     check('L5: ask_human says never to ask for secrets, and no longer suggests credentials', /Never ask for a secret/.test(d) && !/credentials/.test(d), d);
   }
+
+  // ---- L6 (POSIX): the data folder and the database are this user's only, also when they were made wider ----
+  if (process.platform !== 'win32') {
+    fs.chmodSync(board.dataDir, 0o755);
+    fs.chmodSync(path.join(board.dataDir, 'board.db'), 0o644);
+    await board.relaunch();
+    const mode = (p) => fs.statSync(p).mode & 0o777;
+    check('L6: after a start the data folder is 0700 and board.db 0600', mode(board.dataDir) === 0o700 && mode(path.join(board.dataDir, 'board.db')) === 0o600, `${mode(board.dataDir).toString(8)} ${mode(path.join(board.dataDir, 'board.db')).toString(8)}`);
+  }
 } catch (e) {
   check('suite ran without throwing', false, e?.stack || String(e));
 }
