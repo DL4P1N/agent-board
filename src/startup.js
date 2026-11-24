@@ -103,7 +103,8 @@ export function offerHostJoin(live) {
       console.log(` Skipped. To connect later, run in another terminal:\n   npm run join -- --url http://localhost:${PORT}/b/${rt.slug} --token ${TOKEN}\n`);
       return;
     }
-    const child = spawn(process.execPath, [path.join(ROOT, 'scripts', 'join.mjs'), '--url', `http://localhost:${PORT}/b/${rt.slug}`, '--token', TOKEN], { stdio: 'inherit' });
+    // The token goes in the environment, not on the command line (other users of the computer can list those).
+    const child = spawn(process.execPath, [path.join(ROOT, 'scripts', 'join.mjs'), '--url', `http://localhost:${PORT}/b/${rt.slug}`], { stdio: 'inherit', env: { ...process.env, AGENT_BOARD_JOIN_TOKEN: TOKEN } });
     child.on('exit', () => {
       // Join's output pushed the banner off screen: repeat what the host needs next.
       const best = bestBase();

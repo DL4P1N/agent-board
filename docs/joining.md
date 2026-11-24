@@ -112,6 +112,8 @@ Join pre-approves the git and `gh` commands agents need to branch, push and merg
 | `--offline` | set up even if the board can't be reached now |
 | `--verbose` | list the pre-approved git/gh commands |
 
+The token can also come from the environment, `AGENT_BOARD_JOIN_TOKEN=<token>`, instead of `--token`: then other users of the computer can't read it in the process list (the host's `npm start` runs join that way). Join itself still hands the MCP address, token included, to `claude mcp add` and `codex mcp add` on their command lines, since that's how those tools take it.
+
 Turn off the Stop hook for one session with `BOARD_HOOK=off`.
 
 ## If it can't connect

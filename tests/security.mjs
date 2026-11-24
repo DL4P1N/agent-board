@@ -149,6 +149,19 @@ try {
     const m = await fetch(`${board.base}/mcp?agent=cachecheck&token=${TOKEN}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) }); await m.arrayBuffer();
     check('L3: /api and /mcp answers say Cache-Control: no-store (also a 401)', [st, ex, bad, m].every((r) => r.headers.get('cache-control') === 'no-store'), [st, ex, bad, m].map((r) => `${r.status}:${r.headers.get('cache-control')}`).join(' '));
   }
+
+  // ---- L4: join takes the token from the environment (how the host's npm start runs it), off the command line ----
+  {
+    const tmp = tempDir('agent-board-sec-');
+    const home = path.join(tmp, 'home'); fs.mkdirSync(home);
+    const env = { ...process.env, HOME: home, USERPROFILE: home, APPDATA: home, LOCALAPPDATA: home, GIT_CONFIG_NOSYSTEM: '1', AGENT_BOARD_JOIN_TOKEN: TOKEN };
+    delete env.INIT_CWD;
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'join.mjs'), '--url', board.base, '--name', 'envy', '--tool', 'other', '--yes', '--wait', '0'], { cwd: tmp, env, encoding: 'utf8', input: '', timeout: 60e3 });
+    const out = `${r.stdout}${r.stderr}`;
+    check('L4: join with AGENT_BOARD_JOIN_TOKEN and no --token connects', r.status === 0 && /board address printed/.test(out), out.slice(-500));
+    const startup = fs.readFileSync(path.join(ROOT, 'src', 'startup.js'), 'utf8');
+    check('L4: npm start runs join without the token in its arguments', /AGENT_BOARD_JOIN_TOKEN: TOKEN/.test(startup) && !/'--token', TOKEN\]/.test(startup));
+  }
 } catch (e) {
   check('suite ran without throwing', false, e?.stack || String(e));
 }

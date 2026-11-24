@@ -88,7 +88,9 @@ const url = (() => {
   } catch {}
   return u.replace(/\/+$/, '');
 })();
-const token = String(args.token || pastedToken).trim();
+// AGENT_BOARD_JOIN_TOKEN: the token from the environment instead of the command line, where other users of the
+// computer could read it in the process list (the host's npm start passes it this way when it runs join).
+const token = String(args.token || pastedToken || process.env.AGENT_BOARD_JOIN_TOKEN || '').trim();
 // An agent token (agent-…, e.g. copied from a teammate's tool config) is used as it is: enough to connect this
 // laptop's agents, not to open the web board as a person. The presenter view's read-only token can't set anything up.
 const isAgentToken = token.startsWith('agent-');
