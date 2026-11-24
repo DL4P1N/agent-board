@@ -333,8 +333,14 @@ export class Board {
   // Moves whenever the database changes: rows this board wrote (total_changes) or a commit by another
   // connection, e.g. a script (data_version). Anything cached from the database is stale once it moves.
   changeCount() {
-    this.changeStmts ||= [this.db.prepare('SELECT total_changes() AS n'), this.db.prepare('PRAGMA data_version')];
-    return `${this.changeStmts[0].get().n}:${this.changeStmts[1].get().data_version}`;
+    this.changeStmt ||= this.db.prepare('SELECT total_changes() AS n');
+    return `${this.changeStmt.get().n}:${this.dataVersion()}`;
+  }
+
+  // The data_version part alone: it moves only on another connection's commit, which can land between two reads.
+  dataVersion() {
+    this.dataVersionStmt ||= this.db.prepare('PRAGMA data_version');
+    return this.dataVersionStmt.get().data_version;
   }
 
   // Something the web board shows changed without an event of its own (presence, a tool, a helper): live pages reload.

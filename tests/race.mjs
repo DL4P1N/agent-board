@@ -2,6 +2,8 @@
 // One task, N agents: exactly one claim wins, the rest are told who has it, and the board shows one holder.
 // A pool of tasks, N agents each trying several: no task gets two holders and nobody holds more than allowed.
 // Also the planner role and a file lock. Run all suites with: npm test
+import http from 'node:http';
+import path from 'node:path';
 import { startBoard, finish, rest, Client, StreamableHTTPClientTransport } from './helpers.mjs';
 import { agentTokenFor } from '../src/tokens.js';
 
@@ -83,6 +85,34 @@ try {
   const listed = (await human('/state')).locks.filter((l) => l.path === 'src/shared/config.ts');
   check('one file locked by 24 agents at once: one holder, the rest get the conflict', holders.length === 1 && listed.length === 1 && listed[0].owner === holders[0].name
     && locks.filter((r) => r !== holders[0]).every((r) => r.body.ok === false && r.body.conflicts?.[0]?.path === 'src/shared/config.ts'), `${holders.length} holders; listed ${JSON.stringify(listed)}`);
+
+  // ---- /api/state while another process commits: a script writes an agent's last-seen time while the shared
+  // answer is being built; once the write is done, /api/state shows it (not an answer built before it, kept) ----
+  const { DatabaseSync } = await import('node:sqlite');
+  const ext = new DatabaseSync(path.join(board.dataDir, 'board.db'));
+  ext.exec('PRAGMA busy_timeout = 5000');
+  const who = ext.prepare("SELECT name FROM presence_v2 WHERE kind = 'agent' ORDER BY name LIMIT 1").get().name;
+  const setSeen = ext.prepare("UPDATE presence_v2 SET last_seen = ? WHERE name = ? AND kind = 'agent'");
+  // GET /api/state, calling sent() once the request has left this process (so the board is about to build it).
+  const getState = (sent) => new Promise((resolve, reject) => {
+    const req = http.get(`${board.base}/api/state`, { headers: { Authorization: `Bearer ${board.token}`, 'X-Agent': 'dana' } }, (res) => { res.resume(); res.on('end', resolve); });
+    req.on('error', reject);
+    req.on('finish', sent);
+  });
+  const stale = [];
+  const ROUNDS_EXT = 150;
+  try {
+    for (let i = 0; i < ROUNDS_EXT; i++) {
+      const seen = Date.now() - 30 * 60e3 - i;
+      setSeen.run(seen + 1, who); // a change first, so the request below builds a new answer
+      // The write lands 0 to 10 ms after the request is sent, a little later each round: before, during or after that build.
+      const delay = (i % 50) * 0.2;
+      await getState(() => { const t = performance.now() + delay; while (performance.now() < t); setSeen.run(seen, who); });
+      const got = (await human('/state')).presence.find((p) => p.kind === 'agent' && p.name === who)?.last_seen;
+      if (got !== seen) stale.push(`round ${i}: ${got === seen + 1 ? 'the value before' : got}`);
+    }
+  } finally { ext.close(); }
+  check(`/api/state after another process's commit landed during its build: the next answer shows it (${ROUNDS_EXT} rounds)`, !stale.length, `${stale.length} stale: ${stale.slice(0, 3).join('; ')}`);
 } catch (e) {
   R.push(`CRASH ${e.stack || e}`);
 }

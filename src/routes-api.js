@@ -56,9 +56,12 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     try {
       if (!c || c.key !== stateKey() || Date.now() - c.at > STATE_TTL_MS) {
         const at = Date.now();
+        const outside = board.dataVersion();
         const json = Buffer.from(JSON.stringify(stateBody(req, human)));
-        // Keyed after the build: what building it wrote (proposals approved on time, expired locks) is in it.
-        c = { key: stateKey(), at, json, gz: null };
+        // Keyed after the build: what building it wrote (proposals approved on time, expired locks) is in it. A commit
+        // by another process during the build (a script) may have come after some of what it read: then it answers
+        // this request but isn't kept, so the next request builds it again.
+        c = { key: board.dataVersion() === outside ? stateKey() : null, at, json, gz: null };
         stateCache.set(human, c);
       }
     } catch (e) {
