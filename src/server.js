@@ -23,6 +23,12 @@ if (process.env.BOARD_TOKEN && process.env.BOARD_TOKEN.length < MIN_TOKEN && pro
   console.error('  Use a long random one, or leave BOARD_TOKEN unset and the board makes one. (For a throwaway test board only: BOARD_ALLOW_SHORT_TOKEN=1.)');
   process.exit(1);
 }
+// The admin token manages every board (create, archive, delete): as long as a board token at least.
+if (process.env.BOARD_ADMIN_TOKEN && process.env.BOARD_ADMIN_TOKEN.length < MIN_TOKEN && process.env.BOARD_ALLOW_SHORT_TOKEN !== '1') {
+  console.error(`\n✗ BOARD_ADMIN_TOKEN is too short (${process.env.BOARD_ADMIN_TOKEN.length} characters; it needs at least ${MIN_TOKEN}): it manages every board on this server.`);
+  console.error('  Use a long random one, or leave BOARD_ADMIN_TOKEN unset and the server makes one (data/admin-token). (For a throwaway test server only: BOARD_ALLOW_SHORT_TOKEN=1.)');
+  process.exit(1);
+}
 fs.mkdirSync(DATA_DIR, { recursive: true });
 // One server per data folder: a second one would open the same databases and write over the first one's data.
 // (`npm start`'s reload after a change stops the old process before it starts the new one.)

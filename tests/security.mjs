@@ -3,13 +3,14 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { startBoard, finish, ROOT, TOKEN, tempDir } from './helpers.mjs';
 import { isRepoUrl } from '../src/repo-url.js';
 
 const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' && !ok ? ' — ' + x : ''}`);
-const board = await startBoard();
+const ADMIN = 'admin-' + 'x'.repeat(24);
+const board = await startBoard({ env: { BOARD_ADMIN_TOKEN: ADMIN } });
 const api = (p, { method = 'GET', body, token = board.token, who = 'dana', headers = {} } = {}) => fetch(`${board.base}/api${p}`, {
   method, headers: { Authorization: `Bearer ${token}`, ...(who ? { 'X-Agent': who } : {}), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers },
   body: body === undefined ? undefined : JSON.stringify(body),
@@ -109,6 +110,20 @@ try {
     check('M5: a tokenless or wrong-token POST is refused (401) without its body being parsed', [a, b, c].every((r) => r.status === 401), [a, b, c].map((r) => r.status).join());
     const d = await post('/api/messages', board.token);
     check('M5: with the token the body is still read (and bad JSON is a 400)', d.status === 400, String(d.status));
+  }
+
+  // ---- L1: the admin API slows down guesses; a short BOARD_ADMIN_TOKEN is refused ----
+  {
+    const adm = (token, ip) => fetch(`${board.base}/api/admin/boards`, { headers: { 'X-Admin-Token': token, 'CF-Connecting-IP': ip } });
+    const st = [];
+    for (let i = 0; i < 12; i++) st.push((await adm(`wrong-${i}`, '198.51.100.70')).status);
+    check('L1: wrong admin tokens from one address: 10 a minute, then 429', st.slice(0, 10).every((x) => x === 401) && st.slice(10).every((x) => x === 429), st.join());
+    check('L1: …which then has to wait even with the right token', (await adm(ADMIN, '198.51.100.70')).status === 429);
+    check('L1: another address with the right token is served', (await adm(ADMIN, '198.51.100.71')).status === 200);
+    const env = { ...process.env, BOARD_ADMIN_TOKEN: 'short', BOARD_DATA: path.join(tempDir('agent-board-sec-'), 'data'), PORT: '0', BOARD_NO_JOIN: '1' };
+    delete env.BOARD_ALLOW_SHORT_TOKEN; delete env.BOARD_TOKEN;
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'src', 'server.js')], { env, encoding: 'utf8', timeout: 20e3 });
+    check('L1: a server with a short BOARD_ADMIN_TOKEN refuses to start, saying why', r.status === 1 && /BOARD_ADMIN_TOKEN is too short/.test(r.stderr), `${r.status} ${r.stderr}`.slice(0, 300));
   }
 } catch (e) {
   check('suite ran without throwing', false, e?.stack || String(e));
