@@ -58,7 +58,14 @@ function renderSetup(si) {
           <span class="mk" aria-hidden="true">${tick ? '✓' : i + 1}</span><span class="step-t">${esc(s.title)}${tick ? '<span class="vh"> (done)</span>' : ''}</span><span class="step-s">${esc(s.sum)}</span></button>
         ${open ? `<div class="step-b" id="sb-${s.key}">${body[s.key](si)}</div>` : ''}</li>`;
     }).join('')}</ol>
-    <div class="boardsec" id="board-sec">${securityBox()}</div></div>`);
+    ${moreBox()}<div class="boardsec" id="board-sec">${securityBox()}</div></div>`);
+}
+// The presenter view, the recap, the summary and the backup, also here (not only in Help or Ctrl+K). The pages open with
+// the read-only viewer token, never the board token.
+function moreBox() {
+  const vt = state.setup?.viewer_token; const q = vt ? '?token=' + encodeURIComponent(vt) : '';
+  return `<div class="boardsec" id="board-more"><div class="sub">For the room, and after</div>
+    <div class="xacts">${vt ? `<a class="plink" href="${esc(BASE + '/present.html' + q)}" target="_blank" rel="noopener" data-fk="s-present" title="Read-only, for the room's big screen (opens in a new tab)">Presenter view</a><a class="plink" href="${esc(BASE + '/recap.html' + q)}" target="_blank" rel="noopener" data-fk="s-recap" title="Read-only, for after the session (opens in a new tab)">Session recap</a>` : ''}<button type="button" class="ghost" data-act="export-md" data-fk="s-md">Download summary (.md)</button><button type="button" class="ghost" data-act="export-json" data-fk="s-json">Download backup (JSON)</button></div></div>`;
 }
 // "Team can run 7 tasks at once · 4 running", and a warning when idle agents outnumber the ready tasks.
 function teamCapHtml() {

@@ -258,6 +258,12 @@ try {
   check('backup export returns JSON with tasks and events', Array.isArray(js.tasks) && js.tasks.length >= 4 && Array.isArray(js.events), Object.keys(js).join(','));
   const r1 = await fetch(`${BASE}/api/summary?token=testtok`); const r2 = await fetch(`${BASE}/api/export?token=testtok`);
   check('REST: summary is text/markdown, export is a JSON attachment', /text\/markdown/.test(r1.headers.get('content-type')) && /attachment/.test(r2.headers.get('content-disposition') || ''));
+  // Not only in Help or Ctrl+K: Setup (its chip is always in the top bar) offers them too, the pages with the viewer token.
+  await page.evaluate(() => document.querySelector('[data-act="setup-open"]')?.click());
+  const more = await until(page, () => !!document.querySelector('#board-more'));
+  const mr = await page.evaluate(() => { const b = document.querySelector('#board-more'); const vt = state.setup.viewer_token; return { md: !!b?.querySelector('[data-act="export-md"]'), js: !!b?.querySelector('[data-act="export-json"]'), present: b?.querySelector('a[href*="present.html"]')?.getAttribute('href') || '', recap: b?.querySelector('a[href*="recap.html"]')?.getAttribute('href') || '', vt }; });
+  check('Setup offers the presenter view and recap (viewer token), the summary and the backup', more && mr.md && mr.js && mr.present.endsWith('/present.html?token=' + encodeURIComponent(mr.vt)) && mr.recap.endsWith('/recap.html?token=' + encodeURIComponent(mr.vt)) && !mr.present.includes('testtok'), JSON.stringify(mr));
+  await page.evaluate(() => document.querySelector('[data-act="setup-close"]')?.click()); await sleep(300);
   const dl = path.join(out, 'downloads'); fs.rmSync(dl, { recursive: true, force: true }); fs.mkdirSync(dl, { recursive: true });
   const cdp = await page.createCDPSession();
   await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: dl });
