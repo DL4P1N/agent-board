@@ -297,6 +297,7 @@ function toast(msg, bad = false, action = null) {
   const s = document.createElement('span'); s.textContent = msg; d.append(s);
   if (action) {
     const b = document.createElement('button'); b.type = 'button'; b.textContent = action.label;
+    if (action.label === 'Undo') { b.dataset.undo = ''; b.title = 'Undo (Ctrl+Z)'; b.setAttribute('aria-keyshortcuts', 'Control+Z Meta+Z'); }
     b.onclick = () => { toastOut(d); action.run(); }; d.append(b);
   }
   if (bad) d.setAttribute('role', 'alert');
@@ -315,6 +316,14 @@ function toast(msg, bad = false, action = null) {
   const dlg = [...document.querySelectorAll('dialog[open]')].pop();
   if (dlg) { let l = dlg.querySelector(':scope > .dlg-live'); if (!l) { l = document.createElement('div'); l.className = 'vh dlg-live'; l.setAttribute('aria-live', bad ? 'assertive' : 'polite'); dlg.append(l); } l.textContent = ''; setTimeout(() => { l.textContent = msg; }, 60); }
 }
+// Ctrl+Z (⌘Z on a Mac) while an Undo toast shows runs the newest one's Undo, so the keyboard needn't Tab to it in its
+// 8 seconds. In a text field Ctrl+Z stays the field's own undo.
+document.addEventListener('keydown', (ev) => {
+  if (!(ev.ctrlKey || ev.metaKey) || ev.shiftKey || ev.altKey || ev.key.toLowerCase() !== 'z') return;
+  if (ev.target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+  const b = [...$('toasts').querySelectorAll('.toast:not(.out) [data-undo]')].pop(); if (!b) return;
+  ev.preventDefault(); b.click();
+});
 function announce(msg) { const a = $('announcer'); a.textContent = ''; setTimeout(() => { a.textContent = msg; }, 60); }
 
 const plural = (n, w, ws = w + 's') => `${n} ${n === 1 ? w : ws}`;

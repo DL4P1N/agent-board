@@ -1,7 +1,7 @@
 // Accessibility and phone checks: live announcements, one Tab stop per column, phase-track list,
 // 12px minimum text, badges that wrap, a jump-to-chat button and 32px touch targets.
 // Starts its own throwaway board. Run all suites with: npm test
-import { startBoard, launchBrowser, shotsDir, finish, seed, rest } from '../helpers.mjs';
+import { startBoard, launchBrowser, shotsDir, finish, seed, rest, agent } from '../helpers.mjs';
 
 const board = await startBoard();
 const out = shotsDir('a11y');
@@ -14,6 +14,8 @@ const browser = await launchBrowser({ headless: true, defaultViewport: { width: 
 
 try {
   const ids = await seed(board);
+  // UM11: an agent with a very long name (the server allows 64 characters).
+  const longA = await agent(board, 'bartholomew-maximilian-wolfeschlegelsteinhausen-junior-claude'); await longA('board_status');
   const page = await browser.newPage();
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   page.on('console', (m) => m.type() === 'error' && !/Failed to load resource|ERR_CONNECTION|EventSource/i.test(m.text()) && errors.push('console: ' + m.text()));
@@ -98,6 +100,20 @@ try {
   check('U13 with a mouse, the chat hint names the keys', /Shift\+Enter/.test(await page.$eval('#chat-hint', (e) => e.innerText)));
   check('MO-2 no Chat button on desktop', await page.$eval('#tochat', (b) => getComputedStyle(b).display === 'none'));
 
+  // ---- UM10: a filled button's focus ring shows against its own fill ----
+  const fr = await page.evaluate(() => { const e = document.querySelector('#nyou form button[type=submit], [data-fk^="qb-"]'); if (!e) return null; e.focus(); const cs = getComputedStyle(e); const r = { vis: e.matches(':focus-visible'), ring: cs.outlineColor, fill: cs.backgroundColor, style: cs.outlineStyle, off: parseFloat(cs.outlineOffset) }; e.blur(); return r; });
+  check('UM10 a filled button (Answer) has a focus ring that differs from its fill, drawn inside', !!fr && fr.vis && fr.style !== 'none' && fr.ring !== fr.fill && fr.off < 0, JSON.stringify(fr));
+  // ---- UM13: Ctrl+Z runs the Undo of the toast showing, outside a text field ----
+  await page.evaluate((id) => { document.getElementById('toasts').replaceChildren(); moveTask(taskById(id), 'blocked'); }, ids.vote.id);
+  await until(page, () => !!document.querySelector('#toasts [data-undo]'));
+  await until(page, (id) => !!document.querySelector(`#col-blocked .card[data-id="${id}"]`), ids.vote.id);
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.down('Control'); await page.keyboard.press('z'); await page.keyboard.up('Control');
+  const back = await until(page, (id) => !document.querySelector(`#col-blocked .card[data-id="${id}"]`), ids.vote.id);
+  const vs = (await rest(board, 'dana', '/state')).tasks.find((t) => t.id === ids.vote.id)?.status;
+  check('UM13 Ctrl+Z while the Undo toast shows undoes the move', back && vs !== 'blocked' && await page.evaluate(() => !document.querySelector('#toasts .toast:not(.out) [data-undo]')), vs);
+  await sleep(800); await page.evaluate(() => document.getElementById('toasts').replaceChildren());
+
   // ---- Phone: badges, chat button, touch targets ----
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
   await page.evaluate(() => window.scrollTo(0, 0)); await sleep(400);
@@ -105,6 +121,10 @@ try {
   // One "need attention" badge, hidden while What to do now is on screen: no third header row on a phone.
   check('MO-1 phone: no badge row in the header while What to do now is on screen, nothing cut off', hdr.hidden && !hdr.clipped.length, JSON.stringify(hdr));
   check('phone: no horizontal overflow at 390px', hdr.ov <= 0, hdr.ov + 'px');
+  // UM11: a long agent name stays inside its row (a phone widens its layout to fit anything past the edge, so innerWidth
+  // grows with it: the page must stay 390px wide).
+  const um11 = await page.evaluate(() => ({ w: document.documentElement.scrollWidth, iw: innerWidth }));
+  check("UM11 phone: a 61-character agent name doesn't widen the page past 390px", um11.w <= 390 && um11.iw === 390, JSON.stringify(um11));
   await page.screenshot({ path: `${out}/phone-top.png` });
   // Chat is a header icon on a phone (no floating button over the questions or the cards), named "Chat".
   await page.evaluate(() => window.scrollTo(0, 0)); await sleep(300);
