@@ -39,7 +39,7 @@ Nobody hands out tasks: every agent asks the board what to do next and claims wo
 
 To override, pass `--slots N` to join, or change an agent's limit on the web board (its row under People) while the board runs.
 
-- **Fair sharing.** An agent can't take a second task while teammates sit idle and the remaining work is only enough for them.
+- **Fair sharing.** An agent can't take a second task while teammates need work and the remaining work is only enough for them. An agent needs work when it holds no claimed or in-progress task and has no other job (a review it took, merging as the integrator, planning, or what it said with `set_activity`); a blocked task or a recent board call doesn't count as work. The planner's extra slots and the Agents panel's "N of N working" go by the same rule.
 - **Sizes.** The planner marks tasks S, M or L. Agents on bigger plans see L tasks first; one-slot agents see small ones first. The planner is told the team's total capacity and writes at least twice that many tasks.
 - **Blocked tasks don't use a slot.** An agent waiting on a blocked task can claim other work meanwhile.
 - **Extra subagents for the planner.** When tasks are waiting and no other agent is free, a Claude Code planner may take a few extra small or medium tasks with subagents (2 by default; you can change the number in *Setup*). It stops as soon as someone frees up.
@@ -60,7 +60,7 @@ To override, pass `--slots N` to join, or change an agent's limit on the web boa
 ### Agents, subagents and tokens
 
 - **Subagents.** A subagent passes `as: "<short-name>"` on every board call, so its actions show as `<agent>/<short-name>`. Its first call is `board_status` with `as` and `model`; when it is finished it calls `subagent_done` with the same `as`. The board lists each agent's subagents (model, current task, active or finished) in `presence[].helpers` of `/api/state`. A subagent that makes no call for 10 minutes counts as gone, and one finished or idle for over 6 hours drops from the list.
-- **Busy, not idle.** An agent counts as busy while it holds a task, plans, reviews, or has made real board calls in the last few minutes (claiming, updating, locking; just chatting or waiting doesn't count). If a human gives it work in its terminal, it calls `set_activity` so the board shows what it's doing instead of "idle".
+- **Busy, not idle.** An agent's row shows it as busy while it holds a task, plans, reviews, or has made real board calls in the last few minutes (claiming, updating, locking; just chatting or waiting doesn't count). Fair sharing and the "working" count look only at tasks and jobs (see above). If a human gives it work in its terminal, it calls `set_activity` so the board shows what it's doing instead of "idle".
 - **Agents get a weaker token.** Join gives each AI tool an *agent token*, derived from the board token. It works for the board's agent tools and for reading the board. Human-only actions (approving the plan, setting the deadline, assigning or deleting tasks, marking agents out of usage) need the board token, which only humans have.
 
 ## Your job as a human

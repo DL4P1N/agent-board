@@ -1349,25 +1349,44 @@ export class Board {
     const now = Date.now();
     const held = tasks.filter((t) => ['claimed', 'in_progress', 'blocked'].includes(t.status) && sameTeam(root, t.assignee));
     if (held.length) return held.map((t) => `#${t.id} ${t.title}`).join('; ');
+    const job = this.boardJob(root, row, tasks, s, now);
+    if (job) return job;
+    // Busy with recent real board calls but nothing more to say (the tool's name is the board's business, not the page's).
+    if (row?.last_active && now - row.last_active < ACTIVE_MS) return 'working';
+    return null; // waiting for its review (if any): free for more
+  }
+
+  // A job other than holding a task: a review it took, merging as the integrator, planning or deciding proposals as
+  // the planner, or what it said it's doing (set_activity). null when none.
+  boardJob(root, row, tasks, s, now = Date.now()) {
     const reviewing = tasks.find((t) => t.status === 'review' && t.reviewer && sameTeam(root, t.reviewer));
     if (reviewing) return `reviewing #${reviewing.id} to merge`;
     if (s.integrator && s.integrator !== ANYONE && sameTeam(root, s.integrator) && tasks.some((t) => t.status === 'review')) return 'merging work in review';
     if (s.planner && sameTeam(root, s.planner) && s.goal && !tasks.some((t) => t.status !== 'proposed')) return 'planning the task list';
     if (s.planner && sameTeam(root, s.planner) && tasks.some((t) => t.status === 'proposed')) return 'deciding proposed tasks';
     if (row?.activity && now - (row.activity_at || 0) < ACTIVITY_MS) return row.activity;
-    // Busy with recent real board calls but nothing more to say (the tool's name is the board's business, not the page's).
-    if (row?.last_active && now - row.last_active < ACTIVE_MS) return 'working';
-    if (tasks.some((t) => t.status === 'review' && sameTeam(root, t.assignee))) return null; // waiting for its review: free for more
     return null;
   }
 
-  // Started, online agents (other than `except`) with nothing to do and not out of usage.
+  // Does this agent need work: a free slot and no claimed or in-progress task, and no other job (boardJob). A blocked
+  // task (it doesn't hold a slot) or a recent board call is not work. Fair sharing (idleAgents, so the planner's extra
+  // slots too) and the web board's "N of N working" go by this, so an agent that only just asked for work, or waits on
+  // a blocked task, keeps its share.
+  needsWork(name, ctx = {}) {
+    const root = agentRootOf(normName(name));
+    const row = ctx.row || this.agentRow(root);
+    const tasks = ctx.tasks || this.listTasks();
+    if (tasks.some((t) => ['claimed', 'in_progress'].includes(t.status) && sameTeam(root, t.assignee))) return false;
+    return !this.boardJob(root, row, tasks, ctx.settings || this.getSettings());
+  }
+
+  // Started, online agents (other than `except`) that need work (needsWork) and aren't out of usage.
   idleAgents(except) {
     const me = agentRootOf(normName(except));
     const tasks = this.listTasks();
     const settings = this.getSettings();
     return this.db.prepare("SELECT * FROM presence_v2 WHERE kind = 'agent' AND started_at IS NOT NULL").all()
-      .filter((r) => r.name !== me && Date.now() - r.last_seen < AGENT_ONLINE_MS && !this.isLimited(r.name) && !this.doing(r.name, { row: r, tasks, settings }))
+      .filter((r) => r.name !== me && Date.now() - r.last_seen < AGENT_ONLINE_MS && !this.isLimited(r.name) && this.needsWork(r.name, { row: r, tasks, settings }))
       .map((r) => r.name);
   }
 
@@ -1501,6 +1520,9 @@ export class Board {
         started: !!r.started_at,
         limited,
         busy: !!doing,
+        // Online, started, not out of usage, and needs work (needsWork): what fair sharing protects, and what the
+        // web board's "N of N working" leaves out.
+        needs_work: Date.now() - r.last_seen < AGENT_ONLINE_MS && !!r.started_at && !limited && this.needsWork(r.name, { row: r, tasks, settings }),
         doing,
         activity: r.activity && Date.now() - (r.activity_at || 0) < ACTIVITY_MS ? r.activity : null,
         last_active: r.last_active || null,

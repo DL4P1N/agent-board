@@ -85,5 +85,26 @@ const next = (b, who) => b.nextAction(who).next_action;
   check('UM8: approving a feature during the freeze says nobody can claim it before the demo', /freeze/i.test(ok.freeze_note || ''), JSON.stringify(ok));
 }
 
+// ================= UH2: fair sharing protects agents that need work =================
+// Needing work: a free slot and no claimed or in-progress task. A recent board call, or a blocked task, isn't work.
+{
+  const b = fresh();
+  join(b, 'ana', { client: 'Claude Code', slots: 2 }); join(b, 'ben'); join(b, 'cy'); join(b, 'dee');
+  b.claimRole('ana', 'planner');
+  const tasks = ['one', 'two', 'three', 'four'].map((t) => b.createTask('ana', { title: `Task ${t}`, size: 'S' }));
+  // dee waits on a blocked task; ben and cy just made real board calls (a refused claim, a post) but hold nothing.
+  b.claimTask('dee', tasks[3].id); b.updateTask('dee', tasks[3].id, { status: 'blocked', note: 'waiting on a key' });
+  b.noteToolCall('ben', 'claim_task'); b.noteToolCall('cy', 'lock_files');
+  const idle = b.idleAgents('ana').sort().join();
+  check('UH2: agents with a free slot and no claimed or in-progress task need work (recent calls and blocked tasks don\'t count)', idle === 'ben,cy,dee', idle);
+  const cap = b.capacity('ana');
+  check('UH2: the planner gets no extra slots while others need work', cap.extra === 0 && cap.slots === 2, JSON.stringify(cap));
+  b.claimTask('ana', tasks[0].id);
+  const r = refusal(() => b.claimTask('ana', tasks[1].id));
+  check('UH2: a second claim is refused while the rest is needed by agents with nothing to do', /idle teammate/.test(r), r);
+  const pres = Object.fromEntries(b.presence().filter((p) => p.kind === 'agent').map((p) => [p.name, p.needs_work]));
+  check('UH2: presence says which agents need work (the web board\'s "N of N working" counts the others)', pres.ben === true && pres.cy === true && pres.dee === true && pres.ana === false, JSON.stringify(pres));
+}
+
 for (const b of boards) b.close();
 await finish(R);

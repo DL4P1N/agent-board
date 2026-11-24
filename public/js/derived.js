@@ -52,6 +52,8 @@ function agentInfoFresh() {
     if (p.base_slots) a.base = Number(p.base_slots) || 0;
     if (p.slots_override != null) a.override = Number(p.slots_override) || null;
     if (p.busy) a.busy = true; if (p.doing) a.doing = String(p.doing);
+    // The server's word on whether it needs work (no claimed or in-progress task, no review or other job): what the count goes by.
+    if (typeof p.needs_work === 'boolean') a.needsWork = p.needs_work;
     if (p.limited) a.limited = p.limited;
     // Who it belongs to, and where that came from ('human' = set here, 'join', 'guess' = from its name).
     if (p.person) a.person = String(p.person).toLowerCase();
@@ -85,8 +87,9 @@ function teamCapacity() { return once('cap', teamCapacityFresh); }
 function teamCapacityFresh() {
   // Out-of-usage agents don't count: they can't take work right now.
   const all = [...agentInfo().values()].filter((a) => a.started && agentLive(a) && !isLimited(a));
-  // Idle = nothing to do: no task, no review, not planning, no recent board work (the server's `busy`).
-  const idle = all.filter((a) => !a.busy);
+  // Idle = needs work: no claimed or in-progress task and no review or planning (the server's `needs_work`; a blocked task
+  // or a recent board call isn't work). Older servers without it: not `busy`.
+  const idle = all.filter((a) => a.needsWork ?? !a.busy);
   const done = new Set(state.tasks.filter((t) => t.status === 'done').map((t) => t.id));
   const ids = new Set(state.tasks.map((t) => t.id));
   const ready = state.tasks.filter((t) => t.status === 'open' && t.depends_on.every((d) => !ids.has(d) || done.has(d)));
