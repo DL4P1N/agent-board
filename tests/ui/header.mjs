@@ -114,11 +114,12 @@ try {
   const t1 = await ann('create_task', { title: 'Scaffold' });
   const t2 = await ann('create_task', { title: 'API' });
   await cid('claim_task', { id: t2.id }); // a recent claim event: used to count cid online by itself
+  await ann('claim_task', { id: t1.id }); // working: holds a task (an agent with none needs work, however busy its calls)
   await rest('dana', '/agents/bea', 'PATCH', { limited: true });
   await ageAgent('cid', 25);
   await page.evaluate(() => { localStorage.setItem('board-setup', 'closed'); }); await reload();
   const oc = await txt('#o-right-sub'); const ocTip = await page.$eval('#o-right-sub', (e) => e.title);
-  check('WB-6 Agents title bar: the agents working of those that can work ("1 of 1 working", out of usage apart), its tooltip says it in full (what the team can run, "1 online · 1 out of usage · 1 offline")', /^1 of 1 working$/.test(oc.trim()) && /^1 of 1 agent working · team can run \d+ tasks? at once · 1 running/.test(ocTip) && ocTip.includes('\n1 online · 1 out of usage · 1 offline.'), oc + ' | ' + ocTip);
+  check('WB-6 Agents title bar: the agents working of those that can work ("1 of 1 working", out of usage apart), its tooltip says it in full (what the team can run, "1 online · 1 out of usage · 1 offline")', /^1 of 1 working$/.test(oc.trim()) && /^1 of 1 agent working · team can run \d+ tasks? at once · 2 running/.test(ocTip) && ocTip.includes('\n1 online · 1 out of usage · 1 offline.'), oc + ' | ' + ocTip);
   await rest('dana', '/agents/bea', 'PATCH', { limited: false });
 
   // ---- WB-3: plan approval outranks a question; the question follows under "Also" ----

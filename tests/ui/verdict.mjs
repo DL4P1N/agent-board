@@ -26,7 +26,8 @@ const finished = [];
 async function finishOne(title) {
   const t = await alice('create_task', { title });
   await alice('claim_task', { id: t.id });
-  await alice('update_task', { id: t.id, status: 'done', note: 'merged' });
+  // Merged by a human (bob is online, so alice may not mark her own work done).
+  await human(`/tasks/${t.id}`, 'PATCH', { status: 'done', note: 'merged' });
   finished.push(t.id);
 }
 const openTasks = async (n, priority = 2) => { for (let i = 0; i < n; i++) await alice('create_task', { title: `Feature ${priority}-${Math.random().toString(36).slice(2, 7)}`, priority }); };

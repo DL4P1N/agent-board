@@ -30,7 +30,8 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     if (req.role === 'human' && req.method !== 'GET' && RESERVED_NAMES.has(root)) return res.status(400).json({ error: `"${root}" is reserved for the board: pick your own name (the name button at the top of the board).` });
     if (req.role === 'human' && req.method !== 'GET') {
       // A person's name as the board keeps it, never cut short: two long names would otherwise become one.
-      if (!NAME_RE.test(normName(named))) return res.status(400).json({ error: 'Your name must be 1-64 letters, digits, _ . or -: pick a shorter one (the name button at the top of the board).' });
+      const full = normName(named);
+      if (full.length > 64 || !/^[\w.\-/]+$/.test(full) || !NAME_RE.test(root)) return res.status(400).json({ error: 'Your name must be 1-64 letters, digits, _ . or -: pick a shorter one (the name button at the top of the board).' });
       // Nor another person's agent's name: what this human writes would read as that agent's.
       const posing = board.roleClash(root, 'human');
       if (posing) return res.status(409).json({ error: posing });

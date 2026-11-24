@@ -64,14 +64,14 @@ try {
 
   // WB-22: a long agent post is clamped with "Show more".
   const long = Array.from({ length: 14 }, (_, i) => `line ${i + 1} of a long report`).join('\n');
-  await rest('bob-claude', '/messages', 'POST', { text: long });
+  await bc('post', { text: long }); // as the agent: a human may not write under an agent's name
   await page.waitForSelector('#feed .ev.long');
   const clamp = await page.$eval('#feed .ev.long .eb', (b) => ({ c: b.clientHeight, s: b.scrollHeight }));
   check('WB-22 long post clamped', clamp.c < clamp.s && clamp.c < 100, JSON.stringify(clamp));
   await page.click('#feed .ev.long [data-more]');
   const opened = await page.$eval('#feed .ev.long', (e) => ({ open: e.classList.contains('open'), exp: e.querySelector('[data-more]').getAttribute('aria-expanded'), txt: e.querySelector('[data-more]').textContent, h: e.querySelector('.eb').clientHeight, s: e.querySelector('.eb').scrollHeight }));
   check('WB-22 Show more expands it', opened.open && opened.exp === 'true' && opened.txt === 'Show less' && opened.h >= opened.s - 1, JSON.stringify(opened));
-  await rest('bob-claude', '/messages', 'POST', { text: 'short one' });
+  await bc('post', { text: 'short one' });
   await page.waitForFunction(() => [...document.querySelectorAll('#feed .ev')].some((e) => e.innerText.includes('short one')), { timeout: 5000 });
   check('WB-22 stays open when new events arrive', await page.$eval('#feed .ev.long', (e) => e.classList.contains('open')));
   await page.click('#feed .ev.long [data-more]');
@@ -79,7 +79,7 @@ try {
   await (await page.$('#o-act')).screenshot({ path: `${out}/feed-actions-long.png` });
 
   // WB-21: more than 200 events: "Load earlier activity" pages back.
-  for (let i = 0; i < 230; i++) await rest('bob-claude', '/messages', 'POST', { text: `filler ${i}` });
+  for (let i = 0; i < 230; i++) await rest('bob', '/messages', 'POST', { text: `filler ${i}` });
   const cur = (await rest('dana', '/state')).cursor;
   const pg = await rest('dana', `/events?before=${cur}`);
   check('WB-21 /events?before= gives the 200 before it, oldest first', pg.events.length === 200 && pg.events.every((e, i, a) => e.id < cur && (!i || a[i - 1].id < e.id)) && pg.events.at(-1).id === cur - 1, `${pg.events.length}`);
@@ -92,12 +92,12 @@ try {
   check('WB-21 Load earlier activity brings back the start', await page.evaluate(() => state.events[0].id === 1 && [...document.querySelectorAll('#feed .ev')].some((e) => e.innerText.includes('helper says hi'))));
   check('WB-21 no button once everything is loaded', !(await page.$('#feed [data-older]')));
   check('WB-21 no "New activity" pill for older lines', await page.$eval('#jump', (j) => j.hidden));
-  await rest('bob-claude', '/messages', 'POST', { text: 'after paging' });
+  await rest('bob', '/messages', 'POST', { text: 'after paging' });
   await page.waitForFunction(() => [...document.querySelectorAll('#feed .ev')].some((e) => e.innerText.includes('after paging')), { timeout: 5000 });
   check('WB-21 live updates keep the earlier page', await page.evaluate(() => state.events[0].id === 1));
   // More than 200 events between two reloads: the events in between are fetched, not skipped.
   await page.evaluate(() => { window.__load = load; load = async () => {}; });
-  for (let i = 0; i < 260; i++) await rest('bob-claude', '/messages', 'POST', { text: `burst ${i}` });
+  for (let i = 0; i < 260; i++) await rest('bob', '/messages', 'POST', { text: `burst ${i}` });
   await page.evaluate(() => { load = window.__load; return load(); });
   const gap = await page.evaluate(() => {
     const ids = state.events.map((e) => e.id); const texts = state.events.map((e) => e.text);
