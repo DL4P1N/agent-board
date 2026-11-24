@@ -115,7 +115,7 @@ function openTask(id, { discard = false } = {}) {
   const ans = $('td-block').querySelector('textarea'); const n = $('td-name');
   if (ans) ans.focus();
   else if (t && matchMedia('(hover: none) and (pointer: coarse)').matches) { const h = $('td-title'); h.tabIndex = -1; h.focus(); }
-  else { n.focus(); if (t) { n.setSelectionRange(0, 0); n.scrollLeft = 0; } }
+  else { n.focus(); if (t && n.scrollWidth > n.clientWidth) { n.setSelectionRange(0, 0); n.scrollLeft = 0; } } // a title that fits keeps the caret at its end
 }
 function renderDialogLive() {
   const t = editing && taskById(editing.id);
