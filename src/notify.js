@@ -27,6 +27,9 @@ function maskUrl(url) {
 // The webhook URL checks, the private-address list and the pinned delivery live in src/webhook.js.
 // Slack: escape &, <, > so agent text can't produce <!channel>/<!here> pings or links.
 const slackEscape = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// Discord: markdown in agent text is shown as typed (a backslash before each markdown character), so "[a](url)"
+// can't become a masked link that hides where it goes, nor <url> or headings and formatting.
+const discordEscape = (s) => String(s).replace(/[\\[\]()<>*_~`|#-]/g, (c) => '\\' + c);
 
 // One board's notifications: the event listener and the /notify routes on its API router.
 // `humanToken` is the middleware that lets only humans through (the URL is a secret); `tokenCurrent(req)`: the
@@ -45,7 +48,8 @@ export function setupNotifications({ board, slug, api, prefix, humanToken, rawSe
     let init;
     // Text written by agents goes into these messages: no channel-wide pings from it.
     if (k === 'slack') init = { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: slackEscape(full) }) };
-    else if (k === 'discord') init = { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: full.slice(0, 1900), allowed_mentions: { parse: [] } }) };
+    else if (k === 'discord') init = { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `${discordEscape(text).slice(0, 1800)}
+${link}`, allowed_mentions: { parse: [] } }) };
     else if (k === 'ntfy') init = { headers: { 'Content-Type': 'text/plain; charset=utf-8', Title: 'Agent Board', Tags: kind === 'test' ? 'bell' : kind, Click: link }, body: text };
     // Generic webhook: board stays 'claude-board' (its value before the rename to Agent Board) so receivers that filter on it keep working.
     else init = { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, kind, board: 'claude-board', app: 'agent-board', url: link }) };
@@ -61,21 +65,25 @@ export function setupNotifications({ board, slug, api, prefix, humanToken, rawSe
       return { ok: false, status: e.status || 0, error: String(e.message || e) };
     }
   }
-  // Identical texts within a minute are sent once, and at most NOTIFY_CAP messages go out per 10 minutes.
+  // Identical texts within a minute are sent once, and at most NOTIFY_CAP messages go out per 10 minutes: one budget
+  // for what agents set off (questions, blocked tasks, usage limits) and one for the board's own alerts (main failing,
+  // one name on two laptops, the freeze), so agents asking a lot can't silence "main is failing".
   const NOTIFY_CAP = 20;
+  const BOARD_ALERTS = new Set(['main', 'conflict', 'freeze']);
   const recentNotes = new Map();
-  let sentTimes = []; let capLogged = 0;
+  const sentTimes = { agents: [], board: [] }; let capLogged = 0;
   function notify(kind, text) {
     if (!rawSetting('_notify_url') || !notifyEvents().includes(kind)) return;
     const now = Date.now();
     for (const [k, t] of recentNotes) if (now - t > 60e3) recentNotes.delete(k);
     if (recentNotes.has(text)) return;
-    sentTimes = sentTimes.filter((t) => now - t < 10 * 60e3);
-    if (sentTimes.length >= NOTIFY_CAP) {
-      if (now - capLogged > 60e3) { capLogged = now; console.error(`notify (${slug}): more than ${NOTIFY_CAP} messages in 10 minutes; dropping the rest for now`); }
+    const group = BOARD_ALERTS.has(kind) ? 'board' : 'agents';
+    const sent = sentTimes[group] = sentTimes[group].filter((t) => now - t < 10 * 60e3);
+    if (sent.length >= NOTIFY_CAP) {
+      if (now - capLogged > 60e3) { capLogged = now; console.error(`notify (${slug}): more than ${NOTIFY_CAP} ${group === 'board' ? 'board alerts' : 'messages set off by agents'} in 10 minutes; dropping the rest for now`); }
       return;
     }
-    recentNotes.set(text, now); sentTimes.push(now);
+    recentNotes.set(text, now); sent.push(now);
     deliver(text, kind).catch(() => {});
   }
   // Which board events are worth a phone buzz.

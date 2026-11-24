@@ -170,6 +170,31 @@ try {
     check('L5: ask_human says never to ask for secrets, and no longer suggests credentials', /Never ask for a secret/.test(d) && !/credentials/.test(d), d);
   }
 
+  // ---- L7: notifications: agents' questions can't use up the board's alerts; Discord shows agent markdown as typed ----
+  {
+    const got = [];
+    const hook = http.createServer((req, res) => { let b = ''; req.on('data', (d) => { b += d; }); req.on('end', () => { try { got.push(JSON.parse(b)); } catch {} res.end('ok'); }); });
+    await new Promise((r) => hook.listen(0, '127.0.0.1', r));
+    const b2 = await startBoard({ env: { BOARD_WEBHOOK_LOCALHOST: '1' } });
+    const h2 = (p, method, body) => fetch(`${b2.base}/api${p}`, { method, headers: { Authorization: `Bearer ${b2.token}`, 'X-Agent': 'dana', 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
+    await h2('/notify', 'PUT', { url: `http://127.0.0.1:${hook.address().port}/hook?kind=discord` });
+    const asker = await agent(b2, 'asker');
+    await asker('ask_human', { question: 'Which one? See [the spec](https://evil.example/x) **now**' });
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let i = 0; i < 50 && !got.length; i++) await sleep(100);
+    const first = got[0]?.content || '';
+    check('L7: Discord gets agent markdown escaped (no masked link)', first.includes(String.raw`\[the spec\]\(https://evil.example/x\)`) && !first.includes('[the spec](') && /\nhttps?:\/\/\S+\/b\/main$/.test(first), first);
+    for (let i = 0; i < 25; i++) await asker('ask_human', { question: `question number ${i}` });
+    await sleep(1000);
+    const questions = got.length;
+    await h2('/settings', 'PUT', { goal: 'A test app.', deadline: Date.now() + 15e3, freeze_minutes: 60 });
+    for (let i = 0; i < 50 && !got.some((g) => /FEATURE FREEZE/.test(g.content)); i++) await sleep(100);
+    check('L7: after 20 agent questions in 10 minutes, the rest are dropped…', questions === 20, String(questions));
+    check('L7: …but the board\'s own alert (the freeze) still goes out', got.some((g) => /FEATURE FREEZE/.test(g.content)), got.slice(-2).map((g) => g.content.slice(0, 80)).join(' | '));
+    await b2.stop();
+    hook.close();
+  }
+
   // ---- L6 (POSIX): the data folder and the database are this user's only, also when they were made wider ----
   if (process.platform !== 'win32') {
     fs.chmodSync(board.dataDir, 0o755);
