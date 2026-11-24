@@ -48,7 +48,7 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
   // clock), and gzipped once for browsers that accept it. The JSON is the same as building it for each request.
   let version = 0;
   board.bus.on('event', () => { version++; });
-  const stateKey = () => `${version}|${board.changeCount()}`;
+  const stateKey = (dv) => `${version}|${board.changeCount(dv)}`;
   const stateCache = new Map();
   api.get('/state', (req, res) => {
     const human = req.role === 'human';
@@ -61,7 +61,10 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
         // Keyed after the build: what building it wrote (proposals approved on time, expired locks) is in it. A commit
         // by another process during the build (a script) may have come after some of what it read: then it answers
         // this request but isn't kept, so the next request builds it again.
-        c = { key: board.dataVersion() === outside ? stateKey() : null, at, json, gz: null };
+        // The key uses the very data_version compared here: read again, a commit landing in between would be counted
+        // in the key though the build missed it.
+        const after = board.dataVersion();
+        c = { key: after === outside ? stateKey(after) : null, at, json, gz: null };
         stateCache.set(human, c);
       }
     } catch (e) {

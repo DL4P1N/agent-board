@@ -332,9 +332,10 @@ export class Board {
 
   // Moves whenever the database changes: rows this board wrote (total_changes) or a commit by another
   // connection, e.g. a script (data_version). Anything cached from the database is stale once it moves.
-  changeCount() {
+  // `dv`: a data_version already read, so a caller that compared it uses the same one in its key.
+  changeCount(dv = this.dataVersion()) {
     this.changeStmt ||= this.db.prepare('SELECT total_changes() AS n');
-    return `${this.changeStmt.get().n}:${this.dataVersion()}`;
+    return `${this.changeStmt.get().n}:${dv}`;
   }
 
   // The data_version part alone: it moves only on another connection's commit, which can land between two reads.
