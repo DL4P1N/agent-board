@@ -78,6 +78,15 @@ check('VS Code-style mcp.json: the user\'s server kept, the board added', bCfg?.
 check('VS Code-style mcp.json: the original (with comments) saved aside, and join says so', read(path.join(b, '.vscode', 'mcp.json.bak-agent-board')) === jsonc && /has comments, which can't be kept/.test(jb.out), jb.out.slice(-600));
 check('an existing untracked mcp.json now holding the token is kept out of git', git('-C', b, 'check-ignore', '-q', '.vscode/mcp.json').status === 0 && !git('-C', b, 'status', '--porcelain').stdout.includes('mcp.json'), git('-C', b, 'status', '--porcelain').stdout);
 check('no temp file left next to it', !fs.readdirSync(path.join(b, '.vscode')).some((f) => f.endsWith('.tmp')), fs.readdirSync(path.join(b, '.vscode')).join(','));
+// A re-run after the user added comments again: the copy aside now holds the agent token, so it is kept out of git
+// too (both copies), and readable by this user only.
+fs.writeFileSync(path.join(b, '.vscode', 'mcp.json'), `// edited by hand
+${fs.readFileSync(path.join(b, '.vscode', 'mcp.json'), 'utf8')}`);
+const jb2 = join('copilot-vscode', b);
+const baks = fs.readdirSync(path.join(b, '.vscode')).filter((f) => f.includes('.bak-agent-board'));
+const bakStatus = git('-C', b, 'status', '--porcelain', '-uall').stdout;
+check('the JSONC copies aside (one holding the token) are kept out of git', baks.length === 2 && baks.some((f) => read(path.join(b, '.vscode', f))?.includes(agentToken())) && !/bak-agent-board/.test(bakStatus), `${baks} ${bakStatus} ${jb2.out.slice(-300)}`);
+if (process.platform !== 'win32') check('…and readable by this user only', baks.every((f) => (fs.statSync(path.join(b, '.vscode', f)).mode & 0o077) === 0), baks.map((f) => (fs.statSync(path.join(b, '.vscode', f)).mode & 0o777).toString(8)).join());
 
 // ---- one that isn't JSON even with comments allowed: refused, never overwritten ----
 const broken = '{ "servers": { "mine": ';

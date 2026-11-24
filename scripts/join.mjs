@@ -417,7 +417,7 @@ function setupClaude({ mcpUrl, dir }) {
   }
   const settingsPath = path.join(dir, '.claude', 'settings.local.json');
   const settingsCreated = !fs.existsSync(settingsPath);
-  const settings = readConfig(settingsPath);
+  const settings = readConfig(settingsPath, dir);
   const hookPath = path.join(ROOT, 'hooks', 'board-stop-hook.mjs').replace(/\\/g, '/');
   settings.hooks ??= {};
   settings.hooks.Stop = (settings.hooks.Stop || []).filter((g) => !JSON.stringify(g).includes('board-stop-hook'));
@@ -522,7 +522,7 @@ function setupCopilotVSCode({ mcpUrl, dir }) {
   if (!dir) throw new Error('Copilot in VS Code is configured per repo: re-run with --repo <path-to-project-repo>.');
   const mcpPath = path.join(dir, '.vscode', 'mcp.json');
   refuseTracked(mcpPath, dir);
-  const cfg = readConfig(mcpPath);
+  const cfg = readConfig(mcpPath, dir);
   cfg.servers ??= {};
   cfg.servers.board = { type: 'http', url: mcpUrl };
   writeJson(mcpPath, cfg);
@@ -669,7 +669,10 @@ function refuseTracked(file, dir) {
 // A JSON config join is about to change: {} when there is none. A BOM, comments and trailing commas (VS Code
 // and Gemini allow them) are read; comments can't be kept, so that original is copied aside first and the user
 // told. Anything else that doesn't parse is refused, never overwritten (that would lose the user's other entries).
-function readConfig(p) {
+// `dir`: the repo the file is in (Copilot's .vscode/mcp.json, Claude's .claude/settings.local.json): the copy aside
+// may hold the agent token from an earlier join, so it is kept out of git like the file itself, and (as every file
+// join writes that may hold the token) readable by this user only.
+function readConfig(p, dir) {
   let text;
   try { text = fs.readFileSync(p, 'utf8'); } catch (e) {
     if (e.code === 'ENOENT') return {};
@@ -682,7 +685,8 @@ function readConfig(p) {
   }
   if (!isPlainJson(text.replace(/^﻿/, ''))) {
     const bak = [`${p}.bak-agent-board`, `${p}.bak-agent-board-${Date.now()}`].find((b) => !fs.existsSync(b));
-    fs.copyFileSync(p, bak);
+    writeTokenFile(bak, text);
+    if (dir) keepOutOfGit(bak, true, dir);
     console.log(`  • ${p} has comments, which can't be kept when join updates it. The original was saved as ${bak}`);
   }
   return cfg;

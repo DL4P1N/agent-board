@@ -80,7 +80,7 @@ That's it. You don't choose roles or modes: the board tells each agent what to d
 | Gemini CLI | `~/.gemini/settings.json` (`httpUrl`, trusted) | `/board` command in `~/.gemini/commands/board.toml` |
 | Cursor | `~/.cursor/mcp.json` | `/board` command and a rule in the repo's `.cursor/`, kept out of git |
 
-- Settings files join changes are backed up once as `*.bak-agent-board`.
+- Settings files join changes are backed up once as `*.bak-agent-board`. A config with comments (which join can't keep) is copied aside first as `*.bak-agent-board` or `*.bak-agent-board-<time>`; that copy may hold the agent token, so it is readable by you only and, inside a repo, kept out of git like the config itself.
 - Join records what it set up in `~/.agent-board.json`. `npm run doctor` reads that record and checks it.
 - Each AI tool gets an *agent token*, derived from the board token, which can't do human-only actions. See [agents get a weaker token](using-the-board.md#how-work-gets-shared).
 
