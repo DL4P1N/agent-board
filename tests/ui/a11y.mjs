@@ -123,11 +123,7 @@ try {
   const lt = await page.evaluate(() => ({ focus: document.activeElement?.id, sel: $('td-name').selectionStart, left: $('td-name').scrollLeft }));
   check('a long title opens showing its start (caret at 0, not scrolled to its end)', lt.focus === 'td-name' && lt.sel === 0 && lt.left === 0, JSON.stringify(lt));
   await page.keyboard.press('Escape'); await sleep(200);
-  // The message box is a combobox for its @ names; Esc in a direct thread goes back to the threads.
-  await page.focus('#msg'); await page.keyboard.type('@'); await sleep(200);
-  const cb = await page.evaluate(() => ({ role: $('msg').getAttribute('role'), exp: $('msg').getAttribute('aria-expanded'), list: !$('msg-ac').hidden }));
-  await page.keyboard.press('Escape'); await page.evaluate(() => { $('msg').value = ''; });
-  check('the message box is a combobox, aria-expanded while its @ names show', cb.role === 'combobox' && cb.exp === 'true' && cb.list && await page.evaluate(() => $('msg').getAttribute('aria-expanded') === 'false'), JSON.stringify(cb));
+  // Esc in a direct thread's message box goes back to the threads.
   await page.evaluate(() => document.querySelector('#tabs [data-tab="direct"]').click()); await sleep(200);
   await page.evaluate(() => document.querySelector('.dmrow')?.click()); await sleep(200);
   const inDm = await page.evaluate(() => !!ui.dm);

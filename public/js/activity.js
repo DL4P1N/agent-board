@@ -423,13 +423,13 @@ function acNames() {
 }
 function closeAc() {
   ac.open = false; ac.items = []; const ul = $('msg-ac'); ul.hidden = true; ul.innerHTML = '';
-  $('msg').removeAttribute('aria-activedescendant'); $('msg').setAttribute('aria-expanded', 'false');
+  $('msg').removeAttribute('aria-activedescendant');
 }
 function renderAc() {
   const ul = $('msg-ac'); const m = $('msg');
   ul.innerHTML = ac.items.map((it, i) => `<li role="option" id="ac-${i}" data-ac="${i}" aria-selected="${i === ac.idx}"><span class="pc" ${hs(it.name)}>@${esc(it.name)}</span><span class="ak ${it.online ? 'on' : ''}">${esc(it.sub)}</span></li>`).join('');
   ul.hidden = false; ac.open = true;
-  m.setAttribute('aria-activedescendant', 'ac-' + ac.idx); m.setAttribute('aria-expanded', 'true');
+  m.setAttribute('aria-activedescendant', 'ac-' + ac.idx);
   ul.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
 }
 function updateAc() {

@@ -238,7 +238,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
           <!-- The message box comes before the feed in the Tab order (the feed's links would otherwise be dozens of stops
                before it); the feed is drawn above it (CSS order). -->
           <form class="composer" id="composer">
-            <textarea id="msg" rows="1" maxlength="10000" autocomplete="off" spellcheck="true" aria-label="Message" aria-describedby="chat-hint" title="Agents read this chat: @name for one agent, @all for everyone. Enter sends, Shift+Enter adds a line" placeholder="Message, @ to mention" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-autocomplete="list" aria-controls="msg-ac"></textarea>
+            <textarea id="msg" rows="1" maxlength="10000" autocomplete="off" spellcheck="true" aria-label="Message" aria-describedby="chat-hint" title="Agents read this chat: @name for one agent, @all for everyone. Enter sends, Shift+Enter adds a line" placeholder="Message, @ to mention" aria-autocomplete="list" aria-controls="msg-ac"></textarea>
             <ul id="msg-ac" class="ac" role="listbox" aria-label="Names to mention" hidden></ul>
             <select id="chan" aria-label="Channel"><option>general</option><option>help</option><option>review</option><option>humans</option></select>
             <button type="submit" id="send" class="ghost">Send</button>
