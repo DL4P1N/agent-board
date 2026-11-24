@@ -15,6 +15,17 @@ const txt = (page, sel) => page.$eval(sel, (e) => e.innerText.replace(/\s+/g, ' 
 const scheme = (page, s) => page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: s }]);
 const reload = (page) => page.evaluate(() => load());
 const until = (page, fn, arg, timeout = 5000) => page.waitForFunction(fn, { timeout }, arg).then(() => true).catch(() => false);
+// Clicks a button once it has stopped moving and nothing covers it (Setup slides in, and a redraw can land mid-click).
+const clickStill = async (page, sel) => {
+  await page.waitForFunction((sel) => new Promise((done) => {
+    const at = () => { const r = document.querySelector(sel)?.getBoundingClientRect(); return r && r.width ? `${r.x},${r.y}` : ''; };
+    const a = at(); requestAnimationFrame(() => requestAnimationFrame(() => {
+      const b = document.querySelector(sel); const r = b?.getBoundingClientRect();
+      done(!!a && a === at() && !!r && b.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)));
+    }));
+  }), { timeout: 5000 }, sel).catch(() => {});
+  await page.click(sel);
+};
 const errText = (r) => (typeof r === 'string' ? r : JSON.stringify(r));
 
 // A board mid-way: goal, one agent, a few tasks.
@@ -62,9 +73,12 @@ try {
     return d?.type === 'datetime-local' && !!document.querySelector('label[for="dl-in"]') && !!document.querySelector('label[for="fz-in"]') && f?.value === '60' && d.value.slice(0, 10) === localInput(defaultDeadline()).slice(0, 10);
   }));
   // Past time is refused inline.
-  await page.evaluate(() => { $('dl-in').value = localInput(Date.now() - 3600e3); });
-  await page.click('[data-fk="goal-save"]'); await sleep(200);
-  check('past demo time: inline error + aria-invalid', await page.evaluate(() => $('dl-in').getAttribute('aria-invalid') === 'true' && /already passed/.test($('dl-err').textContent)));
+  // Typed like a person (an input event), so a live redraw before the click keeps it as the field's draft.
+  await page.evaluate(() => { const d = $('dl-in'); d.value = localInput(Date.now() - 3600e3); d.dispatchEvent(new Event('input', { bubbles: true })); });
+  await clickStill(page, '[data-fk="goal-save"]');
+  const pastErr = () => $('dl-in').getAttribute('aria-invalid') === 'true' && /already passed/.test($('dl-err').textContent);
+  await page.waitForFunction(pastErr, { timeout: 3000 }).catch(() => {});
+  check('past demo time: inline error + aria-invalid', await page.evaluate(pastErr), await page.evaluate(() => JSON.stringify({ v: $('dl-in')?.value, inv: $('dl-in')?.getAttribute('aria-invalid'), err: $('dl-err')?.textContent, gerr: $('goal-err')?.textContent, rerr: $('repo-err')?.textContent, goal: $('goal-in')?.value, act: document.activeElement?.id, toasts: [...document.querySelectorAll('#toasts > *')].map((t) => t.textContent), now: new Date().toString() })));
   const target = Date.now() + (3 * 60 + 12.5) * 60e3;
   await page.evaluate((ts) => { $('dl-in').value = localInput(ts); $('fz-in').value = '60'; }, target);
   await page.click('[data-fk="goal-save"]');
