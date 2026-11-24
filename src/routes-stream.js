@@ -28,7 +28,7 @@ export function createStreams({ board, holdSlot, presence, isClosed }) {
       const human = req.role === 'human' ? normName(req.query.name).replace(/[^\w.-]/g, '').slice(0, 64) : '';
       // Live pages count toward the open-slot limits too: per person (or per address for the presenter view).
       if (!holdSlot(req, res, human ? `stream:${human}` : `stream:${req.role}:${clientIp(req)}`, human || 'this address', false)) return;
-      res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+      res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
       res.flushHeaders();
       let backedUp = 0; // since when this client's writes have been waiting (0: they aren't)
       const write = (text) => {

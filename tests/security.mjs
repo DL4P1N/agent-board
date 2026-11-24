@@ -140,6 +140,15 @@ try {
     const uev = (await (await api('/events?since=0')).json()).events.filter((e) => e.kind === 'unlock').at(-1);
     check('L2: unlocking them: the event text is short too', unlocked?.released?.length === 200 && uev && uev.text.length < 6000 && / and 190 more$/.test(uev.text), `${uev?.text.length}`);
   }
+
+  // ---- L3: board answers are never cached ----
+  {
+    const st = await api('/state'); await st.arrayBuffer();
+    const ex = await api('/export'); await ex.arrayBuffer();
+    const bad = await fetch(`${board.base}/api/state`); await bad.arrayBuffer();
+    const m = await fetch(`${board.base}/mcp?agent=cachecheck&token=${TOKEN}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) }); await m.arrayBuffer();
+    check('L3: /api and /mcp answers say Cache-Control: no-store (also a 401)', [st, ex, bad, m].every((r) => r.headers.get('cache-control') === 'no-store'), [st, ex, bad, m].map((r) => `${r.status}:${r.headers.get('cache-control')}`).join(' '));
+  }
 } catch (e) {
   check('suite ran without throwing', false, e?.stack || String(e));
 }

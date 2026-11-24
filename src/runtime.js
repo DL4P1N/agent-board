@@ -43,8 +43,10 @@ export function createBoardRuntime(slug, dir, { registry, envTokenSlug }) {
   // The JSON body is read after the per-address limit and the token check (see app.js): a request without a valid
   // token never has its body (up to 2 MB) parsed, so tokenless posts can't keep the server busy reading them.
   const json = express.json({ limit: '2mb' });
-  router.use('/mcp', ipLimit(true), tokens.auth, json);
-  router.use('/api', ipLimit(false), tokens.auth, json);
+  // Answers hold board data (and for humans the tokens): never kept by a browser or a cache in between.
+  const noStore = (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); };
+  router.use('/mcp', noStore, ipLimit(true), tokens.auth, json);
+  router.use('/api', noStore, ipLimit(false), tokens.auth, json);
 
   // ---------- MCP (stateless streamable HTTP) ----------
   mountMcp(router, { board, auth: tokens.auth, tokenCurrent: tokens.current, agentLimit, holdSlot, presence });
