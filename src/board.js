@@ -601,7 +601,7 @@ export class Board {
     const proposed = !human && !!s.planner && !isPlanner && this.isAvailable(s.planner);
     const now = Date.now();
     // The row and its event as one transaction (like every task change).
-    return this.tx(() => {
+    const task = this.tx(() => {
       const r = this.db
         .prepare('INSERT INTO tasks (title, description, status, priority, depends_on, size, reserved_for, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
         .run(title, description, proposed ? 'proposed' : 'open', priority, JSON.stringify(deps), size, reserve, author, now, now);
@@ -611,6 +611,32 @@ export class Board {
         : { author, kind: 'task_created', channel: 'tasks', task_id: task.id, text: `#${task.id} ${task.title}${reserve ? ` (reserved for @${reserve})` : ''}` });
       return task;
     });
+    return this.withNotes(task);
+  }
+
+  // A new or approved task the freeze (or the demo time having passed) keeps anyone from claiming: say so, so it isn't
+  // left in Open waiting for a claim that can't come.
+  freezeNote(task) {
+    const t = timeInfo(this.getSettings());
+    if (t.past) return `The demo time (${t.deadlineLabel}) has passed: nobody can claim #${task.id} on this board any more.`;
+    if (!t.frozen || this.freezeAllows(task)) return '';
+    return `Feature freeze until the demo (${t.deadlineLabel}): nobody can claim #${task.id} before then. Only priority-1 bug fixes of size S or M can be claimed during the freeze${task.status === 'proposed' ? '; the planner approves those first' : ''}.`;
+  }
+
+  // A task as returned to whoever created, approved or reserved it, with what they should know: freeze_note (see
+  // freezeNote), and warning when it's reserved for a name no agent on this board has (see reserveWarning).
+  withNotes(task) {
+    const freeze = ['open', 'proposed'].includes(task.status) ? this.freezeNote(task) : '';
+    const warning = this.reserveWarning(task.reserved_for);
+    return { ...task, ...(freeze ? { freeze_note: freeze } : {}), ...(warning ? { warning } : {}) };
+  }
+
+  // reserved_for names no agent the board knows (none has connected or been set up by join under it): the reservation
+  // holds nobody back (anyone may claim it while that agent isn't around), so it's probably a typo.
+  reserveWarning(name) {
+    if (!name || this.agentRow(name) || this.db.prepare('SELECT 1 FROM name_owners WHERE name = ?').get(name)) return '';
+    const known = this.db.prepare("SELECT name FROM presence_v2 WHERE kind = 'agent' ORDER BY name").all().map((r) => r.name);
+    return `No agent called ${name} is on this board${known.length ? ` (agents: ${known.slice(0, 12).join(', ')})` : ''}: until one connects under that name, anyone may claim the task. Check the name.`;
   }
 
   // The planner (or a human) approves a proposed task (it becomes open; edits allowed) or rejects it (deleted).
@@ -629,7 +655,7 @@ export class Board {
       });
       return { rejected: id };
     }
-    return this.updateTask(author, id, { status: 'open', priority, size, title, description, reserved_for, note: `approved${note ? `: ${note}` : ''} @${agentRootOf(task.created_by)}` }, { human: true });
+    return this.withNotes(this.updateTask(author, id, { status: 'open', priority, size, title, description, reserved_for, note: `approved${note ? `: ${note}` : ''} @${agentRootOf(task.created_by)}` }, { human: true }));
   }
 
   // Proposals can't wait on a planner who isn't around (offline, or out of usage): they become open tasks.
@@ -1075,7 +1101,9 @@ export class Board {
         if (u !== null && u <= Date.now()) throw new Error('That time has already passed: give the time the limit resets, or leave it empty.');
         const n = String(note ?? '').trim().slice(0, 200) || null;
         this.db.prepare("UPDATE presence_v2 SET limited_at = ?, limited_until = ?, limited_note = ?, limited_by = ? WHERE name = ? AND kind = 'agent'").run(Date.now(), u, n, by === 'agent' ? 'agent' : 'human', root);
-        const held = this.listTasks({ status: ['claimed', 'in_progress', 'blocked'] }).filter((t) => sameTeam(root, t.assignee));
+        // Only what may still be claimed: during the freeze, started work; after the demo time, nothing.
+        const time = timeInfo(this.getSettings());
+        const held = this.listTasks({ status: ['claimed', 'in_progress', 'blocked'] }).filter((t) => sameTeam(root, t.assignee) && !time.past && (!time.frozen || this.freezeAllows(t)));
         msgs.push(`@all ${root} hit its usage limit${u ? ` until ${clock(u)}` : ''}${n ? ` (${n})` : ''}.${held.length ? ` Its tasks ${held.map((t) => '#' + t.id).join(', ')} can be taken over: release_task and claim.` : ''}`);
       } else {
         this.db.prepare("UPDATE presence_v2 SET limited_at = NULL, limited_until = NULL, limited_note = NULL, limited_by = NULL WHERE name = ? AND kind = 'agent'").run(root);
@@ -1593,7 +1621,10 @@ export class Board {
     } else {
       // Proposals wait for the planner.
       if (isPlanner && proposals.length) {
-        steps.push(`Proposed tasks are waiting for your decision: ${proposals.map((t) => `#${t.id} ${t.title} (from ${t.created_by})`).join('; ')}. For each: decide_proposal(id, approve=true) (you may adjust size/priority/reserved_for), or approve=false with a reason.${this.statsLine() ? ' ' + this.statsLine() : ''}`);
+        // During the freeze an approved feature can't be claimed before the demo (claimGate): say what's worth approving.
+        const freezeNote = time.past ? ` The demo time has passed: nothing approved now can be claimed, so reject them with a note (or leave them for after the demo).`
+          : time.frozen ? ` Feature freeze: only priority-1 bug fixes of size S or M can be claimed before the demo, so approve only those (set priority 1 when you approve a bug fix) and reject the rest with a note, or leave them for after the demo.` : '';
+        steps.push(`Proposed tasks are waiting for your decision: ${proposals.map((t) => `#${t.id} ${t.title} (from ${t.created_by})`).join('; ')}. For each: decide_proposal(id, approve=true) (you may adjust size/priority/reserved_for), or approve=false with a reason.${freezeNote}${this.statsLine() ? ' ' + this.statsLine() : ''}`);
         act('proposals to decide');
       }
       // Fix what came back from review before anything else.
@@ -1651,9 +1682,9 @@ export class Board {
       if (time.past) {
         steps.push(`The demo time (${time.deadlineLabel}) has passed. Wrap up: push and merge what's finished, release what isn't with a note, and post a short status in general.`);
       } else if (time.frozen) {
-        const bugfix = claimable.filter((t) => t.priority === 1);
-        steps.push(`FEATURE FREEZE (since ${time.freezeLabel}, demo at ${time.deadlineLabel}): don't start new features. Finish and push what you have, get it merged, fix bugs on main, and help with reviews. Unfinished tasks you can't land in time: release_task them with a note.${bugfix.length && cap.active < cap.slots ? ` Priority-1 (bug-fix) tasks may still be claimed: ${bugfix.slice(0, 5).map(label).join('; ')}.` : ''}`);
-        if (bugfix.length && cap.active < cap.slots) act('priority-1 tasks claimable');
+        const allowed = claimable.filter((t) => this.freezeAllows(t));
+        steps.push(`FEATURE FREEZE (since ${time.freezeLabel}, demo at ${time.deadlineLabel}): don't start new features. Finish and push what you have, get it merged, fix bugs on main, and help with reviews. Unfinished tasks you can't land in time: release_task them with a note.${allowed.length && cap.active < cap.slots ? ` Still claimable during the freeze (priority-1 S/M bug fixes, and work someone started before it was released): ${allowed.slice(0, 5).map(label).join('; ')}.` : ''}`);
+        if (allowed.length && cap.active < cap.slots) act('priority-1 tasks claimable');
       } else if (cap.active >= cap.slots) {
         steps.push(`You're at your capacity (${cap.active} of ${slotText(cap)}${cap.plan ? ', ' + cap.plan : ''}${cap.override ? ', limit set on the web board' : ''}). Finish one before claiming more.`);
       } else if (cap.active >= 1 && idle.length && claimable.filter((t) => !t.reserved_for).length <= idle.length) {
@@ -1669,12 +1700,15 @@ export class Board {
       } else {
         steps.push('No open tasks are claimable right now (all taken or waiting on dependencies). Help on the help channel, review others\' work, or create_task for gaps you notice (it goes to the planner as a proposal); then wait_for_events.');
       }
+      // Taking over is a claim: during the freeze only started work can be (see freezeAllows), after the demo time nothing.
+      const takeable = (t) => !time.past && (!time.frozen || this.freezeAllows(t));
       const orphaned = stale.filter((t) => !this.isOnline(t.assignee));
-      const outOfUsage = tasks.filter((t) => ['claimed', 'in_progress', 'blocked'].includes(t.status) && t.assignee && !sameTeam(agent, t.assignee) && this.isLimited(t.assignee) && !orphaned.includes(t));
+      const outOfUsage = tasks.filter((t) => ['claimed', 'in_progress', 'blocked'].includes(t.status) && t.assignee && !sameTeam(agent, t.assignee) && this.isLimited(t.assignee) && !orphaned.includes(t)).filter(takeable);
       const slow = stale.filter((t) => this.isOnline(t.assignee) && !this.isLimited(t.assignee));
-      if (orphaned.length && !time.frozen) steps.push(`Stuck tasks whose owner went offline: ${orphaned.map((t) => `#${t.id} ${t.title} (${t.assignee})`).join('; ')}. If you have room, release_task one with a note ("owner offline") and claim it.`);
-      if (outOfUsage.length && !time.frozen) steps.push(`Tasks held by agents that hit their usage limit: ${outOfUsage.map((t) => `#${t.id} ${t.title} (${t.assignee})`).join('; ')}. If you have room, release_task one with a note ("owner out of usage") and claim it; read its notes and branch first.`);
-      if ((orphaned.length || outOfUsage.length) && !time.frozen && cap.active < cap.slots) act('stuck tasks you can take over');
+      const orphanedNow = orphaned.filter(takeable);
+      if (orphanedNow.length) steps.push(`Stuck tasks whose owner went offline: ${orphanedNow.map((t) => `#${t.id} ${t.title} (${t.assignee})`).join('; ')}. If you have room, release_task one with a note ("owner offline") and claim it.`);
+      if (outOfUsage.length) steps.push(`Tasks held by agents that hit their usage limit: ${outOfUsage.map((t) => `#${t.id} ${t.title} (${t.assignee})`).join('; ')}. If you have room, release_task one with a note ("owner out of usage") and claim it; read its notes and branch first.`);
+      if ((orphanedNow.length || outOfUsage.length) && cap.active < cap.slots) act('stuck tasks you can take over');
       if (slow.length) steps.push(`No progress for 15+ min on ${slow.map((t) => `#${t.id} (@${t.assignee})`).join(', ')}. If they need help, post to them; don't take their task.`);
     }
     if (time.deadline && !time.frozen && phase !== 'all_done') steps.push(`Demo at ${time.deadlineLabel} (${time.leftLabel} left); feature freeze at ${time.freezeLabel}. Prefer small tasks that can land before the freeze.`);
@@ -1704,13 +1738,29 @@ export class Board {
     return n;
   }
 
-  // Why claiming is not allowed right now, or '' if it is.
+  // Why claiming is not allowed right now, or '' if it is. After the demo time nothing is claimed; during the freeze
+  // only what freezeAllows (task: the one being claimed; none: is claiming frozen at all).
   claimGate(task = null) {
     const s = this.getSettings();
     if (s.require_approval && !s.plan_approved) return 'The humans have not approved the task list yet. Wait (wait_for_events); they approve it on the web board.';
     const t = timeInfo(s);
-    if (t.frozen && !(task && task.priority === 1)) return `Feature freeze since ${t.freezeLabel} (demo at ${t.deadlineLabel}): don't start new tasks. Finish and merge what is in progress, or help the integrator. (Priority-1 bug-fix tasks can still be claimed.)`;
+    if (t.past) return `The demo time (${t.deadlineLabel}) has passed: no more claims. Wrap up: push and merge what's finished, release what isn't with a note, and post a short status in general.`;
+    if (t.frozen && !(task && this.freezeAllows(task))) return `Feature freeze since ${t.freezeLabel} (demo at ${t.deadlineLabel}): don't start new tasks. Finish and merge what is in progress, or help the integrator. (Still claimable: priority-1 bug fixes of size S or M, and tasks someone started before they were released.)`;
     return '';
+  }
+
+  // What the feature freeze still lets an agent claim: a priority-1 bug fix that isn't large, or a task someone already
+  // started (its owner went away and it was released): finishing that is landing work, not starting new work.
+  freezeAllows(task) {
+    return (task.priority === 1 && task.size !== 'L') || this.wasStarted(task);
+  }
+
+  // Was work started on this task: it has a branch, and it was in progress (or further) at some point, or has a PR.
+  // A task that was only claimed and then released counts as new work.
+  wasStarted(task) {
+    if (!task?.branch) return false;
+    if (task.pr_url || ['in_progress', 'blocked', 'review'].includes(task.status)) return true;
+    return !!this.db.prepare("SELECT 1 FROM events WHERE task_id = ? AND kind = 'task_updated' AND json_extract(data, '$.status') IN ('in_progress', 'blocked', 'review', 'done') LIMIT 1").get(task.id);
   }
 
   // After the event: what slowed the team down. Time per task, review bounces, blocked time,

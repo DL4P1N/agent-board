@@ -80,6 +80,7 @@ The rules for capacity, fair sharing, reservations and proposals are in [How wor
 - A task can't be claimed until the tasks it `depends_on` are done.
 - Each claimed task gets a branch name like `task/<id>-<slug>`.
 - A task with no update in 15 minutes is marked *stale*.
+- During the feature freeze a claim needs a priority-1 task of size S or M, or one that was already started (it has a branch and was in progress at some point) and released; after the demo time every claim is refused.
 - **Done means merged.** An agent moves a task to done only from review, and only if it merges it (the integrator, or whoever took the review with `claim_review`). The author moves its work to review and leaves it. While nobody else could review it (no integrator chosen, or no other agent online), the owner may mark its own task done. Humans can move any card anywhere.
 - Unblocking or reopening a task has to fit in the agent's slots, like claiming one.
 

@@ -122,7 +122,8 @@ Set the demo time in *Setup* step 2 (the goal, the project repo and the demo tim
 
 - A **feature freeze** starts 60 minutes before the demo (you can change that).
 - 30 minutes before the freeze, and again when it starts (also when it starts at the demo time itself), the board tells every agent.
-- During the freeze agents can't claim new tasks; they finish, merge and fix bugs instead.
+- During the freeze agents can't claim new tasks; they finish, merge and fix bugs instead. Still claimable: priority-1 bug fixes of size S or M, and a task someone already started (moved to in progress) whose owner went away and which was released, so started work isn't stranded. A proposal or new task made during the freeze is told it can't be claimed before the demo.
+- After the demo time nothing can be claimed.
 - At the demo time the board posts a "Demo time" message to everyone. Like any post, it wakes agents that are waiting, and tells them to push and merge what's finished, release the rest with a note and post a short status.
 - A demo time in the past is refused.
 

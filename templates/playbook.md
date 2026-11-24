@@ -27,7 +27,7 @@ Before your first task, in the folder you were started in: run `git fetch`, chec
 - **Assigned by a human:** a human can assign a task to you on the web board. It shows up as claimed by you: pick it up like any task you claimed.
 - **Reservations:** a task reserved for an agent that isn't around (offline or out of usage) can be claimed by anyone.
 - **Usage limits:** if you hit a usage or rate limit, call `report_usage_limit` (with the reset time if it's shown, e.g. `until="15:00"`), `release_task` every task you hold with a note ("hit usage limit"), then stop. (Claude Code's Stop hook also reports it for you when it sees the limit message.) Humans can also mark you as out of usage on the web board; then anyone may release your tasks and take them over.
-- **Stuck tasks:** if `next_action` lists a task whose owner went offline or ran out of usage, and you have room, release it with a note ("owner offline") and claim it. If the owner is still online, post to them instead.
+- **Stuck tasks:** if `next_action` lists a task whose owner went offline or ran out of usage, and you have room, release it with a note ("owner offline") and claim it. If the owner is still online, post to them instead. During the feature freeze this works for tasks that were already started (their branch has work to land), not for ones that were only claimed.
 - **Work outside the board:** if a human gives you work in your terminal that isn't a board task, call `set_activity("<what you're doing>")` so the board doesn't show you as idle, and `set_activity("")` when you're done. If teammates should know about it, `create_task` for it instead.
 
 ## If you are the planner
@@ -35,12 +35,12 @@ Before your first task, in the folder you were started in: run `git fetch`, chec
 2. `create_task` for every piece of work. `next_action` tells you the team's capacity: write at least twice that many tasks, so every agent has something to do.
    - Small tasks: one branch, under an hour. Put acceptance criteria in the description.
    - `size`: S (small, under 30 min), M (about an hour, the default) or L (large, needs a stronger plan). L tasks go first to agents on bigger plans.
-   - Priority 1 for foundations (scaffolding, schema, API contracts) and for bug fixes. Priority-1 tasks stay claimable during the feature freeze.
+   - Priority 1 for foundations (scaffolding, schema, API contracts) and for bug fixes. Priority-1 tasks of size S or M stay claimable during the feature freeze; nothing is claimable after the demo time.
    - Use `depends_on` only where truly needed, so several agents can start at once.
    - You may hand a task to a specific agent with `reserved_for` (on `create_task` or `update_task`). Reserve sparingly: when one agent clearly fits (L tasks to agents with more slots, follow-ups to whoever built the part), and spread the work so nobody sits idle.
    - Duplicates or work that's no longer needed: `cancel_task(id, reason)` (e.g. "duplicate of #19"). Never mark them done.
 3. Post a short summary of the plan in `general`, then work as a normal worker.
-4. **Proposals:** other agents' new tasks arrive as proposals that @mention you. Decide them promptly with `decide_proposal(id, approve, note)`: approve (adjust `priority`, `size` or `reserved_for` if needed), or reject with a reason; the proposer is told either way.
+4. **Proposals:** other agents' new tasks arrive as proposals that @mention you. Decide them promptly with `decide_proposal(id, approve, note)`: approve (adjust `priority`, `size` or `reserved_for` if needed), or reject with a reason; the proposer is told either way. During the feature freeze approve only priority-1 bug fixes of size S or M (nothing else can be claimed before the demo).
 5. **Messages to the planner:** humans can write to whoever is the planner (the planner thread; `next_action` quotes what's waiting, including messages sent before anyone was planner). Treat each one as input to the plan:
    - Reply with what you'll do: `post(to: "<human>", text: "...")`.
    - Turn it into tasks: `create_task`, re-prioritise or reserve existing ones (`update_task`), or `cancel_task` what it replaces.

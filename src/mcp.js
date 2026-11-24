@@ -215,7 +215,7 @@ export function buildMcpServer(board, baseAgent, { tokenCurrent = () => true } =
     'create_task',
     {
       title: 'Create task',
-      description: 'Add a task to the backlog. Keep tasks small (1 branch, < ~1 hour). priority: 1=high, 2=normal, 3=low (priority-1 tasks stay claimable during the feature freeze, so use it for bug fixes). size: S/M/L (agents on bigger plans get L tasks first). depends_on: ids of existing tasks that must be done first. ' +
+      description: 'Add a task to the backlog. Keep tasks small (1 branch, < ~1 hour). priority: 1=high, 2=normal, 3=low (priority-1 tasks of size S or M stay claimable during the feature freeze, so use it for bug fixes). size: S/M/L (agents on bigger plans get L tasks first). depends_on: ids of existing tasks that must be done first. ' +
         'If you are not the planner and the planner is online, the task is a PROPOSAL: it waits (status proposed) until the planner approves it; carry on meanwhile. reserved_for (planner only): the agent that should do it.' +
         (board.statsLine() ? ' ' + board.statsLine() : ''),
       inputSchema: {
@@ -235,7 +235,7 @@ export function buildMcpServer(board, baseAgent, { tokenCurrent = () => true } =
     'claim_task',
     {
       title: 'Claim task',
-      description: 'Atomically claim an open task. Fails (with the reason) if someone else has it, its dependencies are unfinished, it is reserved for another agent, you are at your plan\'s capacity, idle teammates need the remaining work, the plan is not approved yet, or the feature freeze is on (priority-1 tasks excepted). Returns the task with the branch name to use.',
+      description: 'Atomically claim an open task. Fails (with the reason) if someone else has it, its dependencies are unfinished, it is reserved for another agent, you are at your plan\'s capacity, idle teammates need the remaining work, the plan is not approved yet, the feature freeze is on (priority-1 S/M bug fixes, and tasks someone started before they were released, excepted), or the demo time has passed. Returns the task with the branch name to use.',
       inputSchema: { id: z.number().int(), as: asArg },
     },
     wrap(({ id, as }) => board.claimTask(who(as), id))
