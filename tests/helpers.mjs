@@ -203,19 +203,24 @@ export async function seed(board) {
   const vote = await chen('create_task', { title: 'Voting endpoint with rate limit' });
   const scaffold = await alice('create_task', { title: 'Project scaffolding (Vite + Express)', priority: 1 });
 
-  await alice('claim_task', { id: scaffold.id, as: 'setup' });
-  await alice('update_task', { id: scaffold.id, status: 'done', note: 'merged', as: 'setup' });
-  await alice('claim_task', { id: schema.id, as: 'db-worker' });
-  await alice('update_task', { id: schema.id, status: 'in_progress', note: 'writing migrations', as: 'db-worker' });
+  // Every step must succeed (a refused one would quietly change the seeded board): bob and chen claim first, since fair
+  // sharing keeps work back for agents that hold none, and a person merges the finished scaffolding (an author can't
+  // mark its own task done while other agents are online).
+  const ok = async (p) => { const r = await p; if (typeof r === 'string' || r?.error || r?.ok === false) throw new Error(`seed step refused: ${JSON.stringify(r).slice(0, 300)}`); return r; };
+  await ok(bob('claim_task', { id: ci.id, as: 'ci-worker' }));
+  await ok(chen('claim_task', { id: lb.id }));
+  await ok(chen('claim_task', { id: vote.id, as: 'api-worker' })); // made stale below
+  await ok(alice('claim_task', { id: scaffold.id, as: 'setup' }));
+  await ok(alice('update_task', { id: scaffold.id, status: 'review', note: 'PR ready', as: 'setup' }));
+  await ok(rest(board, 'dana', `/tasks/${scaffold.id}`, 'PATCH', { status: 'done', note: 'merged' }));
+  await ok(alice('claim_task', { id: schema.id, as: 'db-worker' }));
+  await ok(alice('update_task', { id: schema.id, status: 'in_progress', note: 'writing migrations', as: 'db-worker' }));
   await alice('lock_files', { paths: ['db/schema.sql', 'db/migrations/001_init.sql'], task_id: schema.id, reason: 'schema changes', as: 'db-worker' });
-  await alice('claim_task', { id: auth.id, as: 'auth-worker' });
-  await alice('update_task', { id: auth.id, status: 'blocked', note: 'need OAuth client id', as: 'auth-worker' });
-  await bob('claim_task', { id: ci.id, as: 'ci-worker' });
-  await bob('update_task', { id: ci.id, status: 'review', note: 'PR ready on task branch', as: 'ci-worker' });
+  await ok(alice('claim_task', { id: auth.id, as: 'auth-worker' }));
+  await ok(alice('update_task', { id: auth.id, status: 'blocked', note: 'need OAuth client id', as: 'auth-worker' }));
+  await ok(bob('update_task', { id: ci.id, status: 'review', note: 'PR ready on task branch', as: 'ci-worker' }));
   await bob('lock_files', { paths: ['package.json'], ttl_s: 600, reason: 'adding test deps', as: 'ci-worker' });
-  await chen('claim_task', { id: lb.id });
-  await chen('update_task', { id: lb.id, status: 'in_progress', note: 'layout done, wiring data' });
-  await chen('claim_task', { id: vote.id, as: 'api-worker' }); // made stale below
+  await ok(chen('update_task', { id: lb.id, status: 'in_progress', note: 'layout done, wiring data' }));
 
   await alice('post', { text: `Starting on schema now. @bob please hold off on db/ until #${schema.id} lands.` });
   await bob('post', { text: `ack — CI is in review, @chen can you look at #${ci.id}?`, as: 'ci-worker' });
