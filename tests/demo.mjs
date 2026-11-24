@@ -51,7 +51,9 @@ try {
   assert.ok(!fs.existsSync(dir), 'temp data folder deleted');
   await assert.rejects(fetch(`${u.origin}/health`), 'server is gone');
   console.log('PASS demo stops and cleans up\n\n2/2 passed');
-  process.exit(0);
+  // Ends on its own, not with process.exit(): exiting while the fetch sockets to the stopped server are still closing
+  // can trip a libuv assert on Windows (async.c, UV_HANDLE_CLOSING).
+  process.exitCode = 0;
 } catch (e) {
   console.log(`FAIL ${e.message}`);
   // Stopped the way a person stops it (it deletes its own data folder then); if it doesn't stop, it's ended and its
