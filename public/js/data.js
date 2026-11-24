@@ -92,8 +92,9 @@ function showUnavailable(kind, info = '') {
   if (kind === 'moved') {
     const to = String(info).replace(/\/+$/, '');
     const url = new URL(to + '/', location.origin); url.searchParams.set('token', token); if (me) url.searchParams.set('name', me);
-    // Only a web address becomes a link (the server sends /b/<board>; anything else, e.g. javascript:, doesn't).
-    if (!/^https?:$/.test(url.protocol)) return showUnavailable('failed', 'it moved, but its new address is not a web link. Ask the host for the new link.');
+    // Only an address on this server becomes a link, the token added (the server sends /b/<board>; anything else, e.g.
+    // javascript: or //elsewhere, doesn't: the token must never go to another site).
+    if (url.origin !== location.origin) return showUnavailable('failed', 'it moved, but its new address is not a web link. Ask the host for the new link.');
     $('moved-link').textContent = new URL(to + '/', location.origin).href; $('moved-link').href = url.href; $('moved-open').href = url.href;
     document.title = 'Board moved · Agent Board';
   }

@@ -67,8 +67,8 @@ export function connect(on: ConnectionEvents): void {
         if (r.status === 503) return on.message(`This board couldn't open: ${esc(body.error || 'unknown error')}. Checking again by itself.`);
         const to = String(body.moved_to || '').replace(/\/+$/, '');
         const url = new URL(to + '/present.html', location.origin); url.searchParams.set('token', token);
-        // Only a web address becomes a link (as on the classic page).
-        if (!/^https?:$/.test(url.protocol)) return on.message('This board moved to its own address. Ask the host for the new presenter link.');
+        // Only an address on this server becomes a link, the token added (as on the classic page).
+        if (url.origin !== location.origin) return on.message('This board moved to its own address. Ask the host for the new presenter link.');
         return on.message(`This board moved to its own address. <a href="${esc(url.href)}">Open the presenter view there</a>.`);
       }
       if (!r.ok) throw new Error(r.statusText);
