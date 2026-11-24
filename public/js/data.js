@@ -29,6 +29,19 @@ function savingCount(d) { savingN = Math.max(0, savingN + d); $('conn').toggleAt
 // token and is sent again with it, instead of signing the host out.
 let tokenTurn = null;
 function tokenChange(p) { const q = tokenTurn = p.catch(() => {}).finally(() => { if (tokenTurn === q) tokenTurn = null; }); }
+// The wait is bounded (15s, or the request's own signal): a rotation whose answer never comes fails the request like a
+// server that isn't answering, so the loads queued behind it go on.
+const NOT_ANSWERING = 'The board server is not answering.';
+function awaitTurn(turn, signal) {
+  return new Promise((resolve, reject) => {
+    const done = (fn) => { clearTimeout(t); signal?.removeEventListener('abort', fail); fn(); };
+    const fail = () => done(() => reject(new Error(NOT_ANSWERING)));
+    const t = setTimeout(fail, 15000);
+    if (signal?.aborted) return fail();
+    signal?.addEventListener('abort', fail, { once: true });
+    turn.then(() => done(resolve));
+  });
+}
 // opts.once: no second try after a 401 (the rotation itself, and a request already sent again).
 async function api(path, opts = {}) {
   let r;
@@ -39,12 +52,12 @@ async function api(path, opts = {}) {
   try {
     // no-store: a 410 (archived) is cacheable by default, so a restored board would still look archived.
     r = await fetch(BASE + '/api' + path, { cache: 'no-store', ...opts, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, 'X-Agent': me, ...(opts.headers || {}) } });
-  } catch (e) { throw new Error(e?.name === 'TimeoutError' ? 'The board server is not answering.' : 'Cannot reach the board server. Is it still running?'); }
+  } catch (e) { throw new Error(e?.name === 'TimeoutError' ? NOT_ANSWERING : 'Cannot reach the board server. Is it still running?'); }
   finally { clearTimeout(slow); if (slowOn) savingCount(-1); }
   const body = await r.json().catch(() => ({}));
   if (unavailableStatus(r.status, body)) throw new Error('Token rejected');
   if (r.status === 401 && !opts.once) {
-    const turn = tokenTurn; if (turn) await turn;
+    const turn = tokenTurn; if (turn) await awaitTurn(turn, opts.signal);
     if (turn || token !== sent) return api(path, { ...opts, once: true });
   }
   if (r.status === 401) { showGate(tokenError(body)); throw new Error('Token rejected'); }

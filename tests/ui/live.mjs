@@ -246,6 +246,38 @@ try {
     // The main page is behind the one just closed: bring it back, or focus() there does nothing (focus stays on body).
     await sp.close(); await page.bringToFront();
   }
+  // ---- E5: a token rotation whose answer never comes doesn't hold the state loads behind it ----
+  // The rotation is played here and never answers (not even to its abort), and the next /api/state answers 401
+  // token_rotated, as the server does for the retired token: that load's wait for the new token gives up after about 15s,
+  // and the loads queued behind it go on.
+  {
+    const rp = await browser.newPage(); watch(rp); await signIn(rp);
+    await rp.evaluateOnNewDocument(() => {
+      const f = window.fetch.bind(window); window.__rotSignal = null; window.__old401 = 0; let mid = false;
+      window.fetch = (u, o) => {
+        const url = String(u);
+        if (/\/api\/token\/rotate$/.test(url)) { mid = true; window.__rotSignal = o?.signal || null; return new Promise(() => {}); }
+        if (mid && /\/api\/state(\?|$)/.test(url)) { mid = false; window.__old401++; return Promise.resolve(new Response(JSON.stringify({ error: 'bad or missing token', reason: 'token_rotated' }), { status: 401, headers: { 'Content-Type': 'application/json' } })); }
+        return f(u, o);
+      };
+    });
+    await rp.goto(board.base + '/');
+    await until(rp, () => $('conn').classList.contains('live'), undefined, 8000);
+    await rp.evaluate(() => { ui.rotateArm = true; if ($('setup').hidden) document.querySelector('[data-act="setup-open"]')?.click(); render(); });
+    await rp.waitForSelector('[data-fk="rot-yes"]', { timeout: 5000 });
+    await rp.evaluate(() => { document.querySelector('[data-fk="rot-yes"]').click(); setTimeout(() => load(), 100); });
+    const t0 = Date.now();
+    await until(rp, () => window.__old401 > 0, undefined, 5000);
+    check('E5 the token rotation request carries a timeout', await rp.evaluate(() => window.__rotSignal instanceof AbortSignal));
+    // A live event's load while the first one waits: it is queued behind it.
+    await rp.evaluate(() => { load(); });
+    const late = await alice('create_task', { title: 'After the stalled rotation' });
+    const shown = await until(rp, (id) => !!document.querySelector(`.card[data-id="${id}"]`), late.id, 22000);
+    const s = Math.round((Date.now() - t0) / 1000);
+    const r = await rp.evaluate(() => ({ old401: window.__old401, gate: !$('gate').hidden, app: !$('app').hidden }));
+    check('E5 a load waiting on a stalled rotation gives up after about 15s, and the loads behind it go on', shown && r.old401 === 1 && !r.gate && r.app && s >= 12 && s < 25, JSON.stringify({ ...r, shown, s }));
+    await rp.close(); await page.bringToFront();
+  }
   const p3 = await browser.newPage(); watch(p3); await signIn(p3);
   await p3.goto(board.base + '/?view=office');
   const office = await until(p3, () => document.documentElement.dataset.boardView === 'office', undefined, 8000);

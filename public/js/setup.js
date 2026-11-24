@@ -170,7 +170,8 @@ async function rotateToken() {
   try {
     // Requests sent with the old token meanwhile wait for the new one (tokenChange), then go again with it.
     const turn = (async () => {
-      const x = await api('/token/rotate', { method: 'POST', body: '{}', once: true });
+      // Bounded like a state load: a rotation whose answer stalls gives up after 15s instead of holding requests forever.
+      const x = await api('/token/rotate', { method: 'POST', body: '{}', once: true, signal: AbortSignal.timeout(15000) });
       if (!x?.token) throw new Error('The server didn\'t return a new token.');
       setToken(x.token); store.set('board-token', token);
       return x;
