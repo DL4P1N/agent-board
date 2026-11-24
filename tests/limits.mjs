@@ -133,16 +133,38 @@ try {
   check('a third wait from one agent is refused (2 open is its limit here), saying why', r.status === 429 && !!r.headers.get('retry-after') && /waiter already has 2 waits open/.test(third?.error || ''), `${r.status} ${JSON.stringify(third)}`);
   const mcpWait = await mcpRaw('waiter', 'tools/call', { name: 'wait_for_events', arguments: { since: 999999, timeout_s: 5 } }, 7);
   check('wait_for_events over MCP counts toward the same limit', mcpWait.status === 429 && /already has 2 waits open/.test((await mcpWait.json()).error?.message || ''));
-  held.push(wait('w1'), wait('w2'), wait('w3'));
+  const probe = await mcpRaw('prober&probe=1', 'tools/call', { name: 'wait_for_events', arguments: { since: 999999, timeout_s: 5 } }, 8);
+  check('a connection check (?probe=1) may not hold a wait open', probe.status === 400 && /probe=1/.test((await probe.json()).error?.message || ''), String(probe.status));
+  // The total is 5 here, and a tenth of it (at least 1) is kept for people: agents may hold 4.
+  held.push(wait('w1'), wait('w2'));
   await sleep(300);
-  r = await get('/events?since=999999&wait=30', { who: 'w4' });
-  check('past the total, any new wait is refused', r.status === 429 && /The board has 5 waits and live streams open/.test((await r.json()).error || ''));
+  r = await get('/events?since=999999&wait=30', { who: 'w3' });
+  check('past what agents may hold, a new agent wait is refused, saying the rest is kept for people', r.status === 429 && /The board has 4 waits open from agents.*kept for people's live pages/.test((await r.json()).error || ''));
+  const stream = (name) => fetch(`${board.base}/api/stream?token=${board.token}&name=${name}`, { signal: ac.signal }).catch(() => null);
+  const page = await stream('dana');
+  check('a person\'s live page still opens, in the slot kept for people', page?.status === 200, String(page?.status));
+  r = await stream('eve');
+  check('past the total, anything new is refused', r?.status === 429 && /The board has 5 waits and live streams open/.test((await r.json()).error || ''), String(r?.status));
   check('plain calls still work while every wait slot is taken', (await get('/next', { who: 'w4' })).status === 200);
   ac.abort();
   await Promise.all(held);
   await sleep(300);
   const quick = await get('/events?since=0&wait=1', { who: 'waiter' });
   check('closed waits free their slots', quick.status === 200, String(quick.status));
+
+  // ---- open waits per network address (another board: 3 per address) ----
+  const b2 = await startBoard({ env: { BOARD_WAITS_IP: '3' } });
+  const ac2 = new AbortController();
+  const wait2 = (who, ip) => fetch(`${b2.base}/api/events?since=999999&wait=30`, { headers: { Authorization: `Bearer ${agentTokenFor(b2.token)}`, 'X-Agent': who, 'CF-Connecting-IP': ip }, signal: ac2.signal });
+  const fromOne = ['m1', 'm2', 'm3'].map((n) => wait2(n, '198.51.100.50').catch(() => null));
+  await sleep(300);
+  const fourth = await wait2('m4', '198.51.100.50');
+  check('one address making up agent names gets no more than its open waits', fourth.status === 429 && /This address \(198\.51\.100\.50\) already has 3 waits/.test((await fourth.json()).error || ''), String(fourth.status));
+  const other = await wait2('n1', '198.51.100.51').catch(() => null);
+  check('another address still gets one', other?.status === 200, String(other?.status));
+  ac2.abort();
+  await Promise.all(fromOne);
+  await b2.stop();
 } catch (e) {
   R.push(`CRASH ${e.stack || e}`);
 }

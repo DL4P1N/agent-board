@@ -29,6 +29,8 @@ export function mountMcp(router, { board, auth, tokenCurrent, agentLimit, holdSl
     if (badRoot(agentFrom(req))) return res.status(400).json({ jsonrpc: '2.0', error: { code: -32602, message: 'This connection needs its own agent name (?agent=<name> on the MCP URL; "board" and "anonymous" are taken). Re-run the join command from the web board.' }, id: null });
     if (!agentLimit(req, res, agentFrom(req), true)) return;
     if (req.body?.method === 'tools/call' && req.body?.params?.name === 'wait_for_events') {
+      // A connection check (?probe=1, below) leaves no trace on the board, so it may not hold a wait open either.
+      if (req.query.probe === '1') return res.status(400).json({ jsonrpc: '2.0', error: { code: -32602, message: 'A connection check (?probe=1) can not wait for events. Connect without probe=1.' }, id: req.body?.id ?? null });
       const who = agentFrom(req).split('/')[0];
       if (!holdSlot(req, res, `wait:${who}`, who, true)) return;
     }
