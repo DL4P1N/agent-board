@@ -339,6 +339,31 @@ function teamSlots(now) {
 }
 const plural = (n, w, ws = w + 's') => `${n} ${n === 1 ? w : ws}`;
 function durWords(ms) { const m = Math.max(1, Math.ceil(ms / 60e3)); const h = Math.floor(m / 60); return h >= 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : h ? `${h}h ${m % 60}m` : `${m}m`; }
+const SIZE_W = { S: 0.5, M: 1, L: 2 };
+// Minutes per size, and the longest chain of tasks waiting on each other: keep in sync with sizeMinutes() / longestChain() in public/js/derived.js.
+function sizeMinutes(m) {
+  const known = Object.keys(SIZE_W).filter((k) => m[k] > 0);
+  const unit = known.reduce((a, k) => a + m[k] / SIZE_W[k], 0) / (known.length || 1);
+  const est = { S: m.S ?? unit * SIZE_W.S, M: m.M ?? unit * SIZE_W.M, L: m.L ?? unit * SIZE_W.L };
+  if (m.M == null) est.M = Math.max(est.M, est.S);
+  if (m.L == null) est.L = Math.max(est.L, est.M);
+  return est;
+}
+function longestChain(left, mins) {
+  const by = new Map(left.map((x) => [x.id, x])); const memo = new Map();
+  const walk = (x, path) => {
+    if (memo.has(x.id)) return memo.get(x.id);
+    let best = { min: 0, n: 0 };
+    for (const d of x.depends_on || []) {
+      const dep = by.get(d); if (!dep || path.has(d)) continue; // done, proposed or a loop: not a wait
+      path.add(d); const c = walk(dep, path); path.delete(d);
+      if (c.min > best.min) best = c;
+    }
+    const r = { min: best.min + (mins[x.size] ?? mins.M), n: best.n + 1 };
+    memo.set(x.id, r); return r;
+  };
+  return left.reduce((b, x) => { const c = walk(x, new Set([x.id])); return c.min > b.min ? c : b; }, { min: 0, n: 0 });
+}
 function outlook(now = Date.now()) {
   const deadline = Number(state.settings?.deadline) || 0; if (!deadline || now >= deadline) return null;
   const freezeAt = deadline - (Number(state.settings?.freeze_minutes) || 0) * 60e3; const frozen = now >= freezeAt;
@@ -346,13 +371,16 @@ function outlook(now = Date.now()) {
   if (!left.length) return null;
   const m = state.stats?.minutes || {}; const known = Object.values(m); if (!known.length) return null;
   const slots = teamSlots(now); if (!slots) return null;
-  const fallback = m.M ?? known.reduce((a, c) => a + c, 0) / known.length;
-  const work = left.reduce((n, x) => n + (m[x.size] ?? fallback), 0);
-  const mins = Math.max(1, ((frozen ? deadline : freezeAt) - now) / 60e3); const eta = work / slots; const ratio = eta / mins;
+  const est = sizeMinutes(m);
+  const work = left.reduce((n, x) => n + (est[x.size] ?? est.M), 0); const chain = longestChain(left, est);
+  const mins = Math.max(1, ((frozen ? deadline : freezeAt) - now) / 60e3); const chained = chain.n > 1 && chain.min > work / slots; const eta = Math.max(work / slots, chain.min); const ratio = eta / mins;
   const shortBy = ratio > 1 ? Math.max(1, Math.round(left.length * (1 - mins / eta))) : 0;
   const verdict = ratio <= 0.9 ? 'ok' : ratio <= 1.1 ? 'tight' : 'behind';
+  const until = `${durWords(mins * 60e3)} to the ${frozen ? 'demo' : 'freeze'}`;
   return { verdict, frozen, label: verdict === 'ok' ? 'On track' : verdict === 'tight' ? 'Tight' : `Behind by ~${plural(shortBy, 'task')}`,
-    why: `About ${durWords(eta * 60e3)} of work left (${plural(left.length, 'task')} at this board's median time per size, over ${plural(slots, 'agent slot')} online) and ${durWords(mins * 60e3)} to the ${frozen ? 'demo' : 'freeze'}` };
+    why: chained
+      ? `About ${durWords(eta * 60e3)} left: ${plural(chain.n, 'task')} wait on each other in a row, and more agents can't speed that up (${plural(left.length, 'task')} in all, at this board's median time per size) and ${until}`
+      : `About ${durWords(eta * 60e3)} of work left (${plural(left.length, 'task')} at this board's median time per size, over ${plural(slots, 'agent slot')} online) and ${until}` };
 }
 // One vocabulary and one counting rule for every view (the board, its 3D view, both presenters). Keep in sync with
 // columnCounts() / needsOf() in office/src/live/board.ts and blockedSplit() in public/js/derived.js.

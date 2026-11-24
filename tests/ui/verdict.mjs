@@ -74,6 +74,23 @@ try {
   const ow = await shownWord();
   check('1440px: "on track" is the time\'s colour (the word is in the tooltip)', !ow.shown && await page.$eval('#clock .tm', (t) => getComputedStyle(t).color !== getComputedStyle(t.closest('.tbc')).color), JSON.stringify(ow));
 
+  // UM6: 5 tasks waiting on each other in a row are 150 min whatever the number of agents; with the 2 open tasks, 7 M tasks
+  // over 2 slots would be 105 min and fit the ~120 min to the freeze, the chain doesn't.
+  const chainIds = []; let prev = null;
+  for (let i = 0; i < 5; i++) { const t = await alice('create_task', { title: `Chain ${i + 1}`, ...(prev ? { depends_on: [prev] } : {}) }); chainIds.push(t.id); prev = t.id; }
+  await reload();
+  c = await pill();
+  check('UM6: a chain of 5 dependent tasks (150 min) is behind, though 7 tasks over 2 slots would fit', /· behind by ~\d+$/.test(c.t) && /5 tasks wait on each other in a row/.test(c.tip), c.t + ' | ' + c.tip);
+  for (const id of chainIds) await human(`/tasks/${id}`, 'DELETE');
+  // An L with no L sample counts twice an M (60 min), not as an M: 3 L and 2 M are 240 min over 2 slots, tight.
+  const bigIds = [];
+  for (const size of ['L', 'L', 'L']) bigIds.push((await alice('create_task', { title: `Big ${bigIds.length}`, size })).id);
+  await reload();
+  c = await pill();
+  check('UM6: 3 L tasks with no L sample count twice an M (tight, not on track)', /· tight$/.test(c.t), c.t);
+  for (const id of bigIds) await human(`/tasks/${id}`, 'DELETE');
+  await reload();
+
   // 8 tasks = 240 min / 2 = 120 min against ~120: tight.
   await openTasks(6); await reload();
   c = await pill();

@@ -59,6 +59,53 @@ async function staleCheck(file) {
 }
 
 
+// The presenter showing the real board with its /api/state rewritten by `patch` (a function body: s is the state, now the
+// time), for what a throwaway board can't easily be: stats with minutes, agents online, a demo time hours away.
+async function synthPage(file, patch, init = '') {
+  const sp = await browser.newPage();
+  await sp.evaluateOnNewDocument((src, pre) => {
+    // eslint-disable-next-line no-new-func
+    const fn = new Function('s', 'now', src); const f = window.fetch.bind(window);
+    if (pre) new Function(pre)();
+    window.fetch = async (u, o) => {
+      if (window.__down && /\/api\//.test(String(u))) throw new TypeError('Failed to fetch');
+      const r = await f(u, o);
+      if (!/\/api\/state(\?|$)/.test(String(u))) return r;
+      const s = await r.json(); fn(s, Date.now());
+      return new Response(JSON.stringify(s), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+  }, patch, init);
+  await sp.goto(`${board.base}/${file}?token=${encodeURIComponent(VIEW)}`);
+  return sp;
+}
+// Two Codex agents online (2 slots), a median of 30 min for M, a demo in 3 h with the freeze an hour before (2 h of room), and these tasks.
+const SYNTH_BASE = `
+  const T = (id, size, deps, status) => ({ id, title: 'Task ' + id, status: status || 'open', priority: 2, size, assignee: null, depends_on: deps || [], created_at: now, updated_at: now });
+  s.stats = { minutes: { M: 30 } };
+  s.presence = ['a1', 'a2'].map((name) => ({ name, kind: 'agent', online: true, started: true, client: 'codex', slots: 1, base_slots: 1 }));
+  s.events = []; s.questions = [];
+  s.settings = { ...s.settings, deadline: now + 3 * 3600e3, freeze_minutes: 60 };
+  s.time = { deadline: now + 3 * 3600e3, freezeAt: now + 2 * 3600e3, past: false };`;
+// UM6: "On track" counts the longest chain of tasks waiting on each other, and an L the board has no sample for takes longer than an M.
+async function verdictCheck(file) {
+  const verdictOf = async (patch) => {
+    const sp = await synthPage(file, SYNTH_BASE + patch);
+    const ok = await sp.waitForSelector('#verdict', { timeout: 10000 }).then(() => true).catch(() => false);
+    const v = ok ? await sp.$eval('#verdict', (e) => ({ t: e.textContent, why: e.title })) : { t: '', why: '' };
+    await sp.close(); return v;
+  };
+  // 5 tasks in a row (150 min), 2 more: 210 min of work over 2 slots is 105, which fits the 120 min to the freeze, the chain doesn't.
+  const chain = await verdictOf(`s.tasks = [T(1, 'M'), T(2, 'M', [1]), T(3, 'M', [2]), T(4, 'M', [3]), T(5, 'M', [4]), T(6, 'M'), T(7, 'M')];`);
+  check(`${file}: a chain of 5 dependent tasks (150 min) is behind with 2 h to the freeze, though 7 tasks over 2 slots would fit`, /^Behind/.test(chain.t) && /5 tasks wait on each other in a row/.test(chain.why), JSON.stringify(chain));
+  const free = await verdictOf(`s.tasks = [T(1, 'M'), T(2, 'M'), T(3, 'M'), T(4, 'M'), T(5, 'M'), T(6, 'M'), T(7, 'M')];`);
+  check(`${file}: the same 7 tasks with nothing waiting on anything are on track`, free.t === 'On track' && !/wait on each other/.test(free.why), JSON.stringify(free));
+  const done = await verdictOf(`s.tasks = [T(1, 'M', [], 'done'), T(2, 'M', [1]), T(3, 'M', [2]), T(4, 'M')];`);
+  check(`${file}: a finished task in a chain no longer waits`, done.t === 'On track', JSON.stringify(done));
+  // 3 L (no L sample: twice an M, 60 min each) and 2 M: 240 min over 2 slots is 120 of 120, tight; counted as M it was 75 min, on track.
+  const big = await verdictOf(`s.tasks = [T(1, 'L'), T(2, 'L'), T(3, 'L'), T(4, 'M'), T(5, 'M')];`);
+  check(`${file}: 3 L tasks with no L sample count twice an M, not as M`, big.t === 'Tight', JSON.stringify(big));
+}
+
 // A stalled /api/state never freezes the page: one answer never comes, and the page gives up on it after 15 s, so the
 // newer change it was asked for in the meantime still shows.
 async function hangCheck(file) {
@@ -318,6 +365,7 @@ try {
     check('in the feature freeze no deadline verdict ("On track"), as on the board', !(await page.$('#verdict')), await page.$eval('#verdict', (v) => v.textContent).catch(() => ''));
     await staleCheck('present.html');
     await hangCheck('present.html');
+    await verdictCheck('present.html');
   }
 
   // No WebGL at all: straight to the classic page, carrying the token from the link.

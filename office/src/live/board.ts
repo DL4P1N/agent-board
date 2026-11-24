@@ -169,8 +169,37 @@ export function teamSlots(b: BoardState, now = Date.now()): number {
 
 export interface Outlook { verdict: 'ok' | 'tight' | 'behind' | 'unknown'; label?: string; why: string; shortBy?: number; left?: number }
 const LEFT_ST: TaskStatus[] = ['open', 'claimed', 'in_progress', 'review', 'blocked'];
-/** Keep in sync with outlook() in public/index.html (a separate bundle). The board's deadline verdict: will the work left fit before the freeze (or the demo,
- *  once frozen)? null: no demo time, it has passed, or nothing is left. */
+type Mins = Record<'S' | 'M' | 'L', number>;
+const SIZE_W: Mins = { S: 0.5, M: 1, L: 2 };
+/** Minutes per size: this board's median where it has one, else scaled from the sizes it has (S half, L twice an M), never
+ *  less than the next size down. Keep in sync with sizeMinutes() in public/js/derived.js. */
+function sizeMinutes(m: Record<string, number>): Mins {
+  const known = (['S', 'M', 'L'] as const).filter((k) => m[k] > 0);
+  const unit = known.reduce((a, k) => a + m[k] / SIZE_W[k], 0) / (known.length || 1);
+  const est: Mins = { S: m.S ?? unit * SIZE_W.S, M: m.M ?? unit * SIZE_W.M, L: m.L ?? unit * SIZE_W.L };
+  if (m.M == null) est.M = Math.max(est.M, est.S);
+  if (m.L == null) est.L = Math.max(est.L, est.M);
+  return est;
+}
+/** The longest run of left tasks that each wait on the one before: its minutes, and how many tasks it has. */
+function longestChain(left: BoardTask[], mins: Mins): { min: number; n: number } {
+  const by = new Map(left.map((x) => [x.id, x] as const)); const memo = new Map<number, { min: number; n: number }>();
+  const walk = (x: BoardTask, path: Set<number>): { min: number; n: number } => {
+    const had = memo.get(x.id); if (had) return had;
+    let best = { min: 0, n: 0 };
+    for (const d of x.depends_on || []) {
+      const dep = by.get(d); if (!dep || path.has(d)) continue; // done, proposed or a loop: not a wait
+      path.add(d); const c = walk(dep, path); path.delete(d);
+      if (c.min > best.min) best = c;
+    }
+    const r = { min: best.min + (mins[x.size] ?? mins.M), n: best.n + 1 };
+    memo.set(x.id, r); return r;
+  };
+  return left.reduce((b, x) => { const c = walk(x, new Set([x.id])); return c.min > b.min ? c : b; }, { min: 0, n: 0 });
+}
+/** Keep in sync with outlook() in public/js/derived.js (a separate bundle). The board's deadline verdict: will the work left fit
+ *  before the freeze (or the demo, once frozen)? At least the longest chain of tasks waiting on each other, however many agents.
+ *  null: no demo time, it has passed, or nothing is left. */
 export function outlook(b: BoardState, t: TimeNow = timeNow(b), now = Date.now()): Outlook | null {
   if (!t.deadline || t.past) return null;
   const left = (b.tasks || []).filter((x) => LEFT_ST.includes(x.status));
@@ -179,14 +208,17 @@ export function outlook(b: BoardState, t: TimeNow = timeNow(b), now = Date.now()
   if (!known.length) return { verdict: 'unknown', why: 'Not enough finished tasks to estimate yet' };
   const slots = teamSlots(b, now);
   if (!slots) return { verdict: 'unknown', why: 'No agent is online to estimate with' };
-  const fallback = m.M ?? known.reduce((a, c) => a + c, 0) / known.length;
-  const work = left.reduce((n, x) => n + (m[x.size] ?? fallback), 0);
+  const est = sizeMinutes(m);
+  const work = left.reduce((n, x) => n + (est[x.size] ?? est.M), 0); const chain = longestChain(left, est);
   const to = t.frozen ? t.deadline : t.freezeAt;
-  const mins = Math.max(1, (to - now) / 60e3); const eta = work / slots; const ratio = eta / mins;
+  const mins = Math.max(1, (to - now) / 60e3); const chained = chain.n > 1 && chain.min > work / slots; const eta = Math.max(work / slots, chain.min); const ratio = eta / mins;
   const shortBy = ratio > 1 ? Math.max(1, Math.round(left.length * (1 - mins / eta))) : 0;
   const verdict = ratio <= 0.9 ? 'ok' : ratio <= 1.1 ? 'tight' : 'behind';
   const label = verdict === 'ok' ? 'On track' : verdict === 'tight' ? 'Tight' : `Behind by ~${plural(shortBy, 'task')}`;
-  const why = `About ${dur(eta * 60e3)} of work left (${plural(left.length, 'task')} at this board's median time per size, over ${plural(slots, 'agent slot')} online) and ${dur(mins * 60e3)} to the ${t.frozen ? 'demo' : 'freeze'}`;
+  const until = `${dur(mins * 60e3)} to the ${t.frozen ? 'demo' : 'freeze'}`;
+  const why = chained
+    ? `About ${dur(eta * 60e3)} left: ${plural(chain.n, 'task')} wait on each other in a row, and more agents can't speed that up (${plural(left.length, 'task')} in all, at this board's median time per size) and ${until}`
+    : `About ${dur(eta * 60e3)} of work left (${plural(left.length, 'task')} at this board's median time per size, over ${plural(slots, 'agent slot')} online) and ${until}`;
   return { verdict, label, why, shortBy, left: left.length };
 }
 
