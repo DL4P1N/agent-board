@@ -368,6 +368,8 @@ function noteSave(id, body, saved) {
   if (Object.keys(vals).length) mySaves.set(id, { vals, at: Date.now() });
 }
 function checkOverwrites(s) {
+  // The board answers again: a "can't reach" from a save tried while it didn't is stale now.
+  const err = $('td-err'); if (/Cannot reach the board server|not answering/.test(err.textContent)) err.textContent = 'Connected again: press Save to try once more.';
   for (const [id, sv] of mySaves) {
     const t = s.tasks.find((x) => x.id === id);
     if (!t || Date.now() - sv.at > 10 * 60e3) { mySaves.delete(id); continue; }

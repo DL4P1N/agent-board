@@ -251,6 +251,40 @@ try {
     check('phone: a toast while typing in the message box at the foot shows clear of it', !ov.overlap, JSON.stringify(ov));
     await pp.close();
   }
+  // ---- offline: the task dialog's "can't reach" goes once the board answers; back online reconnects at once ----
+  {
+    const po = await browser.newPage(); watch(po); await signIn(po);
+    po.on('console', () => {}); // the browser logs the failed requests while offline
+    await po.goto(board.base + '/');
+    await po.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 8000 });
+    await po.evaluate((id) => openTask(id), t1.id); await po.waitForSelector('#task-dlg[open]');
+    await po.setOfflineMode(true);
+    await po.type('#td-name', ' x'); await po.click('#td-save');
+    const down = await until(po, () => /Cannot reach/.test($('td-err').textContent));
+    await po.setOfflineMode(false);
+    await po.evaluate(() => load()); // what the next live event or the 20 s refresh does
+    const cleared = await until(po, () => !/Cannot reach/.test($('td-err').textContent) && /Connected again/.test($('td-err').textContent));
+    check('the task dialog\'s "Cannot reach the board server" goes once the board answers again', down && cleared, await po.evaluate(() => $('td-err').textContent));
+    await po.close();
+  }
+  {
+    // The live stream refused (a proxy's 502 while the server restarts) for 9 s: its retries back off (0.8, 1.6, 3.2,
+    // 6.4 s...). The network coming back (the online event) reconnects at once.
+    const po = await browser.newPage(); watch(po); await signIn(po);
+    po.on('console', () => {});
+    let block = true;
+    await po.setRequestInterception(true);
+    po.on('request', (r) => (block && r.url().includes('/api/stream') ? r.respond({ status: 502, body: '' }) : r.continue()));
+    await po.goto(board.base + '/');
+    await until(po, () => document.getElementById('conn').classList.contains('down'), undefined, 8000);
+    await sleep(9000);
+    block = false;
+    await po.setOfflineMode(true); await sleep(100); await po.setOfflineMode(false);
+    const t0 = Date.now();
+    const back = await until(po, () => document.getElementById('conn').classList.contains('live'), undefined, 1500);
+    check('back online: the live stream reconnects at once (the online event), not after the retry\'s backoff', back, `${Date.now() - t0}ms`);
+    await po.close();
+  }
 
   // ---- 3D: A1 (Setup closes when focus leaves it) and A2 (focus kept when 3D turns off) ----
   // ---- E4: a stalled /api/state gives up after 15s, so live updates don't freeze behind it ----

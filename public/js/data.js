@@ -286,6 +286,12 @@ function connect() {
 let retryT = 0, retryMs = 0;
 function retryLater() { clearTimeout(retryT); retryMs = Math.min(30000, retryMs ? retryMs * 2 : 800); retryT = setTimeout(() => { retryT = 0; recheck(); }, retryMs); }
 const retrying = () => !!retryT;
+// Back online (the wifi returns): catch up and reconnect now, instead of waiting out the retry's backoff (up to 30s).
+addEventListener('online', async () => {
+  if (unavailable || $('app').hidden || esOpen) return;
+  clearTimeout(retryT); retryT = 0; retryMs = 0;
+  if (await load() && !unavailable && !$('app').hidden && !esOpen) connect(); else if (!esOpen) retryLater();
+});
 async function recheck() {
   if (unavailable || $('app').hidden) return;
   const ok = await load();
