@@ -106,6 +106,49 @@ async function verdictCheck(file) {
   check(`${file}: 3 L tasks with no L sample count twice an M, not as M`, big.t === 'Tight', JSON.stringify(big));
 }
 
+// The crunch: what the legend counts, who is "working", what the freeze leaves behind, and a board that can't be reached.
+const TRACK_ES = `const ES = window.EventSource; window.__es = []; window.EventSource = function (u) { const e = new ES(u); window.__es.push(e); return e; }; window.EventSource.prototype = ES.prototype;`;
+async function crunchCheck(file, classic) {
+  const flat = (sp) => sp.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
+  const loaded = (sp) => sp.waitForFunction(() => /\d+ of \d+ done/.test(document.body.innerText), { timeout: 10000, polling: 100 });
+  // The legend: "x of y done" leaves proposals out, and so does Open; they are an entry of their own, so the entries add up to y.
+  let sp = await synthPage(file, SYNTH_BASE + `s.tasks = [T(1, 'M', [], 'done'), T(2, 'M'), T(3, 'M'), Object.assign(T(4, 'M'), { status: 'proposed' })];`);
+  await loaded(sp); let t = await flat(sp);
+  check(`${file}: the legend leaves the proposal out of Open and lists it itself (1 of 3 done: Open 2, Proposed 1)`, /1 of 3 done/.test(t) && /Done 1/.test(t) && /Open 2/.test(t) && /Proposed 1/.test(t), t.slice(0, 400));
+  check(`${file}: before the freeze no "won't land" line`, !(await sp.$('#freeze-note')));
+  await sp.close();
+  sp = await synthPage(file, SYNTH_BASE + `s.tasks = [T(1, 'M', [], 'done'), T(2, 'M')];`);
+  await loaded(sp); t = await flat(sp);
+  check(`${file}: with no proposals there is no Proposed entry`, !/Proposed/.test(t), t.slice(0, 300));
+  await sp.close();
+  // The freeze: open tasks (not the P1 fixes that may still start) and proposals won't land.
+  sp = await synthPage(file, SYNTH_BASE + `s.settings.deadline = now + 30 * 60e3; s.settings.freeze_minutes = 60; s.time = { deadline: now + 30 * 60e3, freezeAt: now - 30 * 60e3, past: false };
+    s.tasks = [T(1, 'M', [], 'done'), T(2, 'M'), T(3, 'M'), T(4, 'M'), Object.assign(T(5, 'M'), { priority: 1 }), Object.assign(T(6, 'M'), { status: 'proposed' }), Object.assign(T(7, 'M', [], 'in_progress'), { assignee: 'a1' })];`);
+  const note = await sp.waitForSelector('#freeze-note', { timeout: 10000 }).then(() => sp.$eval('#freeze-note', (e) => e.textContent)).catch(() => '');
+  check(`${file}: in the freeze it says how much won't land (3 open tasks and 1 proposal; a P1 fix and the started task can)`, /^3 open tasks and 1 proposal won't land/.test(note), note);
+  await sp.close();
+  // A board that can't be reached: a calm, clear band (what it shows is as of the last answer), the clock card dimmed; gone when it is back.
+  sp = await synthPage(file, SYNTH_BASE + `s.tasks = [T(1, 'M', [], 'done'), T(2, 'M')];`, TRACK_ES);
+  await loaded(sp); await sleep(600);
+  check(`${file}: while the board answers there is no offline band`, !(await sp.$('#offline')));
+  await sp.evaluate(() => { window.__down = true; for (const e of window.__es) { e.close(); e.onerror?.(new Event('error')); } });
+  const down = await sp.waitForFunction(() => !!document.getElementById('offline'), { timeout: 15000, polling: 100 }).then(() => true).catch(() => false);
+  const band = down ? await sp.evaluate(() => ({ t: document.getElementById('offline').innerText.replace(/\s+/g, ' '), op: getComputedStyle(document.getElementById('clock')).opacity, rows: document.getElementById('offline').getBoundingClientRect().height })) : null;
+  check(`${file}: the board can't be reached: a band says so and since when, and the clock is dimmed`, !!band && /^Can't reach the board\. Showing it as of .*\d/.test(band.t) && Number(band.op) < 1 && band.rows > 20, JSON.stringify(band));
+  await sp.evaluate(() => { window.__down = false; });
+  check(`${file}: the band goes when the board is back`, await sp.waitForFunction(() => !document.getElementById('offline'), { timeout: 15000, polling: 100 }).then(() => true).catch(() => false));
+  await sp.close();
+  if (classic) {
+    // An agent holding only a blocked task isn't working: it isn't under "Now working on" (the blocked count says it); a mixed holder is.
+    sp = await synthPage(file, SYNTH_BASE + `s.tasks = [Object.assign(T(1, 'M', [], 'in_progress'), { assignee: 'a2' }), Object.assign(T(2, 'M', [], 'blocked'), { assignee: 'a1' }), Object.assign(T(3, 'M', [], 'blocked'), { assignee: 'a2' })];`);
+    await loaded(sp); await sleep(300);
+    const now = await sp.$eval('#h-now', (h) => h.parentElement.innerText.replace(/\s+/g, ' '));
+    check(`${file}: Now working on: an agent with only a blocked task isn't listed, one that also works is`, /a2/.test(now) && /#1 Task 1/.test(now) && !/a1/.test(now) && !/#2 Task 2/.test(now), now);
+    check(`${file}: ...and the blocked tasks are still counted`, /Blocked 2/.test(await flat(sp)));
+    await sp.close();
+  }
+}
+
 // A stalled /api/state never freezes the page: one answer never comes, and the page gives up on it after 15 s, so the
 // newer change it was asked for in the meantime still shows.
 async function hangCheck(file) {
@@ -366,6 +409,7 @@ try {
     await staleCheck('present.html');
     await hangCheck('present.html');
     await verdictCheck('present.html');
+    await crunchCheck('present.html', false);
   }
 
   // No WebGL at all: straight to the classic page, carrying the token from the link.

@@ -2,7 +2,7 @@
  * The calm overlay around the 3D office: goal, deadline verdict and countdown on top; done count, questions waiting
  * and who is stuck below. Read-only, large type for a screen across the room, in the board's Dusk / Day look.
  */
-import { agentRoot, columnCounts, countdown, goalHead, hueOf, needsOf, outlook, personOf, plain, plural, timeNow, type BoardState } from './board';
+import { agentRoot, clock, columnCounts, countdown, goalHead, hueOf, needsOf, outlook, personOf, plain, plural, timeNow, type BoardState } from './board';
 
 const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 // The board's logo (three agents), in the board's accent (amber / burnt orange), not the presenter's blue.
@@ -15,6 +15,7 @@ export class Overlay {
   private state: BoardState | null = null;
   private live = false;
   private note = '';
+  private updated = 0; // when the board last answered: what the page says it is showing while the board can't be reached
   private message: string | null = 'Loading the board…';
   private html = { top: '', bottom: '', msg: '' };
 
@@ -30,7 +31,7 @@ export class Overlay {
 
   constructor(private els: OverlayEls, private simpleHref: () => string, private slug: string) { this.render(); }
 
-  setState(s: BoardState): void { this.state = s; this.render(); }
+  setState(s: BoardState): void { this.state = s; this.updated = Date.now(); this.render(); }
   setStatus(live: boolean, note: string): void { this.live = live; this.note = note; this.render(); }
   setMessage(html: string | null): void { this.message = html; this.render(); }
   /** Once a second: the countdown moves; the rest re-renders only when the verdict or a boundary changes. */
@@ -112,17 +113,26 @@ export class Overlay {
     // Amber, not red, even when behind: the room (judges, other teams) sees it; it's a pace note for the team. None during
     // the feature freeze, as on the board (the clock says "Feature freeze"; "Behind" would only mean those tasks won't start).
     const vd = ol?.label && !t.frozen ? `<span class="pill ${ol.verdict === 'ok' ? 'ok' : 'warn'}" id="verdict" title="${esc(ol.why)}.">${esc(ol.label)}</span>` : '';
-    const top = `${brand}
+    // In the freeze nothing new starts (a P1 fix can): what is still open or waiting for a yes won't land.
+    const proposed = (s.tasks || []).length - tasks.length;
+    const wontOpen = (s.tasks || []).filter((x) => x.status === 'open' && x.priority !== 1).length;
+    const wont = [wontOpen && plural(wontOpen, 'open task'), proposed && plural(proposed, 'proposal')].filter(Boolean).join(' and ');
+    const freezeNote = t.frozen && !t.past && wont ? `<div class="freeze-note" id="freeze-note">${esc(wont)} won't land: nothing new starts in the freeze</div>` : '';
+    // The board can't be reached (the last answer stays on screen): say so, and dim the clock card.
+    const down = !this.live && !!this.note && this.updated > 0;
+    const offline = down ? `<p class="offline" id="offline" role="status">Can't reach the board. <span>Showing it as of ${esc(clock(this.updated))}; checking again.</span></p>` : '';
+    const top = `${brand}${offline}
       <div class="head">
         <h1 class="goal${goal ? '' : ' unset'}" id="goal" title="${esc(goal)}">${esc(head || 'No goal set yet')}</h1>
-        <section class="card time ${cd.cls === 'none' ? 'quiet' : ''}" aria-label="Time to the demo">
-          ${vd}<div class="clock" id="clock"></div><div class="sub" id="clock-sub"></div>
+        <section class="card time ${cd.cls === 'none' ? 'quiet' : ''}${down ? ' stale' : ''}" aria-label="Time to the demo">
+          ${vd}<div class="clock" id="clock"></div><div class="sub" id="clock-sub"></div>${freezeNote}
         </section>
       </div>`;
 
     // The board's column counts (proposals count in Open, as on the board).
     const c = columnCounts(s.tasks || []);
-    const n = { done: c.done, review: c.review, blocked: c.blocked, doing: c.in_progress, open: c.open };
+    // "x of y done" leaves proposals out, so the legend does too: they are their own entry, and the entries add up to y.
+    const n = { done: c.done, review: c.review, blocked: c.blocked, doing: c.in_progress, open: c.open - proposed, proposed };
     const seg = (k: keyof typeof n) => (n[k] ? `<span class="s-${k}" style="width:${(n[k] / total) * 100}%"></span>` : '');
     const key = (k: keyof typeof n, label: string) => `<span><i class="s-${k}" aria-hidden="true"></i>${label} <b>${n[k]}</b></span>`;
     // What needs attention, by the board's rule: the questions (and who asked), then blocked tasks that don't wait on one of
@@ -144,7 +154,7 @@ export class Overlay {
       <section class="card prog" aria-labelledby="h-prog"><h2 id="h-prog">Progress</h2>
         <div class="count" id="done-count">${done} of ${total} done</div>
         <div class="bar" role="progressbar" aria-label="Tasks done" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}">${total ? (['done', 'review', 'blocked', 'doing'] as const).map(seg).join('') : ''}</div>
-        <div class="cols">${key('done', 'Done')}${key('open', 'Open')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}</div>
+        <div class="cols">${key('done', 'Done')}${key('open', 'Open')}${key('doing', 'In progress')}${key('blocked', 'Blocked')}${key('review', 'Review')}${proposed ? key('proposed', 'Proposed') : ''}</div>
       </section>
       <section class="card needs" aria-labelledby="h-needs"><h2 id="h-needs">Needs attention</h2>
         ${needs.length ? `<ul class="list" id="needs">${needs.join('')}</ul>` : '<p class="empty" id="needs">Nothing needs attention, and nothing is blocked.</p>'}
