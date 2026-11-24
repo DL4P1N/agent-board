@@ -196,33 +196,50 @@ const throwsWith = (fn, re) => { try { fn(); return false; } catch (e) { return 
   check('…our own board.pid carries our id and is removed on stop', pidOut.free === null && pidOut.mine === true && pidOut.dropped === true, pr1.stdout + pr1.stderr);
 
   // board.pid written on another machine or container (another hostname, a shared data volume): its pid and port
-  // can't be checked from here, so it keeps the folder however old it is, with a way out in the refusal. Written on
-  // this host (a container's pid 1 before a restart), the old checks still find it stale.
+  // can't be checked from here, so its heartbeat (the file's mtime, touched every 30s) decides: touched in the last
+  // 2 minutes it keeps the folder, whatever the pid and port say here; older, it is stale and taken (a hard-killed
+  // container, recreated with a new hostname). Written on this host (a container's pid 1 before a restart), the old
+  // checks decide as before.
   const fData = tempDir();
   const fScript = `
     import fs from 'node:fs'; import path from 'node:path'; import os from 'node:os'; import net from 'node:net'; import { spawnSync } from 'node:child_process';
-    const { takePid, dropPid, foreignHint } = await import(${JSON.stringify(pathToFileURL(path.join(ROOT, 'src', 'pidfile.js')).href)});
+    const { takePid, dropPid, foreignHint, heartbeat } = await import(${JSON.stringify(pathToFileURL(path.join(ROOT, 'src', 'pidfile.js')).href)});
     const pf = path.join(process.env.BOARD_DATA, 'board.pid');
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const srv = net.createServer(); await new Promise((r) => srv.listen(0, '127.0.0.1', r)); const port = srv.address().port; await new Promise((r) => srv.close(r));
     const dead = spawnSync(process.execPath, ['-e', '0']).pid;
-    const old = new Date(Date.now() - 5 * 60e3).toISOString();
+    const old = new Date(Date.now() - 5 * 60e3);
+    const ago = (ms) => new Date(Date.now() - ms);
+    const age = () => Date.now() - fs.statSync(pf).mtimeMs;
     const res = {};
-    for (const [k, pid, hostname] of [['ourPid', process.pid, 'other-host'], ['deadPid', dead, 'other-host'], ['sameHost', process.pid, os.hostname()]]) {
-      const text = JSON.stringify({ pid, id: 'other-container', port, host: '127.0.0.1', hostname, started: old });
-      fs.writeFileSync(pf, text);
+    const cases = [['fresh', process.pid, 'other-host', 0], ['freshDeadPid', dead, 'other-host', 0], ['quiet', process.pid, 'other-host', 3 * 60e3], ['sameHost', process.pid, os.hostname(), 0]];
+    for (const [k, pid, hostname, beat] of cases) {
+      const text = JSON.stringify({ pid, id: 'other-container', port, host: '127.0.0.1', hostname, started: old.toISOString() });
+      fs.writeFileSync(pf, text); fs.utimesSync(pf, ago(beat), ago(beat));
       const o = await takePid();
       res[k] = { refused: !!o, kept: fs.readFileSync(pf, 'utf8') === text, hint: o ? foreignHint(o) : '' };
       if (!o) dropPid();
       try { fs.unlinkSync(pf); } catch {}
     }
-    await takePid(); res.mine = JSON.parse(fs.readFileSync(pf, 'utf8')).hostname === os.hostname(); dropPid();
+    // The heartbeat touches our own board.pid, and never another server's.
+    await takePid(); res.mine = JSON.parse(fs.readFileSync(pf, 'utf8')).hostname === os.hostname();
+    fs.utimesSync(pf, old, old);
+    const t = heartbeat(50); await sleep(400);
+    res.beat = age() < 10e3;
+    dropPid();
+    fs.writeFileSync(pf, JSON.stringify({ pid: process.pid, id: 'other-container', port, hostname: 'other-host', started: old.toISOString() })); fs.utimesSync(pf, old, old);
+    await sleep(400);
+    res.notTheirs = age() > 4 * 60e3;
+    clearInterval(t); fs.unlinkSync(pf);
     console.log(JSON.stringify(res));`;
   const pr2 = spawnSync(process.execPath, ['--input-type=module', '-e', fScript], { env: { ...process.env, BOARD_DATA: fData }, encoding: 'utf8', timeout: 30000 });
   let fOut = {}; try { fOut = JSON.parse(pr2.stdout.trim().split('\n').at(-1)); } catch {}
-  check('board.pid from another host (our pid, old, its port dead here) is another owner: refused, kept, the refusal says to delete board.pid', fOut.ourPid?.refused && fOut.ourPid.kept && /another machine or container \(other-host\).*delete .*board\.pid/.test(fOut.ourPid.hint), pr2.stdout + pr2.stderr);
-  check('…also when its pid is dead here (another pid namespace)', fOut.deadPid?.refused && fOut.deadPid.kept, pr2.stdout + pr2.stderr);
-  check('…from this host (pid 1 before a restart, old, port dead) it is still stale: taken, no hint', fOut.sameHost?.refused === false && fOut.sameHost.hint === '', pr2.stdout + pr2.stderr);
-  check('…and our own board.pid records our hostname', fOut.mine === true, pr2.stdout + pr2.stderr);
+  check('board.pid from another host with a fresh heartbeat (our pid, started long ago, its port dead here) is another owner: refused, kept, the refusal names the 2-minute takeover and deleting the file', fOut.fresh?.refused && fOut.fresh.kept && /another machine or container \(other-host\).*2 minutes without an update.*delete the file/.test(fOut.fresh.hint), pr2.stdout + pr2.stderr);
+  check('…also when its pid is dead here (another pid namespace)', fOut.freshDeadPid?.refused && fOut.freshDeadPid.kept, pr2.stdout + pr2.stderr);
+  check('…with no heartbeat for over 2 minutes (a hard-killed container) it is stale: taken', fOut.quiet?.refused === false && fOut.quiet.hint === '', pr2.stdout + pr2.stderr);
+  check('…from this host (pid 1 before a restart, old, port dead) it is stale as before: taken, no hint', fOut.sameHost?.refused === false && fOut.sameHost.hint === '', pr2.stdout + pr2.stderr);
+  check('…our own board.pid records our hostname, and the heartbeat touches it', fOut.mine === true && fOut.beat === true, pr2.stdout + pr2.stderr);
+  check('…the heartbeat leaves another server\'s board.pid alone', fOut.notTheirs === true, pr2.stdout + pr2.stderr);
 }
 
 // ================= which board events reach the webhook =================

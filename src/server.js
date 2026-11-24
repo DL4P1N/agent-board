@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import { Registry, adminToken } from './boards.js';
 import { PORT, HOST, DATA_DIR } from './config.js';
-import { takePid, writePid, dropPid, foreignHint } from './pidfile.js';
+import { takePid, writePid, dropPid, foreignHint, heartbeat } from './pidfile.js';
 import { createLiveBoards } from './live-boards.js';
 import { createApp } from './app.js';
 import { printBanner, offerHostJoin, handleListenErrors } from './startup.js';
@@ -37,6 +37,7 @@ if (owner) {
   process.exit(1);
 }
 process.once('exit', dropPid);
+heartbeat();
 let registry;
 try { registry = new Registry(DATA_DIR); } catch (e) {
   console.error(`\n✗ Can't read the boards list: ${e.message}`);

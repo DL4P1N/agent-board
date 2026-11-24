@@ -23,9 +23,14 @@ const ours = (o) => o?.pid === process.pid && o?.id === INSTANCE;
 const HOSTNAME = os.hostname();
 const foreign = (o) => typeof o?.hostname === 'string' && !!o.hostname && o.hostname !== HOSTNAME;
 const mine = (port = PORT) => JSON.stringify({ pid: process.pid, id: INSTANCE, port, host: HOST, hostname: HOSTNAME, started: new Date().toISOString() });
+// A running server touches its board.pid every 30s (heartbeat). Another machine's or container's file whose last touch
+// is older than 2 minutes is stale: that server stopped without removing it (a hard kill, a recreated container).
+export const BEAT_MS = 30e3;
+export const BEAT_STALE_MS = 2 * 60e3;
+const beatAge = () => { try { return Date.now() - fs.statSync(PID_FILE).mtimeMs; } catch { return Infinity; } };
 // For the refusal: what to do when the owner is on another machine or container ('' when it is on this one).
 export const foreignHint = (o) => (foreign(o)
-  ? ` It runs on another machine or container (${o.hostname}), which can't be checked from here: if that server has stopped, delete ${PID_FILE} and try again.`
+  ? ` It runs on another machine or container (${o.hostname}), which can't be checked from here: it keeps the folder while it updates ${PID_FILE} (every ${BEAT_MS / 1000}s), and a server started here takes the folder over by itself once that file has gone ${BEAT_STALE_MS / 60e3} minutes without an update. To take it over sooner, when that server has stopped, delete the file and start again.`
   : '');
 // Where that server answers: the address it listens on (localhost when that is every address); IPv6 in brackets.
 const probeHost = (h) => (!h || h === '0.0.0.0' || h === '::' ? 'localhost' : h.includes(':') ? `[${h}]` : h);
@@ -39,10 +44,11 @@ const refused = (e) => { const c = e?.cause; const codes = c?.errors?.length ? c
 // crash or a hard stop (Windows hands pids out again quickly), and the file is stale. A /health that doesn't
 // answer in time proves nothing (a busy or suspended server): it keeps the folder.
 // A file written on another machine or container (another hostname: a second container on a shared data volume)
-// always keeps it: that server's pid and port aren't this one's to probe (a local port that refuses says nothing).
+// can't be checked that way (its pid and port aren't this one's to probe; a local port that refuses says nothing):
+// its heartbeat decides. Touched within the last 2 minutes, it keeps the folder; older, it is stale.
 export async function otherOwner() {
   const o = read();
-  if (o && Number.isInteger(o.pid) && !ours(o) && foreign(o)) return o;
+  if (o && Number.isInteger(o.pid) && !ours(o) && foreign(o)) return beatAge() < BEAT_STALE_MS ? o : null;
   // Our pid but not our mark: another container's pid 1 (or this container's before a restart), so the process
   // check proves nothing: the checks below decide.
   if (!o || !Number.isInteger(o.pid) || ours(o) || (o.pid !== process.pid && !alive(o.pid))) return null;
@@ -102,3 +108,10 @@ export async function takePid() {
 // Once listening: the port it really got (PORT=0 picks one).
 export const writePid = (port) => { try { fs.writeFileSync(PID_FILE, mine(port)); } catch {} };
 export const dropPid = () => { if (ours(read())) try { fs.unlinkSync(PID_FILE); } catch {} };
+// While it runs: touches board.pid (only while it is still ours) so a server on another machine or container sharing
+// the folder sees it alive. Unref'd: it never keeps the process up. Returns the interval (clearInterval stops it).
+export function heartbeat(ms = BEAT_MS) {
+  const t = setInterval(() => { try { if (ours(read())) { const now = new Date(); fs.utimesSync(PID_FILE, now, now); } } catch {} }, ms);
+  t.unref?.();
+  return t;
+}
