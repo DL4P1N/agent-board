@@ -162,7 +162,7 @@ function oGoal(open, { edit = false } = {}) {
   if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } else $('o-goal').querySelector('.o-ib').focus({ preventScroll: true });
 }
 function oDl(open) {
-  ui.oDl = open; ui.dlErr = ''; if (open) { ui.oGoal = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; setupAway(); if (ui.themeOpen) themePop(false, false); }
+  ui.oDl = open; ui.dlErr = ''; ui.dlFreeze = ''; if (open) { ui.oGoal = false; ui.oMerge = false; ui.oPlan = false; ui.oRoles = false; setupAway(); if (ui.themeOpen) themePop(false, false); }
   if (open) { stashDrafts($('o-dl-b')); $('o-dl-b').innerHTML = ''; $('o-dl-b')._html = undefined; } // a fresh form, with what was typed and not saved (closing, it fades out as it was)
   renderDocks();
   if (open) $('o-dl-in')?.focus(); else $('clock').focus({ preventScroll: true });
@@ -243,7 +243,7 @@ function oDlForm() {
   return `<form class="o-form" data-dlform="o" novalidate>
       <div class="o-fr"><input id="o-dl-in" type="datetime-local" aria-label="Demo time" data-keep="o-dl" data-draft value="${esc(localInput(t.deadline || defaultDeadline()))}" step="60" aria-describedby="o-dl-hint o-dl-err" ${ui.dlErr ? 'aria-invalid="true"' : ''}></div>
       <div class="o-fr"><label for="o-fz-in">Feature freeze</label><span class="o-in"><input id="o-fz-in" type="number" data-keep="o-fz" data-draft value="${esc(fm)}" min="0" max="600" step="5" inputmode="numeric" aria-describedby="o-fz-u o-dl-hint"><span class="muted" id="o-fz-u">min before</span></span></div>
-      <p class="hint" id="o-dl-hint">${t.deadline ? '' : 'Not set yet: the time shown is a suggestion. '}At the freeze agents stop taking new tasks (except priority-1 fixes) and get what they have merged.</p>
+      <p class="hint" id="o-dl-hint">${ui.dlFreeze ? '<b>That is inside the freeze window:</b> the feature freeze starts as soon as you save. Save again to go ahead, or shorten the freeze. ' : t.deadline ? '' : 'Not set yet: the time shown is a suggestion. '}At the freeze agents stop taking new tasks (except priority-1 fixes) and get what they have merged.</p>
       <div class="err" id="o-dl-err" role="alert">${esc(ui.dlErr || '')}</div>
       <div class="xacts">${t.deadline ? '<button type="button" class="ghost sm" data-act="dl-clear" data-fk="o-dl-clear">Remove</button>' : ''}<span class="sp"></span><button type="button" class="ghost sm" data-o-close="dl" data-fk="o-dl-cancel">Cancel</button><button type="submit" class="sm" data-fk="o-dl-save">Save time</button></div></form>`;
 }

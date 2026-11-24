@@ -264,12 +264,15 @@ async function submitForm(f) {
     ui.dlErr = '';
     if (!Number.isFinite(ts)) ui.dlErr = 'Pick the date and time of the demo.';
     else if (ts <= Date.now()) ui.dlErr = 'That time has already passed. Pick a time later than now.';
-    if (ui.dlErr) { render(); return $('o-dl-in')?.focus(); }
+    if (ui.dlErr) { ui.dlFreeze = ''; render(); return $('o-dl-in')?.focus(); }
+    // A time inside the freeze window freezes the board at once: say so first, and save on the second Save.
+    const freezeNow = fm > 0 && ts - fm * 60e3 <= Date.now(); const key = `${ts}|${fm}`;
+    if (freezeNow && ui.dlFreeze !== key) { ui.dlFreeze = key; render(); return document.querySelector('[data-fk="o-dl-save"]')?.focus(); }
     const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
     try {
       state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: ts, freeze_minutes: fm }) });
-      dropDrafts(f); ui.dlErr = '';
-      toast(`Demo at ${when(ts)}${fm ? `; feature freeze at ${when(ts - fm * 60e3)}` : ''}. Agents see it too.`);
+      dropDrafts(f); ui.dlErr = ''; ui.dlFreeze = '';
+      toast(`Demo at ${when(ts)}${fm ? `; feature freeze ${freezeNow ? 'from now' : `at ${when(ts - fm * 60e3)}`}` : ''}. Agents see it too.`);
       ui.oDl = false; render(); scheduleReload(); return $('clock').focus({ preventScroll: true });
     } catch (e) { toast(e.message, true); btn.disabled = false; }
     return;
@@ -337,11 +340,14 @@ async function saveStepGoal(f) {
   const body = { goal };
   if (repo !== (S.repo || '')) body.repo = repo;
   if (ts && (ts !== Number(S.deadline) || String(fm) !== String(S.freeze_minutes))) Object.assign(body, { deadline: ts, freeze_minutes: fm });
+  // The suggested demo time, saved as it was shown (nobody touched it): the toast says so, with a way to take it back.
+  const suggested = !!body.deadline && !Number(S.deadline) && v === $('dl-in')?.defaultValue;
   const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
   try {
     state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify(body) });
     dropDrafts(f); ui.editGoal = false; // the step stays as it was: open (showing what was saved, with Edit) if it was opened
-    toast(`Saved. The agents will plan from the goal${Number(state.settings.deadline) ? `; demo at ${when(Number(state.settings.deadline))}` : ''}.`);
+    if (suggested) toast(`Saved. The agents will plan from the goal. The suggested demo time was saved too: demo at ${when(ts)}${fm ? `, feature freeze ${fm} min before` : ''}.`, false, { label: 'No demo time', run: () => doAct('dl-skip-saved') });
+    else toast(`Saved. The agents will plan from the goal${Number(state.settings.deadline) ? `; demo at ${when(Number(state.settings.deadline))}` : ''}.`);
     render(); scheduleReload();
     document.querySelector('[data-fk="sh-goal"]')?.focus({ preventScroll: true });
   } catch (e) {
@@ -456,6 +462,13 @@ function doAct(a, el) {
   if (a === 'roles') return oRoles(!ui.oRoles);
   if (a === 'o-goal-edit') return oGoal(true, { edit: true });
   if (a === 'o-goal-cancel') { dropDrafts($('o-goal-b')); ui.oGoalEdit = false; ui.goalErr = ''; renderDocks(); return document.querySelector('[data-fk="o-goal-edit"]')?.focus(); }
+  // The toast after step 2 saved the suggested demo time: take it back, and don't suggest one again.
+  if (a === 'dl-skip-saved') {
+    return api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: '' }) }).then((st) => {
+      state.settings = st; store.set('board-dl-skip', '1'); render(); scheduleReload();
+      toast('No demo time: no countdown or feature freeze. Set one any time in step 2.');
+    }).catch((e) => toast(e.message, true));
+  }
   if (a === 'dl-clear') {
     return api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: '' }) }).then((st) => {
       state.settings = st; ui.dlErr = ''; dropDrafts($('o-dl-b')); toast('Demo time removed. No countdown or feature freeze.');

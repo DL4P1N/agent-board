@@ -224,6 +224,33 @@ try {
   check('permission denied: stays off and explains how to allow it', await until(np, () => $('notify-btn').getAttribute('aria-pressed') === 'false' && (/blocked for this page/.test($('toasts').innerText) || /blocked for this page/.test($('notify-btn').title))));
   await np.close();
 
+  // ================= UM9: the suggested demo time saved with the goal =================
+  await settings({ deadline: '' });
+  await page.evaluate(() => { localStorage.removeItem('board-dl-skip'); document.querySelectorAll('#toasts > *').forEach((t) => t.remove()); });
+  await reload(page);
+  await page.evaluate(() => goStep('goal', 'dl')); await sleep(400);
+  await clickStill(page, '[data-fk="goal-save"]');
+  const sugT = await until(page, () => [...document.querySelectorAll('#toasts .toast')].some((t) => /suggested demo time was saved too/.test(t.textContent) && /No demo time/.test(t.querySelector('button')?.textContent || '')));
+  const sugS = await rest(board, 'dana', '/state');
+  check('UM9 saving the goal with the suggested demo time untouched says so, with a No demo time button', sugT && Number(sugS.settings.deadline) > 0, await page.evaluate(() => [...document.querySelectorAll('#toasts .toast')].map((t) => t.textContent).join(' | ')));
+  await page.evaluate(() => [...document.querySelectorAll('#toasts .toast button')].find((b) => /No demo time/.test(b.textContent))?.click());
+  await until(page, () => document.getElementById('clock').classList.contains('unset'));
+  const unS = await rest(board, 'dana', '/state');
+  check('UM9 and that button takes the demo time back (no countdown), and stops suggesting one', !Number(unS.settings.deadline) && await page.evaluate(() => localStorage.getItem('board-dl-skip') === '1'), JSON.stringify(unS.settings.deadline));
+  await page.evaluate(() => localStorage.removeItem('board-dl-skip'));
+
+  // ================= the Demo popover: a time inside the freeze window =================
+  await page.evaluate(() => { localStorage.setItem('board-setup', 'closed'); ui.forceSetup = false; render(); }); await sleep(150);
+  await page.click('#clock'); await page.waitForSelector('#o-dl-in');
+  await page.evaluate(() => { const d = $('o-dl-in'); d.value = localInput(Date.now() + 30 * 60e3); d.dispatchEvent(new Event('input', { bubbles: true })); const f = $('o-fz-in'); f.value = '60'; f.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.click('[data-fk="o-dl-save"]'); await sleep(300);
+  const fw = await page.evaluate(() => ({ open: !$('o-dl').hidden, hint: $('o-dl-hint')?.textContent || '', focus: document.activeElement?.dataset.fk }));
+  const fwS = await rest(board, 'dana', '/state');
+  check('Demo popover: a time inside the freeze window first says the freeze starts at once, and saves nothing yet', fw.open && /freeze starts as soon as you save/.test(fw.hint) && fw.focus === 'o-dl-save' && !Number(fwS.settings.deadline), JSON.stringify({ ...fw, dl: fwS.settings.deadline }));
+  await page.click('[data-fk="o-dl-save"]');
+  check('and Save again saves it, the toast saying the freeze is from now', await until(page, () => $('o-dl').hidden && $('clock').classList.contains('frozen') && /feature freeze from now/.test($('toasts').textContent)));
+  await settings({ deadline: '' }); await reload(page);
+
   // ================= export =================
   const md = await page.evaluate(() => fetchExport('md'));
   check('summary export returns markdown', /^# Team board summary/.test(md) && /Vote API/.test(md), md.slice(0, 80));
