@@ -365,7 +365,7 @@ const batch = await fetch(`${b2.base}/mcp?agent=batcher&token=${agentTokenFor(to
 check('MCP refuses JSON-RPC batches (400)', batch.status === 400 && /Batched requests/.test((await batch.json().catch(() => ({})))?.error?.message || ''), batch.status);
 // A malformed request gets a plain answer, not the server's internals (here: "Cannot read properties of undefined").
 r = await c2('/locks/release', 'POST', {}, tok3);
-check('a malformed request: 400 without internal details', r.status === 400 && /missing a field/.test(r.body?.error || '') && !/properties of undefined/.test(r.body?.error || ''), JSON.stringify(r));
+check('a malformed request: 400 without internal details', r.status === 400 && /missing a field|paths must be a list/.test(r.body?.error || '') && !/properties of undefined/.test(r.body?.error || ''), JSON.stringify(r));
 // Bodies are read only where they're used: one sent to a board that doesn't exist, or to the admin API without
 // its token, is never parsed (a broken one would answer 400 "not valid JSON" if it were). On a board it still is.
 {
