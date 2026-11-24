@@ -113,6 +113,14 @@ try {
   const chat = await page.evaluate(() => { const r = $('msg').getBoundingClientRect(); return { top: r.top, bottom: r.bottom, h: innerHeight, focus: document.activeElement === $('msg') }; });
   check('MO-2 phone: Chat jumps to the message box', chat.focus && chat.top >= 0 && chat.bottom <= chat.h, JSON.stringify(chat));
 
+  // A toast (Undo lasts 8s) never hides the foot of the page: while two show, the page scrolls the last item clear of them.
+  await page.evaluate(() => { document.getElementById('toasts').replaceChildren(); for (const n of [1, 2]) toast(`#${n} moved to Review`, false, { label: 'Undo', run() {} }); });
+  await sleep(500); await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await sleep(200);
+  const tg = await page.evaluate(() => { const t = document.getElementById('toasts').getBoundingClientRect(); const last = Math.max(...[...document.querySelector('main').children].filter((e) => e.offsetHeight).map((e) => e.getBoundingClientRect().bottom)); return { toasts: document.querySelectorAll('#toasts .toast').length, top: Math.round(t.top), last: Math.round(last), atEnd: Math.round(scrollY + innerHeight) >= document.documentElement.scrollHeight - 1 }; });
+  check('phone: with toasts showing, the last item in the column scrolls fully clear of them', tg.toasts === 2 && tg.atEnd && tg.last <= tg.top, JSON.stringify(tg));
+  await page.evaluate(() => { document.getElementById('toasts').replaceChildren(); }); await sleep(100);
+  check('phone: the room the toasts took is given back once they are gone', await page.evaluate(() => document.documentElement.style.getPropertyValue('--toast-room') === '0px'));
+
   await page.screenshot({ path: `${out}/phone-chat.png` });
   const small = await page.evaluate(() => [...document.querySelectorAll('#app button, #app a[href], #app select')]
     .filter((e) => e.offsetParent && !e.closest('.vh') && !e.classList.contains('skip'))

@@ -871,7 +871,10 @@ html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top)
 /* ---------- toasts ---------- */
 /* At the foot of the centre column, at its right end (away from the Open column): never over the side columns, whose
    controls (Send, File locks, an answer box) stay put while the board scrolls under the toasts. */
-#toasts { position: fixed; bottom: var(--s6); left: var(--s6); right: var(--s6); display: flex; flex-direction: column; align-items: flex-end; gap: var(--s3); z-index: 50; pointer-events: none; }
+#toasts { position: fixed; bottom: calc(var(--s6) + env(safe-area-inset-bottom, 0px)); left: var(--s6); right: var(--s6); display: flex; flex-direction: column; align-items: flex-end; gap: var(--s3); z-index: 50; pointer-events: none; }
+/* One column (tablets, phones): a toast sits over the page's foot, so while one shows, the page ends that much lower
+   (--toast-room, set by toast() in helpers.js) and the last item scrolls clear of it. */
+@media (max-width: 1000px) { main { padding-bottom: calc(var(--edge) + var(--toast-room, 0px)); } }
 @media (min-width: 1280px) { #toasts { left: calc(var(--edge) + var(--dock) + var(--gutter)); right: calc(var(--edge) + var(--dock) + var(--gutter)); } }
 .toast { background: var(--toast); color: var(--toast-ink); border: 2px solid var(--border); padding: var(--s4) var(--s5); border-radius: var(--r-md); font-size: var(--fs-sm); max-width: 420px; box-shadow: var(--e2); pointer-events: none; overflow-wrap: anywhere; display: flex; align-items: center; gap: var(--s4);
   transition: opacity var(--t-base) var(--ease), transform var(--t-slow) var(--ease); }
@@ -897,7 +900,7 @@ button.tochat { display: none; } /* phones only (below) */
   .theme-pop[hidden] { translate: 0 4px; }
   .conn { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; }
   #me-btn { max-width: 26vw; overflow: hidden; text-overflow: ellipsis; padding: 0 var(--s4); }
-  main { padding: var(--s6) var(--s6) 72px; } /* room under the last item for the Chat button */
+  main { padding: var(--s6) var(--s6) calc(72px + var(--toast-room, 0px)); } /* room under the last item for the Chat button */
   .filter span { display: none; }
   .filter { flex: 1 1 140px; min-width: 0; } .filter select { width: 100%; max-width: none; }
   /* The Tasks title bar wraps: Tasks and the search on one line, Show, Columns / Table and New task under them. */

@@ -286,6 +286,11 @@ function toastsShift(fn) {
     if (Math.abs(dy) > 1) t.animate([{ translate: `0 ${dy}px` }, { translate: '0 0' }], { duration, easing, id: 'push' });
   }
 }
+// The room the toasts take at the foot of the screen (their height and the gap below), for the page to leave free.
+if ('ResizeObserver' in window) {
+  const box = $('toasts');
+  new ResizeObserver(() => document.documentElement.style.setProperty('--toast-room', box.offsetHeight ? Math.ceil(box.offsetHeight + parseFloat(getComputedStyle(box).bottom)) + 'px' : '0px')).observe(box);
+}
 function toast(msg, bad = false, action = null) {
   const d = document.createElement('div');
   d.className = 'toast' + (bad ? ' bad' : '');
