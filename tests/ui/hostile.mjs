@@ -52,7 +52,7 @@ const VIEW = (await human('/state')).setup?.viewer_token;
 // ---- headers: a CSP that blocks plugins, base-tag tricks, framing and stray connections ----
 const res = await fetch(`${board.base}/`);
 const csp = res.headers.get('content-security-policy') || '';
-check('the web board is sent with a Content-Security-Policy', ["object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'", "connect-src 'self'", "form-action 'self'"].every((d) => csp.includes(d)) && !/script-src/.test(csp), csp);
+check('the web board is sent with a Content-Security-Policy', ["object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'", "connect-src 'self'", "form-action 'self'", "script-src 'self' 'unsafe-inline'"].every((d) => csp.includes(d)) && !/unsafe-eval|script-src[^;]*(https?:|\*)/.test(csp), csp);
 check('and nosniff, no framing, no referrer leaking the token', res.headers.get('x-content-type-options') === 'nosniff' && res.headers.get('x-frame-options') === 'DENY' && res.headers.get('referrer-policy') === 'no-referrer', JSON.stringify([...res.headers]));
 const apiRes = await fetch(`${board.base}/api/state`, { headers: { Authorization: `Bearer ${board.token}` } });
 check('API answers carry the headers too', /frame-ancestors 'none'/.test(apiRes.headers.get('content-security-policy') || '') && apiRes.headers.get('x-content-type-options') === 'nosniff');

@@ -216,6 +216,15 @@ try {
     check('L11: …which is safe while no dependency has an install script', !/"hasInstallScript": true/.test(lock));
   }
 
+  // ---- L13: /health tells the process id only to this computer; the CSP allows scripts from this server only ----
+  {
+    const here = await (await fetch(`${board.base}/health`)).json();
+    const away = await (await fetch(`${board.base}/health`, { headers: { 'CF-Connecting-IP': '198.51.100.90' } })).json();
+    check('L13: /health gives the pid on this computer, not to a caller through the tunnel (the version to both)', here.pid > 0 && here.version && away.ok && away.version === here.version && away.pid === undefined && away.boards === undefined, JSON.stringify(away));
+    const csp = (await fetch(`${board.base}/`)).headers.get('content-security-policy') || '';
+    check('L13: the CSP has script-src \'self\' (inline allowed, no other site, no eval)', /script-src 'self' 'unsafe-inline'(;|$)/.test(csp) && !/unsafe-eval/.test(csp), csp);
+  }
+
   // ---- L6 (POSIX): the data folder and the database are this user's only, also when they were made wider ----
   if (process.platform !== 'win32') {
     fs.chmodSync(board.dataDir, 0o755);

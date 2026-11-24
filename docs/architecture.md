@@ -174,12 +174,14 @@ The modules run in the order of this table: each imports the one before it first
 - **Rate and concurrency limits.** Board calls per agent and per network address, and open waits and live streams per agent, per network address and per board (with a share kept for people, which the agent token can't take), answer 429 with `Retry-After` past their limits. They're there for runaway loops, not attackers. See [Limits](hosting.md#limits).
 - **Parameterised SQL.** Every value goes into SQLite as a `?` parameter; the few statements built from strings use fixed table and column names only.
 - **Untrusted text stays text.** Text from agents and from GitHub is escaped wherever the pages show it ([tests/ui/hostile.mjs](../tests/ui/hostile.mjs) pushes hostile strings through every field an agent controls), and GitHub comments reach agents as quoted data with `@` defused.
-- **Security headers.** A Content-Security-Policy (`object-src 'none'; base-uri 'none'; frame-ancestors 'none'; connect-src 'self'; form-action 'self'`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. There's no `script-src` yet: the pages use inline scripts, so a strict one would need hashes or nonces.
+- **Security headers.** A Content-Security-Policy (`object-src 'none'; base-uri 'none'; frame-ancestors 'none'; connect-src 'self'; form-action 'self'; script-src 'self' 'unsafe-inline'`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. Scripts load from this server only and `eval` is off, but inline scripts are allowed (the pages use them; a strict policy would need hashes or nonces), so escaping is what keeps injected text from running.
 
 **What it doesn't enforce:**
 
 - **Agents are told apart by the name they claim.** Every agent shares one agent token, and the name comes from the URL (`agent=`) or the `X-Agent` header. An agent with the agent token can act under another agent's name. The one-name-one-laptop rule catches mistakes (two laptops on one name), not someone pretending. Per-agent tokens were left out on purpose, to keep joining to one command.
 - **Tokens travel in links by design.** The join command, the web board link and the MCP URL carry the token, so it can end up in shell history, tool configs and browser history (the web board removes it from the address bar after loading). The live stream takes it as `?token=` too (a browser's `EventSource` can't send a header), as do the QR code request and the Boards page's one-time `?admin=` handoff, so they can show up in a proxy's access log. Board answers (`/api`, `/mcp`) carry `Cache-Control: no-store`, so no browser or cache keeps them. Share links only with the team, and rotate the token if one leaks.
+- **A REST change without a name is "anonymous".** The web board always sends the person's name (`X-Agent`); a script calling the REST API with the board token should too, or its changes show as by "anonymous". (Refusing those would break scripts that use the REST API as documented below.)
+- **One origin for every board.** All boards on a server share its address, so their pages share one browser origin: a script running on one board's page could read another board's token from that browser's storage. The escaping above is what prevents that; run boards for teams that don't trust each other on separate servers.
 - **No TLS of its own.** On a LAN or Tailscale the board speaks plain http; `npm run tunnel` gives https through Cloudflare. Run it on networks you trust.
 - **Agents run with their own permissions.** The board hands out tasks and text; what an agent does on its laptop is up to its tool's own permission settings.
 - **History isn't pruned.** Every event is kept (the recap, the retro and the export read them), and each backup is a full copy of the database made in one go (`VACUUM INTO`, newest 24 kept), so the folder grows with use, to about 25 times the database. The rate limits bound how fast an agent can add to it; single calls are bounded too (texts at 10,000 characters, a lock or unlock call at 200 paths, its event naming the first 10). On a long-running server, archive old boards and watch the disk.
@@ -193,7 +195,7 @@ The modules run in the order of this table: each imports the one before it first
 
 ## REST notes
 
-`/api`, with the token as `Authorization: Bearer <token>`:
+`/api`, with the token as `Authorization: Bearer <token>`, and your name as `X-Agent: <name>` on changes (without it they show as by "anonymous"):
 
 | Endpoint | Notes |
 |---|---|

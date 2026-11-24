@@ -10,10 +10,11 @@ import { createAdminRouter } from './admin.js';
 export function createApp({ registry, live, adminToken }) {
   const { runtimes, failures, defaultRuntime } = live;
   const app = express();
-  // Security headers on every answer. The CSP blocks plugins, <base> tricks, framing (clickjacking), form posts
-  // and connections to anywhere but this server. No script-src: the pages use inline scripts (a strict one would
-  // need hashes or nonces); the escaping of untrusted text is what keeps scripts out (tests/ui/hostile.mjs).
-  const CSP = "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; connect-src 'self'; form-action 'self'";
+  // Security headers on every answer. The CSP blocks plugins, <base> tricks, framing (clickjacking), form posts,
+  // connections to anywhere but this server, and scripts from anywhere else (and eval). Inline scripts are still
+  // allowed: the pages use them (a strict policy would need hashes or nonces), so the escaping of untrusted text is
+  // what keeps injected scripts out (tests/ui/hostile.mjs).
+  const CSP = "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; connect-src 'self'; form-action 'self'; script-src 'self' 'unsafe-inline'";
   app.disable('x-powered-by');
   app.use((_req, res, next) => {
     res.set({ 'Content-Security-Policy': CSP, 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer' });
@@ -26,7 +27,14 @@ export function createApp({ registry, live, adminToken }) {
   // app stays 'claude-board' (the name before the rename to Agent Board): older join/doctor/start scripts and
   // people's monitoring check it. name is the display name. pid tells a script which server answered (the tests'
   // board vs another one that took the port first).
-  app.get('/health', (_req, res) => res.json({ ok: true, app: 'claude-board', name: 'Agent Board', version: VERSION, boards: runtimes.size, pid: process.pid }));
+  // The process id and the number of boards only to a caller on this computer (the start scripts, the tests, a second
+  // `npm start`), not through a tunnel or a proxy: nobody else needs them. The version stays public: doctor on a
+  // teammate's laptop compares it with its own.
+  app.get('/health', (req, res) => {
+    const peer = String(req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+    const local = ['127.0.0.1', '::1'].includes(peer) && !req.get('cf-connecting-ip') && !req.get('x-forwarded-for');
+    res.json({ ok: true, app: 'claude-board', name: 'Agent Board', version: VERSION, ...(local ? { boards: runtimes.size, pid: process.pid } : {}) });
+  });
 
   app.use('/api/admin', createAdminRouter({ registry, live, adminToken }));
 
