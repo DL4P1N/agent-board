@@ -207,6 +207,15 @@ try {
     await b3.stop();
   }
 
+  // ---- L11: dependencies are installed without running their install scripts ----
+  {
+    const deps = fs.readFileSync(path.join(ROOT, 'scripts', 'ensure-deps.mjs'), 'utf8');
+    const docker = fs.readFileSync(path.join(ROOT, 'Dockerfile'), 'utf8');
+    const lock = fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8');
+    check('L11: ensure-deps and the Dockerfile install with --ignore-scripts', /npm install [^']*--ignore-scripts/.test(deps) && /npm ci [^\n]*--ignore-scripts/.test(docker));
+    check('L11: …which is safe while no dependency has an install script', !/"hasInstallScript": true/.test(lock));
+  }
+
   // ---- L6 (POSIX): the data folder and the database are this user's only, also when they were made wider ----
   if (process.platform !== 'win32') {
     fs.chmodSync(board.dataDir, 0o755);

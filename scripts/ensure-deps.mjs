@@ -21,7 +21,9 @@ const wanted = { ...pkg.dependencies, ...(process.argv.includes('--dev') ? pkg.d
 const missing = Object.keys(wanted).filter((d) => !fs.existsSync(path.join(ROOT, 'node_modules', d, 'package.json')));
 if (missing.length) {
   console.log(`Installing dependencies (first run: ${missing.join(', ')})…`);
-  const r = spawnSync('npm install --no-audit --no-fund', { cwd: ROOT, shell: true, stdio: 'inherit' });
+  // --ignore-scripts: no dependency's install script runs on this laptop (none of ours needs one; package-lock.json
+  // has no hasInstallScript), so a compromised package version can't run code just by being installed.
+  const r = spawnSync('npm install --no-audit --no-fund --ignore-scripts', { cwd: ROOT, shell: true, stdio: 'inherit' });
   if (r.status !== 0) {
     console.error('✗ npm install failed. Check your internet connection and run `npm install` in the agent-board folder.');
     process.exit(1);
