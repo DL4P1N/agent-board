@@ -81,9 +81,17 @@ function goBoard() {
 // Answer an agent's question (the top panel, or a blocked task's dialog). It disappears at once (optimistic).
 async function sendAnswer(qid, asker, answer) {
   await api(`/questions/${qid}/answer`, { method: 'POST', body: JSON.stringify({ answer }) });
-  toast(`Answer sent to ${asker}`); scheduleReload();
+  (ui.qSent ||= new Set()).add(qid);
+  // An answer can't be changed once sent (the agent may already be acting on it): a correction goes to its direct thread.
+  toast(`Answer sent to ${asker}`, false, { label: 'Correct it', run: () => correctAnswer(asker) }); scheduleReload();
   const q = state.questions.find((x) => x.id === qid); if (q) q.answer = answer;
   render();
+}
+// The asker's direct thread, the message box started with "Correction to my answer: " (unless something is typed there).
+function correctAnswer(asker) {
+  openDm(agentRoot(asker));
+  const m = $('msg'); if (m.value.trim()) return;
+  m.value = 'Correction to my answer: '; growMsg(); m.setSelectionRange(m.value.length, m.value.length);
 }
 function goWrapup() {
   const n = $('board-note');

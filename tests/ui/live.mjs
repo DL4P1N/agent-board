@@ -221,6 +221,37 @@ try {
   check('U4 the blocked task is listed once (in Blocked), not also under "Also"', await page.evaluate(() => !/blocked/i.test(document.querySelector('#nyou .also')?.textContent || '')), await page.$eval('#nyou', (e) => e.innerText.replace(/\s+/g, ' ')));
   await page.screenshot({ path: `${out}/live-board.png` });
 
+  // ---- a half-typed answer when someone else answers first; Correct it after sending ----
+  {
+    const qid = (await rest(board, 'dana', '/state')).questions.find((q) => q.answer == null && /anonymous/.test(q.question)).id;
+    await page.evaluate(() => document.getElementById('toasts').replaceChildren());
+    await page.type(`#qa-${qid}`, 'Yes, anonymous ple');
+    await rest(board, 'erin', `/questions/${qid}/answer`, 'POST', { answer: 'No, show names' });
+    const lost = await until(page, () => [...document.querySelectorAll('#toasts .toast')].some((t) => /erin already answered alice's question, so yours wasn't sent/.test(t.textContent) && /Copy yours/.test(t.querySelector('button')?.textContent || '')));
+    check('a half-typed answer whose question another tab answers: a toast says so, with Copy yours', lost, await page.evaluate(() => $('toasts').textContent));
+    await page.evaluate(() => document.getElementById('toasts').replaceChildren());
+    const q2 = await alice('ask_human', { question: 'Which colour for the vote button?' });
+    await until(page, (id) => !!document.getElementById('qa-' + id), q2.question_id);
+    await page.type(`#qa-${q2.question_id}`, 'green');
+    await page.click(`[data-fk="qb-${q2.question_id}"]`);
+    const sent = await until(page, () => [...document.querySelectorAll('#toasts .toast')].some((t) => /Answer sent to alice/.test(t.textContent)));
+    check('my own answer: no "wasn\'t sent" toast, and "Answer sent" offers Correct it', sent && await page.evaluate(() => !/wasn't sent/.test($('toasts').textContent) && [...document.querySelectorAll('#toasts button')].some((b) => b.textContent === 'Correct it')));
+    await page.evaluate(() => [...document.querySelectorAll('#toasts button')].find((b) => b.textContent === 'Correct it')?.click());
+    check('Correct it opens alice\'s direct thread, the message box started with "Correction to my answer: "', await until(page, () => ui.dm === 'alice' && document.activeElement === $('msg') && $('msg').value === 'Correction to my answer: '));
+    await page.evaluate(() => { $('msg').value = ''; document.querySelector('[data-dm-back]')?.click(); document.querySelector('#tabs [data-tab="all"]')?.click(); document.getElementById('toasts').replaceChildren(); }); await sleep(200);
+  }
+  // ---- a phone: a toast doesn't cover the message box being typed in ----
+  {
+    const pp = await browser.newPage(); watch(pp); await signIn(pp);
+    await pp.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+    await pp.goto(board.base + '/');
+    await pp.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 8000 });
+    await pp.evaluate(() => { $('msg').scrollIntoView({ block: 'end' }); $('msg').focus({ preventScroll: true }); toast('Answer sent to alice'); }); await sleep(500);
+    const ov = await pp.evaluate(() => { const m = $('msg').getBoundingClientRect(); const t = document.querySelector('#toasts .toast').getBoundingClientRect(); return { overlap: t.bottom > m.top && t.top < m.bottom, m: [Math.round(m.top), Math.round(m.bottom)], t: [Math.round(t.top), Math.round(t.bottom)] }; });
+    check('phone: a toast while typing in the message box at the foot shows clear of it', !ov.overlap, JSON.stringify(ov));
+    await pp.close();
+  }
+
   // ---- 3D: A1 (Setup closes when focus leaves it) and A2 (focus kept when 3D turns off) ----
   // ---- E4: a stalled /api/state gives up after 15s, so live updates don't freeze behind it ----
   {

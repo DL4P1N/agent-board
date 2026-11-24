@@ -877,6 +877,7 @@ html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top)
 /* One column (tablets, phones): a toast sits over the page's foot, so while one shows, the page ends that much lower
    (--toast-room, set by toast() in helpers.js) and the last item scrolls clear of it. */
 @media (max-width: 1000px) { main { padding-bottom: calc(var(--edge) + var(--toast-room, 0px)); } }
+#toasts.top { bottom: auto; top: calc(var(--s6) + env(safe-area-inset-top, 0px)); } /* a phone typing near the foot (helpers.js) */
 @media (min-width: 1280px) { #toasts { left: calc(var(--edge) + var(--dock) + var(--gutter)); right: calc(var(--edge) + var(--dock) + var(--gutter)); } }
 .toast { background: var(--toast); color: var(--toast-ink); border: 2px solid var(--border); padding: var(--s4) var(--s5); border-radius: var(--r-md); font-size: var(--fs-sm); max-width: 420px; box-shadow: var(--e2); pointer-events: none; overflow-wrap: anywhere; display: flex; align-items: center; gap: var(--s4);
   transition: opacity var(--t-base) var(--ease), transform var(--t-slow) var(--ease); }

@@ -3,7 +3,7 @@
 
 import './render.js';
 import { $, ALL_PHASES, ANYONE, me, oUi, state, ui } from './state.js';
-import { ago, canMove, easeHeight, esc, fmt, fullTime, leave, motion, patch, plural, reveal, root, short, taskById, who } from './helpers.js';
+import { ago, canMove, easeHeight, esc, fmt, fullTime, leave, motion, patch, plural, reveal, root, short, taskById, toast, who } from './helpers.js';
 import { agentInfoNow, agentOf, approvalWait, blockedSplit, bouncedTasks, cutTasks, dlSkipped, setupShown,
   teamCapacity, timeNow } from './derived.js';
 
@@ -176,6 +176,15 @@ function questionsHtml(qOpen) {
 }
 function snapQuestions(qOpen) {
   const box = $('questions'), ny = $('nyou');
+  // An answer typed here and not sent, whose question was answered elsewhere (another tab, a teammate): its card goes,
+  // so say so, and keep the text to copy.
+  for (const c of box.children) {
+    const id = Number(c.id.slice(2)); const draft = c.querySelector('textarea')?.value.trim();
+    if (!id || !draft || c.classList.contains('leaving') || qOpen.some((q) => q.id === id) || ui.qSent?.has(id)) continue;
+    const q = state.questions.find((x) => x.id === id); const by = q?.answered_by;
+    toast(`${q?.answer != null ? `${by ? (by === me ? 'You' : by) : 'Someone'} already answered ${q.asker}'s question` : `${q?.asker || 'The agent'}'s question was closed`}, so yours wasn't sent.`, false,
+      { label: 'Copy yours', run: () => navigator.clipboard?.writeText(draft).then(() => toast('Copied.'), () => {}) });
+  }
   qHtml = questionsHtml(qOpen);
   // Measured only when the cards change (a pass that changes nothing doesn't lay the page out). The whole body is
   // measured: answering can also change the Blocked list under the cards (drawn later in the pass, renderDocks).

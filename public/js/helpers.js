@@ -289,7 +289,7 @@ function toastsShift(fn) {
 // The room the toasts take at the foot of the screen (their height and the gap below), for the page to leave free.
 if ('ResizeObserver' in window) {
   const box = $('toasts');
-  new ResizeObserver(() => document.documentElement.style.setProperty('--toast-room', box.offsetHeight ? Math.ceil(box.offsetHeight + parseFloat(getComputedStyle(box).bottom)) + 'px' : '0px')).observe(box);
+  new ResizeObserver(() => document.documentElement.style.setProperty('--toast-room', box.offsetHeight && !box.classList.contains('top') ? Math.ceil(box.offsetHeight + parseFloat(getComputedStyle(box).bottom)) + 'px' : '0px')).observe(box);
 }
 function toast(msg, bad = false, action = null) {
   const d = document.createElement('div');
@@ -301,6 +301,10 @@ function toast(msg, bad = false, action = null) {
     b.onclick = () => { toastOut(d); action.run(); }; d.append(b);
   }
   if (bad) d.setAttribute('role', 'alert');
+  // One column (a phone): toasts at the foot would cover a text field being typed in down there (the chat's message
+  // box, an answer), so then they show at the top.
+  const f = document.activeElement;
+  $('toasts').classList.toggle('top', matchMedia('(max-width: 999px)').matches && !!f?.matches?.('input, textarea') && f.getBoundingClientRect().bottom > innerHeight / 2);
   toastsShift(() => $('toasts').append(d));
   const shown = [...$('toasts').children].filter((t) => !t.classList.contains('out'));
   shown.slice(0, Math.max(0, shown.length - 3)).forEach(toastOut);
