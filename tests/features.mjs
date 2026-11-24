@@ -329,9 +329,9 @@ check('…nor right after the merger sent it back from review', /review first/.t
 await human('/agents/o1', 'PATCH', { slots: 1 });
 check('reopening its done task while at capacity is refused', /before reopening/.test(err(await o1('update_task', { id: PT2.id, status: 'in_progress' }))));
 await human('/agents/o1', 'PATCH', { slots: null });
-// Nobody to review it (no integrator chosen): the owner may mark its own work done.
+// No integrator chosen, but another agent is online: it reviews (claiming the role), not the owner.
 await human('/settings', 'PUT', { integrator: '' });
-check('with no integrator chosen the owner may mark its task done', (await o1('update_task', { id: PT3.id, status: 'done' })).status === 'done');
+check('with no integrator chosen the owner still cannot mark its task done while another agent is online', /review first[^]*claim_role\("integrator"\)/.test(err(await o1('update_task', { id: PT3.id, status: 'done' }))));
 
 // --- claim_review: needs an integrator mode, and a free slot in "whoever is free" mode ---
 await board.restart();

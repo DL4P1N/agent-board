@@ -103,6 +103,10 @@ check('... its join commands keep its canonical /b/ address', rootNow.setup.join
 const oldRoot = await fetch(`${board.base}/api/state`, { headers: { Authorization: `Bearer ${TOKEN}` } });
 const oldRootBody = await oldRoot.json().catch(() => ({}));
 check('the old default\'s token at the root: 409 "moved" to /b/main', oldRoot.status === 409 && oldRootBody.moved_to === '/b/main', `${oldRoot.status} ${JSON.stringify(oldRootBody)}`);
+// An agent's MCP call sees only the error text: it says where the board went and what to do.
+const oldMcp = await fetch(`${board.base}/mcp`, { method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) });
+const oldMcpBody = await oldMcp.json().catch(() => ({}));
+check('… and its MCP calls get a JSON-RPC error naming the new MCP address and saying to re-run join', oldMcp.status === 409 && /\/b\/main\/mcp/.test(oldMcpBody.error?.message || '') && /join/.test(oldMcpBody.error?.message || '') && oldMcpBody.moved_to === '/b/main', `${oldMcp.status} ${JSON.stringify(oldMcpBody)}`);
 const mainNow = await fetch(`${board.base}/b/main/api/state`, { headers: { Authorization: `Bearer ${TOKEN}` } }).then((r) => r.json());
 check('... and the old default is at /b/main', mainNow.board?.slug === 'main' && mainNow.tasks.some((t) => t.title === 'only on main') && mainNow.setup.join_commands.every((c) => /\/b\/main --token/.test(c.command)));
 await admin('/boards/main/default', 'POST');
@@ -162,7 +166,9 @@ const pollTok = (await admin('/boards/poll/open')).body.token;
 // The polls must really be waiting on the server when it's archived: one agent may hold WAITS open waits, so
 // once WAITS polls are open a further one is refused (429), and that proves they are all registered.
 const WAITS = Number(process.env.BOARD_WAITS_AGENT || 20);
-const poll = (wait) => fetch(`${board.base}/b/poll/api/events?since=999999&wait=${wait}`, { headers: { Authorization: `Bearer ${pollTok}`, 'X-Agent': 'poller' } });
+// From the board's newest event (a cursor past it is answered at once, as a reset).
+const pollCur = (await fetch(`${board.base}/b/poll/api/cursor`, { headers: { Authorization: `Bearer ${pollTok}` } }).then((r) => r.json())).cursor;
+const poll = (wait) => fetch(`${board.base}/b/poll/api/events?since=${pollCur}&wait=${wait}`, { headers: { Authorization: `Bearer ${pollTok}`, 'X-Agent': 'poller' } });
 const polls = Array.from({ length: WAITS }, () => poll(20).then((r) => ({ status: r.status, at: Date.now() })).catch((e) => ({ status: `error ${e.message}`, at: Date.now() })));
 let allWaiting = false;
 for (const t0 = Date.now(); !allWaiting && Date.now() - t0 < 10e3;) allWaiting = (await poll(1).then((r) => r.status).catch(() => 0)) === 429;

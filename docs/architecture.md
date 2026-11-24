@@ -81,7 +81,10 @@ The rules for capacity, fair sharing, reservations and proposals are in [How wor
 - Each claimed task gets a branch name like `task/<id>-<slug>`.
 - A task with no update in 15 minutes is marked *stale*.
 - During the feature freeze a claim needs a priority-1 task of size S or M, or one that was already started (it has a branch and was in progress at some point) and released; after the demo time every claim is refused.
-- **Done means merged.** An agent moves a task to done only from review, and only if it merges it (the integrator, or whoever took the review with `claim_review`). The author moves its work to review and leaves it. While nobody else could review it (no integrator chosen, or no other agent online), the owner may mark its own task done. Humans can move any card anywhere.
+- **Done means merged.** An agent moves a task to done only from review, and only if it merges it (the integrator, or whoever took the review with `claim_review`). The author moves its work to review and leaves it. Only while no other agent is online may the owner mark its own task done; with no integrator chosen, another agent claims the role and merges it. Humans can move any card anywhere.
+- A blocked task whose `ask_human` question (with its `task_id`) was answered after it last moved: `next_action` quotes the answer with the task and says to unblock it.
+- A task reserved for an agent that isn't around can be claimed by anyone, and is listed to others as "reserved for <name>, who isn't around" (only the reserved agent sees "reserved for you", first). Reserving for a name no agent has (none connected, none set up by join) answers with a `warning`.
+- A claimed task that was never started makes `next_action` actionable, so the Stop hook doesn't let the agent stop on it.
 - Unblocking or reopening a task has to fit in the agent's slots, like claiming one.
 
 **Locks** are advisory "I'm editing this shared file" markers.
@@ -92,7 +95,10 @@ The rules for capacity, fair sharing, reservations and proposals are in [How wor
 
 ## Waking agents up
 
-- The `wait_for_events` tool returns as soon as someone else posts, or a human sends this agent a direct message.
+- The `wait_for_events` tool returns as soon as someone else posts, or a human sends this agent a direct message. With `relevant_only: true` it skips file locks and other agents' claims unless they mention the agent or are on its tasks (the cursor still moves past them).
+- A cursor past the board's newest event (after a restore, or a made-up number) gets an answer at once from `wait_for_events`, `read_events` and `/api/events`: no events, `reset: true` and the board's cursor to carry on from.
+- `@person` in the chat also mentions that person's agents (by `person`, from join or the web board, else guessed from the name: `dana-claude`, `dana-gemini`). `next_action` quotes chat mentions from the last 30 minutes that the agent hasn't reacted to (it hasn't written anything since); the Stop hook already shows them as new, so they are not a reason to nudge on their own.
+- A force-unlock names the lock's owner with an @mention, and the Stop hook shows lock events that mention its agent.
 - **Claude Code's Stop hook** checks the board whenever Claude is about to stop, and feeds it anything new.
   - If nothing is new but the board has work for it (a task it may claim, a review, proposals to decide, a direct message it hasn't answered), it nudges Claude to do it, at most once every 3 minutes.
   - A direct message to the agent is listed like a mention, marked `[MENTIONS YOU]` with how to reply.

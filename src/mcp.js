@@ -48,6 +48,13 @@ export function buildMcpServer(board, baseAgent, { tokenCurrent = () => true } =
     try { return ok(await fn(args || {}, extra)); } catch (e) { return fail(e); }
   };
   const presence = () => board.presenceChanged();
+  // A cursor past the board's newest event (the board was restored from a backup or started fresh, or the number was
+  // made up): nothing would ever come after it. Answered at once with the board's cursor to carry on from.
+  const cursorAhead = (since) => {
+    const latest = board.latestEventId();
+    if (!(Number(since) > latest)) return null;
+    return { events: [], cursor: latest, timed_out: false, reset: true, note: `Your cursor (${since}) is past the board's newest event (${latest}): the board was restored or started again. Carry on from cursor ${latest}, and call board_status to catch up.` };
+  };
   const tool = (name, def, handler) => server.registerTool(name, def, async (args, extra) => {
     // One name, one laptop: a second laptop using a name another laptop owns may only read the board (its
     // board_status says to stop). Checked once here, for every tool, so none can act for the owner's agent.
@@ -152,6 +159,8 @@ export function buildMcpServer(board, baseAgent, { tokenCurrent = () => true } =
       },
     },
     wrap(({ since = 0, channel, task_id, include_own, limit }) => {
+      const ahead = cursorAhead(since);
+      if (ahead) return ahead;
       const events = board.events({ since, channel, task_id, limit, exclude_author: include_own ? undefined : baseAgent, direct: baseAgent });
       return { events, cursor: events.length ? events.at(-1).id : Math.max(since, 0) };
     })
@@ -164,23 +173,35 @@ export function buildMcpServer(board, baseAgent, { tokenCurrent = () => true } =
       description:
         `Block until new events from OTHER agents/humans arrive (or timeout, max ${MAX_WAIT_S}s). This is how you "receive webhooks". ` +
         'Pass the cursor from your last call. Returns {events, cursor}. Empty events means timeout — call again or do other work. ' +
-        'A direct message from a human to you arrives as a message on channel "direct": answer it with post(to: "<their name>").',
+        'A direct message from a human to you arrives as a message on channel "direct": answer it with post(to: "<their name>"). ' +
+        'A cursor past the board\'s newest event (the board was restored or restarted) returns at once with reset: true and the cursor to carry on from.',
       inputSchema: {
         since: z.number().int().optional().describe('Cursor from board_status / previous call. Omit to wait only for brand-new events.'),
         timeout_s: z.number().int().min(1).max(MAX_WAIT_S).optional().describe('Default 60'),
         channel: z.string().optional(),
+        relevant_only: z.boolean().optional().describe('Wake only for what concerns you: file locks and other agents\' claims are skipped unless they mention you or are on your tasks. The cursor still moves past them. Default false.'),
       },
     },
-    wrap(async ({ since, timeout_s = 60, channel }, extra) => {
+    wrap(async ({ since, timeout_s = 60, channel, relevant_only }, extra) => {
+      const ahead = cursorAhead(since);
+      if (ahead) return ahead;
       const cursor0 = since ?? board.latestEventId();
-      const events = await board.waitForEvents(
-        { since: cursor0, channel, exclude_author: baseAgent, limit: 200, direct: baseAgent },
-        Math.min(timeout_s, MAX_WAIT_S) * 1000,
-        extra?.signal
-      );
-      // The token was rotated while this waited (that ends every wait): nothing that came after is for it.
-      if (!tokenCurrent()) throw new Error(TOKEN_ROTATED);
-      return { events, cursor: events.length ? events.at(-1).id : cursor0, timed_out: events.length === 0 };
+      const filter = { channel, exclude_author: baseAgent, limit: 200, direct: baseAgent };
+      const until = Date.now() + Math.min(timeout_s, MAX_WAIT_S) * 1000;
+      let cursor = cursor0;
+      // Without relevant_only the first events end the wait; with it, events that don't concern this agent move the
+      // cursor on and the wait goes on until something does (or the time is up).
+      for (;;) {
+        const events = await board.waitForEvents({ ...filter, since: cursor }, Math.max(0, until - Date.now()), extra?.signal);
+        // The token was rotated while this waited (that ends every wait): nothing that came after is for it.
+        if (!tokenCurrent()) throw new Error(TOKEN_ROTATED);
+        if (!events.length) break;
+        cursor = events.at(-1).id;
+        const shown = relevant_only ? events.filter(board.relevantTo(baseAgent)) : events;
+        if (shown.length) return { events: shown, cursor, timed_out: false };
+        if (Date.now() >= until || extra?.signal?.aborted || board.closed) break;
+      }
+      return { events: [], cursor, timed_out: true };
     })
   );
 
@@ -389,7 +410,7 @@ export function buildMcpServer(board, baseAgent, { tokenCurrent = () => true } =
     'unlock_files',
     {
       title: 'Unlock files',
-      description: 'Release locks you (or your subagents) hold. force=true removes someone else\'s lock — only after asking them.',
+      description: 'Release locks you (or your subagents) hold. force=true removes someone else\'s lock — only after asking them; the board names and @mentions its owner.',
       inputSchema: { paths: z.array(z.string()).min(1), force: z.boolean().optional(), as: asArg },
     },
     wrap(({ paths, force, as }) => board.unlockFiles(who(as), { paths, force }))

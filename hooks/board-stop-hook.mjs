@@ -136,9 +136,6 @@ async function main() {
 
   // The board leaves out this agent's own events; its own subagents' (<agent>/<name>) are left out here.
   const own = (e) => String(e.author || '').toLowerCase().startsWith(agent + '/');
-  const relevant = events.filter((e) => !['lock', 'unlock'].includes(e.kind) && !own(e) && (!fresh || Date.now() - e.ts < RECENT_MS));
-  if (!relevant.length) return continuing ? undefined : nudgeIfWork({ get, agent, state }); // else allow the stop
-
   // A direct message from a human counts as a mention (the board only sends this agent its own threads).
   const direct = (e) => e.channel === 'direct' && e.data?.dm?.from !== 'agent';
   const mine = (n) => n === agent || n.startsWith(agent + '/');
@@ -146,6 +143,9 @@ async function main() {
   // matched here because not every name can be an @mention (one starting with a digit never is).
   const answerToMe = (e) => e.kind === 'answer' && mine(String(e.data?.asker ?? /^@([\w.\-/]+) re "/.exec(String(e.text || ''))?.[1] ?? '').toLowerCase());
   const mentionsMe = (e) => direct(e) || answerToMe(e) || (e.data?.mentions || []).map((m) => String(m).toLowerCase()).some((m) => mine(m) || m === 'all' || m === 'everyone');
+  // File locks are left out, unless one names this agent (someone force-unlocked its lock).
+  const relevant = events.filter((e) => (!['lock', 'unlock'].includes(e.kind) || mentionsMe(e)) && !own(e) && (!fresh || Date.now() - e.ts < RECENT_MS));
+  if (!relevant.length) return continuing ? undefined : nudgeIfWork({ get, agent, state }); // else allow the stop
   // The last 40 events, plus every one for this agent (mentions, direct messages, answers to its questions)
   // however early: the cursor moves past all of them, so one left out would never be seen.
   const others = relevant.filter((e) => !mentionsMe(e));

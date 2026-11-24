@@ -78,7 +78,13 @@ export function createApp({ registry, live, adminToken }) {
     const t = isData ? tokenFrom(req) : '';
     if (t && !(rt && [rt.token, rt.agentToken, rt.viewerToken].some((x) => safeEq(t, x)))) {
       const moved = [...runtimes.values()].find((o) => [o.token, o.agentToken, o.viewerToken].some((x) => safeEq(t, x)));
-      if (moved) return res.status(409).json({ error: 'This board moved', moved_to: `/b/${moved.slug}` });
+      if (moved) {
+        // Where it went and what to do, for an agent (its MCP call shows only this text) as much as for the page.
+        const to = `/b/${moved.slug}`;
+        const mcp = /^\/mcp(\/|$)/.test(req.path);
+        const error = `This board moved to ${to}/ on this server. ${mcp ? `Its MCP address is now ${to}/mcp: ask your human to re-run the join command from the web board, then restart this tool.` : 'Open it there, or re-run the join command from the web board.'}`;
+        return res.status(409).json(mcp ? { jsonrpc: '2.0', error: { code: -32001, message: error }, id: null, moved_to: to } : { error, moved_to: to });
+      }
     }
     if (!rt) {
       const f = failures.get(registry.defaultSlug);

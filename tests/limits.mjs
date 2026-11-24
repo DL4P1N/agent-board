@@ -125,20 +125,22 @@ try {
 
   // ---- open waits: per agent and in total ----
   const ac = new AbortController();
-  const wait = (who) => get('/events?since=999999&wait=30', { who, signal: ac.signal }).catch(() => null);
+  // Waits that stay open: from the board's newest event (a cursor past it is answered at once, as a reset).
+  const cur = (await (await get('/cursor', { who: 'waiter' })).json()).cursor;
+  const wait = (who) => get(`/events?since=${cur}&wait=30`, { who, signal: ac.signal }).catch(() => null);
   const held = [wait('waiter'), wait('waiter')];
   await sleep(300);
-  let r = await get('/events?since=999999&wait=30', { who: 'waiter' });
+  let r = await get(`/events?since=${cur}&wait=30`, { who: 'waiter' });
   const third = r.status === 429 ? await r.json() : null;
   check('a third wait from one agent is refused (2 open is its limit here), saying why', r.status === 429 && !!r.headers.get('retry-after') && /waiter already has 2 waits open/.test(third?.error || ''), `${r.status} ${JSON.stringify(third)}`);
-  const mcpWait = await mcpRaw('waiter', 'tools/call', { name: 'wait_for_events', arguments: { since: 999999, timeout_s: 5 } }, 7);
+  const mcpWait = await mcpRaw('waiter', 'tools/call', { name: 'wait_for_events', arguments: { since: cur, timeout_s: 5 } }, 7);
   check('wait_for_events over MCP counts toward the same limit', mcpWait.status === 429 && /already has 2 waits open/.test((await mcpWait.json()).error?.message || ''));
   const probe = await mcpRaw('prober&probe=1', 'tools/call', { name: 'wait_for_events', arguments: { since: 999999, timeout_s: 5 } }, 8);
   check('a connection check (?probe=1) may not hold a wait open', probe.status === 400 && /probe=1/.test((await probe.json()).error?.message || ''), String(probe.status));
   // The total is 5 here, and a tenth of it (at least 1) is kept for people: agents may hold 4.
   held.push(wait('w1'), wait('w2'));
   await sleep(300);
-  r = await get('/events?since=999999&wait=30', { who: 'w3' });
+  r = await get(`/events?since=${cur}&wait=30`, { who: 'w3' });
   check('past what agents may hold, a new agent wait is refused, saying the rest is kept for people', r.status === 429 && /The board has 4 waits open from agents.*kept for people's live pages/.test((await r.json()).error || ''));
   const stream = (name) => fetch(`${board.base}/api/stream?token=${board.token}&name=${name}`, { signal: ac.signal }).catch(() => null);
   const page = await stream('dana');
@@ -155,7 +157,8 @@ try {
   // ---- open waits per network address (another board: 3 per address) ----
   const b2 = await startBoard({ env: { BOARD_WAITS_IP: '3' } });
   const ac2 = new AbortController();
-  const wait2 = (who, ip) => fetch(`${b2.base}/api/events?since=999999&wait=30`, { headers: { Authorization: `Bearer ${agentTokenFor(b2.token)}`, 'X-Agent': who, 'CF-Connecting-IP': ip }, signal: ac2.signal });
+  const cur2 = (await (await fetch(`${b2.base}/api/cursor`, { headers: { Authorization: `Bearer ${agentTokenFor(b2.token)}`, 'X-Agent': 'm0' } })).json()).cursor;
+  const wait2 = (who, ip) => fetch(`${b2.base}/api/events?since=${cur2}&wait=30`, { headers: { Authorization: `Bearer ${agentTokenFor(b2.token)}`, 'X-Agent': who, 'CF-Connecting-IP': ip }, signal: ac2.signal });
   const fromOne = ['m1', 'm2', 'm3'].map((n) => wait2(n, '198.51.100.50').catch(() => null));
   await sleep(300);
   const fourth = await wait2('m4', '198.51.100.50');

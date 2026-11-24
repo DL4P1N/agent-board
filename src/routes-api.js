@@ -188,6 +188,10 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     queryCount(req, res, 'before'); queryCount(req, res, 'wait');
     const before = Math.max(0, Number(req.query.before) || 0) || undefined;
     if (before) return { events: board.events({ before, limit: 200 }) };
+    // A cursor past the board's newest event (a restored or fresh board): answered at once with the board's cursor
+    // (reset: true), not a wait for events that would never come.
+    const latest = board.latestEventId();
+    if (since > latest) return { events: [], cursor: latest, reset: true };
     const exclude_author = req.query.exclude || undefined;
     const wait = Math.min(Number(req.query.wait || 0), 600);
     // An agent (the Stop hook) gets the direct messages it may read; the web feed gets none (they come with /state).

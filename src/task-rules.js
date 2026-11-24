@@ -86,18 +86,20 @@ function agentChangeRefusal(c, changingStatus) {
     const cap = c.capacity();
     if (cap.active >= cap.slots) return `You hold ${cap.active} of ${cap.slots} task(s) at once: finish or release one before ${task.status === 'done' ? 'reopening' : task.status === 'review' ? 'taking back' : 'unblocking'} #${id}.`;
   }
-  // Done means merged: only whoever merges moves a task to done, and only from review. Without anyone to
-  // review it (no integrator yet, or no other agent online) the owner may mark its own work done.
-  // (Someone else's task: the ownership check below refuses it.)
-  if (owner && changingStatus && status === 'done' && !(task.status === 'review' && canMerge) && integrator && c.othersOnline()) {
+  // Done means merged: only whoever merges moves a task to done, and only from review. Only when nobody else could
+  // review it (no other agent online) may the owner mark its own work done; with no integrator chosen yet, another
+  // agent takes the role and merges it. (Someone else's task: the ownership check below refuses it.)
+  if (owner && changingStatus && status === 'done' && !(task.status === 'review' && canMerge) && c.othersOnline()) {
+    const who = anyone ? 'another agent takes it with claim_review' : integrator ? `${integrator} reviews it` : 'another agent reviews it (nobody owns main yet: the first one free calls claim_role("integrator"))';
     if (task.status !== 'review') {
       return canMerge
         ? `Move #${id} to review first (update_task status "review"), then merge it and mark it done.`
-        : `Move #${id} to review first (update_task status "review", with pr_url if you opened a PR): ${anyone ? 'another agent takes it with claim_review' : `${integrator} reviews it`} and marks it done once it's merged.`;
+        : `Move #${id} to review first (update_task status "review", with pr_url if you opened a PR): ${who} and marks it done once it's merged.`;
     }
     return anyone
       ? `#${id} is waiting for review: another agent takes it with claim_review and merges it. Carry on with other work.`
-      : `#${id} is waiting for ${integrator} to review and merge it. Carry on with other work.`;
+      : integrator ? `#${id} is waiting for ${integrator} to review and merge it. Carry on with other work.`
+        : `#${id} is waiting for review: nobody owns main yet, so another agent calls claim_role("integrator") and merges it. Carry on with other work.`;
   }
   if (!task.assignee && (changingStatus || branch !== undefined)) return `task #${id} isn't claimed by anyone. Claim it first (claim_task).`;
   // A crashed agent's task, or one whose owner hit its usage limit: anyone may put it back to open.

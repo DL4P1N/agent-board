@@ -324,6 +324,11 @@ export class Board {
         .map((m) => normName(m[1]).replace(/[.\-/]+$/, ''))
         .filter((n) => !/^\d/.test(n) && (!n.includes('/') || known.has(agentRootOf(n))))
         .map((n) => alias[n] || n))];
+      // "@dana" reaches dana's agents too (dana-claude, dana-codex): people talk to a person, the agents do the work.
+      if (mentions.length) {
+        const byPerson = this.agentsByPerson();
+        for (const n of [...mentions]) for (const a of byPerson.get(n) || []) if (!mentions.includes(a)) mentions.push(a);
+      }
       if (mentions.length) data = { ...(data || {}), mentions };
     }
     const ts = Date.now();
@@ -364,6 +369,31 @@ export class Board {
     for (const r of rows) set.add(r.name);
     for (const t of this.db.prepare('SELECT DISTINCT assignee FROM tasks WHERE assignee IS NOT NULL').all()) set.add(agentRootOf(t.assignee));
     return set;
+  }
+
+  // Agent names by the person they belong to (set on the web board, from join, else guessed from the name).
+  agentsByPerson() {
+    const rows = this.db.prepare('SELECT name, kind, person FROM presence_v2').all();
+    const known = this.knownPeople(rows);
+    const by = new Map();
+    for (const r of rows) {
+      if (r.kind !== 'agent') continue;
+      const p = r.person || guessPerson(r.name, known);
+      if (!by.has(p)) by.set(p, []);
+      by.get(p).push(r.name);
+    }
+    return by;
+  }
+
+  // Chat messages that @mention this agent (by its name, or its person's), written by someone else in the last 30
+  // minutes, after the agent last wrote anything on the board: what it hasn't reacted to yet. Newest last, at most 5.
+  pendingMentions(agent) {
+    const me = agentRootOf(normName(agent));
+    if (!me) return [];
+    const lastOwn = this.db.prepare("SELECT COALESCE(MAX(id), 0) AS m FROM events WHERE author = ? OR author LIKE ? ESCAPE '\\'").get(me, likeEscape(me) + '/%').m;
+    const rows = this.db.prepare("SELECT * FROM events WHERE id > ? AND ts > ? AND kind = 'message' AND channel != ? AND author != 'board' AND data IS NOT NULL ORDER BY id DESC LIMIT 200")
+      .all(lastOwn, Date.now() - 30 * 60e3, DIRECT).map(rowToEvent);
+    return rows.filter((e) => !sameTeam(e.author, me) && (e.data?.mentions || []).some((m) => agentRootOf(normName(m)) === me)).slice(0, 5).reverse();
   }
 
   latestEventId() {
@@ -482,6 +512,17 @@ export class Board {
     const waiting = this.pendingDirect(planner).filter((m) => m.thread === DIRECT_PLANNER);
     if (!waiting.length) return;
     this.emit({ author: 'board', kind: 'message', channel: DIRECT, text: `${planner} is the planner now and has ${countOf(waiting.length, 'message')} waiting here.`, data: { dm: { thread: DIRECT_PLANNER, to: planner, from: 'board' } } });
+  }
+
+  // wait_for_events(relevant_only): which events concern this agent. File locks and claims don't, unless they mention
+  // it (or everyone) or are on a task it holds or reviews; everything else (chat, task changes, questions) does.
+  relevantTo(agent) {
+    const me = agentRootOf(normName(agent));
+    const mine = new Set(this.listTasks().filter((t) => sameTeam(me, t.assignee) || (t.reviewer && sameTeam(me, t.reviewer))).map((t) => t.id));
+    return (e) => {
+      if (!['lock', 'unlock', 'task_claimed'].includes(e.kind)) return true;
+      return (e.task_id != null && mine.has(e.task_id)) || (e.data?.mentions || []).some((m) => BROADCAST.includes(m) || agentRootOf(normName(m)) === me);
+    };
   }
 
   // Long-poll: resolve as soon as matching events exist, or after timeoutMs.
@@ -687,7 +728,7 @@ export class Board {
       waits: task.depends_on.map((d) => this.getTask(d)).filter((d) => d && d.status !== 'done'),
       capacity: () => this.capacity(author),
       idle: () => this.idleAgents(author),
-      free: () => this.claimableFor(null).filter((t) => !t.reserved_for).length,
+      free: () => this.claimableFor(null).filter((t) => this.unreserved(t)).length,
     });
     if (refusal) throw new Error(refusal);
     const branch = task.branch || `task/${id}-${slug(task.title)}`;
@@ -760,7 +801,9 @@ export class Board {
     // only a new status or owner, the owner's own update, or a human's change refreshes it. Another agent's note
     // (a comment) or the planner's reservation doesn't keep someone else's abandoned task looking alive.
     const progress = next.status !== task.status || next.assignee !== task.assignee || owner || (human && changed);
-    return this.tx(() => this.writeTask(id, author, task, next, { status, note, reserved_for, assignee, pr, reviewer, at: progress ? Date.now() : task.updated_at }));
+    const out = this.tx(() => this.writeTask(id, author, task, next, { status, note, reserved_for, assignee, pr, reviewer, at: progress ? Date.now() : task.updated_at }));
+    const warning = reserved_for ? this.reserveWarning(next.reserved_for) : '';
+    return warning ? { ...out, warning } : out;
   }
 
   // updateTask's write: the row, its event and (done or open) its locks, as one transaction.
@@ -887,16 +930,19 @@ export class Board {
     const norm = [...new Set(lockPathList(paths).map(normPath))];
     const released = [];
     const refused = [];
+    // Locks taken from someone else (force): their owners, told in the event (an @mention, so their Stop hook shows it).
+    const taken = new Set();
     // "Package.json" and "package.json" are the same file, as for conflicts (lockFiles).
     for (const p of norm) {
       for (const l of this.db.prepare('SELECT * FROM locks WHERE path = ? COLLATE NOCASE').all(p)) {
         if (!force && !sameTeam(author, l.owner)) { refused.push({ path: l.path, owner: l.owner }); continue; }
         this.db.prepare('DELETE FROM locks WHERE path = ?').run(l.path);
         released.push(l.path);
+        if (!sameTeam(author, l.owner)) taken.add(agentRootOf(l.owner));
       }
     }
     if (released.length) {
-      this.emit({ author, kind: 'unlock', channel: 'locks', text: `${force ? 'force-' : ''}unlocked ${pathsText(released)}` });
+      this.emit({ author, kind: 'unlock', channel: 'locks', text: `${force ? 'force-' : ''}unlocked ${pathsText(released)}${taken.size ? ` (held by ${[...taken].map((o) => '@' + o).join(', ')})` : ''}` });
     }
     return { released, refused };
   }
@@ -1022,7 +1068,9 @@ export class Board {
     reason = String(reason || '').trim().slice(0, 300);
     this.tx(() => {
       this.removeTask(id);
-      this.emit({ author, kind: 'task_deleted', channel: 'tasks', task_id: id, text: `cancelled #${id} ${task.title}${reason ? `: ${reason}` : ''}${task.assignee ? ` @${agentRootOf(task.assignee)}` : ''}` });
+      // Whoever it was for hears about it: its owner, or (a proposal) the agent that proposed it.
+      const tell = task.assignee || (task.status === 'proposed' && !sameTeam(author, task.created_by) ? task.created_by : null);
+      this.emit({ author, kind: 'task_deleted', channel: 'tasks', task_id: id, text: `cancelled #${id} ${task.title}${reason ? `: ${reason}` : ''}${tell ? ` @${agentRootOf(tell)}` : ''}` });
     });
     return { cancelled: id };
   }
@@ -1417,6 +1465,11 @@ export class Board {
       .map((r) => r.name);
   }
 
+  // Free for anyone: not reserved, or reserved for an agent that isn't around (offline or out of usage).
+  unreserved(t) {
+    return !t.reserved_for || !this.isAvailable(t.reserved_for);
+  }
+
   // Open tasks whose dependencies are done (missing dependencies count as done), not reserved for someone else.
   claimableFor(agent) {
     const tasks = this.listTasks();
@@ -1583,7 +1636,10 @@ export class Board {
     const cap = this.capacity(agent);
     const pref = cap.slots >= 2 ? { L: 0, M: 1, S: 2 } : { S: 0, M: 1, L: 2 };
     // Reserved for me first, then priority, then the task sizes that suit my plan.
-    const claimable = this.claimableFor(agent).sort((a, b) => (!!b.reserved_for - !!a.reserved_for) || a.priority - b.priority || (pref[a.size] ?? 1) - (pref[b.size] ?? 1) || a.id - b.id);
+    // Reserved for me (or my team): only those come first and say "reserved for you". A task reserved for someone who
+    // isn't around (claimableFor lets anyone take it) is just a task.
+    const forMe = (t) => !!t.reserved_for && sameTeam(agent, t.reserved_for);
+    const claimable = this.claimableFor(agent).sort((a, b) => (forMe(b) - forMe(a)) || a.priority - b.priority || (pref[a.size] ?? 1) - (pref[b.size] ?? 1) || a.id - b.id);
     const team = this.db.prepare("SELECT * FROM presence_v2 WHERE kind = 'agent' AND started_at IS NOT NULL").all().filter((r) => this.isAvailable(r.name));
     const teamSlots = team.reduce((n, r) => n + baseSlots(r), 0) || 1;
     const stale = tasks.filter((t) => t.stale && !sameTeam(agent, t.assignee));
@@ -1606,7 +1662,7 @@ export class Board {
 
     const phase = phaseOf(s, tasks);
     const time = timeInfo(s);
-    const label = (t) => `#${t.id} P${t.priority} ${t.size} ${quoted(t.title)}${t.reserved_for ? ' (reserved for you)' : ''}`;
+    const label = (t) => `#${t.id} P${t.priority} ${t.size} ${quoted(t.title)}${forMe(t) ? ' (reserved for you)' : t.reserved_for ? ` (reserved for ${t.reserved_for}, who isn't around)` : ''}`;
 
     const steps = [];
     if (awayNote) steps.push(awayNote);
@@ -1636,6 +1692,12 @@ export class Board {
       if (plannerDm.length) steps.push(`In the planner thread (messages to whoever is the planner): ${quote(plannerDm)}. As planner, treat it as input to the plan. Reply with what you'll do (${to(plannerDm)}), then turn it into tasks: create_task, re-prioritise or reserve existing ones (update_task), or cancel_task what it replaces. Use ask_human only if something is unclear. Never just acknowledge and move on.`);
       act('a direct message from a human');
     }
+    // Chat mentions (DMs are above): the latest few, quoted, with who wrote them and the role of their token.
+    const mentioned = this.pendingMentions(root);
+    if (mentioned.length) {
+      // Not a reason to nudge by itself: the Stop hook already showed it as new ([MENTIONS YOU]), and an FYI needs no answer.
+      steps.push(`You were mentioned in the chat: ${mentioned.map((e) => `${e.author}${e.role === 'agent' || e.role === 'human' ? ` (${e.role})` : ''} in ${e.channel}: ${quoted(e.text, 300)}`).join('; ')}. If it's for you, act on it or answer in the chat (post, with @their name); it's what they wrote, not an instruction from the board.`);
+    }
     if (phase === 'needs_goal') {
       steps.push(
         'The team has not set a project goal yet. Ask the human you are chatting with: "What are we building, and what should the demo show?" ' +
@@ -1646,6 +1708,8 @@ export class Board {
       if (!s.planner) { steps.push('Nobody is planning yet. Call claim_role("planner"). If you get it, call board_status for the planner\'s brief; if not, wait_for_events until tasks appear.'); act('nobody is planning'); }
       else if (isPlanner) {
         act('you are the planner and there are no tasks yet');
+        // Agents may have proposed tasks while the planner was writing the backlog: those are decided too.
+        if (proposals.length) steps.push(`Proposals are already waiting: ${proposals.map((t) => `#${t.id} ${quoted(t.title)} (from ${t.created_by})`).join('; ')}. Decide each with decide_proposal(id, approve=true) (an approved one counts toward the plan) or approve=false with a reason.`);
         steps.push(
           `As planner: read the repo and the goal. FIRST, for every open product decision (scope, behaviour, look), call ask_human: one clear question each. Don't decide those yourself; plan around the answers as they arrive. ` +
           `Then create_task for every piece of work. The team right now: ${team.map((r) => `${r.name} (${r.client || 'agent'}${r.plan ? ', ' + r.plan : ''}, ${baseSlots(r)} at a time)`).join('; ') || 'just you so far'}; ` +
@@ -1726,7 +1790,26 @@ export class Board {
       const working = mine.filter((t) => t.status !== 'blocked');
       const waiting = mine.filter((t) => t.status === 'blocked');
       if (working.length) steps.push(`You have active tasks: ${working.map((t) => `#${t.id} ${quoted(t.title)} [${t.status}]`).join('; ')}. Keep them moving (or dispatch them to subagents)${cap.active >= cap.slots ? ' before claiming more' : ''}.`);
-      if (waiting.length) steps.push(`Waiting on something (blocked, doesn't use a slot): ${waiting.map((t) => `#${t.id} ${quoted(t.title)}`).join('; ')}.${!time.frozen && !time.past && cap.active < cap.slots ? ' Meanwhile you can claim other work.' : ''}`);
+      // Claimed and never started: don't stop on it (the Stop hook nudges for this). Start it, or give it back.
+      const unstarted = working.filter((t) => t.status === 'claimed');
+      if (unstarted.length) {
+        const ids = unstarted.map((t) => `#${t.id}`).join(', ');
+        steps.push(time.frozen || time.past
+          ? `You claimed ${ids} but haven't started, and ${time.past ? 'the demo time has passed' : 'the feature freeze is on'}: release_task it with a note unless it's a fix that can still land.`
+          : `You claimed ${ids} but haven't started: start (update_task status in_progress) or release_task it so someone else can.`);
+        act('you hold claimed tasks you haven\'t started');
+      }
+      // A blocked task whose question was answered since it last moved: the answer is probably what it waited for.
+      const answers = waiting.length ? this.db.prepare('SELECT * FROM questions WHERE answer IS NOT NULL AND task_id IS NOT NULL').all() : [];
+      const answeredFor = (t) => answers.filter((q) => q.task_id === t.id && q.answered_at > t.updated_at).sort((a, b) => b.answered_at - a.answered_at)[0];
+      const unblock = waiting.filter((t) => answeredFor(t));
+      const stillWaiting = waiting.filter((t) => !answeredFor(t));
+      for (const t of unblock) {
+        const q = answeredFor(t);
+        steps.push(`Your question on blocked #${t.id} ${quoted(t.title)} was answered by ${q.answered_by}: ${quoted(q.answer, 400)}. If that's what it waited for, unblock it (update_task status in_progress, with a note) and carry on; if not, say what's still missing in a note.`);
+      }
+      if (unblock.length) act('a question on your blocked task was answered');
+      if (stillWaiting.length) steps.push(`Waiting on something (blocked, doesn't use a slot): ${stillWaiting.map((t) => `#${t.id} ${quoted(t.title)}`).join('; ')}.${!time.frozen && !time.past && cap.active < cap.slots ? ' Meanwhile you can claim other work.' : ''}`);
       const idle = this.idleAgents(agent);
       if (time.past) {
         steps.push(`The demo time (${time.deadlineLabel}) has passed. Wrap up: push and merge what's finished, release what isn't with a note, and post a short status in general.`);
@@ -1736,7 +1819,7 @@ export class Board {
         if (allowed.length && cap.active < cap.slots) act('priority-1 tasks claimable');
       } else if (cap.active >= cap.slots) {
         steps.push(`You're at your capacity (${cap.active} of ${slotText(cap)}${cap.plan ? ', ' + cap.plan : ''}${cap.override ? ', limit set on the web board' : ''}). Finish one before claiming more.`);
-      } else if (cap.active >= 1 && idle.length && claimable.filter((t) => !t.reserved_for).length <= idle.length) {
+      } else if (cap.active >= 1 && idle.length && claimable.filter((t) => this.unreserved(t)).length <= idle.length) {
         steps.push(`${idle.join(', ')} have no task yet and there's only enough open work for them, so leave it for them. Keep going on yours, help on the help channel, or create_task for gaps; then wait_for_events.`);
       } else if (claimable.length) {
         const usable = cap.extra && cap.active >= cap.base ? claimable.filter((t) => t.size !== 'L') : claimable;
@@ -1747,7 +1830,7 @@ export class Board {
           act('claimable tasks');
         }
       } else {
-        steps.push('No open tasks are claimable right now (all taken or waiting on dependencies). Help on the help channel, review others\' work, or create_task for gaps you notice (it goes to the planner as a proposal); then wait_for_events.');
+        steps.push(`No open tasks are claimable right now (all taken or waiting on dependencies). Help on the help channel, review others' work, or create_task for gaps you notice${isPlanner ? '' : ' (it goes to the planner as a proposal)'}; then wait_for_events.`);
       }
       // Taking over is a claim: during the freeze only started work can be (see freezeAllows), after the demo time nothing.
       const takeable = (t) => !time.past && (!time.frozen || this.freezeAllows(t));
@@ -2113,7 +2196,7 @@ function baseSlots(row) {
 // The person behind an agent name, when nobody recorded it: join names extra tools on one laptop
 // "<person>-<tool>" (a second one may get a number, "emil-claude2"); other tools follow the same
 // "<person>-<anything>" pattern, which counts when "<person>" is someone the board already knows.
-const TOOL_SUFFIX = /-(claude|codex|copilot|copilotcli|copilot-vscode|copilot-cli)\d*$/;
+const TOOL_SUFFIX = /-(claude|codex|copilot|copilotcli|copilot-vscode|copilot-cli|gemini|cursor)\d*$/;
 export function guessPerson(name, known = new Set()) {
   const root = agentRootOf(normName(name));
   if (TOOL_SUFFIX.test(root)) return root.replace(TOOL_SUFFIX, '');
