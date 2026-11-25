@@ -6,6 +6,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { startBoard, finish, ROOT, TOKEN, tempDir } from './helpers.mjs';
+import { agentTokenFor } from '../src/tokens.js';
 
 const R = [];
 const check = (n, ok, x = '') => R.push(`${ok ? 'PASS' : 'FAIL'} ${n}${x !== '' && !ok ? ' — ' + String(x).slice(0, 600) : ''}`);
@@ -67,6 +68,22 @@ try {
     const nb = await admin('/boards', 'POST', { name: 'Kube\x1b[2Jcon\x07', slug: 'kube' });
     const listed = (await (await admin('/boards')).json()).find((b) => b.slug === 'kube');
     check("N9: a new board's name is stored without control characters", nb.status === 200 && listed?.name === 'Kube [2Jcon', JSON.stringify(listed?.name));
+  }
+
+  // ---- N10: look-alikes of "board" and "anonymous" are reserved too, for agents and people ----
+  {
+    const AG = agentTokenFor(board.token);
+    const post = (who, token) => api('/messages', { method: 'POST', token, who, body: { text: 'hello', channel: 'general' } }).then((r) => r.status);
+    const mcp = (name) => fetch(`${board.base}/mcp?agent=${encodeURIComponent(name)}&token=${AG}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'x', version: '1' } } }) }).then((r) => r.status);
+    const looks = ['board.', 'board_', 'board-', 'Board..', '_board', 'anonymous-', '.anonymous.', 'board_/ui'];
+    const agentSt = []; const humanSt = []; const mcpSt = [];
+    const asAgent = (who) => api('/state', { token: AG, who }).then((r) => r.status);
+    for (const n of looks) { mcpSt.push(await mcp(n)); agentSt.push(await asAgent(n)); }
+    for (const n of looks) humanSt.push(await post(n, board.token));
+    check('N10: an agent may not use a look-alike of board or anonymous', agentSt.every((s) => s === 400), agentSt.join());
+    check('N10: …nor a person', humanSt.every((s) => s === 400), humanSt.join());
+    check('N10: …nor connect over MCP as one', mcpSt.every((s) => s === 400), mcpSt.join());
+    check('N10: names that only start with those words still work', (await asAgent('boardwalk')) === 200 && (await post('board-ana', board.token)) === 200 && (await mcp('anonymous-fan')) === 200);
   }
 } finally {
   await finish(R, { board });

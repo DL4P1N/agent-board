@@ -14,9 +14,12 @@ export function safeEq(a, b) {
   const y = Buffer.from(String(b));
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 }
+// "board" and "anonymous", and their look-alikes ("board.", "board_", "_anonymous-"): in the feed and the Stop hook
+// a post by one would pass for the board's own announcement. Nobody may use them, agent or person.
+export const reservedRoot = (root) => RESERVED_NAMES.has(root) || /^[._-]*(?:board|anonymous)[._-]*$/i.test(String(root || ''));
 // The name's root ("alice" for "alice/ui-worker") is not one an agent may use: "board" (the board's own
-// announcements), "anonymous" (a call without a name), or no name at all ("/x").
-export const badRoot = (name) => { const root = name.split('/')[0]; return RESERVED_NAMES.has(root) || !NAME_RE.test(root); };
+// announcements), "anonymous" (a call without a name), a look-alike of them, or no name at all ("/x").
+export const badRoot = (name) => { const root = name.split('/')[0]; return reservedRoot(root) || !NAME_RE.test(root); };
 export function agentFrom(req) {
   const a = (req.get('x-agent') || req.body?.author || req.query.agent || '').toString().trim();
   // Names are case-insensitive: "Dana" and "dana" are one person.

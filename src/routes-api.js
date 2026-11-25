@@ -2,8 +2,8 @@
 // board, the Stop hook and join. The notification routes are in notify.js, the live stream in routes-stream.js.
 import zlib from 'node:zlib';
 import QRCode from 'qrcode';
-import { timeInfo, normName, callerLaptop, callerRole, NAME_RE, RESERVED_NAMES } from './board.js';
-import { agentFrom, badRoot, h, laptopParam, internalError, wantsGzip, GZIP_VARY } from './http-util.js';
+import { timeInfo, normName, callerLaptop, callerRole, NAME_RE } from './board.js';
+import { agentFrom, badRoot, reservedRoot, h, laptopParam, internalError, wantsGzip, GZIP_VARY } from './http-util.js';
 import { clientIp } from './request-limits.js';
 import { recap } from './recap.js';
 import { TOKEN_ROTATED } from './auth.js';
@@ -27,7 +27,7 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     if (!named) return next();
     const root = agentFrom(req).split('/')[0];
     if (req.role === 'agent' && badRoot(agentFrom(req))) return res.status(400).json({ error: `"${root || agentFrom(req)}" is not an agent name. Use your own (BOARD_AGENT, or re-run join).` });
-    if (req.role === 'human' && req.method !== 'GET' && RESERVED_NAMES.has(root)) return res.status(400).json({ error: `"${root}" is reserved for the board: pick your own name (the name button at the top of the board).` });
+    if (req.role === 'human' && req.method !== 'GET' && reservedRoot(root)) return res.status(400).json({ error: `"${root}" is reserved for the board: pick your own name (the name button at the top of the board).` });
     if (req.role === 'human' && req.method !== 'GET') {
       // A person's name as the board keeps it, never cut short: two long names would otherwise become one.
       const full = normName(named);
