@@ -169,9 +169,12 @@ const WAITS = Number(process.env.BOARD_WAITS_AGENT || 20);
 // From the board's newest event (a cursor past it is answered at once, as a reset).
 const pollCur = (await fetch(`${board.base}/b/poll/api/cursor`, { headers: { Authorization: `Bearer ${pollTok}` } }).then((r) => r.json())).cursor;
 const poll = (wait) => fetch(`${board.base}/b/poll/api/events?since=${pollCur}&wait=${wait}`, { headers: { Authorization: `Bearer ${pollTok}`, 'X-Agent': 'poller' } });
-const polls = Array.from({ length: WAITS }, () => poll(20).then((r) => ({ status: r.status, at: Date.now() })).catch((e) => ({ status: `error ${e.message}`, at: Date.now() })));
+// A probe below can reach the server before the last of these and hold its slot for its second: a poll refused that
+// way (429) tries again, so all WAITS end up open (the probe alone can't tell otherwise).
+const holdPoll = async () => { for (let i = 0; i < 50; i++) { const r = await poll(20); if (r.status !== 429) return r; await r.body?.cancel(); await new Promise((x) => setTimeout(x, 200)); } return poll(20); };
+const polls = Array.from({ length: WAITS }, () => holdPoll().then((r) => ({ status: r.status, at: Date.now() })).catch((e) => ({ status: `error ${e.message}`, at: Date.now() })));
 let allWaiting = false;
-for (const t0 = Date.now(); !allWaiting && Date.now() - t0 < 20e3;) allWaiting = (await poll(1).then((r) => r.status).catch(() => 0)) === 429;
+for (const t0 = Date.now(); !allWaiting && Date.now() - t0 < 10e3;) allWaiting = (await poll(1).then((r) => r.status).catch(() => 0)) === 429;
 const archivedAt = Date.now();
 const archPoll = await admin("/boards/poll/archive", "POST");
 const ended = await Promise.all(polls);
