@@ -118,7 +118,9 @@ try {
     const st = [];
     for (let i = 0; i < 12; i++) st.push((await adm(`wrong-${i}`, '198.51.100.70')).status);
     check('L1: wrong admin tokens from one address: 10 a minute, then 429', st.slice(0, 10).every((x) => x === 401) && st.slice(10).every((x) => x === 429), st.join());
-    check('L1: …which then has to wait even with the right token', (await adm(ADMIN, '198.51.100.70')).status === 429);
+    // N7: the right token is checked first and never counted, so guesses from a shared address can't lock the host out.
+    check('N7: …but the right token from that address is still served', (await adm(ADMIN, '198.51.100.70')).status === 200);
+    check('N7: …while wrong ones from it keep waiting', (await adm('wrong-x', '198.51.100.70')).status === 429);
     check('L1: another address with the right token is served', (await adm(ADMIN, '198.51.100.71')).status === 200);
     const env = { ...process.env, BOARD_ADMIN_TOKEN: 'short', BOARD_DATA: path.join(tempDir('agent-board-sec-'), 'data'), PORT: '0', BOARD_NO_JOIN: '1' };
     delete env.BOARD_ALLOW_SHORT_TOKEN; delete env.BOARD_TOKEN;
@@ -202,7 +204,13 @@ try {
     const st = [];
     for (let i = 0; i < 11; i++) st.push(await adm(`wrong-${i}`, { 'X-Forwarded-For': `10.9.9.${i}, 198.51.100.80` }));
     check('L10: the last X-Forwarded-For address is the caller (what the client wrote before it is not)', st.slice(0, 10).every((x) => x === 401) && st[10] === 429, st.join());
-    check('L10: CF-Connecting-IP is not believed then (a client could send it through the proxy)', await adm(ADMIN, { 'X-Forwarded-For': '198.51.100.80', 'CF-Connecting-IP': '198.51.100.99' }) === 429);
+    check('L10: CF-Connecting-IP is not believed then (a client could send it through the proxy)', await adm('wrong-cf', { 'X-Forwarded-For': '198.51.100.80', 'CF-Connecting-IP': '198.51.100.99' }) === 429);
+    // N12: an entry with a port (some proxies add one) is still that address, not the proxy's.
+    check('N12: an X-Forwarded-For entry with a port is the same address', await adm('wrong-port', { 'X-Forwarded-For': '198.51.100.80:51234' }) === 429);
+    const v6 = [];
+    for (let i = 0; i < 11; i++) v6.push(await adm(`wrong-${i}`, { 'X-Forwarded-For': i % 2 ? '[2001:db8::7]:443' : '2001:db8::7' }));
+    check('N12: …also an IPv6 one in brackets', v6[10] === 429 && v6.slice(0, 10).every((x) => x === 401), v6.join());
+    check("N12: …and the proxy's own address isn't the one blocked", await adm('wrong-other', { 'X-Forwarded-For': '198.51.100.82' }) === 401);
     check('L10: another address behind the proxy is served', await adm(ADMIN, { 'X-Forwarded-For': '198.51.100.80, 198.51.100.81' }) === 200);
     await b3.stop();
   }

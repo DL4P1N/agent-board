@@ -61,7 +61,7 @@ One server can host several boards at once, e.g. two teams or two events. Each b
 
 **The Boards page** (`/boards`) is for the host.
 
-- Sign in with the admin token: `npm start` prints the link, and the token is saved in `data/admin-token` (or set `BOARD_ADMIN_TOKEN`, at least 16 characters). After 10 wrong admin tokens in a minute, an address has to wait a few seconds before it may try again.
+- Sign in with the admin token: `npm start` prints the link, and the token is saved in `data/admin-token` (or set `BOARD_ADMIN_TOKEN`, at least 16 characters). After 10 wrong admin tokens in a minute, an address has to wait a few seconds before it may try again (the right token is always let in, so guesses from a shared address can't lock the host out).
 - From there you create, open and make a board the default, and copy its join command.
 - **Archive** stops serving a board but keeps its data (not the default board). **Restore** brings it back. **Delete** removes an archived one: it is moved to `data/trash/`, never removed outright.
 
@@ -137,7 +137,7 @@ docker run -d -p 4000:4000 -v agent-board-data:/data -e PUBLIC_URL=https://board
 - The image installs its dependencies with `npm ci --ignore-scripts` (no package's install script runs, as for `npm start`'s first-run install). Its base image is pinned by tag (`node:24-slim`); for a build that can't change under you, add the digest (`FROM node:24-slim@sha256:…`, from `docker buildx imagetools inspect node:24-slim`).
 - One server per data volume: a second container started on the same volume refuses to start while the first one runs. The running server touches `/data/board.pid` every 30 s. A container recreated after a crash takes the folder back by itself once that file has gone 2 minutes without an update, or at once if you delete it. A restarted container (same hostname) takes it back straight away. A server paused for more than 2 minutes (for example `docker pause`) can lose the folder to one started meanwhile.
 - The image has no `gh`, so PR and CI checks are off there.
-- Behind your own reverse proxy (Caddy, nginx, a load balancer), set `BOARD_TRUSTED_PROXIES` to its address (for example `-e BOARD_TRUSTED_PROXIES=172.17.0.1`), and have it set `X-Forwarded-For`. Without it every request seems to come from the proxy, so all callers share one address in the [limits](#limits). With it, a request from the proxy counts as coming from the last address in `X-Forwarded-For` (what the client wrote before it is ignored), and `CF-Connecting-IP` isn't used. Don't list an address that clients can reach the board from directly.
+- Behind your own reverse proxy (Caddy, nginx, a load balancer), set `BOARD_TRUSTED_PROXIES` to its address (for example `-e BOARD_TRUSTED_PROXIES=172.17.0.1`), and have it set `X-Forwarded-For`. Without it every request seems to come from the proxy, so all callers share one address in the [limits](#limits). With it, a request from the proxy counts as coming from the last address in `X-Forwarded-For` (what the client wrote before it is ignored; an entry with a port, such as `203.0.113.5:51234`, counts as that address), and `CF-Connecting-IP` isn't used. Don't list an address that clients can reach the board from directly.
 
 ## Backups
 

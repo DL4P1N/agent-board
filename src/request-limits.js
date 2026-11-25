@@ -30,11 +30,18 @@ const TRUSTED_PROXIES = new Set(String(process.env.BOARD_TRUSTED_PROXIES || '').
 // header names the real address (trusted only from this machine itself). With BOARD_TRUSTED_PROXIES set, a request
 // from one of those proxies is from the address its X-Forwarded-For names last, after any further trusted proxies (the
 // entries before that are the client's own word); CF-Connecting-IP is not used then, as a client could send it through.
+// One X-Forwarded-For entry as a plain address: some proxies add the client's port ("203.0.113.5:51234",
+// "[2001:db8::1]:443"), which would otherwise not read as an address and fall back to the proxy's own.
+const hopAddress = (s) => {
+  const t = s.trim();
+  const m = t.match(/^\[([^\]]+)\](?::\d+)?$/) || t.match(/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/);
+  return (m ? m[1] : t).replace(/^::ffff:/, '');
+};
 export function clientIp(req) {
   const peer = String(req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
   if (TRUSTED_PROXIES.size) {
     if (!TRUSTED_PROXIES.has(peer)) return peer || 'unknown';
-    const hops = String(req.get('x-forwarded-for') || '').split(',').map((s) => s.trim().replace(/^::ffff:/, '')).filter(Boolean);
+    const hops = String(req.get('x-forwarded-for') || '').split(',').map(hopAddress).filter(Boolean);
     while (hops.length && TRUSTED_PROXIES.has(hops.at(-1))) hops.pop();
     const last = hops.at(-1);
     return last && net.isIP(last) ? last : peer;
