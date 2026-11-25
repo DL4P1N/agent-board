@@ -107,7 +107,8 @@ export class Registry {
   }
 
   create(name, slug) {
-    name = String(name ?? '').trim().slice(0, 80);
+    // One line without control characters: join and the boards CLI print it in teammates' terminals.
+    name = String(name ?? '').replace(/[\0-\x1f\x7f-\x9f]+/g, ' ').trim().slice(0, 80);
     if (!name) throw new Error('Give the board a name, e.g. "KubeCon 2026".');
     slug = checkSlug(slug ? String(slug).trim().toLowerCase() : slugify(name));
     if (this.get(slug)) throw new Error(`There is already a board called "${slug}". Pick another name.`);

@@ -113,10 +113,13 @@ try {
   const r = await fetch(`${url}/api/state`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) });
   if (r.status === 401) fail('The board rejected the token: the token changed (the host rotated it, or started a fresh board). Ask the host for the new join command (web board → Setup → step 1) and run it.');
   // 409: this is the plain address, and the board behind the token moved to its own /b/<name> address.
-  if (r.status === 409) { const m = await r.json().catch(() => ({})); fail(`This join command uses the plain board address, but that board is now at ${url}${m.moved_to || '/b/<name>'}. Copy the new join command from the web board (or use --url ${url}${m.moved_to || '/b/<name>'}).`); }
+  if (r.status === 409) { const m = await r.json().catch(() => ({})); const to = printable(m.moved_to).slice(0, 200) || '/b/<name>'; fail(`This join command uses the plain board address, but that board is now at ${url}${to}. Copy the new join command from the web board (or use --url ${url}${to}).`); }
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   boardState = await r.json();
-  ok(`board${boardState.board?.name ? ` "${boardState.board.name}"` : ''} reachable at ${url}${boardState.settings?.goal ? ` (goal: ${boardState.settings.goal.slice(0, 60)}${boardState.settings.goal.length > 60 ? '…' : ''})` : ''}`);
+  // Everything the board says is printed without control characters (a hostile board, or a goal an agent set, could
+  // carry terminal escapes: a fake line, a hidden link, a cleared screen).
+  const goal = printable(boardState.settings?.goal);
+  ok(`board${boardState.board?.name ? ` "${printable(boardState.board.name).slice(0, 80)}"` : ''} reachable at ${url}${goal ? ` (goal: ${goal.slice(0, 60)}${goal.length > 60 ? '…' : ''})` : ''}`);
 } catch (e) {
   // https against an http board fails the TLS handshake with "wrong version number".
   const why = `${e.cause?.code || ''} ${e.cause?.message || ''} ${e.message}`;
@@ -147,7 +150,7 @@ const ask = async (q, def) => {
 // Names already on this board that this laptop didn't set up before (so re-running join is fine).
 const agentToken = isAgentToken ? token : agentTokenFor(token);
 // This board's name (multi-board servers say it; older ones don't): shown when a tool switches boards.
-const boardName = boardState?.board?.name || boardState?.board?.slug || url;
+const boardName = printable(boardState?.board?.name || boardState?.board?.slug || url).slice(0, 80) || url;
 // What this laptop set up before, on any board. Each agent entry remembers its own board (url + token);
 // older configs kept one board for all of them at the top level.
 const prior = (() => { try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch { return null; } })();
@@ -169,7 +172,7 @@ const taken = (n) => {
   const isN = (x) => lc(x) === n || new RegExp(`^${n.replace(/\./g, '\\.')}-(claude|codex|copilot|copilotcli|gemini|cursor|other)$`).test(lc(x));
   const theirs = (x) => isN(x) && !mine.has(lc(x));
   const p = (boardState?.presence || []).find((p) => (p.kind === 'agent' ? lc(p.person || p.name) === n || isN(p.name) : lc(p.name) === n) && !mine.has(lc(p.name)));
-  if (p) return { where: p.kind === 'agent' ? p.client || 'an agent' : 'on the web board' };
+  if (p) return { where: p.kind === 'agent' ? printable(p.client).slice(0, 60) || 'an agent' : 'on the web board' };
   if ((boardState?.tasks || []).some((t) => theirs(t.assignee) || theirs(t.created_by))) return { where: 'on a task' };
   if ((boardState?.events || []).some((ev) => ev.author !== 'board' && theirs(ev.author))) return { where: 'in the feed' };
   return null;
@@ -185,7 +188,7 @@ const takenOnBoard = async (n) => {
   // The endpoint knows agents and reservations; tasks and posts by that name only show in the state.
   if (!j || !j.taken) return taken(n);
   const h = (j.holders || [])[0] || {};
-  return { where: h.connected === false ? 'reserved by another laptop; its agent hasn\'t started yet' : h.client || 'an agent' };
+  return { where: h.connected === false ? 'reserved by another laptop; its agent hasn\'t started yet' : printable(h.client).slice(0, 60) || 'an agent' };
 };
 
 let name = '';
@@ -318,9 +321,9 @@ const claudeAgent = plan.find((p) => p.tool === 'claude')?.agent || name;
 // the previous board for the tools picked now; the laptop's other tools stay on the board they had.
 const keep = priorAgents.filter((a) => !tools.includes(a.tool));
 for (const a of priorAgents.filter((x) => tools.includes(x.tool) && !sameBoard(x))) {
-  console.log(`  • This laptop's ${TOOLS[a.tool]?.label || a.tool} now points at board "${boardName}"; it no longer gets "${a.board}".`);
+  console.log(`  • This laptop's ${TOOLS[a.tool]?.label || a.tool} now points at board "${boardName}"; it no longer gets "${printable(a.board)}".`);
 }
-for (const a of keep.filter((x) => !sameBoard(x))) console.log(`  • ${TOOLS[a.tool]?.label || a.tool} stays on board "${a.board}" (join again with --tool ${a.tool} to move it here too).`);
+for (const a of keep.filter((x) => !sameBoard(x))) console.log(`  • ${TOOLS[a.tool]?.label || a.tool} stays on board "${printable(a.board)}" (join again with --tool ${a.tool} to move it here too).`);
 const entry = ({ tool, agent, dir, plan_id, plan: planLabel, slots }) => ({ tool, agent, dir, plan_id, plan: planLabel, slots, url, token: agentToken, board: boardName });
 const saveConfig = (agents) => {
   const all = [...keep.map(({ tool, agent, dir, plan_id, plan: planLabel, slots, url: u, token: t, board: b }) => ({ tool, agent, dir, plan_id, plan: planLabel, slots, url: u, token: t, board: b })), ...agents.map(entry)];

@@ -1012,6 +1012,9 @@ export class Board {
     for (const key of SETTING_KEYS) {
       if (patch[key] === undefined) continue;
       let val = String(patch[key] ?? '').trim();
+      // The goal without control characters (terminal escapes would reach everyone join prints it to); it keeps its
+      // line breaks and tabs. The other text settings refuse them (repo) or keep only name characters.
+      if (key === 'goal') val = val.replace(/\r\n?/g, '\n').replace(/[\0-\x08\x0b-\x1f\x7f-\x9f]/g, '').trim();
       if (key === 'goal' || key === 'repo') capText(val, key, key === 'goal' ? MAX_TEXT : 500);
       // What teammates' laptops run `git clone` on (join, the invite text): a plain git address only (src/repo-url.js).
       if (key === 'repo' && !isRepoUrl(val)) throw new Error('repo must be a git address, e.g. https://github.com/team/project or git@github.com:team/project.git (no spaces, quotes or shell characters, and not starting with -)');

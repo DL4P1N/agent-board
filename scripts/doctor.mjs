@@ -8,6 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { onPath, runSync } from './lib/run.mjs';
 import { parseJsonc } from './lib/jsonc.mjs';
+import { printable } from '../src/repo-url.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // What join set up on this laptop: ~/.agent-board.json. Laptops that joined before the rename to Agent Board
@@ -69,6 +70,8 @@ export async function runDoctor({ header = true } = {}) {
       // /health is answered once for the whole server, at its root (not under /b/<board>).
       const r = await fetch(`${url.replace(/\/b\/[^/]+$/, '')}/health`, { signal: AbortSignal.timeout(4000) });
       health = await r.json();
+      // What the board says is printed without control characters (no terminal escapes from a hostile board).
+      if (health && typeof health === 'object' && health.version) health.version = printable(health.version).slice(0, 40);
     } catch (e) {
       bad(`can't reach the board at ${url} (${e.cause?.code || e.message})`,
         'Is the host\'s `npm start` window still open? Same wifi (or both on Tailscale)? On the host, allow Node through the firewall.');
@@ -87,7 +90,8 @@ export async function runDoctor({ header = true } = {}) {
     }
     if (st?.status === 409) {
       const m = await st.json().catch(() => ({}));
-      bad(`Your tools point at the plain board address, but that board is now at ${url}${m.moved_to || '/b/<name>'}.`, `Re-run join with the new command from the web board (--url ${url}${m.moved_to || '/b/<name>'}).`);
+      const to = printable(m.moved_to).slice(0, 200) || '/b/<name>';
+      bad(`Your tools point at the plain board address, but that board is now at ${url}${to}.`, `Re-run join with the new command from the web board (--url ${url}${to}).`);
       return b;
     }
     if (st?.status === 410) {
@@ -103,7 +107,7 @@ export async function runDoctor({ header = true } = {}) {
       bad(`the board at ${url} didn't answer (${st ? `HTTP ${st.status}` : 'no reply in time'}).`, 'Ask the host to check the npm start window for errors; if it shows none, run doctor again in a minute.');
       return b;
     }
-    try { const s = await st.json(); b.name = s?.board?.name || s?.board?.slug || null; } catch {}
+    try { const s = await st.json(); b.name = printable(s?.board?.name || s?.board?.slug).slice(0, 80) || null; } catch {}
     ok(`board${b.name ? ` "${b.name}"` : ''} reachable at ${url}`);
     b.ok = true;
     return b;
