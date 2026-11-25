@@ -224,6 +224,9 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     // The host's window says it too, but never the token itself (that window is often docker logs or journald): the
     // end of it, to tell which one a link holds, and where the new join command and links are.
     console.log(`Token rotated for board "${slug}" at ${new Date().toLocaleTimeString()}: the old links and join commands stop working.\n  The new join command and links are on the web board's Setup page (the page that rotated it already has the new token, …${String(t).slice(-4)}).`);
+    // The new web link too, with the token left out (the terminal's scrollback and logs get shared).
+    const web = setup.join_commands?.[0]?.web_url;
+    if (web) console.log(`  Web board: ${web.replace(/token=[^&#]*/, 'token=…')} (open Setup on the board for the full link)`);
     return { token: t, setup };
   }));
 

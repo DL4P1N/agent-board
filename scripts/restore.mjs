@@ -4,7 +4,8 @@
 //   npm run restore -- latest                    restore the default board's newest backup
 //   npm run restore -- <file>                    restore that one (a name from the list, or a path)
 //   npm run restore -- latest --board <name>     the same for another board (see npm run boards -- list)
-// The board server must be stopped first. The current board.db is kept as board.db.before-restore-<time>.
+// The board server must be stopped first. The current board.db is kept as board.db.before-restore-<time>
+// (restore that file to undo it). Times in backup names, and in this script's output, are UTC.
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -30,7 +31,7 @@ if (values.board !== undefined && !boardArg) { console.error('✗ --board needs 
 
 const backupsOf = (b) => path.join(path.resolve(DATA_DIR, b.dir || '.'), 'backups');
 const listIn = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /^board-\d{8}-\d{6}\.db$/.test(f)).sort() : []);
-const when = (f) => { const m = f.match(/^board-(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)(\d\d)\.db$/); return m ? `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}` : f; };
+const when = (f) => { const m = f.match(/^board-(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)(\d\d)\.db$/); return m ? `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]} UTC` : f; };
 const fail = (msg) => { console.error(`✗ ${msg}`); process.exit(1); };
 
 const arg = positional[0];
@@ -114,20 +115,53 @@ try {
   if (!fs.existsSync(db)) for (const [from, to] of moved.reverse()) { try { fs.renameSync(to, from); } catch {} }
   fail(`Restore failed: ${e.message}. The backup copy is at ${tmp}.`);
 }
+// Ids must keep counting up from where the replaced board stopped: a restored board that reuses them would let old
+// notes, locks and releases land on unrelated new tasks, leave the restore note below agents' cursors (so waiting agents
+// never get it), and leave their "seen" positions ahead of the board. So every AUTOINCREMENT counter of the restored
+// database (sqlite_sequence: tasks, events, questions) is raised to at least the replaced database's highest id.
+// The same look at the replaced database says what the restore drops: what was created after the backup.
+const dropped = {};
+const oldSeq = {};
+let replaced = null; // the replaced database, read only
+if (kept) {
+  try {
+    replaced = new DatabaseSync(kept, { readOnly: true });
+    for (const r of replaced.prepare('SELECT name, seq FROM sqlite_sequence').all()) oldSeq[r.name] = Number(r.seq) || 0;
+    for (const t of Object.keys(oldSeq)) {
+      try { oldSeq[t] = Math.max(oldSeq[t], Number(replaced.prepare(`SELECT COALESCE(MAX(id), 0) AS m FROM "${t}"`).get().m) || 0); } catch {}
+    }
+  } catch (e) { console.log(`  (Couldn't read the replaced board to keep its ids and count what is dropped: ${e.message})`); }
+}
 // A note in the restored board's feed, so nobody wonders why tasks or answers from after the backup are gone.
 // Written into the restored database itself (the server is stopped), so it shows when the board starts.
 try {
   const d = new DatabaseSync(db);
   try {
+    const tables = d.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%AUTOINCREMENT%'").all().map((r) => r.name);
+    for (const t of tables) {
+      let cur = 0;
+      try { cur = Math.max(Number(d.prepare('SELECT seq FROM sqlite_sequence WHERE name = ?').get(t)?.seq) || 0, Number(d.prepare(`SELECT COALESCE(MAX(id), 0) AS m FROM "${t}"`).get().m) || 0); } catch {}
+      if (t in oldSeq && oldSeq[t] > cur) {
+        // Rows of the replaced board past the restored board's highest id: created after the backup.
+        if (replaced && ['tasks', 'events'].includes(t)) { try { dropped[t] = Number(replaced.prepare(`SELECT COUNT(*) AS n FROM "${t}" WHERE id > ?`).get(cur).n) || 0; } catch {} }
+        if (d.prepare('UPDATE sqlite_sequence SET seq = ? WHERE name = ?').run(oldSeq[t], t).changes === 0) d.prepare('INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)').run(t, oldSeq[t]);
+      }
+    }
     const cols = d.prepare('PRAGMA table_info(events)').all().map((c) => c.name);
     if (cols.includes('author') && cols.includes('text')) {
-      const text = `@all The board was restored from a backup made ${when(path.basename(src))} UTC: anything done after that is gone. If your agent looks lost, run /board again.`;
+      const text = `@all The board was restored from a backup made ${when(path.basename(src))}: anything done after that is gone. If your agent looks lost, run /board again.`;
       const row = { ts: Date.now(), author: 'board', kind: 'message', channel: 'general', text, data: JSON.stringify({ mentions: ['all'] }) };
       const use = Object.keys(row).filter((k) => cols.includes(k));
       d.prepare(`INSERT INTO events (${use.join(', ')}) VALUES (${use.map(() => '?').join(', ')})`).run(...use.map((k) => row[k]));
     }
   } finally { d.close(); }
 } catch (e) { console.log(`  (Couldn't leave a note in the board's feed: ${e.message})`); }
+try { replaced?.close(); } catch {}
 console.log(`✓ Restored board "${board.slug}" from ${path.basename(src)} (${when(path.basename(src))}).`);
-if (kept) console.log(`  The previous board is kept as ${path.basename(kept)}.`);
+if (kept) {
+  const n = (k, w) => `${dropped[k] || 0} ${w}${(dropped[k] || 0) === 1 ? '' : 's'}`;
+  console.log(`  Dropped what came after the backup: ${n('tasks', 'task')} and ${n('events', 'event')} (at least: changes to older tasks are not counted).`);
+  console.log(`  The previous board is kept as ${path.basename(kept)} in ${BOARD_DIR}.`);
+  console.log(`  To undo: stop the board, then  npm run restore -- "${kept}"${board.slug === defaultSlug ? '' : ` --board ${board.slug}`}`);
+}
 console.log('  Start the board again: npm start (or npm run tunnel). Agents reconnect by themselves.');

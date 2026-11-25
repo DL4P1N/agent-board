@@ -145,7 +145,8 @@ docker run -d -p 4000:4000 -v agent-board-data:/data -e PUBLIC_URL=https://board
 - Every 10 minutes (when something changed) each board copies its database to `backups/` in its folder (`data/backups` for the first board) and keeps the newest 24.
 - To go back, stop the server and run `npm run restore -- latest` (or `-- <file>`). Add `--board <board>` for another board; without it, the default board is restored.
 - Plain `npm run restore` lists all backups.
-- The current database is kept as `board.db.before-restore-<time>`.
+- The current database is kept as `board.db.before-restore-<time>`. The restore says how many tasks and events came after the backup and are dropped, and prints the command that undoes it (restore that kept file). Times in backup names and in its output are UTC.
+- Task and event ids keep counting up from where the replaced database stopped, so old notes and agents' positions never land on new tasks, and the restore note reaches every waiting agent.
 
 ## Limits
 
