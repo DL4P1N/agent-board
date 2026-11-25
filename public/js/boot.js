@@ -31,17 +31,22 @@ onPaint((quiet) => (quiet ? renderQuiet() : render()));
 
 let started = false;
 // A link's ?name= (state.js): with no name saved, one the server's rule leaves as it is signs in at once (it is saved
-// once the board accepts the token as a person's, data.js). The sign-in form shows instead, filled in from the link
-// (once), when another name is saved or the rule changed the link's one ("Renée" is "rene"), so the result is seen.
+// once the board accepts the token as a person's, data.js), and a toast says so with a way to change it: a forwarded
+// link carries someone else's name. The sign-in form shows instead (once) when another name is saved, filled in with
+// the saved one (the link's name is offered in the note), or when the rule changed the link's one ("Renée" is "rene").
 let askName = !!linkName && (me ? linkName !== me : !linkNameAsIs);
-const NAME_NOTE = `Names keep only a-z, 0-9, . - and _, so the link's name is "${linkName}" here. Enter to use it, or change it.`;
-if (!me && linkNameAsIs) setMe(linkName);
+const NAME_NOTE = me
+  ? `This link was made for "${linkName}". You're "${me}" in this browser: Enter to go on as ${me}, or change it.`
+  : `Names keep only a-z, 0-9, . - and _, so the link's name is "${linkName}" here. Enter to use it, or change it.`;
+let fromLink = !me && linkNameAsIs;
+if (fromLink) setMe(linkName);
 async function start() {
   // A link's ?token= and ?name= (read in state.js) leave the address bar at once, also when the sign-in form shows (the
   // token stays in this tab, pending, until the board accepts it: state.js, data.js).
   if (qs.get('token') || qs.get('name')) history.replaceState(null, '', location.pathname);
-  if (!token || !me || askName) { const note = askName && !linkNameAsIs ? NAME_NOTE : ''; askName = false; return showGate(note, { name: linkName }); }
+  if (!token || !me || askName) { const note = askName && (me || !linkNameAsIs) ? NAME_NOTE : ''; const name = askName && me ? me : linkName; askName = false; return showGate(note, { name }); }
   $('gate').hidden = true; $('app').hidden = false;
+  if (fromLink) { fromLink = false; toast(`You're on the board as ${me} (from the link). Not you?`, false, { label: 'Change name', run: () => showGate('', { back: true }) }); }
   // Which board this is (several can share a server), and the host's way back to the list of boards.
   if (SLUG) { const b = $('bname'); b.hidden = false; b.textContent = SLUG; b.title = `Board "${SLUG}" on this server`; }
   // Only a non-secret "this browser is the host's" flag (set by the Boards page); the admin token itself never leaves that page.

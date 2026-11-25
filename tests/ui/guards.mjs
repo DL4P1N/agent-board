@@ -151,11 +151,14 @@ try {
       const { page, errs } = await open({ path: '/?name=eve' });
       await page.waitForSelector('#gate:not([hidden])');
       const r = { ...(await saved(page)), field: await page.$eval('#g-name', (e) => e.value) };
-      check("M6 a link's ?name= for someone else only fills in the sign-in form; the saved name stays", r.gate && r.field === 'eve' && r.name === 'dana' && !/name=/.test(page.url()), JSON.stringify(r));
+      const note = await page.$eval('#g-err', (e) => e.textContent);
+      // M9 (round 5b): a forwarded link carries someone else's name: the saved one is offered first, the link's named.
+      check("M9 a link's ?name= for someone else shows the sign-in form with the saved name first, the link's name in the note", r.gate && r.field === 'dana' && r.name === 'dana' && /made for "eve"/.test(note) && !/name=/.test(page.url()), JSON.stringify({ ...r, note }));
+      await page.$eval('#g-name', (e) => { e.value = 'eve'; });
       await page.click('#g-go');
       await until(page, () => document.getElementById('conn')?.classList.contains('live'));
       const r2 = await saved(page);
-      check('M6 and entering it there signs in as that name', r2.app && r2.name === 'eve', JSON.stringify(r2));
+      check('M6 and entering the link name there signs in as that name', r2.app && r2.name === 'eve', JSON.stringify(r2));
       check('M6 name link: no page errors', !errs.length, errs.join(' | '));
       await page.close();
     }
@@ -172,6 +175,11 @@ try {
       const ok = await until(page, () => document.getElementById('conn')?.classList.contains('live'));
       const r = await saved(page);
       check('M6 a first-time link (nothing saved) signs straight in, and keeps the token and name once accepted', ok && r.app && !r.gate && r.tok === 'testtok' && r.name === 'newbie' && !r.pend, JSON.stringify(r));
+      // M9 (round 5b): it may be a forwarded link: a toast says whose name is in use, with a way to change it.
+      const nt = await until(page, () => [...document.querySelectorAll('#toasts .toast')].some((t) => /You're on the board as newbie \(from the link\)\. Not you\?/.test(t.textContent) && t.querySelector('button')?.textContent === 'Change name'));
+      await page.evaluate(() => [...document.querySelectorAll('#toasts .toast button')].find((b) => b.textContent === 'Change name')?.click());
+      const cg = await until(page, () => !document.getElementById('gate').hidden && !document.getElementById('g-back').hidden && document.getElementById('g-name').value === 'newbie');
+      check('M9 a first-time named link says "You are on the board as newbie (from the link). Not you?", and Change name opens the sign-in form (with a way back)', nt && cg);
       check('M6 first-time link: no page errors', !errs.length, errs.join(' | '));
       await page.close();
     }
