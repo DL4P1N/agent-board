@@ -17,6 +17,12 @@ const LIMITS = {
 // Of a board's open-wait total, this many are kept for the human and viewer tokens (live pages, the presenter): one
 // agent token making up names can't lock people out of the board. A tenth, at least 1 and at most 100.
 export const HUMAN_RESERVE = LIMITS.waitsTotal ? Math.max(1, Math.min(100, Math.floor(LIMITS.waitsTotal / 10))) : 0;
+// Of each address's open waits, the last tenth (at least 1, at most 20) is kept for the human and viewer tokens too:
+// a team behind one NAT, whose agents hold the address's waits, still gets its live pages.
+export const IP_HUMAN_RESERVE = LIMITS.waitsPerIp > 1 ? Math.max(1, Math.min(20, Math.floor(LIMITS.waitsPerIp / 10))) : 0;
+// Live streams of the viewer token (the presenter link, which is easy to pass around) per board: at most half of the
+// share kept for people, so they can't fill it.
+export const VIEWER_STREAMS = HUMAN_RESERVE ? Math.max(1, Math.floor(HUMAN_RESERVE / 2)) : 0;
 const agentRate = new RateLimiter(LIMITS.agentPerMinute);
 const ipRate = new RateLimiter(LIMITS.ipPerMinute);
 // Per network address, across boards (one laptop or script is the same load on any board).
@@ -61,13 +67,18 @@ const slotText = (who, full) => (full.full === 'key'
   ? `${who} already has ${full.open} waits open (wait_for_events, the Stop hook or live pages), the most one agent may have. Let one of them return before starting another: they wake up as soon as something happens.`
   : full.reserved ? `The board has ${full.open} waits open from agents, as many as agents may hold (the rest are kept for people's live pages). Try again in a few seconds.`
     : `The board has ${full.open} waits and live streams open, as many as it allows. Try again in a few seconds.`);
-const ipSlotText = (ip, full) => `This address (${ip}) already has ${full.open} waits and live pages open, the most one address may have. Let one of them return before starting another.`;
+const ipSlotText = (ip, full) => (full.reserved
+  ? `This address (${ip}) has ${full.open} waits open from agents, as many as agents may hold from one address (the rest are kept for people's live pages). Let one of them return before starting another.`
+  : `This address (${ip}) already has ${full.open} waits and live pages open, the most one address may have. Let one of them return before starting another.`);
+const viewerText = (full) => `The board has ${full.open} presenter views (viewer-token live streams) open, as many as it allows. Close one, or try again in a few seconds.`;
 
 // The limit checks of one board. Agent and slot keys carry its slug, so boards don't share those counts; the
 // per-address count is one for the whole server (an address calling in a loop is the same load on any board).
 export function createRequestLimits(slug) {
   // Open waits of this board: per agent or person, and in all (each board its own total).
   const slowSlots = new Slots(LIMITS.waitsPerAgent, LIMITS.waitsTotal);
+  // Viewer-token streams of this board, from any address.
+  const viewerSlots = new Slots(0, VIEWER_STREAMS);
   // Board calls per network address, whatever the token or board. (Per agent: agentLimit, once we know the name.)
   const ipLimit = (mcp) => (req, res, next) => {
     const r = ipRate.take(clientIp(req));
@@ -80,14 +91,18 @@ export function createRequestLimits(slug) {
     return r.ok;
   };
   // A slow request (a wait or a live stream) holds a slot until its connection closes: one of its address's and one of
-  // the board's (an agent token's waits leave the board's last HUMAN_RESERVE slots free). false = refused (429 sent).
+  // the board's (an agent token's waits leave the last IP_HUMAN_RESERVE of its address's and the board's last
+  // HUMAN_RESERVE free; a viewer stream also takes one of the board's VIEWER_STREAMS). false = refused (429 sent).
   const holdSlot = (req, res, key, who, mcp) => {
     const ip = clientIp(req);
-    const byIp = ipSlots.acquire(ip);
+    const agent = req.role === 'agent';
+    const byIp = ipSlots.acquire(ip, { keyReserve: agent ? IP_HUMAN_RESERVE : 0 });
     if (typeof byIp !== 'function') { tooMany(req, res, 5, ipSlotText(ip, byIp), mcp); return false; }
-    const got = slowSlots.acquire(`${slug}|${key}`, { reserve: req.role === 'agent' ? HUMAN_RESERVE : 0 });
-    if (typeof got !== 'function') { byIp(); tooMany(req, res, 5, slotText(who, got), mcp); return false; }
-    res.on('close', () => { got(); byIp(); });
+    const byViewer = req.role === 'viewer' ? viewerSlots.acquire('viewer') : () => {};
+    if (typeof byViewer !== 'function') { byIp(); tooMany(req, res, 5, viewerText(byViewer), mcp); return false; }
+    const got = slowSlots.acquire(`${slug}|${key}`, { reserve: agent ? HUMAN_RESERVE : 0 });
+    if (typeof got !== 'function') { byIp(); byViewer(); tooMany(req, res, 5, slotText(who, got), mcp); return false; }
+    res.on('close', () => { got(); byIp(); byViewer(); });
     return true;
   };
   return { ipLimit, agentLimit, holdSlot };

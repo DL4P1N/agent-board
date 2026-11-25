@@ -40,10 +40,11 @@ export class Slots {
   }
 
   // Takes a slot for `key`. Returns a release function (safe to call twice), or { full: 'key' | 'total', open }.
-  // `reserve`: this caller may not take the last `reserve` slots of the total (they are kept for others).
-  acquire(key, { reserve = 0 } = {}) {
+  // `reserve`: this caller may not take the last `reserve` slots of the total (they are kept for others); `keyReserve`:
+  // nor the last `keyReserve` of its key's.
+  acquire(key, { reserve = 0, keyReserve = 0 } = {}) {
     const n = this.open.get(key) || 0;
-    if (this.perKey && n >= this.perKey) return { full: 'key', open: n };
+    if (this.perKey && n >= this.perKey - keyReserve) return { full: 'key', open: n, reserved: keyReserve > 0 && n < this.perKey };
     if (this.total && this.count >= this.total - reserve) return { full: 'total', open: this.count, reserved: reserve > 0 && this.count < this.total };
     this.open.set(key, n + 1);
     this.count++;

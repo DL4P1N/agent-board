@@ -3,7 +3,7 @@
 // The board here runs with low limits (BOARD_RATE_AGENT, BOARD_RATE_IP, BOARD_WAITS_AGENT, BOARD_WAITS_TOTAL);
 // the defaults are far higher. Run all suites with: npm test
 import { startBoard, finish, agent } from './helpers.mjs';
-import { agentTokenFor } from '../src/tokens.js';
+import { agentTokenFor, viewerTokenFor } from '../src/tokens.js';
 import { RateLimiter } from '../src/limits.js';
 import { clientIp } from '../src/request-limits.js';
 
@@ -159,15 +159,34 @@ try {
   const ac2 = new AbortController();
   const cur2 = (await (await fetch(`${b2.base}/api/cursor`, { headers: { Authorization: `Bearer ${agentTokenFor(b2.token)}`, 'X-Agent': 'm0' } })).json()).cursor;
   const wait2 = (who, ip) => fetch(`${b2.base}/api/events?since=${cur2}&wait=30`, { headers: { Authorization: `Bearer ${agentTokenFor(b2.token)}`, 'X-Agent': who, 'CF-Connecting-IP': ip }, signal: ac2.signal });
-  const fromOne = ['m1', 'm2', 'm3'].map((n) => wait2(n, '198.51.100.50').catch(() => null));
+  // N6: of an address's 3, the last is kept for people (agents behind one NAT can't lock its people out).
+  const fromOne = ['m1', 'm2'].map((n) => wait2(n, '198.51.100.50').catch(() => null));
   await sleep(300);
-  const fourth = await wait2('m4', '198.51.100.50');
-  check('one address making up agent names gets no more than its open waits', fourth.status === 429 && /This address \(198\.51\.100\.50\) already has 3 waits/.test((await fourth.json()).error || ''), String(fourth.status));
+  const third2 = await wait2('m3', '198.51.100.50');
+  check("one address's agents may hold all but the last of its open waits, which is kept for people", third2.status === 429 && /This address \(198\.51\.100\.50\) has 2 waits open from agents.*kept for people/.test((await third2.json()).error || ''), String(third2.status));
+  const stream2 = (token, ip) => fetch(`${b2.base}/api/stream?token=${token}&name=dana`, { headers: { 'CF-Connecting-IP': ip }, signal: ac2.signal }).catch(() => null);
+  const pagePerson = await stream2(b2.token, '198.51.100.50');
+  check('…so a person at that address still gets a live page', pagePerson?.status === 200, String(pagePerson?.status));
+  const fourth = await stream2(b2.token, '198.51.100.50');
+  check('…and past its open waits, the address gets no more', fourth?.status === 429 && /This address \(198\.51\.100\.50\) already has 3 waits/.test((await fourth.json()).error || ''), String(fourth?.status));
   const other = await wait2('n1', '198.51.100.51').catch(() => null);
   check('another address still gets one', other?.status === 200, String(other?.status));
   ac2.abort();
   await Promise.all(fromOne);
   await b2.stop();
+
+  // ---- N6: viewer streams (the presenter link) have a cap of their own per board, inside the share kept for people ----
+  const b3 = await startBoard({ env: { BOARD_WAITS_TOTAL: '20' } });
+  const ac3 = new AbortController();
+  const stream3 = (token, ip, name = '') => fetch(`${b3.base}/api/stream?token=${token}${name ? `&name=${name}` : ''}`, { headers: { 'CF-Connecting-IP': ip }, signal: ac3.signal }).catch(() => null);
+  const VIEW = viewerTokenFor(b3.token);
+  const v1 = await stream3(VIEW, '198.51.100.60');
+  const v2 = await stream3(VIEW, '198.51.100.61');
+  check('a board takes viewer streams up to its viewer cap (1 here: half of the 2 kept for people), from any address', v1?.status === 200 && v2?.status === 429 && /presenter|viewer/i.test((await v2.json()).error || ''), `${v1?.status} ${v2?.status}`);
+  const p3 = await stream3(b3.token, '198.51.100.62', 'dana');
+  check("…and a person's live page still opens", p3?.status === 200, String(p3?.status));
+  ac3.abort();
+  await b3.stop();
 } catch (e) {
   R.push(`CRASH ${e.stack || e}`);
 }
