@@ -50,6 +50,8 @@ const cleanName = (n) => String(n ?? '').trim().toLowerCase().replace(/[^\w.\-]/
 const linkRaw = String(qs.get('name') ?? '').trim().toLowerCase();
 const linkName = cleanName(linkRaw).slice(0, NAME_MAX);
 const linkNameAsIs = !!linkName && linkName === linkRaw && linkName !== 'board' && linkName !== 'anonymous';
+// Why the link's name changed: only cut to NAME_MAX, or characters dropped too (the sign-in form's note says which).
+const linkNameCut = !!linkName && cleanName(linkRaw) === linkRaw && linkRaw.length > NAME_MAX;
 let me = (store.get('board-name') || '').toLowerCase();
 const DEFAULT_SETTINGS = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '', planner_extra: '2', no_deadline: '' };
 const ANYONE = '*'; // settings.integrator: whoever is free merges
@@ -71,5 +73,5 @@ function setState(s) { state = s; }
 function setSeenMention(id) { seenMention = id; }
 
 export { $, ACTIVE, AGENT_ONLINE_MS, ALL_PHASES, ANYONE, BASE, cleanName, COL_DESC, COL_EMPTY, COL_SHOWN, COLS, DEFAULT_SETTINGS,
-  DONE_SHOWN, FROZEN_DESC, HINT, PAST_DESC, HOLDING, HUES, LABEL, linkName, linkNameAsIs, me, NAME_MAX, nsKey, oSave, oUi, pending, qs, reduceMotion, seenMention,
+  DONE_SHOWN, linkNameCut, FROZEN_DESC, HINT, PAST_DESC, HOLDING, HUES, LABEL, linkName, linkNameAsIs, me, NAME_MAX, nsKey, oSave, oUi, pending, qs, reduceMotion, seenMention,
   setMe, setSeenMention, setState, setToken, SIZE_TIP, SLUG, smooth, STALE_MS, state, STATUSES, store, token, ui };

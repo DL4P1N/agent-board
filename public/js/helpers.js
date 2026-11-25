@@ -316,12 +316,20 @@ function toast(msg, bad = false, action = null) {
     }
     b.onclick = () => { toastOut(d); action.run(); }; d.append(b);
   }
-  if (bad) d.setAttribute('role', 'alert');
+  // A touch screen: a tap on the toast (not its button) closes it.
+  d.addEventListener('click', (ev) => { if (!ev.target.closest('button')) toastOut(d); });
+  const box = $('toasts');
+  // An open modal dialog (a task, Help) covers the page and makes it inert: the toasts show inside it meanwhile, on
+  // top and their buttons usable (back on the page once it closes). There the dialog's own live line reads them out
+  // (below), so the toasts' region is quiet.
+  const host = [...document.querySelectorAll('dialog[open]')].filter((x) => x.matches(':modal')).pop() || document.body;
+  if (box.parentElement !== host) { host.append(box); box.setAttribute('aria-live', host === document.body ? 'polite' : 'off'); }
+  if (bad && host === document.body) d.setAttribute('role', 'alert');
   // One column (a phone): toasts at the foot would cover a text field being typed in down there (the chat's message
-  // box, an answer), so then they show at the top.
+  // box, an answer), so then they show at the top. Chosen when none shows: the ones showing never jump.
   const f = document.activeElement;
-  $('toasts').classList.toggle('top', matchMedia('(max-width: 999px)').matches && !!f?.matches?.('input, textarea') && f.getBoundingClientRect().bottom > innerHeight / 2);
-  toastsShift(() => $('toasts').append(d));
+  if (![...box.children].some((t) => !t.classList.contains('out'))) box.classList.toggle('top', matchMedia('(max-width: 999px)').matches && !!f?.matches?.('input, textarea') && f.getBoundingClientRect().bottom > innerHeight / 2);
+  toastsShift(() => box.append(d));
   const shown = [...$('toasts').children].filter((t) => !t.classList.contains('out'));
   shown.slice(0, Math.max(0, shown.length - 3)).forEach(toastOut);
   // A toast with a button (Undo) waits while the pointer or focus is on it, then gets its time again.
@@ -351,6 +359,8 @@ document.addEventListener('keydown', (ev) => {
   const b = newestToast()?.querySelector('[data-undo]'); if (!b) return;
   ev.preventDefault(); b.click();
 });
+// A dialog closing hands the toasts back to the page.
+document.addEventListener('close', (ev) => { const box = $('toasts'); if (ev.target.tagName === 'DIALOG' && ev.target.contains(box)) { document.body.append(box); box.setAttribute('aria-live', 'polite'); } }, true);
 function announce(msg) { const a = $('announcer'); a.textContent = ''; setTimeout(() => { a.textContent = msg; }, 60); }
 
 const plural = (n, w, ws = w + 's') => `${n} ${n === 1 ? w : ws}`;

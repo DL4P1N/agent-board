@@ -5,7 +5,7 @@
 // the UI modules' handlers), so the modules that show the board import this one and not the other way round.
 
 import './helpers.js';
-import { $, BASE, cleanName, DEFAULT_SETTINGS, me, NAME_MAX, pending, setMe, setState, setToken, SLUG, state, store, token } from './state.js';
+import { $, BASE, cleanName, DEFAULT_SETTINGS, me, NAME_MAX, nsKey, pending, setMe, setState, setToken, SLUG, state, store, token } from './state.js';
 import { esc, knownPeople, toast } from './helpers.js';
 
 const hooks = { request: [], state: [], event: [], paint: [] };
@@ -73,6 +73,9 @@ async function api(path, opts = {}) {
   }
   if (r.status === 401 && !opts.once) {
     const turn = tokenTurn; if (turn) await awaitTurn(turn, opts.signal);
+    // The host rotated the token in another tab of this browser: that tab saved the new one, so go on with it.
+    const saved = store.get('board-token') || '';
+    if (!turn && token === sent && saved && saved !== sent && body?.reason === 'token_rotated') setToken(saved);
     if (turn || token !== sent) return api(path, { ...opts, once: true });
   }
   if (r.status === 401) { showGate(tokenError(body)); throw new Error('Token rejected'); }
@@ -165,13 +168,24 @@ async function gateNames() {
   const html = names.map((n) => `<option value="${esc(n)}"></option>`).join('');
   if ($('g-names').innerHTML !== html) $('g-names').innerHTML = html;
 }
-$('g-token').addEventListener('change', gateNames);
+// The whole board link pasted into the token box: its token is what's wanted (and its name, if none is typed).
+function tokenFromLink() {
+  const v = $('g-token').value.trim(); if (!/[?&#]token=/.test(v)) return;
+  try {
+    const u = new URL(v, location.href); const t = u.searchParams.get('token'); if (!t) return;
+    $('g-token').value = t;
+    const n = u.searchParams.get('name'); if (n && !$('g-name').value.trim()) $('g-name').value = cleanName(n).slice(0, NAME_MAX);
+  } catch {}
+}
+$('g-token').addEventListener('change', () => { tokenFromLink(); gateNames(); });
 $('gate').addEventListener('submit', async (ev) => {
   ev.preventDefault();
+  tokenFromLink();
   const t = $('g-token').value.trim(); const typed = $('g-name').value.trim().toLowerCase(); const n = cleanName(typed);
   if (!t) { $('g-err').textContent = 'Enter the board token.'; return $('g-token').focus(); }
-  if (!n) { $('g-err').textContent = 'Enter your name (letters, numbers, . - _).'; return $('g-name').focus(); }
-  if (n.length > NAME_MAX) { $('g-err').textContent = `Keep your name to ${NAME_MAX} characters.`; return $('g-name').focus(); }
+  // A name in another script ("李明") keeps nothing: say why, instead of asking for a name again.
+  if (!n) { $('g-err').textContent = typed ? `Names keep only a-z, 0-9, . - and _, and "${typed}" has none of them. Type your name in Latin letters (e.g. li-ming).` : 'Enter your name (letters, numbers, . - _).'; return $('g-name').focus(); }
+  if (n.length > NAME_MAX) { $('g-err').textContent = `Names are at most ${NAME_MAX} characters, and yours has ${n.length}. Shorten it.`; return $('g-name').focus(); }
   // Names keep only a-z, digits, . - _ (the server's rule): show the name it becomes before signing in with it.
   if (n !== typed) { $('g-name').value = n; $('g-err').textContent = `Names keep only a-z, 0-9, . - and _, so yours would be "${n}". Enter again to use it, or change it.`; return $('g-name').focus(); }
   // The board speaks as "board", and "anonymous" is a call without a name: the server refuses both as a writer.
@@ -289,10 +303,18 @@ let retryT = 0, retryMs = 0;
 function retryLater() { clearTimeout(retryT); retryMs = Math.min(30000, retryMs ? retryMs * 2 : 800); retryT = setTimeout(() => { retryT = 0; recheck(); }, retryMs); }
 const retrying = () => !!retryT;
 // Back online (the wifi returns): catch up and reconnect now, instead of waiting out the retry's backoff (up to 30s).
+// Also when the stream still counts as open: after the network went away it may be a dead connection that hasn't
+// noticed yet, so it is opened again.
 addEventListener('online', async () => {
-  if (unavailable || $('app').hidden || esOpen) return;
+  if (unavailable || $('app').hidden) return;
   clearTimeout(retryT); retryT = 0; retryMs = 0;
-  if (await load() && !unavailable && !$('app').hidden && !esOpen) connect(); else if (!esOpen) retryLater();
+  if (await load() && !unavailable && !$('app').hidden) connect(); else retryLater();
+});
+// The host rotated the token in another tab of this browser (setup.js saves the new one): this tab goes on with it.
+addEventListener('storage', (ev) => {
+  if (ev.key !== nsKey('board-token') || !ev.newValue || ev.newValue === token || pending.get()) return;
+  setToken(ev.newValue);
+  if (!unavailable && !$('app').hidden) { load(); connect(); }
 });
 async function recheck() {
   if (unavailable || $('app').hidden) return;

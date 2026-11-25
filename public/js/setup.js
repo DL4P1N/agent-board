@@ -64,8 +64,8 @@ function renderSetup(si) {
 // the read-only viewer token, never the board token.
 function moreBox() {
   const vt = state.setup?.viewer_token; const q = vt ? '?token=' + encodeURIComponent(vt) : '';
-  return `<div class="boardsec" id="board-more"><div class="sub">For the room, and after</div>
-    <div class="xacts">${vt ? `<a class="plink" href="${esc(BASE + '/present.html' + q)}" target="_blank" rel="noopener" data-fk="s-present" title="Read-only, for the room's big screen (opens in a new tab)">Presenter view</a><a class="plink" href="${esc(BASE + '/recap.html' + q)}" target="_blank" rel="noopener" data-fk="s-recap" title="Read-only, for after the session (opens in a new tab)">Session recap</a>` : ''}<button type="button" class="ghost" data-act="export-md" data-fk="s-md">Download summary (.md)</button><button type="button" class="ghost" data-act="export-json" data-fk="s-json">Download backup (JSON)</button></div></div>`;
+  return `<div class="boardsec" id="board-more" role="group" aria-labelledby="board-more-h"><div class="sub" id="board-more-h">For the room, and after</div>
+    <div class="xacts">${vt ? `<a class="plink" href="${esc(BASE + '/present.html' + q)}" target="_blank" rel="noopener" data-fk="s-present" title="Read-only, for the room's big screen (opens in a new tab)">Presenter view</a><a class="plink" href="${esc(BASE + '/recap.html' + q)}" target="_blank" rel="noopener" data-fk="s-recap" title="Read-only, for after the session (opens in a new tab)">Session recap</a>` : ''}<button type="button" class="ghost" data-act="export-md" data-fk="s-md">Download summary (.md)</button><button type="button" class="ghost" data-act="export-json" data-fk="s-json" title="Everything on the board as JSON, to read or keep">Download export (JSON)</button></div></div>`;
 }
 // "Team can run 7 tasks at once · 4 running", and a warning when idle agents outnumber the ready tasks.
 function teamCapHtml() {

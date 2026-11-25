@@ -198,7 +198,7 @@ try {
   check('MO-3 phone: every visible control is at least 32px tall (a PR link in the feed too)', !small.length && await page.$$eval('#feed a[href*="/pull/"]', (l) => l.length >= 2), small.slice(0, 8).join(' | '));
   // Phone fields are 16px (a phone's browser zooms into smaller ones), the @ names are 32px rows, and a card opens
   // without popping the keyboard up.
-  const pf = await page.evaluate(() => ({ msg: getComputedStyle($('msg')).fontSize, ans: getComputedStyle(document.querySelector('#questions textarea') || $('msg')).fontSize, search: getComputedStyle($('tsearch')).fontSize }));
+  const pf = await page.evaluate(() => ({ msg: getComputedStyle($('msg')).fontSize, ans: getComputedStyle(document.querySelector('#questions textarea') || $('msg')).fontSize, search: getComputedStyle($('tsearch')).fontSize, filter: getComputedStyle($('filter')).fontSize }));
   check('phone: text fields are 16px (no zoom on focus)', Object.values(pf).every((v) => v === '16px'), JSON.stringify(pf));
   await page.focus('#msg'); await page.keyboard.type('@'); await sleep(200);
   const acH = await page.evaluate(() => Math.min(...[...document.querySelectorAll('#msg-ac li')].map((l) => l.getBoundingClientRect().height)));

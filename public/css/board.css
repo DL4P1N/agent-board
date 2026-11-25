@@ -938,16 +938,21 @@ button.tochat { display: none; } /* phones only (below) */
   #now .na.link::before { top: calc(var(--s3) + .65em - 4px); }
   #now .also .link, #now-more .also .link { padding: var(--s2) 0; }
   .ac li { min-height: var(--ctl-sm); } /* the @ names to pick */
+  .toast { pointer-events: auto; } /* a tap on a toast closes it (helpers.js): no mouse to move off it */
 }
 /* A phone's browser zooms the page into a field whose text is under 16px when it is focused: these stay 16px. */
 @media (hover: none) and (pointer: coarse) and (max-width: 999px) {
-  input:not([type=checkbox]), textarea, select, .composer :is(#msg, select) { font-size: 16px; }
+  input:not([type=checkbox]), textarea, select, .composer :is(#msg, select), .filter select { font-size: 16px; }
 }
 /* Windows High Contrast (forced colours): the system draws the colours, so what colour alone said gets an edge. */
 @media (forced-colors: active) {
   :focus-visible, button:is(:not([class]), [class="sm"]):focus-visible, .toast button:focus-visible { outline-color: Highlight; }
   .card, .o-panel, .qcard, .toast, .o-agent, .tbc, .pill, .chip { border: 1px solid CanvasText; }
-  :is(.tabs button, .o-agent, [aria-pressed])[aria-pressed="true"], .ac li[aria-selected="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
+  /* Pressed: the tabs and the view switch are underlined (as their ink line in colour), other pressed controls ringed;
+     focus is the ring, so it still shows on a pressed control (a double ring on the ringed ones). */
+  .tabs button[aria-pressed="true"] { text-decoration: underline 3px; text-underline-offset: 5px; }
+  :is(.o-agent, [aria-pressed]:not(.tabs button))[aria-pressed="true"], .ac li[aria-selected="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
+  :is(.o-agent, [aria-pressed]:not(.tabs button))[aria-pressed="true"]:focus-visible { outline: 5px double Highlight; outline-offset: -5px; }
   .tdot, .sw, .tp-grid * { forced-color-adjust: none; } /* a tool dot and the theme swatches: the colour is the point */
 }
 

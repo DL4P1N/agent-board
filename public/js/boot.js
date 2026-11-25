@@ -4,7 +4,7 @@
 // office, panels, palette, boot.
 
 import './palette.js';
-import { $, HUES, linkName, linkNameAsIs, me, nsKey, oSave, oUi, qs, setMe, SLUG, state, store, token, ui } from './state.js';
+import { $, HUES, linkName, linkNameAsIs, linkNameCut, me, nsKey, oSave, oUi, qs, setMe, SLUG, state, store, token, ui } from './state.js';
 import { ago, clock, fullTime, hue, knownPeople, nameHash, taskById, toast, when } from './helpers.js';
 import { connect, es, esOpen, load, onEvent, onPaint, onRequest, onSignIn, onState, paint, recheck, retrying, setConn, setLoad,
   showGate, unavailable, unavailableStatus } from './data.js';
@@ -37,6 +37,7 @@ let started = false;
 let askName = !!linkName && (me ? linkName !== me : !linkNameAsIs);
 const NAME_NOTE = me
   ? `This link was made for "${linkName}". You're "${me}" in this browser: Enter to go on as ${me}, or change it.`
+  : linkNameCut ? `Names are at most 32 characters, so the link's name is "${linkName}" here. Enter to use it, or change it.`
   : `Names keep only a-z, 0-9, . - and _, so the link's name is "${linkName}" here. Enter to use it, or change it.`;
 let fromLink = !me && linkNameAsIs;
 if (fromLink) setMe(linkName);

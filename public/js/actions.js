@@ -380,6 +380,15 @@ async function saveStepGoal(f) {
   } catch (e) {
     btn.disabled = false;
     if (/time|deadline/i.test(e.message)) { ui.dlErr = e.message; render(); return $('dl-in')?.focus(); }
+    // A repo address the server refuses doesn't cost the goal: the rest is saved, the repo's error shows under its field
+    // (what was typed there stays, the form open).
+    if ('repo' in body && /^repo\b/i.test(e.message)) {
+      const { repo: _, ...rest } = body;
+      try { state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify(rest) }); } catch (e2) { return toast(e2.message, true); }
+      ui.editGoal = true; ui.repoErr = e.message; render(); scheduleReload();
+      toast("Goal saved. The repo address wasn't: see why under it.");
+      return $('repo-in')?.focus();
+    }
     toast(e.message, true);
   }
 }
