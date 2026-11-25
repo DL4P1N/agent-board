@@ -221,8 +221,9 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     muteStreams();
     later(closeStreams, 50);
     const setup = { ...setupInfo(), viewer_token: tokens.viewerToken, token_from_env: false };
-    // The host's window says it too (the web page's toast is the only other place): the new join command to send round.
-    console.log(`Token rotated for board "${slug}" at ${new Date().toLocaleTimeString()}: the old links and join commands stop working.\n  New join command: ${setup.join_commands?.[0]?.command || '(see the web board)'}`);
+    // The host's window says it too, but never the token itself (that window is often docker logs or journald): the
+    // end of it, to tell which one a link holds, and where the new join command and links are.
+    console.log(`Token rotated for board "${slug}" at ${new Date().toLocaleTimeString()}: the old links and join commands stop working.\n  The new join command and links are on the web board's Setup page (the page that rotated it already has the new token, …${String(t).slice(-4)}).`);
     return { token: t, setup };
   }));
 

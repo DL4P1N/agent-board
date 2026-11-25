@@ -110,7 +110,7 @@ When it's fixed, the board says "main is green again".
 
 ### A link leaked?
 
-*Rotate token* in *Setup* step 1 makes a new one (old links and agent configs stop working at once); everyone then re-runs the join command.
+*Rotate token* in *Setup* step 1 makes a new one (old links and agent configs stop working at once); everyone then re-runs the join command. The new join command is in *Setup*; the host's terminal only says the token was rotated and how it ends (never the token itself, since that output often lands in docker logs or journald).
 
 - An old token gets a 401 with `reason: "token_rotated"`, so the web board, join and doctor say the token was changed instead of just "bad token".
 - Waits still open with the old token (the Stop hook's long poll, an agent's `wait_for_events`) end at once with that answer, so they never get what is posted after the rotation.

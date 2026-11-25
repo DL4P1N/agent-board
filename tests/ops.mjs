@@ -190,7 +190,8 @@ const c2 = (p, method = 'GET', body, token) => fetch(`${b2.base}/api${p}`, { met
 r = await c2('/token/rotate', 'POST', undefined, oldTok);
 const newTok = r.body?.token;
 check('rotate returns a new token and the join commands', r.status === 200 && newTok && newTok !== oldTok && r.body.setup?.join_commands?.[0]?.command.includes(newTok), JSON.stringify(r).slice(0, 200));
-check('the host terminal says the token was rotated, with the new join command', await (async () => { for (let i = 0; i < 20 && !/Token rotated for board "main"/.test(b2.out); i++) await new Promise((x) => setTimeout(x, 100)); return /Token rotated for board "main"/.test(b2.out) && b2.out.slice(b2.out.indexOf('Token rotated')).includes(`--token ${newTok}`) && !b2.out.slice(b2.out.indexOf('Token rotated')).includes(oldTok); })(), b2.out.slice(-300));
+// N13: the host's window (docker logs, journald) never gets the new token: a hint of it and where the join command is.
+check('the host terminal says the token was rotated and where the new join command is, without the token', await (async () => { for (let i = 0; i < 20 && !/Token rotated for board "main"/.test(b2.out); i++) await new Promise((x) => setTimeout(x, 100)); const said = b2.out.slice(b2.out.indexOf('Token rotated')); return /Token rotated for board "main"/.test(said) && /Setup/.test(said) && said.includes(`…${newTok.slice(-4)}`) && !said.includes(newTok) && !said.includes(newTok.slice(0, 8)) && !said.includes(oldTok); })(), b2.out.slice(-300));
 check('the old token stops working', (await c2('/state', 'GET', undefined, oldTok)).status === 401);
 check('the old agent token stops working', (await c2('/state', 'GET', undefined, agentTokenFor(oldTok))).status === 401);
 const st2 = await c2('/state', 'GET', undefined, newTok);
