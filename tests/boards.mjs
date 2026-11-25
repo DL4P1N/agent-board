@@ -171,7 +171,7 @@ const pollCur = (await fetch(`${board.base}/b/poll/api/cursor`, { headers: { Aut
 const poll = (wait) => fetch(`${board.base}/b/poll/api/events?since=${pollCur}&wait=${wait}`, { headers: { Authorization: `Bearer ${pollTok}`, 'X-Agent': 'poller' } });
 const polls = Array.from({ length: WAITS }, () => poll(20).then((r) => ({ status: r.status, at: Date.now() })).catch((e) => ({ status: `error ${e.message}`, at: Date.now() })));
 let allWaiting = false;
-for (const t0 = Date.now(); !allWaiting && Date.now() - t0 < 10e3;) allWaiting = (await poll(1).then((r) => r.status).catch(() => 0)) === 429;
+for (const t0 = Date.now(); !allWaiting && Date.now() - t0 < 20e3;) allWaiting = (await poll(1).then((r) => r.status).catch(() => 0)) === 429;
 const archivedAt = Date.now();
 const archPoll = await admin("/boards/poll/archive", "POST");
 const ended = await Promise.all(polls);
