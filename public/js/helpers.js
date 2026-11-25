@@ -301,13 +301,19 @@ if ('ResizeObserver' in window) {
   const box = $('toasts');
   new ResizeObserver(() => document.documentElement.style.setProperty('--toast-room', box.offsetHeight && !box.classList.contains('top') ? Math.ceil(box.offsetHeight + parseFloat(getComputedStyle(box).bottom)) + 'px' : '0px')).observe(box);
 }
+// The Undo key's name on this computer.
+const UNDO_KEY = /Mac|iPhone|iPad/.test(navigator.platform || '') ? '⌘Z' : 'Ctrl+Z';
 function toast(msg, bad = false, action = null) {
   const d = document.createElement('div');
   d.className = 'toast' + (bad ? ' bad' : '');
   const s = document.createElement('span'); s.textContent = msg; d.append(s);
   if (action) {
     const b = document.createElement('button'); b.type = 'button'; b.textContent = action.label;
-    if (action.label === 'Undo') { b.dataset.undo = ''; b.title = 'Undo (Ctrl+Z)'; b.setAttribute('aria-keyshortcuts', 'Control+Z Meta+Z'); }
+    // Undo names its key (not on a touch screen: .kb); Ctrl+Z runs it while it is the newest toast.
+    if (action.label === 'Undo') {
+      b.dataset.undo = ''; b.title = `Undo (${UNDO_KEY})`; b.setAttribute('aria-keyshortcuts', 'Control+Z Meta+Z');
+      const k = document.createElement('span'); k.className = 'kb'; k.textContent = ` (${UNDO_KEY})`; b.append(k);
+    }
     b.onclick = () => { toastOut(d); action.run(); }; d.append(b);
   }
   if (bad) d.setAttribute('role', 'alert');
@@ -330,12 +336,19 @@ function toast(msg, bad = false, action = null) {
   const dlg = [...document.querySelectorAll('dialog[open]')].pop();
   if (dlg) { let l = dlg.querySelector(':scope > .dlg-live'); if (!l) { l = document.createElement('div'); l.className = 'vh dlg-live'; l.setAttribute('aria-live', bad ? 'assertive' : 'polite'); dlg.append(l); } l.textContent = ''; setTimeout(() => { l.textContent = msg; }, 60); }
 }
-// Ctrl+Z (⌘Z on a Mac) while an Undo toast shows runs the newest one's Undo, so the keyboard needn't Tab to it in its
-// 8 seconds. In a text field Ctrl+Z stays the field's own undo.
+// Ctrl+Z (⌘Z on a Mac) runs the newest toast's Undo, so the keyboard needn't Tab to it in its 8 seconds: only when the
+// newest toast is an Undo one (never an older move's under a newer note). In a text field Ctrl+Z stays the field's own.
+// F8 goes to the newest toast's button (Undo, Copy yours, Open...), wherever focus is; the toast waits while it has focus.
+const newestToast = () => [...$('toasts').querySelectorAll('.toast:not(.out)')].pop() || null;
 document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'F8' && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !ev.shiftKey) {
+    const b = [...$('toasts').querySelectorAll('.toast:not(.out)')].reverse().map((t) => t.querySelector('button')).find(Boolean);
+    if (b) { ev.preventDefault(); b.focus(); }
+    return;
+  }
   if (!(ev.ctrlKey || ev.metaKey) || ev.shiftKey || ev.altKey || ev.key.toLowerCase() !== 'z') return;
   if (ev.target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
-  const b = [...$('toasts').querySelectorAll('.toast:not(.out) [data-undo]')].pop(); if (!b) return;
+  const b = newestToast()?.querySelector('[data-undo]'); if (!b) return;
   ev.preventDefault(); b.click();
 });
 function announce(msg) { const a = $('announcer'); a.textContent = ''; setTimeout(() => { a.textContent = msg; }, 60); }

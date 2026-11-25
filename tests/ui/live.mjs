@@ -148,19 +148,19 @@ try {
   await page.evaluate(() => $('task-dlg').close()); await sleep(200);
 
   // ---- J10 / M9 / A4: Undo after a move ----
-  const undo = (how) => page.evaluate((h) => [...document.querySelectorAll('#toasts button')].find((b) => b.textContent === 'Undo')?.[h](), how);
+  const undo = (how) => page.evaluate((h) => [...document.querySelectorAll('#toasts [data-undo]')].find(Boolean)?.[h](), how);
   await page.click(`[data-move="${t3.id}"]`); await page.click(`[data-move-to="open"]`);
-  await until(page, () => [...document.querySelectorAll('#toasts button')].some((b) => b.textContent === 'Undo'));
+  await until(page, () => !!document.querySelector('#toasts [data-undo]'));
   await undo('focus'); await undo('click'); // from the keyboard: focus was on the toast's button
   await until(page, (id) => taskById(id)?.status === 'in_progress', t3.id);
   await sleep(300);
   check('M9 after Undo, focus is on the card it moved back', await page.evaluate((id) => document.activeElement?.closest?.('.card')?.dataset.id === String(id), t3.id), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
   await sleep(600);
   await page.click(`[data-move="${t3.id}"]`); await page.click(`[data-move-to="open"]`);
-  await until(page, () => [...document.querySelectorAll('#toasts button')].some((b) => b.textContent === 'Undo'));
+  await until(page, () => !!document.querySelector('#toasts [data-undo]'));
   await undo('focus');
   await sleep(9000);
-  check('A4 an Undo toast stays while it has focus (past its 8 seconds)', !!(await page.evaluate(() => [...document.querySelectorAll('#toasts button')].some((b) => b.textContent === 'Undo'))));
+  check('A4 an Undo toast stays while it has focus (past its 8 seconds)', !!(await page.evaluate(() => !!document.querySelector('#toasts [data-undo]'))));
   await bob('claim_task', { id: t3.id });
   await until(page, (id) => taskById(id)?.assignee === 'bob', t3.id);
   await undo('click'); await sleep(900);

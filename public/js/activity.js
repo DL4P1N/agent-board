@@ -170,7 +170,11 @@ function openDm(name, focus = true) {
   if ($('task-dlg').open) $('task-dlg').close();
   ui.tab = 'direct'; store.set('board-tab', 'direct'); ui.dm = name; // the open thread isn't remembered: a reload shows the list
   $('feed')._html = undefined; render();
-  if (focus) { const m = $('msg'); m.focus({ preventScroll: true }); m.setSelectionRange(m.value.length, m.value.length); }
+  if (focus) {
+    // On a phone the thread's message box can be far down the page: bring it into view, as the way to the chat does.
+    $('composer').scrollIntoView({ behavior: smooth(), block: 'nearest' });
+    const m = $('msg'); m.focus({ preventScroll: true }); m.setSelectionRange(m.value.length, m.value.length);
+  }
 }
 const TAB_EMPTY = { me: 'No mentions of you yet.' };
 function renderFeed(unreadCount, at = null) {

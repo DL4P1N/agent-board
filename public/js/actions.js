@@ -290,7 +290,11 @@ async function submitForm(f) {
     if (ui.dlErr) { ui.dlFreeze = ''; render(); return $('o-dl-in')?.focus(); }
     // A time inside the freeze window freezes the board at once: say so first, and save on the second Save.
     const freezeNow = fm > 0 && ts - fm * 60e3 <= Date.now(); const key = `${ts}|${fm}`;
-    if (freezeNow && ui.dlFreeze !== key) { ui.dlFreeze = key; render(); return document.querySelector('[data-fk="o-dl-save"]')?.focus(); }
+    if (freezeNow && ui.dlFreeze !== key) {
+      ui.dlFreeze = key; render(); document.querySelector('[data-fk="o-dl-save"]')?.focus();
+      // The popover isn't a dialog: its hint changes quietly, so the warning is read out too.
+      return announce('That time is inside the freeze window: the feature freeze starts as soon as you save. Save again to go ahead, or shorten the freeze.');
+    }
     const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
     try {
       state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: ts, freeze_minutes: fm }) });
