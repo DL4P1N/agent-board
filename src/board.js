@@ -139,6 +139,9 @@ const MIGRATIONS = [
   (b) => b.db.exec('CREATE INDEX IF NOT EXISTS events_channel ON events(channel)'),
   // Version 6: each event records the role of the token it was written with (see emit).
   (b) => { if (!b.db.prepare('PRAGMA table_info(events)').all().some((c) => c.name === 'role')) b.db.exec('ALTER TABLE events ADD COLUMN role TEXT'); },
+  // Version 7: the person a join made with the board token recorded for a name on its laptop (name_owners.joined_person):
+  // only then may an agent carry the name of a person on the web board (its own person's, see roleClash).
+  (b) => { if (!b.db.prepare('PRAGMA table_info(name_owners)').all().some((c) => c.name === 'joined_person')) b.db.exec('ALTER TABLE name_owners ADD COLUMN joined_person TEXT'); },
 ];
 
 export class Board {
@@ -1412,18 +1415,20 @@ export class Board {
   }
 
   // join, before any agent has connected: hold `name` for this laptop, so a teammate who picks it next is warned.
-  // Not taken over while another laptop's agent is online under it.
-  reserveName(name, laptop, person = null) {
+  // Not taken over while another laptop's agent is online under it. human: join ran with the board token, so the person
+  // it names is recorded as joined_person (what lets that person's own agent carry their name, see roleClash).
+  reserveName(name, laptop, person = null, { human = false } = {}) {
     const root = agentRootOf(normName(name));
     const row = this.db.prepare('SELECT * FROM name_owners WHERE name = ?').get(root);
     const now = Date.now();
+    const joined = human && person ? normName(person) : null;
     let reserved = false;
     if (row && row.laptop === laptop) {
-      if (person) this.db.prepare('UPDATE name_owners SET person = ? WHERE name = ?').run(normName(person), root);
+      if (person) this.db.prepare('UPDATE name_owners SET person = ?, joined_person = COALESCE(?, joined_person) WHERE name = ?').run(normName(person), joined, root);
       reserved = true;
     } else if (!this.ownerHolds(row)) {
-      this.db.prepare("INSERT INTO name_owners (name, laptop, person, via, seen_at) VALUES (?,?,?,'join',?) ON CONFLICT(name) DO UPDATE SET laptop = excluded.laptop, person = excluded.person, via = 'join', seen_at = excluded.seen_at")
-        .run(root, laptop, person ? normName(person) : null, now);
+      this.db.prepare("INSERT INTO name_owners (name, laptop, person, via, seen_at, joined_person) VALUES (?,?,?,'join',?,?) ON CONFLICT(name) DO UPDATE SET laptop = excluded.laptop, person = excluded.person, via = 'join', seen_at = excluded.seen_at, joined_person = excluded.joined_person")
+        .run(root, laptop, person ? normName(person) : null, now, joined);
       reserved = true;
     }
     return { ...this.checkName(name, laptop), reserved };
@@ -1464,15 +1469,18 @@ export class Board {
 
   // A name used across roles: an agent connecting under a human's name, or a human writing under another person's
   // agent's name. What either wrote would read as the other's, so it's refused (the refusal text; '' when fine).
-  // A person's own agent may carry their name (join with one tool names the agent after its person: ?person= says so),
-  // and a name that is already an agent's stays usable by that agent.
-  roleClash(name, kind, person = null) {
+  // A person's own agent may carry their name (join with one tool names the agent after its person), but only when a
+  // join made with the board token recorded that for this laptop (?person= alone is the agent's own say-so, N3); a name
+  // that is already an agent's stays usable by that agent. laptop: the caller's laptop id (join's ?laptop= / X-Laptop), if any.
+  roleClash(name, kind, person = null, laptop = null) {
     const root = agentRootOf(normName(name));
     if (!root) return '';
     if (kind === 'agent') {
       if (this.agentRow(root) || !this.db.prepare("SELECT 1 FROM presence_v2 WHERE name = ? AND kind = 'human'").get(root)) return '';
-      if (normName(person) === root) return '';
-      return `${root} is the name of a person on the web board, so an agent can't use it (its posts would read as theirs). Ask your human to re-run join with a different agent name (or, if this is ${root}'s own agent, with person ${root}).`;
+      const own = this.db.prepare('SELECT laptop, joined_person FROM name_owners WHERE name = ?').get(root);
+      // A laptop id, when sent, must be the one join recorded it on (doctor's connection check sends none).
+      if (normName(person) === root && own?.joined_person === root && (!laptop || own.laptop === laptop)) return '';
+      return `${root} is the name of a person on the web board, so an agent can't use it (its posts would read as theirs). Ask your human to re-run join with a different agent name (or, if this is ${root}'s own agent, to re-run join with the board link, which records the name for this laptop).`;
     }
     const row = this.agentRow(root);
     const owner = this.db.prepare('SELECT person FROM name_owners WHERE name = ?').get(root);

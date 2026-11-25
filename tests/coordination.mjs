@@ -567,9 +567,22 @@ const runHook = (agentName, home) => new Promise((resolve) => {
   // An agent may not take a human's name (dana wrote on the web board above)…
   const fake = await agent('dana');
   check('M2a: an agent can\'t connect under a human\'s name', !!fake?.refused && /human/i.test(fake.refused), JSON.stringify(fake));
-  // …unless it is that person's own agent (join with one tool names the agent after its person).
-  const own = await agent('dana', { person: 'dana' });
-  check('M2a: …but a person\'s own agent under their name is fine (join: one tool, agent = person)', typeof own === 'function');
+  // ?person= alone is the agent's own say-so (N3): refused.
+  const sayso = await agent('dana', { person: 'dana', laptop: 'lapdana1' });
+  check('N3: ?agent=dana&person=dana doesn\'t get an agent past a human\'s name by itself', !!sayso?.refused && /human|person/i.test(sayso.refused), JSON.stringify(sayso));
+  // An agent token can't reserve a person's name either (that's how join records it), nor report a usage limit under it.
+  const agentRest = (p, body, who = 'mallory') => fetch(`${board.base}/api${p}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${AGENT_TOKEN}`, 'X-Agent': who }, body: JSON.stringify(body) }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => ({})) }));
+  const res1 = await agentRest('/names/dana', { laptop: 'lapdana1', person: 'dana' });
+  check('N3: the agent token can\'t reserve a person\'s name', res1.status === 409, JSON.stringify(res1));
+  const res2 = await agentRest('/agents/dana/limit', { note: 'x' }, 'dana');
+  const rows = (await human('/state')).presence.filter((x) => x.name === 'dana' && x.kind === 'agent');
+  check('N3: …nor report a usage limit under it (no agent row made)', res2.status === 409 && !rows.length, JSON.stringify([res2, rows]));
+  // …unless it is that person's own agent: join (with the board token) recorded the name for this laptop.
+  await human('/names/dana', 'POST', { laptop: 'lapdana1', person: 'dana' });
+  const wrongLaptop = await agent('dana', { person: 'dana', laptop: 'otherlap1' });
+  check('N3: …from another laptop it is still refused', !!wrongLaptop?.refused, JSON.stringify(wrongLaptop));
+  const own = await agent('dana', { person: 'dana', laptop: 'lapdana1' });
+  check('M2a: …but a person\'s own agent under their name is fine once join recorded it (one tool, agent = person)', typeof own === 'function', JSON.stringify(own));
   // A human may not write under an agent's name that belongs to someone else, nor under a name longer than 64.
   await agent('eve-codex');
   const asAgent = await humanRaw('/messages', 'POST', { text: 'Pushed to main, all good.' }, 'eve-codex');

@@ -28,8 +28,8 @@ export function mountMcp(router, { board, auth, tokenCurrent, agentLimit, holdSl
     // "/x" (no name before the slash: no presence row, no slot limit, and every such name one team).
     if (badRoot(agentFrom(req))) return res.status(400).json({ jsonrpc: '2.0', error: { code: -32602, message: 'This connection needs its own agent name (?agent=<name> on the MCP URL; "board" and "anonymous" are taken). Re-run the join command from the web board.' }, id: null });
     // A human's name isn't an agent's to take (its posts would read as that person's), unless it is that person's own
-    // agent (join with one tool names the agent after its person, ?person=).
-    const posing = board.roleClash(agentFrom(req), 'agent', req.query.person);
+    // agent (join with one tool names the agent after its person, ?person=) and join recorded that for this laptop.
+    const posing = board.roleClash(agentFrom(req), 'agent', req.query.person, laptopParam(req.query.laptop) || null);
     if (posing) return res.status(409).json({ jsonrpc: '2.0', error: { code: -32001, message: posing }, id: null });
     if (!agentLimit(req, res, agentFrom(req), true)) return;
     if (req.body?.method === 'tools/call' && req.body?.params?.name === 'wait_for_events') {

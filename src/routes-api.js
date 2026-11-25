@@ -138,7 +138,11 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     if (person !== null && (typeof person !== 'string' || !NAME_RE.test(person))) badName(res, 'person');
     const laptop = laptopParam(req.body?.laptop);
     if (!laptop) { res.status(400); throw new Error('laptop is required (join\'s laptop id).'); }
-    return board.reserveName(req.params.name, laptop, person);
+    // With the agent token, not a person's name (it would block them from writing under it, and claim it for an agent).
+    const posing = req.role === 'agent' && board.roleClash(req.params.name, 'agent', person, laptop);
+    if (posing) { res.status(409); throw new Error(posing); }
+    // Only a join made with the board token records the person (see roleClash).
+    return board.reserveName(req.params.name, laptop, person, { human: req.role === 'human' });
   }));
 
   // An agent reports that it hit its usage limit ({until?, note?}). Humans may mark any agent; with the
@@ -150,6 +154,9 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     // One name, one laptop: the Stop hook says which laptop it runs on; another laptop's limit isn't the owner's.
     const laptop = req.role === 'human' ? '' : laptopParam(req.get('x-laptop'));
     if (laptop && callerLaptop.run(laptop, () => board.nameClash(name))) { res.status(403); throw new Error(board.clashText(name)); }
+    // Nor a person's name: reporting it would make an agent row under it (N3).
+    const posing = req.role === 'agent' && board.roleClash(name, 'agent', null, laptop || null);
+    if (posing) { res.status(409); throw new Error(posing); }
     const r = board.reportUsageLimit(name, req.body || {}, { by: req.role === 'human' ? 'human' : 'agent' });
     presence();
     return r;
