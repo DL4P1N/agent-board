@@ -494,6 +494,8 @@ function doAct(a, el) {
   // Setup's step 4 points to where the planner is chosen: the Roles chip (the Planner chip from 1600px).
   if (a === 'pick-planner') return matchMedia('(max-width: 1599px)').matches ? oRoles(true) : oPlan(true);
   if (a === 'qr') { ui.qr = !ui.qr; render(); return document.querySelector('[data-fk="qr-tog"]')?.focus({ preventScroll: true }); }
+  // Which of the laptop's addresses the QR code holds (Setup step 1, when it has more than one that teammates can reach).
+  if (a === 'qr-addr') { ui.qrAddr = Number(el.dataset.i) || 0; render(); return document.querySelector(`[data-fk="qr-addr-${ui.qrAddr}"]`)?.focus({ preventScroll: true }); }
   if (a === 'clock') return oDl(el?.id === 'clock' ? !ui.oDl : true);
   if (a === 'goal') return oGoal(!ui.oGoal);
   if (a === 'merge') return oMerge(!ui.oMerge);

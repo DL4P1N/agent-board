@@ -50,6 +50,28 @@ check('JOIN-9: doctor shows the "other" tool\'s MCP server again (name, type, ur
 check('JOIN-9: same address join printed', joinUrl && d2.out.includes(`url:  ${joinUrl}`), `${joinUrl}\n${d2.out}`);
 check('JOIN-8: "other" ends with "Next: add the server…", not "All good"', d2.status === 0 && /Next: add the server shown above to your tool\./.test(d2.out) && !/All good/.test(d2.out), d2.out.slice(-400));
 
+// Doctor's connection check sends this laptop's id (laptop=) and its person, as the agent itself does, so the board's
+// one-name-one-laptop rule applies to the check too: seen by a stub board that records what doctor asks for.
+{
+  const cfgL = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  const seen = [];
+  // /health and /api/state answer like a board, so doctor goes on to its connection check (the /mcp request).
+  const stub = http.createServer((req, res) => {
+    seen.push(req.url);
+    const ok = req.url === '/health' ? { ok: true, version: 'unknown' } : req.url === '/api/state' ? { board: { slug: 'main', name: 'Main' } } : null;
+    res.writeHead(ok ? 200 : 401, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(ok || { error: 'stub' }));
+  });
+  await new Promise((r) => stub.listen(0, '127.0.0.1', r));
+  const stubUrl = `http://127.0.0.1:${stub.address().port}`;
+  fs.writeFileSync(cfgPath, JSON.stringify({ ...cfgL, url: stubUrl, agents: cfgL.agents.map((a) => ({ ...a, url: stubUrl })) }));
+  await new Promise((r) => { const c = spawn(process.execPath, [path.join(ROOT, 'scripts', 'doctor.mjs')], { cwd: ROOT, env, stdio: 'ignore' }); c.on('exit', r); setTimeout(() => { c.kill(); r(); }, 60e3); });
+  await new Promise((r) => stub.close(r));
+  fs.writeFileSync(cfgPath, JSON.stringify(cfgL));
+  const probe = seen.find((u) => u.startsWith('/mcp?')) || '';
+  const q = new URLSearchParams(probe.split('?')[1] || '');
+  check('doctor\'s connection check sends this laptop\'s id and person (laptop=, person=), with probe=1', /^[a-z0-9]{8,16}$/.test(cfgL.laptop_id || '') && q.get('laptop') === cfgL.laptop_id && q.get('person') === cfgL.person && q.get('probe') === '1', `${cfgL.laptop_id} ${cfgL.person} ${JSON.stringify(seen)}`);
+}
+
 // ---- JOIN-8: a command-line tool that isn't installed ----
 fs.rmSync(cfgPath);
 const j3 = join('--tool', 'gemini');

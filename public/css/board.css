@@ -298,6 +298,9 @@ button.bell.blocked .slash { display: inline; }
 .qrs { display: flex; gap: var(--s6); flex-wrap: wrap; margin: var(--s3) 0 var(--s2); }
 .qrs figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: var(--s2); font-size: var(--fs-meta); color: var(--muted); max-width: 200px; text-align: center; }
 .qrs img { width: 180px; height: 180px; background: #fff; padding: var(--s4); border-radius: var(--r-md); box-sizing: content-box; }
+/* Which address the QR code holds: the chosen one reads as pressed (ink and a chip background), the rest stay quiet. */
+.qr-addrs { flex-wrap: wrap; gap: var(--s2); margin: 0 0 var(--s2); }
+.qr-addrs button[aria-pressed="true"] { color: var(--ink); background: var(--chip); border-color: var(--line-strong); }
 .nf { display: flex; flex-direction: column; gap: var(--s3); margin: var(--s2) 0 var(--s3); max-width: 640px; }
 .nf label { margin: var(--s2) 0 0; }
 .nf fieldset { border: 2px solid var(--border); border-radius: var(--r-md); padding: var(--s2) var(--s5) var(--s3); margin: 0; display: flex; flex-wrap: wrap; gap: var(--s1) var(--s6); }

@@ -164,6 +164,23 @@ try {
   await page.evaluate(() => { ui.qr = true; render(); });
   const qrs = await page.$$eval('#qr-codes figure', (f) => f.map((x) => x.innerText));
   check('ONB-7 one QR code, for the board link', qrs.length <= 1 && !/paste/i.test(qrs.join(' ')), JSON.stringify(qrs));
+  // A laptop on two networks (wifi and wired): still one code, with a button per usable address to switch it (the local
+  // and virtual ones are left out, as in the invite message).
+  const qrSwitch = await page.evaluate(async () => {
+    const real = state.setup.join_commands;
+    const mk = (ip, label) => ({ ip, label, command: `npm run join -- --url http://${ip}:4000`, web_url: `http://${ip}:4000/?token=t` });
+    state.setup.join_commands = [mk('192.168.1.20', 'same wifi'), mk('10.0.0.7', 'same network (wired or other)'), mk('172.20.0.1', 'virtual adapter'), mk('localhost', 'this laptop')];
+    ui.qrAddr = 0; render();
+    const img = () => decodeURIComponent(document.querySelector('#qr-codes img')?.getAttribute('src') || '');
+    const btns = [...document.querySelectorAll('.qr-addrs button')];
+    const first = { n: document.querySelectorAll('#qr-codes figure').length, btns: btns.map((b) => `${b.textContent}:${b.getAttribute('aria-pressed')}`), wifi: img().includes('192.168.1.20') };
+    btns[1]?.click(); await new Promise((r) => setTimeout(r, 50));
+    const after = { n: document.querySelectorAll('#qr-codes figure').length, wired: img().includes('10.0.0.7'), pressed: document.querySelector('.qr-addrs [aria-pressed="true"]')?.dataset.i, focus: document.activeElement?.dataset?.fk };
+    state.setup.join_commands = real; ui.qrAddr = 0; render();
+    return { first, after };
+  });
+  check('ONB-7 a second network: one code, a button per usable address, and a button switches the code', qrSwitch.first.n === 1 && qrSwitch.first.btns.length === 2 && qrSwitch.first.btns[0].endsWith(':true') && qrSwitch.first.wifi
+    && qrSwitch.after.n === 1 && qrSwitch.after.wired && qrSwitch.after.pressed === '1' && qrSwitch.after.focus === 'qr-addr-1', JSON.stringify(qrSwitch));
   const inv = await page.evaluate(() => inviteText());
   check('ONB-7 invite has Gemini CLI and Cursor', /Gemini CLI: \/board/.test(inv) && /Cursor: \/board/.test(inv), inv);
 } catch (e) { results.push('CRASH ' + e.stack); }

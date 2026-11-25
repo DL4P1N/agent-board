@@ -121,8 +121,9 @@ export async function runDoctor({ header = true } = {}) {
     const outdated = board.outdated;
     console.log(`  ${LABEL[a.tool] || a.tool} (as "${a.agent}")${board.name && severalBoards ? ` on board "${board.name}"` : ''}${a.dir ? ` in ${a.dir}` : ''}`);
     // probe=1: checking must not make this agent look online/started on the board. person: whose agent it is (the board
-    // refuses an agent under a person's name unless it is that person's own).
-    const mcpUrl = `${url}/mcp?agent=${encodeURIComponent(a.agent)}&token=${encodeURIComponent(token)}${cfg.person ? `&person=${encodeURIComponent(cfg.person)}` : ''}&probe=1`;
+    // refuses an agent under a person's name unless it is that person's own). laptop: this laptop's id from join, so the
+    // check goes through the same one-name-one-laptop rule as the agent itself.
+    const mcpUrl = `${url}/mcp?agent=${encodeURIComponent(a.agent)}&token=${encodeURIComponent(token)}${cfg.person ? `&person=${encodeURIComponent(cfg.person)}` : ''}${cfg.laptop_id ? `&laptop=${encodeURIComponent(cfg.laptop_id)}` : ''}&probe=1`;
     let tools = [];
     try {
       const r = await fetch(mcpUrl, {

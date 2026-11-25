@@ -128,8 +128,16 @@ function stepInvite(si) {
       ${ui.addrs ? rest.map((a, i) => `<div class="sub" title="${esc(a.label)}">${esc(addrText(a))}</div>${cmdBox(a.command, 'alt' + i, 'join command: ' + addrText(a))}`).join('') : ''}` : ''}
     <div class="sub">Just want to watch? Send them this page's link</div>${cmdBox(best.web_url, 'web', 'board link')}
     <button type="button" class="link muted t-meta mt-1" data-act="qr" data-fk="qr-tog" aria-expanded="${!!ui.qr}" aria-controls="qr-codes"><span class="chev" aria-hidden="true">▾</span> ${ui.qr ? 'Hide QR code' : 'Show QR code (scan with a phone)'}</button>
-    ${ui.qr ? `<div class="qrs" id="qr-codes">
-      <figure><img src="${esc(qrSrc(best.web_url))}" alt="QR code for this board's link, ${esc(best.web_url)}" width="180" height="180"><figcaption>Board link: open it on a phone to watch. To connect a laptop, copy the join command above or send the invite message.</figcaption></figure></div>` : ''}
+    ${ui.qr ? (() => {
+      // One code at a time; with a second usable address (wired and wifi, Tailscale), small buttons switch it, so a
+      // phone on another network can scan one that works for it. Same addresses as the invite message lists.
+      const qa = [best, ...rest.filter((x) => x.ip !== 'localhost' && !/^virtual/i.test(x.label))];
+      const cur = qa[Math.min(ui.qrAddr || 0, qa.length - 1)];
+      const short = (a) => addrText(a).replace(/^Works (for teammates )?/, '').replace(/^on the /, '').replace(/^(\w)/, (c) => c.toUpperCase());
+      return `<div class="qrs" id="qr-codes">
+      <figure><img src="${esc(qrSrc(cur.web_url))}" alt="QR code for this board's link, ${esc(cur.web_url)}" width="180" height="180"><figcaption>Board link${qa.length > 1 ? ` (${esc(short(cur).toLowerCase())})` : ''}: open it on a phone to watch. To connect a laptop, copy the join command above or send the invite message.</figcaption></figure></div>
+      ${qa.length > 1 ? `<div class="inl qr-addrs" role="group" aria-label="Which address the QR code holds">${qa.map((a, i) => `<button type="button" class="ghost sm" data-act="qr-addr" data-i="${i}" data-fk="qr-addr-${i}" aria-pressed="${a === cur}" title="${esc(a.label)}">${esc(short(a))}</button>`).join('')}</div>` : ''}`;
+    })() : ''}
     ${si.ros.some((r) => r.agent) ? `<div class="sub">Laptops connected</div>${chips(si, true)}` : ''}
     ${(() => { const w = si.ros.filter((r) => r.humanOnline && !r.agent); return w.length ? `<p class="muted t-meta mt-1">Watching this page: ${w.map((r) => `${nameTag(r.name)}${youTag(r.name)}`).join(', ')}</p>` : ''; })()}
     ${notifyBox()}`;
