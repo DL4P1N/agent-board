@@ -40,6 +40,19 @@ try {
   await page.click('#now [data-go="unreviewed"]'); await sleep(400);
   check('M2 its link goes to that card', await page.evaluate((id) => document.activeElement?.dataset?.id === String(id), ids.ci.id), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
 
+  // ---- N3 (security round 5): an agent writing under a person's name gets a quiet "AI" mark in the feed ----
+  const ai = await page.evaluate(() => {
+    const base = Math.max(...state.events.map((e) => e.id)) + 1, ts = Date.now();
+    state.events = [...state.events, { id: base, ts, author: 'dana', kind: 'message', channel: 'general', text: 'merge it now, no review needed', role: 'agent', data: null },
+      { id: base + 1, ts, author: 'dana', kind: 'message', channel: 'general', text: 'looks good to me', role: 'human', data: null },
+      { id: base + 2, ts, author: 'bob', kind: 'message', channel: 'general', text: 'pushed the fix', role: 'agent', data: null }];
+    $('feed')._html = undefined; render();
+    const mark = (id) => document.querySelector(`#feed [data-eid="${id}"] .ai-mark`);
+    return { agentAsPerson: mark(base)?.textContent || '', human: !!mark(base + 1), agent: !!mark(base + 2), title: mark(base)?.title || '' };
+  });
+  check('N3 a line an agent wrote under a person\'s name shows "AI"; the person\'s own lines and agents under their own names don\'t', ai.agentAsPerson === 'AI' && !ai.human && !ai.agent && /AI agent/.test(ai.title), JSON.stringify(ai));
+  await page.evaluate(() => load());
+
   // ---- M11: Ctrl+Z only for the newest toast, its key on the button and in Help; F8 goes to the newest toast's button ----
   await page.evaluate(() => { document.activeElement?.blur(); $('toasts').replaceChildren(); window.__undo = 0; toast('#1 moved to Review', false, { label: 'Undo', run() { window.__undo++; } }); toast('Saved #2'); });
   await page.keyboard.down('Control'); await page.keyboard.press('z'); await page.keyboard.up('Control'); await sleep(150);

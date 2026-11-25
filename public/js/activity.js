@@ -60,18 +60,26 @@ function evHtml(e, prev) {
   evCache.set(e.id, { key, e: e.ts + e.text, html });
   return html;
 }
+// An agent writing under a person's name (you, or a person on this board): a small, quiet "AI" mark after the name tells
+// it apart. The server records each event's role (the token it was written with).
+function aiMark(e) {
+  if (e.role !== 'agent') return '';
+  const n = String(e.author || '').toLowerCase();
+  const person = n === me || (state.presence || []).some((p) => p.kind === 'human' && String(p.person || p.name || '').toLowerCase() === n);
+  return person ? '<span class="ai-mark" title="Written by an AI agent using this name">AI</span>' : '';
+}
 function evHtmlRaw(e, prev) {
   if (e.channel === 'direct' && e.data?.dm?.from === 'board') return `<div class="ev sys" data-eid="${e.id}"><div class="eh"><span class="eb">${fmt(e.text, true)}</span>${timeEl(e.ts)}</div></div>`;
   if (!isChat(e)) {
     // Consecutive status lines from the same author are grouped: the name shows once.
     const cont = prev && !isChat(prev) && prev.author === e.author && e.ts - prev.ts < 10 * 60e3;
-    return `<div class="ev sys${cont ? ' cont' : ''}${isAction(e) ? ' act' : ''}${isAction(e) && mentionsMe(e) ? ' mention' : ''}" data-eid="${e.id}"><div class="eh"><span class="eb">${cont ? `<span class="vh">${esc(e.author)} </span>` : who(e.author, true) + (isAction(e) ? ' · ' : ' ')}${fmt(statusWords(noTool(e.kind === 'settings' ? settingsText(e) : isAction(e) ? actionText(e) : e.text)), true)}</span>${timeEl(e.ts)}</div></div>`;
+    return `<div class="ev sys${cont ? ' cont' : ''}${isAction(e) ? ' act' : ''}${isAction(e) && mentionsMe(e) ? ' mention' : ''}" data-eid="${e.id}"><div class="eh"><span class="eb">${cont ? `<span class="vh">${esc(e.author)} </span>` : who(e.author, true) + aiMark(e) + (isAction(e) ? ' · ' : ' ')}${fmt(statusWords(noTool(e.kind === 'settings' ? settingsText(e) : isAction(e) ? actionText(e) : e.text)), true)}</span>${timeEl(e.ts)}</div></div>`;
   }
   const mention = mentionsMe(e); const lite = !mention && mentionsLite(e);
   const tag = e.kind === 'question' ? '<span class="pill warn">asked the humans</span>' : e.kind === 'answer' ? '<span class="pill">answered</span>' : '';
   const open = e.kind === 'question' && state.questions.some((q) => q.id === e.data?.question_id && !q.answer);
   const long = isLong(e.text); const shown = long && expandedEv.has(e.id);
-  return `<div class="ev chat ${mention ? 'mention' : lite ? 'mention-lite' : ''} ${open ? 'question' : ''}${long ? ' long' : ''}${shown ? ' open' : ''}" data-eid="${e.id}"><div class="eh">${who(e.author, true)}${tag}${e.channel === 'direct' ? (e.data?.dm?.from === 'agent' && e.data.dm.to && !isMe(e.data.dm.to) ? `<span class="ch">to ${esc(e.data.dm.to)}</span>` : '') : e.channel !== 'general' ? `<span class="ch">#${esc(e.channel)}</span>` : ''}${timeEl(e.ts)}</div>
+  return `<div class="ev chat ${mention ? 'mention' : lite ? 'mention-lite' : ''} ${open ? 'question' : ''}${long ? ' long' : ''}${shown ? ' open' : ''}" data-eid="${e.id}"><div class="eh">${who(e.author, true)}${aiMark(e)}${tag}${e.channel === 'direct' ? (e.data?.dm?.from === 'agent' && e.data.dm.to && !isMe(e.data.dm.to) ? `<span class="ch">to ${esc(e.data.dm.to)}</span>` : '') : e.channel !== 'general' ? `<span class="ch">#${esc(e.channel)}</span>` : ''}${timeEl(e.ts)}</div>
     <div class="eb">${fmt(e.text, true)}</div>${long ? `<button type="button" class="link muted evmore" data-more="${e.id}" data-fk="more-${e.id}" aria-expanded="${shown}">${shown ? 'Show less' : 'Show more'}</button>` : ''}</div>`;
 }
 // A status line written for the agents ends with the tool to use, "(decide_proposal)": people don't need it.

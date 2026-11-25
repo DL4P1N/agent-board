@@ -478,6 +478,9 @@ html[data-board-view="office"] .pagefoot { display: none; }
 .ev .eh { display: flex; gap: var(--s3); align-items: baseline; flex-wrap: wrap; }
 .ev time { color: var(--muted); font-size: var(--fs-micro); margin-left: auto; white-space: nowrap; }
 .ev .ch { font-size: var(--fs-micro); color: var(--muted); }
+/* An agent writing under a person's name: a small outlined "AI" after it, quiet like the channel name. */
+.ai-mark { font: 600 var(--fs-micro)/1 var(--mono); color: var(--muted); border: 1px solid var(--line-strong); border-radius: var(--r-xs); padding: 1px 3px; vertical-align: 1px; }
+.eb .ai-mark { margin-left: var(--s2); } /* in a status line's running text (a chat line's header has its own gap) */
 .ev .eb { white-space: pre-wrap; }
 .ev.sys { color: var(--muted); font-size: var(--fs-meta); padding: 1px var(--s3); }
 .ev.sys .eh { flex-wrap: nowrap; }
