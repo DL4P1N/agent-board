@@ -85,8 +85,16 @@ const mentionsMe = (e) => !sameTeam(e.author, me) && (e.data?.mentions || []).so
 const mentionsLite = (e) => !sameTeam(e.author, me) && !mentionsMe(e) && (e.data?.mentions || []).some((m) => BROADCAST.includes(m) || root(m) === root(me));
 const short = (s, n = 90) => { s = String(s || '').replace(/\s+/g, ' '); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
-// Escape-then-format: split raw text into tokens, escape each, linkify #ids and @names. A pull request's address
-// reads "PR #49" (the address is its tooltip).
+// The host of the project repo setting (https://host/…, ssh://[user@]host/…, git@host:…), lower case, or ''.
+const repoHost = () => {
+  const r = String(state.settings?.repo || '').trim();
+  const scp = r.match(/^[\w.-]+@([A-Za-z0-9][\w.-]*):/);
+  if (scp) return scp[1].toLowerCase();
+  try { const u = new URL(r); return /^(https?|ssh|git):$/.test(u.protocol) ? u.hostname.toLowerCase() : ''; } catch { return ''; }
+};
+// Escape-then-format: split raw text into tokens, escape each, linkify #ids and @names. A pull request's address on
+// github.com or the project repo's host reads "PR #49" (the address is its tooltip); one on any other host shows its
+// address, so a link can't pass for the team's PR.
 // inline=true (the feed): its #id links get no Tab stop of their own (the feed would otherwise be dozens of stops);
 // web links always do.
 function fmt(text, inline = false) {
@@ -96,7 +104,9 @@ function fmt(text, inline = false) {
     if (p[0] === '#' && /(?:\bPRs?|\bpull(?:\s+request)?|\bissues?|!)\s?$/i.test(all[i - 1] || '')) return esc(p);
     if (/^https?:/i.test(p)) {
       const url = p.replace(/[.,;:!?)\]]+$/, ''); const trail = p.slice(url.length);
-      const pr = /^https?:\/\/[^/]+\/[^/]+\/[^/]+\/pull\/(\d+)(?:[/?#].*)?$/i.exec(url);
+      const m = /^https?:\/\/([^/]+)\/[^/]+\/[^/]+\/pull\/(\d+)(?:[/?#].*)?$/i.exec(url);
+      const host = m?.[1].toLowerCase();
+      const pr = m && (host === 'github.com' || host === 'www.github.com' || (!!repoHost() && host === repoHost())) ? [m[0], m[2]] : null;
       return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer"${pr ? ` title="${esc(url)}"` : ''}>${pr ? `PR #${pr[1]}` : esc(url)}</a>${esc(trail)}`;
     }
     if (p[0] === '#') { const t = taskById(Number(p.slice(1))); return t ? `<button type="button" class="link tref" data-open-task="${t.id}" title="${esc(t.title)}"${inline ? ' tabindex="-1"' : ''}>${esc(p)}</button>` : esc(p); }

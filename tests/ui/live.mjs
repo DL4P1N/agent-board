@@ -47,6 +47,18 @@ try {
   const feed = await page.evaluate(() => ({ t: $('feed').innerText, pr: [...document.querySelectorAll('#feed a[href*="/pull/49"]')].map((a) => ({ text: a.textContent, title: a.title, ti: a.getAttribute('tabindex') })) }));
   check('U11 status changes in the feed use the board\'s words ("In progress"), not ids', /In progress/.test(feed.t) && !/in_progress/.test(feed.t), feed.t.slice(0, 300));
   check('U11 a pull request link reads "PR #49" (the address in its tooltip)', feed.pr.length === 1 && feed.pr[0].text === 'PR #49' && /github\.com\/team\/vote\/pull\/49/.test(feed.pr[0].title), JSON.stringify(feed.pr));
+  // L8: only a pull request on github.com or the project repo's host reads "PR #N"; another host's shows its address.
+  const prText = await page.evaluate(async () => {
+    const { fmt } = await import(new URL('js/helpers.js', location.href).href);
+    const { state } = await import(new URL('js/state.js', location.href).href);
+    const label = (u) => { const d = document.createElement('div'); d.innerHTML = fmt(u); return d.querySelector('a')?.textContent; };
+    const saved = state.settings.repo;
+    state.settings.repo = 'git@ghe.example.com:team/app.git';
+    const r = { gh: label('https://github.com/o/r/pull/7'), ghe: label('https://ghe.example.com/team/app/pull/3'), other: label('https://evil.example/o/r/pull/9') };
+    state.settings.repo = saved;
+    return r;
+  });
+  check('L8 a /pull/N link reads "PR #N" only on github.com or the repo\'s host; elsewhere its address shows', prText.gh === 'PR #7' && prText.ghe === 'PR #3' && /^https:\/\/evil\.example\//.test(prText.other || ''), JSON.stringify(prText));
   check('A3 a link in a message is a Tab stop', feed.pr.length === 1 && feed.pr[0].ti !== '-1', JSON.stringify(feed.pr));
 
   // ---- P1 / J3: plain messages are drawn from the event (no /api/state), the feed's lines stay ----
