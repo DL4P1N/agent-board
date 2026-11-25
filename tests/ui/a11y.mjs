@@ -103,6 +103,33 @@ try {
   // ---- UM10: a filled button's focus ring shows against its own fill ----
   const fr = await page.evaluate(() => { const e = document.querySelector('#nyou form button[type=submit], [data-fk^="qb-"]'); if (!e) return null; e.focus(); const cs = getComputedStyle(e); const r = { vis: e.matches(':focus-visible'), ring: cs.outlineColor, fill: cs.backgroundColor, style: cs.outlineStyle, off: parseFloat(cs.outlineOffset) }; e.blur(); return r; });
   check('UM10 a filled button (Answer) has a focus ring that differs from its fill, drawn inside', !!fr && fr.vis && fr.style !== 'none' && fr.ring !== fr.fill && fr.off < 0, JSON.stringify(fr));
+  // ---- H2 (round 5b): the unfilled controls without a class (the view switch, Activity's tabs, the Table view's sort
+  // headings, a toast's button) keep a ring that shows against what is behind them, in every kind of theme ----
+  const ringCheck = () => page.evaluate(() => {
+    const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+    const rgb = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = '#000'; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); const d = ctx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3]]; };
+    const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+    const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+    // What the ring is drawn on: the button's own fill, or the first painted box under it.
+    const bgOf = (e) => { for (let n = e; n; n = n.parentElement) { const c = rgb(getComputedStyle(n).backgroundColor); if (c[3] > 200) return c; } return rgb(getComputedStyle(document.body).backgroundColor); };
+    const els = { 'view switch (on)': document.querySelector('#viewtog [aria-pressed="true"]'), 'view switch (off)': document.querySelector('#viewtog [aria-pressed="false"]'),
+      'feed tab': document.querySelector('#tabs [data-tab]:not([aria-pressed="true"])'), 'sort heading': document.querySelector('#tasktable [data-tsort]'), 'toast button': document.querySelector('#toasts .toast button') };
+    const res = {};
+    for (const [k, e] of Object.entries(els)) {
+      if (!e) { res[k] = 'missing'; continue; }
+      e.focus({ preventScroll: true }); const cs = getComputedStyle(e);
+      res[k] = e.matches(':focus-visible') && cs.outlineStyle !== 'none' ? Math.round(ratio(rgb(cs.outlineColor), bgOf(e)) * 10) / 10 : 'no ring';
+      e.blur();
+    }
+    return res;
+  });
+  await page.evaluate(() => { document.querySelector('#viewtog [data-view="table"]').click(); document.getElementById('toasts').replaceChildren(); toast('#1 moved to Review', false, { label: 'Undo', run() {} }); });
+  for (const th of ['dark', 'light', 'contrast', 'paper', 'synthwave', 'candy']) {
+    await page.evaluate((t) => setTheme(t), th); await sleep(80);
+    const rc = await ringCheck();
+    check(`H2 ${th}: unfilled controls (view switch, feed tab, sort heading, toast button) have a focus ring of 3:1 or more against what is behind it`, Object.values(rc).every((v) => typeof v === 'number' && v >= 3), JSON.stringify(rc));
+  }
+  await page.evaluate(() => { setTheme('auto'); document.querySelector('#viewtog [data-view="columns"]').click(); document.getElementById('toasts').replaceChildren(); });
   // ---- UM13: Ctrl+Z runs the Undo of the toast showing, outside a text field ----
   await page.evaluate((id) => { document.getElementById('toasts').replaceChildren(); moveTask(taskById(id), 'blocked'); }, ids.vote.id);
   await until(page, () => !!document.querySelector('#toasts [data-undo]'));
