@@ -73,18 +73,22 @@ export const callerLaptop = new AsyncLocalStorage();
 export const callerRole = new AsyncLocalStorage();
 
 // Same time format as the web board: "4:00 PM", with the weekday when it isn't today. No seconds.
+// After the demo time nothing can be claimed: how a team that carries on gets out of that (H1).
+const MOVE_DEMO = 'If the team is carrying on (the demo moved, or this is a later day), ask a human to move or remove the demo time on the web board (the Demo button at the top).';
 const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 const stamp = (ms) => (new Date(ms).toDateString() === new Date().toDateString() ? clock(ms) : `${new Date(ms).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} ${clock(ms)}`);
 // Deadline / feature-freeze state from settings.
 export function timeInfo(s, now = Date.now()) {
   const deadline = Number(s.deadline) || 0;
-  if (!deadline) return { deadline: 0, frozen: false };
+  if (!deadline) return { deadline: 0, frozen: false, past: false, past_demo: false };
   const freezeAt = deadline - (Number(s.freeze_minutes) || 0) * 60e3;
   const left = Math.max(0, deadline - now);
   const mins = Math.round(left / 60e3);
   const h = Math.floor(mins / 60);
   const m = mins % 60;
-  return { deadline, freezeAt, frozen: now >= freezeAt, past: now >= deadline, deadlineLabel: clock(deadline), freezeLabel: clock(freezeAt), leftLabel: h ? `${h}h ${m}m` : `${m}m` };
+  // past_demo: the demo time has passed (the same as past; named for the web board). The *Stamp labels carry the date
+  // when it isn't today: what agents are told, so a demo time left from another day reads as one.
+  return { deadline, freezeAt, frozen: now >= freezeAt, past: now >= deadline, past_demo: now >= deadline, deadlineLabel: clock(deadline), freezeLabel: clock(freezeAt), deadlineStamp: stamp(deadline), freezeStamp: stamp(freezeAt), leftLabel: h ? `${h}h ${m}m` : `${m}m` };
 }
 
 function describeSetting(key, val, cur) {
@@ -678,9 +682,9 @@ export class Board {
   // left in Open waiting for a claim that can't come.
   freezeNote(task) {
     const t = timeInfo(this.getSettings());
-    if (t.past) return `The demo time (${t.deadlineLabel}) has passed: nobody can claim #${task.id} on this board any more.`;
+    if (t.past) return `The demo time (${t.deadlineStamp}) has passed, so nobody can claim #${task.id} until a human moves or removes the demo time on the web board (the Demo button at the top).`;
     if (!t.frozen || this.freezeAllows(task)) return '';
-    return `Feature freeze until the demo (${t.deadlineLabel}): nobody can claim #${task.id} before then. Only priority-1 bug fixes of size S or M can be claimed during the freeze${task.status === 'proposed' ? '; the planner approves those first' : ''}.`;
+    return `Feature freeze until the demo (${t.deadlineStamp}): nobody can claim #${task.id} before then. Only priority-1 bug fixes of size S or M can be claimed during the freeze${task.status === 'proposed' ? '; the planner approves those first' : ''}.`;
   }
 
   // A task as returned to whoever created, approved or reserved it, with what they should know: freeze_note (see
@@ -785,6 +789,12 @@ export class Board {
       ownerAway: () => (task.stale && !this.isOnline(task.assignee)) || (task.assignee && this.isLimited(task.assignee)),
     });
     if (refusal) throw new Error(refusal);
+    // Taking someone's task over (back to open while its owner is away) only helps if it can be claimed again: after
+    // the demo time nothing can, and during the freeze only started work (claimGate). Otherwise it's refused (H1).
+    if (!human && !owner && task.assignee && moveTo === 'open' && task.status !== 'open' && this.claimGate(task)) {
+      const t = timeInfo(s);
+      throw new Error(`Leave #${id} with ${task.assignee}: ${t.past ? `the demo time (${t.deadlineStamp}) has passed` : 'the feature freeze is on and it was never started'}, so nobody could claim it again once released.${t.past ? ' ' + MOVE_DEMO : ''}`);
+    }
     // A pull request link: given directly (owner, merger or a human), or the first PR URL in the owner's
     // note while the task has none yet (a reviewer's note mentioning another PR must not replace it).
     // Kept as its origin and path only: it goes into the board's own messages and to `gh`, so no spaces, ?query or #fragment.
@@ -847,10 +857,11 @@ export class Board {
     return this.updateTask(author, id, { status: 'open', note: note ? `released: ${note}` : 'released' });
   }
 
-  // "Whoever is free": a free slot, or nobody else online has one (reviews must not wait forever).
-  mayReview(agent) {
+  // "Whoever is free": a free slot, or nobody else online who could take this review has one (reviews must not wait
+  // forever). The task's author can't review its own work, so its free slot doesn't count (H3).
+  mayReview(agent, task = null) {
     const free = (n) => { const c = this.capacity(n, { withExtra: false }); return c.active < c.slots; };
-    return free(agent) || !this.onlineAgents().some((n) => !sameTeam(n, agent) && free(n));
+    return free(agent) || !this.onlineAgents().some((n) => !sameTeam(n, agent) && !(task?.assignee && sameTeam(n, task.assignee)) && free(n));
   }
 
   // Integrator "whoever is free" (or the named integrator): take a task in review to merge it.
@@ -863,7 +874,7 @@ export class Board {
     const s = this.getSettings();
     if (!s.integrator) throw new Error('Nobody merges to main yet: call claim_role("integrator") to take the job (or ask a human to pick "whoever is free" on the web board).');
     if (s.integrator !== ANYONE && !sameTeam(author, s.integrator) && this.isAvailable(s.integrator)) throw new Error(`${s.integrator} is the integrator and merges reviewed work. Carry on with your own tasks.`);
-    if (s.integrator === ANYONE && !this.mayReview(author)) throw new Error('You have no free slot. Leave the review to an agent with room, and finish your own tasks first.');
+    if (s.integrator === ANYONE && !this.mayReview(author, task)) throw new Error('You have no free slot. Leave the review to an agent with room, and finish your own tasks first.');
     if (task.reviewer && sameTeam(author, task.reviewer)) return { ...task, already: true };
     if (task.reviewer && this.isAvailable(task.reviewer)) throw new Error(`${task.reviewer} is already reviewing #${id}. Pick another review or task.`);
     const others = this.onlineAgents().filter((n) => !sameTeam(n, author));
@@ -1754,7 +1765,7 @@ export class Board {
       // Proposals wait for the planner.
       if (isPlanner && proposals.length) {
         // During the freeze an approved feature can't be claimed before the demo (claimGate): say what's worth approving.
-        const freezeNote = time.past ? ` The demo time has passed: nothing approved now can be claimed, so reject them with a note (or leave them for after the demo).`
+        const freezeNote = time.past ? ` The demo time has passed: nothing approved now can be claimed (until a human moves or removes the demo time), so reject them with a note or leave them.`
           : time.frozen ? ` Feature freeze: only priority-1 bug fixes of size S or M can be claimed before the demo, so approve only those (set priority 1 when you approve a bug fix) and reject the rest with a note, or leave them for after the demo.` : '';
         steps.push(`Proposed tasks are waiting for your decision: ${proposals.map((t) => `#${t.id} ${quoted(t.title)} (from ${t.created_by})`).join('; ')}. For each: decide_proposal(id, approve=true) (you may adjust size/priority/reserved_for), or approve=false with a reason.${freezeNote}${this.statsLine() ? ' ' + this.statsLine() : ''}`);
         act('proposals to decide');
@@ -1795,8 +1806,8 @@ export class Board {
         if (review.length) act('work waiting in review');
       } else if (anyone) {
         if (reviewingNow.length) { steps.push(`You're reviewing ${reviewingNow.map((t) => `#${t.id}`).join(', ')}: finish it (merge, test, update_task done) or send it back with update_task status in_progress and a note saying what to fix.`); act('your review in progress'); }
-        else if (reviewable.length && this.mayReview(agent)) {
-          steps.push(`Reviews waiting (merging is shared: whoever is free; do these before new tasks): ${reviewable.slice(0, 5).map((t) => `#${t.id} ${quoted(t.title)} by ${t.assignee}${t.pr_url ? ' ' + t.pr_url : ''}`).join('; ')}. Call claim_review(id), then merge it as the playbook's integrator section says.`);
+        else if (reviewable.some((t) => this.mayReview(agent, t))) {
+          steps.push(`Reviews waiting (merging is shared: whoever is free; do these before new tasks): ${reviewable.filter((t) => this.mayReview(agent, t)).slice(0, 5).map((t) => `#${t.id} ${quoted(t.title)} by ${t.assignee}${t.pr_url ? ' ' + t.pr_url : ''}`).join('; ')}. Call claim_review(id), then merge it as the playbook's integrator section says.`);
           act('reviews waiting');
         }
       } else if (!s.integrator && review.length && (review.some((t) => !sameTeam(agent, t.assignee)) || !others.length)) {
@@ -1831,10 +1842,10 @@ export class Board {
       if (stillWaiting.length) steps.push(`Waiting on something (blocked, doesn't use a slot): ${stillWaiting.map((t) => `#${t.id} ${quoted(t.title)}`).join('; ')}.${!time.frozen && !time.past && cap.active < cap.slots ? ' Meanwhile you can claim other work.' : ''}`);
       const idle = this.idleAgents(agent);
       if (time.past) {
-        steps.push(`The demo time (${time.deadlineLabel}) has passed. Wrap up: push and merge what's finished, release what isn't with a note, and post a short status in general.`);
+        steps.push(`The demo time (${time.deadlineStamp}) has passed: nothing can be claimed. Wrap up: push and merge what's finished, release what isn't with a note, and post a short status in general. ${MOVE_DEMO}`);
       } else if (time.frozen) {
         const allowed = claimable.filter((t) => this.freezeAllows(t));
-        steps.push(`FEATURE FREEZE (since ${time.freezeLabel}, demo at ${time.deadlineLabel}): don't start new features. Finish and push what you have, get it merged, fix bugs on main, and help with reviews. Unfinished tasks you can't land in time: release_task them with a note.${allowed.length && cap.active < cap.slots ? ` Still claimable during the freeze (priority-1 S/M bug fixes, and work someone started before it was released): ${allowed.slice(0, 5).map(label).join('; ')}.` : ''}`);
+        steps.push(`FEATURE FREEZE (since ${time.freezeStamp}, demo at ${time.deadlineStamp}): don't start new features. Finish and push what you have, get it merged, fix bugs on main, and help with reviews. Unfinished tasks you can't land in time: release_task them with a note.${allowed.length && cap.active < cap.slots ? ` Still claimable during the freeze (priority-1 S/M bug fixes, and work someone started before it was released): ${allowed.slice(0, 5).map(label).join('; ')}.` : ''}`);
         if (allowed.length && cap.active < cap.slots) act('priority-1 tasks claimable');
       } else if (cap.active >= cap.slots) {
         steps.push(`You're at your capacity (${cap.active} of ${slotText(cap)}${cap.plan ? ', ' + cap.plan : ''}${cap.override ? ', limit set on the web board' : ''}). Finish one before claiming more.`);
@@ -1862,7 +1873,7 @@ export class Board {
       if ((orphanedNow.length || outOfUsage.length) && cap.active < cap.slots) act('stuck tasks you can take over');
       if (slow.length) steps.push(`No progress for 15+ min on ${slow.map((t) => `#${t.id} (@${t.assignee})`).join(', ')}. If they need help, post to them; don't take their task.`);
     }
-    if (time.deadline && !time.frozen && phase !== 'all_done') steps.push(`Demo at ${time.deadlineLabel} (${time.leftLabel} left); feature freeze at ${time.freezeLabel}. Prefer small tasks that can land before the freeze.`);
+    if (time.deadline && !time.frozen && phase !== 'all_done') steps.push(`Demo at ${time.deadlineStamp} (${time.leftLabel} left); feature freeze at ${time.freezeStamp}. Prefer small tasks that can land before the freeze.`);
     if (openQs.length) steps.push(`${countOf(openQs.length, 'question is', 'questions are')} waiting for humans. Don't re-ask them; answers arrive as "answer" events.`);
     if (!s.integrator && phase === 'building' && role !== 'integrator' && !review.length) steps.push('Note: nobody owns main yet. The first agent with work in review should claim_role("integrator").');
     if (this.claimGate() && phase === 'building' && why.every((r) => r === 'claimable tasks')) actionable = false;
@@ -1895,8 +1906,8 @@ export class Board {
     const s = this.getSettings();
     if (s.require_approval && !s.plan_approved) return 'The humans have not approved the task list yet. Wait (wait_for_events); they approve it on the web board.';
     const t = timeInfo(s);
-    if (t.past) return `The demo time (${t.deadlineLabel}) has passed: no more claims. Wrap up: push and merge what's finished, release what isn't with a note, and post a short status in general.`;
-    if (t.frozen && !(task && this.freezeAllows(task))) return `Feature freeze since ${t.freezeLabel} (demo at ${t.deadlineLabel}): don't start new tasks. Finish and merge what is in progress, or help the integrator. (Still claimable: priority-1 bug fixes of size S or M, and tasks someone started before they were released.)`;
+    if (t.past) return `The demo time (${t.deadlineStamp}) has passed: no more claims. Wrap up: push and merge what's finished, release what isn't with a note, and post a short status in general. ${MOVE_DEMO}`;
+    if (t.frozen && !(task && this.freezeAllows(task))) return `Feature freeze since ${t.freezeStamp} (demo at ${t.deadlineStamp}): don't start new tasks. Finish and merge what is in progress, or help the integrator. (Still claimable: priority-1 bug fixes of size S or M, and tasks someone started before they were released.)`;
     return '';
   }
 

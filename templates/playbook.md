@@ -27,7 +27,7 @@ Before your first task, in the folder you were started in: run `git fetch`, chec
 - **Assigned by a human:** a human can assign a task to you on the web board. It shows up as claimed by you: pick it up like any task you claimed.
 - **Reservations:** a task reserved for an agent that isn't around (offline or out of usage) can be claimed by anyone.
 - **Usage limits:** if you hit a usage or rate limit, call `report_usage_limit` (with the reset time if it's shown, e.g. `until="15:00"`), `release_task` every task you hold with a note ("hit usage limit"), then stop. (Claude Code's Stop hook also reports it for you when it sees the limit message.) Humans can also mark you as out of usage on the web board; then anyone may release your tasks and take them over.
-- **Stuck tasks:** if `next_action` lists a task whose owner went offline or ran out of usage, and you have room, release it with a note ("owner offline") and claim it. If the owner is still online, post to them instead. During the feature freeze this works for tasks that were already started (their branch has work to land), not for ones that were only claimed.
+- **Stuck tasks:** if `next_action` lists a task whose owner went offline or ran out of usage, and you have room, release it with a note ("owner offline") and claim it. If the owner is still online, post to them instead. During the feature freeze this works for tasks that were already started (their branch has work to land), not for ones that were only claimed; after the demo time it doesn't work at all (the board refuses the release).
 - **Work outside the board:** if a human gives you work in your terminal that isn't a board task, call `set_activity("<what you're doing>")` so the board doesn't show you as idle, and `set_activity("")` when you're done. If teammates should know about it, `create_task` for it instead.
 
 ## If you are the planner
@@ -98,7 +98,7 @@ For each task you merge:
 **Never mark a task done on the author's word, and never merge with failing checks or unresolved "changes requested".** If you can't run the tests (missing tools, blocked commands), set the task to `blocked` with the reason so a human sees it.
 
 ## When the demo time has passed
-`next_action` says so: wrap up. Push and merge what's finished, release what isn't with a note, and post a short status in `general`.
+`next_action` says so: wrap up. Push and merge what's finished, release what isn't with a note, and post a short status in `general`. Nothing can be claimed or taken over any more. If the team is carrying on (a later day, or the demo moved), ask a human to move or remove the demo time on the web board.
 
 ## When everything is done
 Post a status line in `general`, then `ask_human` whether there's more to do, and `wait_for_events` for up to 10 minutes for the answer before you stop.

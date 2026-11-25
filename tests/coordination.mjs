@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { Board } from '../src/board.js';
+import { Board, timeInfo } from '../src/board.js';
 import { agentTokenFor } from '../src/tokens.js';
 import { ROOT, tempDir, finish, startBoard, rest, Client, StreamableHTTPClientTransport } from './helpers.mjs';
 
@@ -193,13 +193,16 @@ const next = (b, who) => b.nextAction(who).next_action;
 {
   // The planner's first brief lists proposals already waiting; the planner isn't told its own tasks become proposals.
   const b = fresh();
-  join(b, 'maya'); join(b, 'ben');
+  join(b, 'maya', { slots: 2 }); join(b, 'ben');
   b.claimRole('maya', 'planner');
   const p = b.createTask('ben', { title: 'An early idea', size: 'S' });
   const n = next(b, 'maya');
   check('Low: the planner\'s first brief lists the proposals already waiting', p.status === 'proposed' && n.includes(`#${p.id}`) && /decide_proposal/.test(n), n);
+  // An approved proposal alone isn't the plan (M5): the planner writes a task of its own too.
+  const own = b.createTask('maya', { title: 'The planner\'s first task', size: 'S' });
   b.decideProposal('maya', p.id, { approve: true });
   b.claimTask('ben', p.id);
+  b.claimTask('maya', own.id);
   const n2 = next(b, 'maya');
   check('Low: the planner isn\'t told its new tasks go to the planner as proposals', /No open tasks are claimable/.test(n2) && !/proposal/.test(n2.split('\n').find((l) => /No open tasks/.test(l))), n2);
   // cancel_task on a proposal tells the proposer.
@@ -211,6 +214,48 @@ const next = (b, who) => b.nextAction(who).next_action;
 {
   const { guessPerson } = await import('../src/board.js');
   check('Low: names from join for Gemini and Cursor belong to their person', guessPerson('dana-gemini') === 'dana' && guessPerson('dana-cursor2') === 'dana', `${guessPerson('dana-gemini')} ${guessPerson('dana-cursor2')}`);
+}
+
+// ================= Round 5b H3: "whoever is free" doesn't count the author among the free =================
+{
+  const b = fresh();
+  join(b, 'ana'); join(b, 'bo'); join(b, 'cy');
+  b.setSettings('dana', { integrator: '*' }, { human: true });
+  const [t0, t1, t2] = ['Foundation', 'Feature B', 'Feature C'].map((title) => b.createTask('dana', { title, size: 'S' }, { human: true }));
+  for (const [who, t] of [['ana', t0], ['bo', t1], ['cy', t2]]) { b.claimTask(who, t.id); b.updateTask(who, t.id, { status: 'in_progress' }); }
+  b.updateTask('ana', t0.id, { status: 'review' });
+  // Only ana (the author) has a free slot: she can't review her own work, so bo and cy must be able to.
+  const g = b.nextAction('bo');
+  check('H3: with only the author free, a busy agent is offered the review', g.actionable && g.next_action.includes(`#${t0.id} "Foundation"`) && /claim_review/.test(g.next_action), JSON.stringify(g));
+  const r = refusal(() => b.claimReview('bo', t0.id));
+  check('H3: …and claim_review lets it take the review', !r && b.getTask(t0.id).reviewer === 'bo', r);
+}
+
+// ================= Round 5b H1: after the demo time =================
+{
+  const b = fresh();
+  join(b, 'ana'); join(b, 'ben');
+  const t = b.createTask('dana', { title: 'Late task', size: 'S' }, { human: true });
+  const held = b.createTask('dana', { title: 'Started work', size: 'S' }, { human: true });
+  b.claimTask('ben', held.id); b.updateTask('ben', held.id, { status: 'in_progress' });
+  pastDemo(b);
+  const gate = refusal(() => b.claimTask('ana', t.id));
+  check('H1: a claim after the demo time says to ask a human to move or remove the demo time', /ask a human to move or remove the demo time/i.test(gate), gate);
+  const n = next(b, 'ana');
+  check('H1: next_action after the demo time says how to carry on', /has passed/.test(n) && /move or remove the demo time/i.test(n), n);
+  // A demo time on another day carries the date, not only the clock time.
+  setRaw(b, 'deadline', Date.now() - 2 * 86400e3);
+  const n2 = next(b, 'ana');
+  const day = new Date(Date.now() - 2 * 86400e3).toLocaleDateString([], { weekday: 'short' });
+  check('H1: a demo time on another day is given with its date', n2.includes(day), n2);
+  check('H1: timeInfo has past_demo for the web board', timeInfo(b.getSettings()).past_demo === true, JSON.stringify(timeInfo(b.getSettings())));
+  const note = b.createTask('dana', { title: 'After the demo', size: 'S' }, { human: true }).freeze_note || '';
+  check('H1: freeze_note after the demo time says a human can move or remove the demo time', /has passed/.test(note) && /moves or removes the demo time/i.test(note), note);
+  // A stale task whose owner is gone isn't advertised for a takeover nobody could finish (a claim would be refused).
+  b.db.prepare('UPDATE tasks SET updated_at = ? WHERE id = ?').run(Date.now() - 40 * 60e3, held.id);
+  b.db.prepare("UPDATE presence_v2 SET last_seen = ? WHERE name = 'ben'").run(Date.now() - 20 * 60e3);
+  const take = refusal(() => b.releaseTask('ana', held.id, 'owner offline'));
+  check('H1: after the demo time a takeover release is refused (nobody could claim it back)', /demo time/.test(take) && b.getTask(held.id).assignee === 'ben', take);
 }
 
 for (const b of boards) b.close();
