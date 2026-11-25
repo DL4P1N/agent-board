@@ -69,7 +69,7 @@ function renderNow(qOpen, unread, si) {
     text: `Answer ${plural(qOpen.length, 'question')}${bs.asked.length ? ` (${plural(bs.asked.length, 'task is', 'tasks are')} blocked on ${qOpen.length > 1 ? 'them' : 'it'})` : `: ${qOpen.length > 1 ? 'agents are' : 'an agent is'} waiting for you`}` });
   // The feature freeze changes what humans should do, so it comes right after the questions.
   if (tm.frozen && !tm.past && state.phase !== 'all_done') ranked.push({ kind: 'urgent', go: review ? 'review' : 'compose', go2: 'wrapup', text2: 'Write-up for your submission', more: 'Feature freeze: help merge and test',
-    text: `Feature freeze: agents won't start new tasks. Help merge and test ${review ? `the ${plural(review, 'task')} in Review` : 'main'}, then rehearse the demo. P1 bug fixes can still be claimed` });
+    text: `Feature freeze: agents won't start new tasks. Help merge and test ${review ? `the ${plural(review, 'task')} in Review` : 'main'}, then rehearse the demo. P1 fixes of size S or M can still be claimed` });
   // After the demo time, while agents are still on the board: they take no new tasks until a human moves or removes it.
   if (tm.past && state.phase !== 'all_done') ranked.push({ kind: 'urgent', go: 'demo', go2: 'dl-clear', text2: 'Remove the demo time', more: 'Demo time passed: move or remove it',
     text: `The demo time (${when(tm.deadline)}) has passed: agents take no new tasks until you move it or remove it` });

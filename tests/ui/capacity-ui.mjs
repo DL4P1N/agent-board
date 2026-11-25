@@ -186,9 +186,9 @@ try {
   await human('/settings', 'PUT', { deadline: Date.now() + 30 * 60e3, freeze_minutes: 60 });
   // No freeze banner any more: the Open column says what can still start, and dims the rest.
   await page.waitForFunction(() => /Feature freeze/.test(document.querySelector('#col-open .cd')?.textContent || ''), { timeout: 5000 });
-  check('freeze: the Open column says priority-1 bug fixes can still be claimed', /Priority-1 tasks \(bug fixes\) can still be claimed/.test(await txt('#col-open .cd')), await txt('#col-open .cd'));
+  check('freeze: the Open column says priority-1 fixes of size S or M can still be claimed', /Priority-1 fixes of size S or M/.test(await txt('#col-open .cd')), await txt('#col-open .cd'));
   check('freeze: no banner above the board', await page.$eval('#board-note', (n) => n.hidden));
-  check('freeze What to do now mentions P1', /P1 bug fixes can still be claimed/.test(await txt('#now')), await txt('#now'));
+  check('freeze What to do now mentions P1', /P1 fixes of size S or M can still be claimed/.test(await txt('#now')), await txt('#now'));
 
   // ---- empty answer: inline error, nothing sent ----
   await ana('ask_human', { question: 'Should votes be anonymous?' });

@@ -25,10 +25,10 @@ function renderClock() {
   // tm + detail: the detail (freeze time) hides on narrower screens when a verdict follows the time.
   let tm, detail = '', cls = '', tip;
   if (t.past) { tm = 'time passed'; cls = 'past'; tip = `The demo was at ${when(t.deadline)}. Click to edit the time.`; }
-  else if (t.frozen) { tm = `in ${dur(t.deadline - now)}`; cls = 'frozen'; tip = `Feature freeze since ${when(t.freezeAt)}: agents don't take new tasks, except priority-1 bug fixes. Demo at ${when(t.deadline)}. Click to edit the time.`; }
+  else if (t.frozen) { tm = `in ${dur(t.deadline - now)}`; cls = 'frozen'; tip = `Feature freeze since ${when(t.freezeAt)}: agents don't take new tasks, except priority-1 fixes of size S or M and work already started. Demo at ${when(t.deadline)}. Click to edit the time.`; }
   else {
     tm = `in ${dur(t.deadline - now)}`; detail = t.fm ? ` · freeze ${t.warn ? 'in ' + dur(t.freezeAt - now) : when(t.freezeAt)}` : '';
-    cls = t.warn ? 'warn' : ''; tip = `Demo at ${when(t.deadline)}${t.fm ? `; feature freeze at ${when(t.freezeAt)} (${t.fm} min before): agents stop taking new tasks then (priority-1 bug fixes still allowed)` : ''}. Click to edit the time.`;
+    cls = t.warn ? 'warn' : ''; tip = `Demo at ${when(t.deadline)}${t.fm ? `; feature freeze at ${when(t.freezeAt)} (${t.fm} min before): agents stop taking new tasks then (priority-1 fixes of size S or M still allowed)` : ''}. Click to edit the time.`;
   }
   const ol = outlook(t);
   // The verdict is a short word after the time, in its colour (on track, tight, behind by ~N); the full one is the
