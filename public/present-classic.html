@@ -477,7 +477,9 @@ function render() {
   // An agent holding only blocked tasks isn't working (the board's rule; the blocked count and Needs attention say it): not listed here.
   const working = new Set(tasks.filter((t) => ['claimed', 'in_progress'].includes(t.status) && t.assignee).map((t) => agentRoot(t.assignee)));
   for (const t of tasks) if (['claimed', 'in_progress', 'blocked'].includes(t.status) && t.assignee && working.has(agentRoot(t.assignee))) { holders.add(agentRoot(t.assignee)); add(t.assignee, `#${t.id} ${t.title}`, t.status === 'blocked'); }
-  for (const a of agents) if (a.online && a.doing && !limitedNow(a, Date.now()) && !holders.has(a.name) && !/^working \(last board call/.test(a.doing)) add(a.name, a.doing);
+  // Others only with a job besides holding tasks (a review, planning): not needs_work, the board's own rule. An agent with only
+  // a blocked task, or one that just made a board call, needs work: it is idle, not "working".
+  for (const a of agents) if (a.online && a.doing && !a.needs_work && !limitedNow(a, Date.now()) && !holders.has(a.name) && !/^working \(last board call/.test(a.doing)) add(a.name, a.doing);
   const people = [...groups].filter(([, g]) => g.items.length).sort((a, b) => a[0].localeCompare(b[0]));
   // Everyone who holds work (a big screen has room for a team), stuck tasks first and marked.
   const NOW_MAX = 6;
@@ -503,7 +505,7 @@ function render() {
   const key = (k, label) => `<span><i class="s-${k}" aria-hidden="true"></i>${label} <b>${n[k]}</b></span>`;
   // In the freeze nothing new starts (a P1 fix can): what is still open or waiting for a yes won't land.
   const tm = state.time || {}; const inFreeze = !!tm.deadline && !!tm.freezeAt && Date.now() >= tm.freezeAt && Date.now() < tm.deadline;
-  const wontOpen = (state.tasks || []).filter((t) => t.status === 'open' && t.priority !== 1).length; const wontProp = proposed;
+  const wontOpen = (state.tasks || []).filter((t) => t.status === 'open' && (t.priority !== 1 || t.size === 'L')).length; const wontProp = proposed;
   const wont = [wontOpen && plural(wontOpen, 'open task'), wontProp && plural(wontProp, 'proposal')].filter(Boolean).join(' and ');
   const freezeNote = inFreeze && wont ? `<div class="freeze-note" id="freeze-note">${esc(wont)} won't land: nothing new starts in the freeze</div>` : '';
   const down = !!lastErr;

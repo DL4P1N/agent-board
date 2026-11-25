@@ -115,7 +115,7 @@ export class Overlay {
     const vd = ol?.label && !t.frozen ? `<span class="pill ${ol.verdict === 'ok' ? 'ok' : 'warn'}" id="verdict" title="${esc(ol.why)}.">${esc(ol.label)}</span>` : '';
     // In the freeze nothing new starts (a P1 fix can): what is still open or waiting for a yes won't land.
     const proposed = (s.tasks || []).length - tasks.length;
-    const wontOpen = (s.tasks || []).filter((x) => x.status === 'open' && x.priority !== 1).length;
+    const wontOpen = (s.tasks || []).filter((x) => x.status === 'open' && (x.priority !== 1 || x.size === 'L')).length;
     const wont = [wontOpen && plural(wontOpen, 'open task'), proposed && plural(proposed, 'proposal')].filter(Boolean).join(' and ');
     const freezeNote = t.frozen && !t.past && wont ? `<div class="freeze-note" id="freeze-note">${esc(wont)} won't land: nothing new starts in the freeze</div>` : '';
     // The board can't be reached (the last answer stays on screen): say so, and dim the clock card.

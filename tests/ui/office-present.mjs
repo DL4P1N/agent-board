@@ -123,9 +123,9 @@ async function crunchCheck(file, classic) {
   await sp.close();
   // The freeze: open tasks (not the P1 fixes that may still start) and proposals won't land.
   sp = await synthPage(file, SYNTH_BASE + `s.settings.deadline = now + 30 * 60e3; s.settings.freeze_minutes = 60; s.time = { deadline: now + 30 * 60e3, freezeAt: now - 30 * 60e3, past: false };
-    s.tasks = [T(1, 'M', [], 'done'), T(2, 'M'), T(3, 'M'), T(4, 'M'), Object.assign(T(5, 'M'), { priority: 1 }), Object.assign(T(6, 'M'), { status: 'proposed' }), Object.assign(T(7, 'M', [], 'in_progress'), { assignee: 'a1' })];`);
+    s.tasks = [T(1, 'M', [], 'done'), T(2, 'M'), T(3, 'M'), T(4, 'M'), Object.assign(T(5, 'M'), { priority: 1 }), Object.assign(T(6, 'M'), { status: 'proposed' }), Object.assign(T(7, 'M', [], 'in_progress'), { assignee: 'a1' }), Object.assign(T(8, 'L'), { priority: 1 })];`);
   const note = await sp.waitForSelector('#freeze-note', { timeout: 10000 }).then(() => sp.$eval('#freeze-note', (e) => e.textContent)).catch(() => '');
-  check(`${file}: in the freeze it says how much won't land (3 open tasks and 1 proposal; a P1 fix and the started task can)`, /^3 open tasks and 1 proposal won't land/.test(note), note);
+  check(`${file}: in the freeze it says how much won't land (4 open tasks and 1 proposal; a P1 fix of size M and the started task can, a P1 L can't)`, /^4 open tasks and 1 proposal won't land/.test(note), note);
   await sp.close();
   // A board that can't be reached: a calm, clear band (what it shows is as of the last answer), the clock card dimmed; gone when it is back.
   sp = await synthPage(file, SYNTH_BASE + `s.tasks = [T(1, 'M', [], 'done'), T(2, 'M')];`, TRACK_ES);

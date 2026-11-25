@@ -129,9 +129,9 @@ async function crunchCheck(file, classic) {
   await sp.close();
   // The freeze: open tasks (not the P1 fixes that may still start) and proposals won't land.
   sp = await synthPage(file, SYNTH_BASE + `s.settings.deadline = now + 30 * 60e3; s.settings.freeze_minutes = 60; s.time = { deadline: now + 30 * 60e3, freezeAt: now - 30 * 60e3, past: false };
-    s.tasks = [T(1, 'M', [], 'done'), T(2, 'M'), T(3, 'M'), T(4, 'M'), Object.assign(T(5, 'M'), { priority: 1 }), Object.assign(T(6, 'M'), { status: 'proposed' }), Object.assign(T(7, 'M', [], 'in_progress'), { assignee: 'a1' })];`);
+    s.tasks = [T(1, 'M', [], 'done'), T(2, 'M'), T(3, 'M'), T(4, 'M'), Object.assign(T(5, 'M'), { priority: 1 }), Object.assign(T(6, 'M'), { status: 'proposed' }), Object.assign(T(7, 'M', [], 'in_progress'), { assignee: 'a1' }), Object.assign(T(8, 'L'), { priority: 1 })];`);
   const note = await sp.waitForSelector('#freeze-note', { timeout: 10000 }).then(() => sp.$eval('#freeze-note', (e) => e.textContent)).catch(() => '');
-  check(`${file}: in the freeze it says how much won't land (3 open tasks and 1 proposal; a P1 fix and the started task can)`, /^3 open tasks and 1 proposal won't land/.test(note), note);
+  check(`${file}: in the freeze it says how much won't land (4 open tasks and 1 proposal; a P1 fix of size M and the started task can, a P1 L can't)`, /^4 open tasks and 1 proposal won't land/.test(note), note);
   await sp.close();
   // A board that can't be reached: a calm, clear band (what it shows is as of the last answer), the clock card dimmed; gone when it is back.
   sp = await synthPage(file, SYNTH_BASE + `s.tasks = [T(1, 'M', [], 'done'), T(2, 'M')];`, TRACK_ES);
@@ -151,6 +151,15 @@ async function crunchCheck(file, classic) {
     const now = await sp.$eval('#h-now', (h) => h.parentElement.innerText.replace(/\s+/g, ' '));
     check(`${file}: Now working on: an agent with only a blocked task isn't listed, one that also works is`, /a2/.test(now) && /#1 Task 1/.test(now) && !/a1/.test(now) && !/#2 Task 2/.test(now), now);
     check(`${file}: ...and the blocked tasks are still counted`, /Blocked 2/.test(await flat(sp)));
+    await sp.close();
+    // The board's own rule (presence needs_work: online, started, no claimed or in-progress task, no other job): an agent that
+    // holds only a blocked task, or only made a recent board call, is idle and isn't listed; one on a review is.
+    sp = await synthPage(file, SYNTH_BASE + `s.tasks = [Object.assign(T(1, 'M', [], 'in_progress'), { assignee: 'a2' }), Object.assign(T(2, 'M', [], 'blocked'), { assignee: 'a1' }), Object.assign(T(3, 'M', [], 'review'), { reviewer: 'a4' })];
+      const P = (name, doing, needs_work) => ({ name, kind: 'agent', online: true, started: true, client: 'codex', slots: 1, base_slots: 1, doing, needs_work });
+      s.presence = [P('a1', '#2 Task 2', true), P('a2', '#1 Task 1', false), P('a3', 'working', true), P('a4', 'reviewing #3 to merge', false)];`);
+    await loaded(sp); await sleep(300);
+    const idle = await sp.$eval('#h-now', (h) => h.parentElement.innerText.replace(/\s+/g, ' '));
+    check(`${file}: Now working on follows needs_work: blocked-only and recently-active agents are left out, a reviewer and a holder are in`, /a2/.test(idle) && /a4/.test(idle) && /reviewing #3/.test(idle) && !/a1/.test(idle) && !/a3/.test(idle) && !/#2 Task 2/.test(idle), idle);
     await sp.close();
   }
 }
