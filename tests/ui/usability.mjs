@@ -89,7 +89,7 @@ try {
   const st1 = await rest('dana', '/state');
   check('A repo saved to settings', st1.settings.repo === 'https://github.com/team/vote-app', st1.settings.repo);
   const invite = await page.evaluate(() => inviteText());
-  check('A invite message has every step', ['git clone https://github.com/DL4P1N/agent-board && cd agent-board', 'npm run join -- --url http://', '--token testtok', 'git clone https://github.com/team/vote-app', '/board', '$board', 'copilot --allow-tool board --autopilot --max-autopilot-continues 50', 'Just watching? Open http://'].every((s) => invite.includes(s)), invite);
+  check('A invite message has every step', ['git clone https://github.com/DL4P1N/agent-board && cd agent-board', 'npm run join -- --url http://', '--token testtok', 'git clone -- https://github.com/team/vote-app', '/board', '$board', 'copilot --allow-tool board --autopilot --max-autopilot-continues 50', 'Just watching? Open http://'].every((s) => invite.includes(s)), invite);
   await openStep(page, 'invite');
   await page.click('[data-act="copy-invite"]'); await sleep(200);
   check('A copy invite gives feedback', /Invite copied/.test(await txt(page, '#toasts')));
