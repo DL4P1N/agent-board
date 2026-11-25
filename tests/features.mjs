@@ -495,7 +495,7 @@ const cx = await k1('cancel_task', { id: dup13.id, reason: 'duplicate of #1' });
 st = await state();
 check('planner cancels an open task: it is gone', cx.cancelled === dup13.id && !st.tasks.some((t) => t.id === dup13.id), JSON.stringify(cx));
 const cev = st.events.find((e) => e.task_id === dup13.id && e.kind === 'task_deleted');
-check('cancel event names the task and the reason', new RegExp(`cancelled #${dup13.id} duplicate thing: duplicate of #1`).test(cev?.text || ''), cev?.text);
+check('cancel event names the task (quoted, with who wrote it) and the reason', new RegExp(`cancelled #${dup13.id} "duplicate thing" \\(by [\\w.-]+\\): duplicate of #1`).test(cev?.text || ''), cev?.text);
 check('dependents lose the cancelled task', !st.tasks.find((t) => t.id === dep13.id).depends_on.includes(dup13.id));
 const wk = await newTask('k2 is working on this');
 await k2('claim_task', { id: wk.id }); await k2('update_task', { id: wk.id, status: 'in_progress' });

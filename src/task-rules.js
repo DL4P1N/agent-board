@@ -8,6 +8,10 @@ export const STATUSES = ['proposed', 'open', 'claimed', 'in_progress', 'blocked'
 
 // "1 task", "2 tasks": for guidance and refusal texts.
 export const countOf = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
+// "ana", "ana and ben", "ana, ben and cy".
+export const listText = (names) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
+// "ana has", "ana and ben have".
+export const namesHave = (names, what) => `${listText(names)} ${names.length === 1 ? 'has' : 'have'} ${what}`;
 // An agent's task limit as the web board shows it, with the planner's extra slots said separately.
 export const slotText = (cap) => cap.extra ? `${cap.base} at once (+${cap.extra} extra as planner while others are busy)` : `${cap.slots} at once`;
 
@@ -23,7 +27,7 @@ export function claimRefusal({ id, task, reservedElsewhere, waits, capacity, idl
   if (task.status === 'open') {
     const cap = capacity();
     if (cap.active >= cap.slots) {
-      return `You already hold ${countOf(cap.active, 'active task')} and may hold ${slotText(cap)} (${cap.plan || 'no plan given'}${cap.override ? ', set on the web board' : ''}). Finish or release one first.${alsoWaits}`;
+      return `You already hold ${countOf(cap.active, 'active task')} and may hold ${slotText(cap)} (${cap.plan ? JSON.stringify(String(cap.plan).replace(/\s+/g, ' ')) : 'no plan given'}${cap.override ? ', set on the web board' : ''}). Finish or release one first.${alsoWaits}`;
     }
     // Extra planner slots (nobody else free) are for small and medium work only.
     if (cap.extra && cap.active >= cap.base && task.size === 'L') {
@@ -32,7 +36,7 @@ export function claimRefusal({ id, task, reservedElsewhere, waits, capacity, idl
     const idleNames = idle();
     const freeCount = free();
     if (cap.active >= 1 && idleNames.length && freeCount <= idleNames.length) {
-      return `Leave this for an idle teammate: ${idleNames.join(', ')} have no task and there are only ${countOf(freeCount, 'unreserved task')} to go around. Keep working on yours and wait_for_events.${alsoWaits}`;
+      return `Leave this for an idle teammate: ${namesHave(idleNames, 'no task')} and there ${freeCount === 1 ? 'is' : 'are'} only ${countOf(freeCount, 'unreserved task')} to go around. Keep working on yours and wait_for_events.${alsoWaits}`;
     }
   }
   if (waits.length) return `task #${id} depends on unfinished task(s): ${waits.map((b) => `#${b.id} (${b.status})`).join(', ')}`;
@@ -43,7 +47,7 @@ export function claimRefusal({ id, task, reservedElsewhere, waits, capacity, idl
 //   id, task, the requested fields (status, branch, assignee, reserved_for, size, pr_url, force), human;
 //   owner: the asker holds the task (or is on its team); canMerge: the asker merges it (the integrator,
 //   or the agent that took its review); isPlanner; integrator: settings.integrator; anyone: the integrator
-//   is "whoever is free"; ownIntegrator: the asker is the integrator and holds the task (it doesn't merge its own). Lookups: capacity() of the asker, waitingOn() its unfinished dependency ids,
+//   is "whoever is free"; frozen: the feature freeze is on; ownIntegrator: the asker is the integrator and holds the task (it doesn't merge its own). Lookups: capacity() of the asker, waitingOn() its unfinished dependency ids,
 //   othersOnline() another agent is online, ownerAway() its owner crashed (stale and offline) or is out
 //   of usage.
 export function updateRefusal(c) {
@@ -84,7 +88,7 @@ function agentChangeRefusal(c, changingStatus) {
   // taking a slot, and isn't the owner, so this doesn't apply to it; an owner who also merges gets no exemption.)
   if (owner && ['blocked', 'review', 'done'].includes(task.status) && ['claimed', 'in_progress'].includes(status)) {
     const cap = c.capacity();
-    if (cap.active >= cap.slots) return `You hold ${cap.active} of ${cap.slots} task(s) at once: finish or release one before ${task.status === 'done' ? 'reopening' : task.status === 'review' ? 'taking back' : 'unblocking'} #${id}.`;
+    if (cap.active >= cap.slots) return `You hold ${countOf(cap.active, 'active task')} and may hold ${cap.slots} at once: finish or release one before ${task.status === 'done' ? 'reopening' : task.status === 'review' ? 'taking back' : 'unblocking'} #${id}.`;
   }
   // Done means merged: only whoever merges moves a task to done, and only from review. Only when nobody else could
   // review it (no other agent online) may the owner mark its own work done; with no integrator chosen yet, another
@@ -116,6 +120,11 @@ function agentChangeRefusal(c, changingStatus) {
   // The size of someone else's task: its owner, the planner or a human sets it. (A note is a comment: allowed.)
   if (c.size !== undefined && c.size !== task.size && task.assignee && !owner && !c.isPlanner) {
     return `task #${id} is assigned to ${task.assignee}: only they, the planner or a human can change its size. Post to them instead.`;
+  }
+  // During the freeze the size decides what may still be claimed (priority-1 fixes of size S or M), so only the task's
+  // owner or a human changes it then: resizing an open L to M would get it past the freeze.
+  if (c.size !== undefined && c.size !== task.size && !owner && c.frozen) {
+    return `Feature freeze: only ${task.assignee || 'its owner'} or a human can change #${id}'s size now (the size decides what can still be claimed). Post in general if it's wrong.`;
   }
   return null;
 }

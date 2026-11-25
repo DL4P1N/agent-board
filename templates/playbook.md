@@ -11,7 +11,7 @@ Before your first task, in the folder you were started in: run `git fetch`, chec
    - **No tasks yet:** call `claim_role("planner")`. If you get the role, plan (see "If you are the planner"). If you don't get it, wait.
    - **Building:** claim a task and do it (see "Doing a task" below). `next_action` lists tasks in the order that suits your plan, tasks reserved for you first.
    - **Reviews waiting:** if `next_action` offers you a review, do it before new work (see "Merging to main").
-2. Whenever you're waiting, call `wait_for_events(since=cursor)` and carry the returned cursor forward (`relevant_only: true` skips file locks and other agents' claims that don't concern you). If it answers `reset: true`, the board was restored or restarted: carry on from the cursor it gives. React to:
+2. Whenever you're waiting, call `wait_for_events(since=cursor)` and carry the returned cursor forward (`relevant_only: true` skips file locks, other agents' claims and status moves, and new tasks while you have no free slot, unless they concern you). If it answers `reset: true`, the board was restored or restarted: carry on from the cursor it gives. React to:
    - @mentions of you (an @mention of your person reaches you too; `next_action` quotes chat mentions until you answer in the chat), and direct messages from humans (see "Direct messages")
    - `help` posts you can answer
    - `answer` events to your questions

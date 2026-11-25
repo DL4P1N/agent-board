@@ -30,15 +30,19 @@ const t2 = await evil('create_task', { title: `Second ${P(40)}` });
 const t3 = await evil('create_task', { title: `Third ${P(50)}` });
 const t4 = await evil('create_task', { title: `Fourth ${P(60)}` });
 await evil('claim_task', { id: t1.id, as: SHORT(70) });
-await evil('update_task', { id: t1.id, status: 'in_progress', note: `Note ${P(80)}`, branch: `task/${P(90)}`, as: SHORT(70) });
+// A branch is a git branch name (no spaces), and git allows markup characters in one: < > " ' = ( ).
+const BRANCH = (n) => `task/<img/src=x/onerror=__xss(${n})>"x-pwn="${n}'x-pwn='${n}`;
+await evil('update_task', { id: t1.id, status: 'in_progress', note: `Note ${P(80)}`, branch: BRANCH(90), as: SHORT(70) });
 await evil('set_activity', { doing: `Doing ${P(100)}`, as: SHORT(70) });
 await evil('lock_files', { paths: [`src/${SHORT(110)}.js`], task_id: t1.id, reason: `Reason ${P(120)}`, as: SHORT(70) });
 await evil2('claim_task', { id: t2.id });
-await evil2('update_task', { id: t2.id, status: 'review', note: `Review ${P(130)}`, pr_url: `https://github.com/o/r/pull/1"><img src=x onerror=__xss(140)>` });
+await evil2('update_task', { id: t2.id, status: 'review', note: `Review ${P(130)}`, pr_url: `https://github.com/o/r/pull/1"><img/src=x/onerror=__xss(140)>` });
 await evil3('claim_task', { id: t3.id });
 await evil3('update_task', { id: t3.id, status: 'blocked', note: `Blocked ${P(150)}` });
 await evil('cancel_task', { id: t4.id, reason: `Cancel ${P(160)}` });
-await evil('post', { text: `Chat ${P(170)} @dana`, channel: `general"><img src=x onerror=__xss(180)>` });
+// A channel is a plain word (letters, digits, _ . -): markup in one is refused when it's written.
+const badChannel = await evil('post', { text: `Chat ${P(170)} @dana`, channel: `general"><img src=x onerror=__xss(180)>` });
+await evil('post', { text: `Chat ${P(170)} @dana`, channel: 'general' });
 await evil('post', { text: `General ${P(190)}` });
 await evil('ask_human', { question: `Question ${P(200)}`, task_id: t1.id });
 const other = await agent(board, 'ivy-codex', 'codex-mcp-client');
@@ -55,6 +59,7 @@ const csp = res.headers.get('content-security-policy') || '';
 check('the web board is sent with a Content-Security-Policy', ["object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'", "connect-src 'self'", "form-action 'self'", "script-src 'self' 'unsafe-inline'"].every((d) => csp.includes(d)) && !/unsafe-eval|script-src[^;]*(https?:|\*)/.test(csp), csp);
 check('and nosniff, no framing, no referrer leaking the token', res.headers.get('x-content-type-options') === 'nosniff' && res.headers.get('x-frame-options') === 'DENY' && res.headers.get('referrer-policy') === 'no-referrer', JSON.stringify([...res.headers]));
 const apiRes = await fetch(`${board.base}/api/state`, { headers: { Authorization: `Bearer ${board.token}` } });
+check('a channel with markup is refused when it is written (only letters, digits, _ . -)', typeof badChannel === 'string' && /channel must be/.test(badChannel), String(badChannel));
 check('API answers carry the headers too', /frame-ancestors 'none'/.test(apiRes.headers.get('content-security-policy') || '') && apiRes.headers.get('x-content-type-options') === 'nosniff');
 
 const browser = await launchBrowser({ headless: true, defaultViewport: { width: 1440, height: 900 }, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });

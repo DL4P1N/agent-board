@@ -18,7 +18,9 @@ export function startAnnouncements({ board, announced, every, later, forget }) {
     const now = Date.now();
     if (!t.frozen && t.freezeAt - now <= 30 * 60e3 && !announced.has(key('warn'))) {
       announced.add(key('warn'));
-      board.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all Feature freeze in 30 minutes (${t.freezeLabel}); demo at ${t.deadlineLabel}. Don't start big tasks now. Aim to get what you have merged.` });
+      // The real time left: a demo time set less than 30 minutes before its freeze is announced at once, with what's left.
+      const mins = Math.max(1, Math.round((t.freezeAt - now) / 60e3));
+      board.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all Feature freeze in ${mins} minute${mins === 1 ? '' : 's'} (${t.freezeLabel}); demo at ${t.deadlineLabel}. Don't start big tasks now. Aim to get what you have merged.` });
     }
     // A freeze "0 min before" starts at the deadline itself: still announce it (within a few minutes).
     if (t.frozen && (now < t.deadline || now - t.freezeAt < 5 * 60e3) && !announced.has(key('freeze'))) {
@@ -48,6 +50,10 @@ export function startAnnouncements({ board, announced, every, later, forget }) {
     if (e?.kind !== 'settings') return;
     const t = timeInfo(board.getSettings());
     if (wasFrozen && !t.frozen) {
+      // Lifted: the warning and the freeze are announced again when it comes back, even at the same time (a demo time
+      // set wrong and put back within 5 minutes has the same marks).
+      announced.forget?.('_announced_warn_');
+      announced.forget?.('_announced_freeze_');
       board.emit({ author: 'board', kind: 'message', channel: 'general', text: t.deadline
         ? `@all The feature freeze is lifted: the demo time moved to ${t.deadlineLabel}. New tasks can be claimed again until the freeze at ${t.freezeLabel}.`
         : '@all The feature freeze is lifted: the demo time was cleared. New tasks can be claimed again.' });
