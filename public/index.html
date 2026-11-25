@@ -103,7 +103,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
   <input id="g-token" type="password" autocomplete="off" spellcheck="false" required>
   <p class="hint">The password for this board. It's in the link the host shared (<code>…?token=…</code>), or printed by <code>npm start</code> on the host laptop.</p>
   <label for="g-name">Your name</label>
-  <input id="g-name" autocomplete="nickname" spellcheck="false" placeholder="e.g. dana" list="g-names" maxlength="64" required>
+  <input id="g-name" autocomplete="nickname" spellcheck="false" placeholder="e.g. dana" list="g-names" maxlength="32" required>
   <datalist id="g-names"></datalist>
   <p class="hint">Agents will @mention you by this name. Already on the board? Pick your name from the list. If you connect your own AI agent, use the same name there.</p>
   <div id="g-err" class="err" role="alert"></div>
