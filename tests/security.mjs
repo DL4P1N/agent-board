@@ -78,10 +78,10 @@ try {
   {
     const { pollablePr, startGithubPolling } = await import('../src/github.js');
     const repo = 'https://ghe.example.com/team/app';
-    const ok = ['https://github.com/o/r/pull/7', 'https://www.github.com/o/r/pull/7/', 'https://ghe.example.com/team/app/pull/3'];
+    const ok = ['https://ghe.example.com/team/app/pull/3', 'https://GHE.example.com/Team/App/pull/4/'];
     const no = ['https://127.0.0.1:4443/o/r/pull/1', 'https://evil.example/o/r/pull/1', 'http://github.com/o/r/pull/1', 'https://github.com.evil.example/o/r/pull/1',
       'https://user@github.com/o/r/pull/1', 'https://github.com:8443/o/r/pull/1', 'https://gitlab.com/o/r/-/merge_requests/1', 'https://github.com/o/r/pull/1/../../../x', 'not a url'];
-    check('M1: PR links on github.com or the repo\'s host are polled', ok.every((u) => pollablePr(u, repo)), ok.filter((u) => !pollablePr(u, repo)).join(' '));
+    check('M1: PR links of the project repo (here on a GitHub Enterprise host) are polled', ok.every((u) => pollablePr(u, repo)), ok.filter((u) => !pollablePr(u, repo)).join(' '));
     check('M1: PR links on any other host, port, user or scheme are not', !no.some((u) => pollablePr(u, repo)), no.filter((u) => pollablePr(u, repo)).join(' '));
     check('M1: without a repo setting only github.com counts', !pollablePr('https://ghe.example.com/team/app/pull/3', '') && pollablePr('https://github.com/o/r/pull/7', ''));
 

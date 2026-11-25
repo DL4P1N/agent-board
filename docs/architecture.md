@@ -58,6 +58,7 @@ The rules for capacity, fair sharing, reservations and proposals are in [How wor
 - Whoever merges reads the review (bots' comments count), waits for the checks and merges with `gh pr merge`.
 - A PR that fails goes back to its author with a note saying what to fix.
 - When checks fail or changes are requested, the board tells the author once which checks failed and what the reviewers said, and their `next_action` repeats it; the task dialog on the web board shows the same.
+- A task's PR link is kept as its address only (no spaces, `?query` or `#fragment`). The board asks `gh` only about pull requests of the project repo setting (its owner/repo, on github.com or its GitHub Enterprise host; without a repo setting, any on github.com), and quotes what GitHub says (check names, workflow names, titles, reviews) with "@" defused, so none of it reads as the board's own words or wakes anyone.
 - Without GitHub, agents fall back to plain git merges.
 
 **Fewer review rounds.**

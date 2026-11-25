@@ -89,7 +89,7 @@ try {
   check('feedback leaves out the PR author\'s own comments', !(pr?.feedback || []).some((f) => f.author === 'ana-gh'), JSON.stringify(pr?.feedback));
   const told = (st) => st.events.filter((e) => e.author === 'board' && e.task_id === T1.id && /@ana\b/.test(e.text) && /checks are failing/.test(e.text));
   let st = await state();
-  check('the author is told once, with the check names and the reviewer\'s words', told(st).length === 1 && /lint, test/.test(told(st)[0].text) && /gitar-bot \(changes requested\): Please handle the null case/.test(told(st)[0].text), JSON.stringify(told(st).map((e) => e.text)));
+  check('the author is told once, with the check names and the reviewer\'s words', told(st).length === 1 && /"lint", "test"/.test(told(st)[0].text) && /gitar-bot \(changes requested\): "Please handle the null case/.test(told(st)[0].text), JSON.stringify(told(st).map((e) => e.text)));
   check('…and the message @mentions the author', (told(st)[0]?.data?.mentions || []).includes('ana'));
   const na = await next('ana');
   check('author\'s next_action: "Your PR needs work" with checks and feedback', /Your PR needs work/.test(na.next_action) && /lint, test/.test(na.next_action) && /gitar-bot: "Please handle the null case/.test(na.next_action) && na.actionable === true, na.next_action.slice(0, 300));
@@ -174,7 +174,7 @@ try {
   const red = await until((s) => s.main_ci?.status === 'fail' && s.main_ci);
   check('main_ci: fail, with the workflow, commit and run link', red?.failing?.includes('CI') && red.sha === 'bad0c0ffee12' && /Merge #3/.test(red.title) && /actions\/runs/.test(red.url), JSON.stringify(red));
   st = await state();
-  check('one "@all main is failing" message naming the workflow', redMsgs(st).length === 1 && /CI on "Merge #3 login form"/.test(redMsgs(st)[0].text), JSON.stringify(redMsgs(st).map((e) => e.text)));
+  check('one "@all main is failing" message naming the workflow', redMsgs(st).length === 1 && /"CI" on "Merge #3 login form"/.test(redMsgs(st)[0].text), JSON.stringify(redMsgs(st).map((e) => e.text)));
   const nb = await next('ben');
   check('a free agent (who may merge) is told to fix main first', /^main is failing/.test(nb.next_action) && /fix main before merging/.test(nb.next_action) && nb.actionable === true, nb.next_action.slice(0, 200));
   check('the gh calls asked for main\'s runs of the right repo', fs.readFileSync(env.FAKE_GH_LOG, 'utf8').split('\n').some((l) => /"run","list","-R","o\/r","--branch","main"/.test(l)));

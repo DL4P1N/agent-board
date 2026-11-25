@@ -53,6 +53,17 @@ function reserveName(v) {
   return root;
 }
 const PR_RE = /https?:\/\/\S+?\/(?:pull|pulls|merge_requests)\/\d+/i;
+// A task's pull request link as stored: an http(s) address without spaces, a user, a ?query or a #fragment, kept as
+// its origin and path (it is quoted in the board's own messages and passed to `gh`). '' or null: no link. Else throws.
+export function prLink(v) {
+  const s = String(v ?? '').trim();
+  if (!s) return null;
+  const bad = 'pr_url must be the http(s) address of the pull request, without spaces, ?query or #fragment';
+  if (s.length > 300 || /[\s?#]/.test(s) || /[\0-\x1f\x7f-\x9f]/.test(s)) throw new Error(bad);
+  let u; try { u = new URL(s); } catch { throw new Error(bad); }
+  if (!/^https?:$/.test(u.protocol) || u.username || u.password) throw new Error(bad);
+  return u.origin + u.pathname;
+}
 // The laptop id (join's ?laptop=) of the MCP request being handled, set by the server around each request.
 // Board calls outside a request (REST, tests) have none, so the name checks below don't apply to them.
 export const callerLaptop = new AsyncLocalStorage();
@@ -776,9 +787,9 @@ export class Board {
     if (refusal) throw new Error(refusal);
     // A pull request link: given directly (owner, merger or a human), or the first PR URL in the owner's
     // note while the task has none yet (a reviewer's note mentioning another PR must not replace it).
-    const fromNote = (human || owner) && !task.pr_url ? String(note || '').match(PR_RE)?.[0] : null;
-    const pr = pr_url !== undefined ? String(pr_url || '').trim().slice(0, 300) || null : fromNote || task.pr_url;
-    if (pr && !/^https?:\/\//i.test(pr)) throw new Error('pr_url must be an http(s) link to the pull request');
+    // Kept as its origin and path only: it goes into the board's own messages and to `gh`, so no spaces, ?query or #fragment.
+    const fromNote = (human || owner) && !task.pr_url ? (() => { try { return prLink(String(note || '').match(PR_RE)?.[0]); } catch { return null; } })() : null;
+    const pr = pr_url !== undefined ? prLink(pr_url) : fromNote || task.pr_url;
     const next = {
       status: moveTo ?? task.status,
       branch: branch ?? task.branch,
