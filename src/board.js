@@ -55,7 +55,7 @@ function reserveName(v) {
 const PR_RE = /https?:\/\/\S+?\/(?:pull|pulls|merge_requests)\/\d+/i;
 // A task's pull request link as stored: an http(s) address without spaces, a user, a ?query or a #fragment, kept as
 // its origin and path (it is quoted in the board's own messages and passed to `gh`). '' or null: no link. Else throws.
-export function prLink(v) {
+function prLink(v) {
   const s = String(v ?? '').trim();
   if (!s) return null;
   const bad = 'pr_url must be the http(s) address of the pull request, without spaces, ?query or #fragment';
