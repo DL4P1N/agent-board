@@ -57,7 +57,7 @@ try {
   // ---- Boards page: sign in with ?admin= ----
   await page.goto(`${BASE}/boards?admin=${ADMIN}`);
   await page.waitForSelector('#app:not([hidden])', { timeout: 5000 });
-  check('?admin= signs in, is kept in this tab only (sessionStorage), and is removed from the address bar', await page.evaluate(() => sessionStorage.getItem('board-admin-token') === 'adm' && !location.search));
+  check('?admin= signs in, is kept in this tab only (sessionStorage), and is removed from the address bar', await until(() => sessionStorage.getItem('board-admin-token') === 'adm' && !location.search));
   check('the admin token is not in localStorage; only a non-secret host flag is', await page.evaluate(() => !Object.keys(localStorage).some((k) => localStorage.getItem(k) === 'adm') && localStorage.getItem('board-is-host') === '1'));
   await until(() => document.querySelectorAll('#live .card').length >= 1);
   check('lists the default board as live + default', /default/.test(await txt('#live')) && /live/.test(await txt('#live')), await txt('#live'));
@@ -104,6 +104,8 @@ try {
   const plink = await bp.waitForFunction(() => { const a = document.getElementById('present-link'); return a && !a.hidden && a.getAttribute('href'); }, { timeout: 5000, polling: 250 }).then((h) => h.jsonValue()).catch(() => '');
   check('presenter link uses the board prefix', /^\/b\/spring-hackathon\/present\.html\?token=/.test(plink), plink);
   check('Boards link shows for the host (host flag set by the Boards page)', await bp.$eval('#boards-link', (a) => !a.hidden && a.getAttribute('href') === '/boards'));
+  // L9: in a new tab of its own, so the admin token the Boards page keeps never sits in this board's tab (Back from it).
+  check('Boards link opens in a new tab without an opener', await bp.$eval('#boards-link', (a) => a.target === '_blank' && /\bnoopener\b/.test(a.rel)));
   await bp.screenshot({ path: path.join(out, 'board-prefixed.png') });
 
   // ---- presenter under the prefix ----
@@ -215,6 +217,27 @@ try {
   await rp.waitForSelector('#gate:not([hidden]), #app:not([hidden])', { timeout: 5000 });
   check('root board doesn\'t reuse the prefixed board\'s saved token', await rp.evaluate(() => localStorage.getItem('board-token') === null));
   await rp.close();
+
+  // ---- N11: ?admin= is saved only once the server accepted it ----
+  {
+    const ap = await browser.newPage();
+    ap.on('pageerror', (e) => errors.push(e.message));
+    await ap.setRequestInterception(true);
+    let held = null; let onRequest;
+    const seen = new Promise((resolve) => { onRequest = (rq) => { if (!held && rq.url().includes('/api/admin/boards')) { held = rq; resolve(); } else rq.continue(); }; ap.on('request', onRequest); });
+    await ap.goto(`${BASE}/boards?admin=${ADMIN}`);
+    await seen;
+    const before = await ap.evaluate(() => ({ saved: sessionStorage.getItem('board-admin-token'), search: location.search }));
+    check('N11: a token from ?admin= is off the address bar but not saved while the server checks it', before.saved === null && !before.search, JSON.stringify(before));
+    held.continue();
+    check('N11: …and saved once it is accepted', await ap.waitForFunction(() => sessionStorage.getItem('board-admin-token') === 'adm', { timeout: 5000, polling: 100 }).then(() => true).catch(() => false));
+    ap.off('request', onRequest);
+    await ap.setRequestInterception(false);
+    await ap.goto(`${BASE}/boards?admin=not-the-token`);
+    await ap.waitForFunction(() => !location.search && document.querySelectorAll('#live .card').length >= 1, { timeout: 5000, polling: 100 }).catch(() => {});
+    check('N11: a wrong token in a link never replaces the one this tab signed in with', await ap.evaluate(() => sessionStorage.getItem('board-admin-token') === 'adm' && !document.getElementById('app').hidden), await ap.evaluate(() => `${sessionStorage.getItem('board-admin-token')} ${document.getElementById('gate').hidden}`));
+    await ap.close();
+  }
 
   // ---- wrong admin token ----
   await page.evaluate(() => sessionStorage.setItem('board-admin-token', 'wrong'));

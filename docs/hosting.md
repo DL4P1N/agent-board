@@ -62,6 +62,7 @@ One server can host several boards at once, e.g. two teams or two events. Each b
 **The Boards page** (`/boards`) is for the host.
 
 - Sign in with the admin token: `npm start` prints the link, and the token is saved in `data/admin-token` (or set `BOARD_ADMIN_TOKEN`, at least 16 characters). After 10 wrong admin tokens in a minute, an address has to wait a few seconds before it may try again (the right token is always let in, so guesses from a shared address can't lock the host out).
+- The admin token stays in that tab only: the link's `?admin=` is saved once the server accepts it (a wrong one never replaces the token you signed in with), boards open from there in a new tab without it, and a board's *Boards* link opens the page in a tab of its own.
 - From there you create, open and make a board the default, and copy its join command.
 - **Archive** stops serving a board but keeps its data (not the default board). **Restore** brings it back. **Delete** removes an archived one: it is moved to `data/trash/`, never removed outright.
 

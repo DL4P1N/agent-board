@@ -124,7 +124,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     <div class="needs" id="needs"></div>
     <span class="sp"></span>
     <div class="hacts">
-      <a id="boards-link" class="plink" href="/boards" hidden title="All boards on this server: create, open, archive (host only)">Boards</a>
+      <a id="boards-link" class="plink" href="/boards" target="_blank" rel="noopener" hidden title="All boards on this server: create, open, archive (host only; opens in a new tab)">Boards</a>
       <span class="themew"><button type="button" id="theme-btn" class="ghost icon" aria-expanded="false" aria-controls="theme-pop" title="Theme"><i class="sw" id="theme-sw" aria-hidden="true"></i></button>
         <span class="theme-pop o-panel" id="theme-pop" role="radiogroup" aria-label="Theme" hidden><span class="o-head"><span class="o-ht" aria-hidden="true">Theme</span><button type="button" class="o-ib" data-tp-close tabindex="-1" aria-label="Close Theme" title="Close Theme (Esc)">×</button></span><span class="o-body"><span class="tp-grid" id="tp-grid"></span></span></span></span>
       <span class="hpair">

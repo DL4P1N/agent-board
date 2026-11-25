@@ -371,8 +371,12 @@ const hostFlag = (on) => { try { on ? localStorage.setItem(HOST_FLAG, '1') : loc
 // Older versions kept the admin token in localStorage: move it out.
 try { const old = localStorage.getItem(KEY); if (old) { if (!store.get()) store.set(old); localStorage.removeItem(KEY); } } catch {}
 const qs = new URLSearchParams(location.search);
-let admin = qs.get('admin') || store.get();
-if (qs.get('admin')) { store.set(admin); history.replaceState(null, '', location.pathname); }
+// A token from ?admin= is only held in memory (and taken off the address bar) until the server accepts it: only then
+// is it saved, so a link carrying a wrong or someone else's admin token never replaces the one this tab has.
+const fromLink = qs.get('admin') || '';
+let admin = fromLink || store.get();
+let unchecked = !!fromLink;
+if (fromLink) history.replaceState(null, '', location.pathname);
 let boards = [];
 const ui = { confirm: null, created: null }; // confirm: { slug, action }
 
@@ -387,7 +391,14 @@ async function api(path, opts = {}) {
   try { r = await fetch('/api/admin' + path, { cache: 'no-store', ...opts, headers: { 'Content-Type': 'application/json', 'X-Admin-Token': admin } }); }
   catch { throw new Error('Cannot reach the board server. Is it still running?'); }
   const body = await r.json().catch(() => ({}));
-  if (r.status === 401 || r.status === 403) { store.set(''); hostFlag(false); showGate('That admin token was rejected. Check what npm start printed on the host.'); throw new Error('rejected'); }
+  if (r.status === 401 || r.status === 403) {
+    // The link's token was wrong: back to the one this tab had signed in with, if any.
+    const before = unchecked ? store.get() : '';
+    unchecked = false;
+    if (before && before !== admin) { admin = before; toast('The admin token in that link was rejected; still signed in with the one this tab had.', true); setTimeout(load); throw new Error('rejected'); }
+    store.set(''); hostFlag(false); admin = ''; showGate('That admin token was rejected. Check what npm start printed on the host.'); throw new Error('rejected');
+  }
+  if (unchecked && r.ok) { unchecked = false; store.set(admin); }
   if (!r.ok) throw new Error(body.error || r.statusText || 'Request failed');
   return body;
 }
@@ -400,7 +411,7 @@ function showGate(err = '') {
 $('gate-form').addEventListener('submit', (ev) => {
   ev.preventDefault();
   const t = $('gate-in').value.trim(); if (!t) { $('gate-err').textContent = 'Paste the admin token first.'; return; }
-  admin = t; store.set(t); start();
+  admin = t; unchecked = true; start();
 });
 $('signout').onclick = () => { store.set(''); hostFlag(false); admin = ''; showGate(); };
 
