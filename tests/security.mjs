@@ -23,6 +23,16 @@ try {
     const bad = ['--upload-pack=touch PWNED;', '-c', '--upload-pack=x', 'https://x/$(id)', 'https://x/`id`', 'https://x/a;b', 'https://x/a b', 'https://x/a\nb', "https://x/a'b", 'ext::sh', 'git@-oProxyCommand=x:y', 'git@host:-x', 'https://-x/y', 'https://x/a|b', 'https://x/a&b'];
     check('H1: isRepoUrl accepts git addresses', good.every(isRepoUrl), good.filter((g) => !isRepoUrl(g)).join(' '));
     check('H1: isRepoUrl refuses options, shell characters and control characters', !bad.some(isRepoUrl), bad.filter(isRepoUrl).join(' '));
+    // N8: a file: address on a host is a UNC path on Windows (git would connect to that host and send the login's
+    // NTLM hash); % is read by cmd.exe in the invite (%USERNAME%); a user name is short and plain.
+    const bad8 = ['file://evil.example/share/repo', 'file://127.0.0.1/c$/x', 'file:C:/x', 'file:/C:/x', 'https://x/%USERNAME%', 'https://x/a%20b', 'ssh://%41@host/x/y', 'git@host:team/%PATH%', 'ssh://' + 'a'.repeat(70) + '@host/x/y'];
+    check('N8: isRepoUrl refuses file: on a host, %, and a long or odd ssh user', !bad8.some(isRepoUrl), bad8.filter(isRepoUrl).join(' '));
+    const good8 = ['file:///home/me/app', 'file:///C:/work/app', 'ssh://git@host.example/x/y', 'ssh://deploy.user-1@host.example:22/x/y.git', 'https://user@host.example/x/y'];
+    check('N8: …and still takes local file:/// folders and ssh users', good8.every(isRepoUrl), good8.filter((g) => !isRepoUrl(g)).join(' '));
+    const t0 = Date.now(); isRepoUrl('ssh://' + 'a'.repeat(450) + '!'); isRepoUrl('ssh://' + '.'.repeat(490));
+    check('N8: a long odd value is refused at once', Date.now() - t0 < 50, `${Date.now() - t0} ms`);
+    const setupJs = fs.readFileSync(path.join(ROOT, 'public', 'js', 'setup.js'), 'utf8');
+    check("N8: the invite's clone line ends git's options before the address", /git clone -- \$\{shellArg\(S\.repo\)\}/.test(setupJs));
     const r = await api('/settings', { method: 'PUT', body: { repo: '--upload-pack=touch PWNED;' } });
     const j = await r.json();
     check('H1: the server refuses a repo that is a git option', r.status === 400 && /git address/.test(j.error || ''), `${r.status} ${JSON.stringify(j)}`);

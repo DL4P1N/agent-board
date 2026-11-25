@@ -3,12 +3,17 @@
 // ("--upload-pack=…" would run a command on the laptop that clones it), and only characters that mean nothing to a
 // shell (no spaces, quotes, $, ;, &, |, backticks, brackets or control characters). Shared by the server and join.
 
-// Letters, digits and the characters git addresses use, nothing a shell or git reads specially.
-const SAFE = /^[A-Za-z0-9._~:/@%+=-]+$/;
+// Letters, digits and the characters git addresses use, nothing a shell or git reads specially. No %: cmd.exe expands
+// %NAME% in the invite's clone line, and a git address never needs it.
+const SAFE = /^[A-Za-z0-9._~:/@+=-]+$/;
+// An ssh or https user name: plain and short (bounded, so a long value without "@" is refused at once).
+const USER = String.raw`[A-Za-z0-9_][\w.~+-]{0,63}@`;
 const FORMS = [
-  /^(?:https?|ssh|git):\/\/(?:[\w.~%+-]+@)?[A-Za-z0-9]/i, // https://github.com/team/project, ssh://git@host:22/x
-  /^[A-Za-z0-9][\w.-]*@[A-Za-z0-9][\w.-]*:[^-]/, // git@github.com:team/project.git
-  /^file:/i, // a local folder (a rehearsal)
+  new RegExp(String.raw`^(?:https?|ssh|git)://(?:${USER})?[A-Za-z0-9][A-Za-z0-9.-]*(?::\d{1,5})?(?:/|$)`, 'i'), // https://github.com/team/project, ssh://git@host:22/x
+  /^[A-Za-z0-9_][\w.~+-]{0,63}@[A-Za-z0-9][\w.-]*:[^-]/, // git@github.com:team/project.git
+  // A local folder (a rehearsal), with no host: file://host/share is a network (UNC) path on Windows, and git would
+  // connect to that host and send it the login's NTLM hash.
+  /^file:\/\/\//i,
   /^[\w.][\w.-]*\/[\w.-]+$/, // team/project
 ];
 

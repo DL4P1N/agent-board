@@ -106,7 +106,7 @@ function inviteText() {
   L.push(`${n++}. In the agent-board folder, connect your laptop (it asks your name, AI tool and project folder):`, `   ${join}`);
   // The same board on this laptop's other addresses (a wired and a wifi one): for a teammate whose network can't reach the first.
   for (const a of (su.join_commands || []).slice(1).filter((x) => x.ip !== 'localhost' && !/^virtual/i.test(x.label))) L.push(`   If that doesn't connect (${addrText(a).replace(/^Works /, 'works ')}):`, `   ${a.command}`);
-  if (S.repo) L.push(`${n++}. Get the project repo (if you don't have it yet):`, `   git clone ${shellArg(S.repo)}`);
+  if (S.repo) L.push(`${n++}. Get the project repo (if you don't have it yet):`, `   git clone -- ${shellArg(S.repo)}`);
   L.push(`${n++}. Then open your AI tool in the project repo and type /board`, `   (Codex: $board · Copilot CLI: start it with  ${copilotLaunch()}  then type /board)`);
   L.push('   (Gemini CLI: /board · Cursor: /board in the Agent chat)');
   L.push('', `Just watching? Open ${boardLink()}`);
