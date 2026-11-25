@@ -4,8 +4,8 @@
 import './render.js';
 import { $, ALL_PHASES, ANYONE, me, oUi, state, ui } from './state.js';
 import { ago, canMove, easeHeight, esc, fmt, fullTime, leave, motion, patch, plural, reveal, root, short, taskById, toast, when, who } from './helpers.js';
-import { agentInfoNow, agentOf, approvalWait, blockedSplit, bouncedTasks, cutTasks, dlSkipped, setupShown,
-  teamCapacity, timeNow } from './derived.js';
+import { agentInfoNow, agentOf, approvalWait, blockedSplit, bouncedTasks, cutTasks, dlSkipped, dur, setupShown,
+  teamCapacity, timeNow, unreviewedTasks } from './derived.js';
 
 // The header's one needs-attention count badge: what waits on a human. Shown only while What to do now (where each of these
 // is listed) is scrolled out of view; it jumps back up there.
@@ -75,6 +75,12 @@ function renderNow(qOpen, unread, si) {
     text: `The demo time (${when(tm.deadline)}) has passed: agents take no new tasks until you move it or remove it` });
   // Blocked leads when it's the most important thing; it isn't repeated under Also (the Blocked list is right below).
   if (blocked) ranked.push({ kind: 'urgent', go: 'blocked', more: '', text: `${plural(blocked, 'task is', 'tasks are')} blocked: read why and help` });
+  // Finished work nobody is reviewing (whoever merges is picked, but no agent took it for 10+ minutes).
+  const unrev = S.integrator && !tm.past ? unreviewedTasks() : [];
+  if (unrev.length) { const [u] = unrev; ranked.push({ kind: 'urgent', go: 'unreviewed',
+    more: unrev.length === 1 ? `#${u.t.id} waits for a reviewer` : `${unrev.length} tasks wait for a reviewer`,
+    text: unrev.length === 1 ? `#${u.t.id} ${short(u.t.title, 40)} has waited in Review ${dur(Date.now() - u.since)} and nobody is reviewing it: review and merge it yourself, or ask an agent with room in chat`
+      : `${unrev.length} tasks have waited in Review 10+ minutes and nobody is reviewing them: review and merge them yourself, or ask an agent with room in chat` }); }
   // Tasks that keep coming back from review: the task (or its checks) is probably unclear.
   const bounced = bouncedTasks();
   if (bounced.length) ranked.push({ kind: 'urgent', go: 'rejected', more: bounced.length === 1 ? `#${bounced[0].id} came back from review ${bounced[0].n}×` : `${bounced.length} tasks keep coming back from review`,

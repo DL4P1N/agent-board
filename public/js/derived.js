@@ -325,6 +325,14 @@ function blockedSplit(qOpen = openQuestions()) {
   return { asked: all.filter((t) => asked.has(t.id)), alone: all.filter((t) => !asked.has(t.id)) };
 }
 
+// Tasks in Review that nobody has taken to review for 10+ minutes (no reviewer since they arrived there), oldest first.
+const UNREVIEWED_MS = 10 * 60e3;
+function reviewSince(t) {
+  for (let i = state.events.length - 1; i >= 0; i--) { const e = state.events[i]; if (e.task_id === t.id && e.kind === 'task_updated' && e.data?.status === 'review') return e.ts; }
+  return t.updated_at || 0;
+}
+const unreviewedTasks = () => state.tasks.filter((t) => t.status === 'review' && !t.reviewer)
+  .map((t) => ({ t, since: reviewSince(t) })).filter((x) => Date.now() - x.since > UNREVIEWED_MS).sort((a, b) => a.since - b.since);
 // Not-done tasks sent back from review twice or more (state.rejects: {id: times}), most bounced first.
 const bouncedTasks = () => state.tasks.filter((t) => t.status !== 'done' && (state.rejects?.[t.id] || 0) >= 2)
   .map((t) => ({ id: t.id, title: t.title, n: state.rejects[t.id] })).sort((a, b) => b.n - a.n || a.id - b.id);
@@ -340,4 +348,4 @@ export { agentInfo, agentInfoNow, agentLimited, agentOf, agentsLine, agentState,
   bouncedTasks, capText, capTip, claimHold, clientOf, colOf, copilotLaunch, cutTasks, dlSkipped, dur, filterRoot, inPass,
   isLimited, limitText, mergingBy, notStartedText, openQuestions, outlook, people, questionFor, roster, setupInfo,
   setupOpen, setupShown, startCmd, stays, stepOpen, taskVisible, tasksOf, tasksOwnedBy, teamCapacity, timeNow,
-  unreadMentions };
+  unreadMentions, unreviewedTasks };

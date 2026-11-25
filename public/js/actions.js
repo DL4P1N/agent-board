@@ -6,7 +6,7 @@ import { $, ANYONE, LABEL, seenMention, setSeenMention, smooth, state, store, ui
 import { agentRoot, ago, announce, clock, dropDrafts, esc, focusMark, glide, isStale, refocusAfter, mentionsMe, plural, snapCards, taskById, toast, when } from './helpers.js';
 import { act, api, load, scheduleReload } from './data.js';
 import { agentInfoNow, bouncedTasks, colOf, cutTasks, filterRoot, openQuestions, setupInfo, setupOpen, stepOpen,
-  teamCapacity } from './derived.js';
+  teamCapacity, unreviewedTasks } from './derived.js';
 import { render } from './render.js';
 import { toggleNotify } from './topbar.js';
 import { exportFile, inviteText, nfEvents, NOTIFY_KIND, renderSetup, rotateToken } from './setup.js';
@@ -214,6 +214,8 @@ document.addEventListener('click', (ev) => {
     el?.scrollIntoView({ behavior: smooth(), block: 'center' }); return el?.focus({ preventScroll: true });
   }
   if (d.go === 'review') return goCards((t) => t.status === 'review', null, 'col-review');
+  // The oldest task in Review nobody is reviewing: its card (or row).
+  if (d.go === 'unreviewed') { const u = unreviewedTasks()[0]; if (!u) return; needBoard(); return tableShown() ? goCards((t) => t.id === u.t.id) : goCard(u.t.id); }
   if (d.go === 'stale') return goCards(isStale, '.card.stale');
 });
 document.addEventListener('keydown', (ev) => {
