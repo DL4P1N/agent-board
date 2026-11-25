@@ -1225,9 +1225,14 @@ export class Board {
     seen[laptop] = now;
     for (const k of Object.keys(seen)) if (now - seen[k] > AGENT_ONLINE_MS) delete seen[k];
     const n = Object.keys(seen).length;
-    const conflictAt = n >= 2 ? row.conflict_at || now : null;
+    // Only a name whose agent has started (read the board) counts: names made up in MCP URLs never had a laptop of
+    // their own. And at most 3 "@all" posts about it in 10 minutes: an agent token making up names can't flood the
+    // feed or use up the alerts (the presence still shows each conflict).
+    const conflictAt = n >= 2 && row.started_at ? row.conflict_at || now : null;
     this.db.prepare("UPDATE presence_v2 SET laptops = ?, conflict_at = ? WHERE name = ? AND kind = 'agent'").run(JSON.stringify(seen), conflictAt, root);
-    if (conflictAt && !row.conflict_at) {
+    this.conflictPosts = (this.conflictPosts || []).filter((t) => now - t < 10 * 60e3);
+    if (conflictAt && !row.conflict_at && this.conflictPosts.length < 3) {
+      this.conflictPosts.push(now);
       this.emit({ author: 'board', kind: 'message', channel: 'general', text: `@all The name ${root} is being used from ${n} laptops at once. Two people probably joined with the same name: one of them should re-run join with a different name, so tasks and messages reach the right agent.` });
     }
     return !known || !!conflictAt !== !!row.conflict_at;

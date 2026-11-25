@@ -66,21 +66,23 @@ ${link}`, allowed_mentions: { parse: [] } }) };
     }
   }
   // Identical texts within a minute are sent once, and at most NOTIFY_CAP messages go out per 10 minutes: one budget
-  // for what agents set off (questions, blocked tasks, usage limits) and one for the board's own alerts (main failing,
-  // one name on two laptops, the freeze), so agents asking a lot can't silence "main is failing".
+  // for what agents set off (questions, blocked tasks, usage limits), one for the board's own alerts (main failing,
+  // the freeze), so agents asking a lot can't silence "main is failing", and a small one of their own for "one name on
+  // two laptops" (agents set those off too, by the names they connect with).
   const NOTIFY_CAP = 20;
-  const BOARD_ALERTS = new Set(['main', 'conflict', 'freeze']);
+  const CAPS = { agents: NOTIFY_CAP, board: NOTIFY_CAP, conflict: 5 };
+  const BOARD_ALERTS = new Set(['main', 'freeze']);
   const recentNotes = new Map();
-  const sentTimes = { agents: [], board: [] }; let capLogged = 0;
+  const sentTimes = { agents: [], board: [], conflict: [] }; let capLogged = 0;
   function notify(kind, text) {
     if (!rawSetting('_notify_url') || !notifyEvents().includes(kind)) return;
     const now = Date.now();
     for (const [k, t] of recentNotes) if (now - t > 60e3) recentNotes.delete(k);
     if (recentNotes.has(text)) return;
-    const group = BOARD_ALERTS.has(kind) ? 'board' : 'agents';
+    const group = kind === 'conflict' ? 'conflict' : BOARD_ALERTS.has(kind) ? 'board' : 'agents';
     const sent = sentTimes[group] = sentTimes[group].filter((t) => now - t < 10 * 60e3);
-    if (sent.length >= NOTIFY_CAP) {
-      if (now - capLogged > 60e3) { capLogged = now; console.error(`notify (${slug}): more than ${NOTIFY_CAP} ${group === 'board' ? 'board alerts' : 'messages set off by agents'} in 10 minutes; dropping the rest for now`); }
+    if (sent.length >= CAPS[group]) {
+      if (now - capLogged > 60e3) { capLogged = now; console.error(`notify (${slug}): more than ${CAPS[group]} ${group === 'board' ? 'board alerts' : group === 'conflict' ? 'two-laptop alerts' : 'messages set off by agents'} in 10 minutes; dropping the rest for now`); }
       return;
     }
     recentNotes.set(text, now); sent.push(now);

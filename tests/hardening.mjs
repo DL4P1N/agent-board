@@ -160,6 +160,29 @@ try {
     check('N10: …nor connect over MCP as one', mcpSt.every((s) => s === 400), mcpSt.join());
     check('N10: names that only start with those words still work', (await asAgent('boardwalk')) === 200 && (await post('board-ana', board.token)) === 200 && (await mcp('anonymous-fan')) === 200);
   }
+
+  // ---- N5: made-up names seen from two laptops can't make the board post @all, nor use up its alerts ----
+  {
+    const got = [];
+    const hook = http.createServer((req, res) => { let s = ''; req.on('data', (d) => { s += d; }); req.on('end', () => { try { got.push(JSON.parse(s)); } catch {} res.end('ok'); }); });
+    await new Promise((r) => hook.listen(0, '127.0.0.1', r));
+    const b = await startBoard({ env: { BOARD_WEBHOOK_LOCALHOST: '1' } });
+    const AG = agentTokenFor(b.token);
+    const hum = (p, method = 'GET', body) => fetch(`${b.base}/api${p}`, { method, headers: { Authorization: `Bearer ${b.token}`, 'X-Agent': 'dana', 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) }).then((r) => r.json());
+    const call = (name, laptop, tool) => fetch(`${b.base}/mcp?agent=${name}&token=${AG}&laptop=${laptop}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: tool, arguments: {} } }) }).then((r) => r.text());
+    await hum('/notify', 'PUT', { url: `http://127.0.0.1:${hook.address().port}/hook?kind=generic` });
+    const posts = async () => (await hum('/state')).events.filter((e) => e.author === 'board' && /laptops at once/.test(e.text));
+    for (let i = 0; i < 25; i++) { await call(`ghost${i}`, 'aaaaaaaa1', 'list_locks'); await call(`ghost${i}`, 'bbbbbbbb2', 'list_locks'); }
+    check("N5: names whose agent never started (made up in MCP URLs) don't make the board post about two laptops", (await posts()).length === 0, (await posts()).length);
+    for (let i = 0; i < 12; i++) { await call(`spook${i}`, 'aaaaaaaa1', 'board_status'); await call(`spook${i}`, 'bbbbbbbb2', 'list_locks'); }
+    const started = await posts();
+    check('N5: started names on two laptops: the @all posts are rate-limited (3 in 10 minutes)', started.length === 3, started.length);
+    await hum('/settings', 'PUT', { goal: 'A test app.', deadline: Date.now() + 15e3, freeze_minutes: 60 });
+    for (let i = 0; i < 40 && !got.some((g) => /FEATURE FREEZE/.test(g.text)); i++) await sleep(100);
+    check('N5: the freeze alert still reaches the webhook', got.some((g) => /FEATURE FREEZE/.test(g.text)), JSON.stringify(got.map((g) => g.kind)));
+    check('N5: two-laptop alerts reach the webhook at most 3 times', got.filter((g) => /laptops at once/.test(g.text)).length <= 3, got.filter((g) => /laptops at once/.test(g.text)).length);
+    await b.stop(); hook.close();
+  }
 } finally {
   await finish(R, { board });
 }

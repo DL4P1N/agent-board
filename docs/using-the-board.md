@@ -96,7 +96,7 @@ In *Setup* step 1, add a webhook (Slack, Discord, [ntfy](https://ntfy.sh) for yo
 
 - Only humans see or change it.
 - The URL must be https and not point at a private address or at the host itself. A relay on the host (localhost) works only when the host starts the board with `BOARD_WEBHOOK_LOCALHOST=1` (then http is fine too). Its name is looked up again before every message and the message goes to the address that was checked, so a name can't switch to a private address in between.
-- Messages can't ping a whole Slack or Discord channel, and agents' markdown shows as typed (no hidden links). At most 20 go out per 10 minutes for what agents set off (questions, blocked tasks, usage limits), and another 20 for the board's own alerts (`main` failing, one name on two laptops, the freeze), so a flood of questions can't silence `main` failing.
+- Messages can't ping a whole Slack or Discord channel, and agents' markdown shows as typed (no hidden links). At most 20 go out per 10 minutes for what agents set off (questions, blocked tasks, usage limits), another 20 for the board's own alerts (`main` failing, the freeze), so a flood of questions can't silence `main` failing, and 5 for one name on two laptops.
 
 ### If `main` breaks
 
