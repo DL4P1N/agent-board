@@ -210,7 +210,7 @@ matchMedia('(max-width: 1599px)').addEventListener?.('change', () => {
 });
 document.addEventListener('click', (ev) => {
   if (ui.oGoal && !ev.target.closest?.('#o-goal, #goal-btn') && ev.target.isConnected) { ui.oGoal = false; renderDocks(); }
-  if (ui.oDl && !ev.target.closest?.('#o-dl, #clock, [data-act="clock"]') && ev.target.isConnected) { ui.oDl = false; renderDocks(); }
+  if (ui.oDl && !ev.target.closest?.('#o-dl, #clock, [data-act="clock"], [data-go="demo"]') && ev.target.isConnected) { ui.oDl = false; renderDocks(); }
   if (ui.oMerge && !ev.target.closest?.('#o-merge, #merge-btn') && ev.target.isConnected) { ui.oMerge = false; renderDocks(); renderTopbar(setupInfo()); }
   if (ui.oPlan && !ev.target.closest?.('#o-plan, #plan-btn, [data-act="pick-planner"]') && ev.target.isConnected) { ui.oPlan = false; renderDocks(); renderTopbar(setupInfo()); }
   if (ui.oRoles && !ev.target.closest?.('#o-roles, #roles-btn, [data-act="pick-planner"]') && ev.target.isConnected) { ui.oRoles = false; renderDocks(); renderTopbar(setupInfo()); }

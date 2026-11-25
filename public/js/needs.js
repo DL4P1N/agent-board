@@ -3,7 +3,7 @@
 
 import './render.js';
 import { $, ALL_PHASES, ANYONE, me, oUi, state, ui } from './state.js';
-import { ago, canMove, easeHeight, esc, fmt, fullTime, leave, motion, patch, plural, reveal, root, short, taskById, toast, who } from './helpers.js';
+import { ago, canMove, easeHeight, esc, fmt, fullTime, leave, motion, patch, plural, reveal, root, short, taskById, toast, when, who } from './helpers.js';
 import { agentInfoNow, agentOf, approvalWait, blockedSplit, bouncedTasks, cutTasks, dlSkipped, setupShown,
   teamCapacity, timeNow } from './derived.js';
 
@@ -70,6 +70,9 @@ function renderNow(qOpen, unread, si) {
   // The feature freeze changes what humans should do, so it comes right after the questions.
   if (tm.frozen && !tm.past && state.phase !== 'all_done') ranked.push({ kind: 'urgent', go: review ? 'review' : 'compose', go2: 'wrapup', text2: 'Write-up for your submission', more: 'Feature freeze: help merge and test',
     text: `Feature freeze: agents won't start new tasks. Help merge and test ${review ? `the ${plural(review, 'task')} in Review` : 'main'}, then rehearse the demo. P1 bug fixes can still be claimed` });
+  // After the demo time, while agents are still on the board: they take no new tasks until a human moves or removes it.
+  if (tm.past && state.phase !== 'all_done') ranked.push({ kind: 'urgent', go: 'demo', go2: 'dl-clear', text2: 'Remove the demo time', more: 'Demo time passed: move or remove it',
+    text: `The demo time (${when(tm.deadline)}) has passed: agents take no new tasks until you move it or remove it` });
   // Blocked leads when it's the most important thing; it isn't repeated under Also (the Blocked list is right below).
   if (blocked) ranked.push({ kind: 'urgent', go: 'blocked', more: '', text: `${plural(blocked, 'task is', 'tasks are')} blocked: read why and help` });
   // Tasks that keep coming back from review: the task (or its checks) is probably unclear.

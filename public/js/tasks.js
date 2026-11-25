@@ -2,12 +2,12 @@
 // between cards, and drag and drop (moveTask).
 
 import './agents.js';
-import { $, COL_DESC, COL_EMPTY, COL_SHOWN, COLS, DONE_SHOWN, FROZEN_DESC, HOLDING, LABEL, me, SIZE_TIP, state,
+import { $, COL_DESC, COL_EMPTY, COL_SHOWN, COLS, DONE_SHOWN, FROZEN_DESC, HOLDING, LABEL, me, PAST_DESC, SIZE_TIP, state,
   STATUSES, store, ui } from './state.js';
 import { agentRoot, ago, canMove, cardRects, esc, fmt, fullTime, hs, isHttps, isStale, isWebUrl, moveCards, nameTag,
   noteMove, ownerOffline, patch, plural, root, short, taskById, timeEl, toast, when } from './helpers.js';
 import { act, api, scheduleReload } from './data.js';
-import { agentInfo, agentLimited, approvalWait, clientOf, colOf, filterRoot, inPass, people, questionFor, setupShown, taskVisible,
+import { agentInfo, agentLimited, approvalWait, claimHold, clientOf, colOf, filterRoot, inPass, people, questionFor, setupShown, taskVisible,
   timeNow } from './derived.js';
 import { render } from './render.js';
 import { exportBtns } from './setup.js';
@@ -59,9 +59,10 @@ function renderBoardNote() {
   } else if (done) {
     html = `<p><b>Every task is merged.</b> Write-up for your submission: a summary of the goal, who built what, the decisions you made and what's unfinished.</p><div class="inl">${exportBtns('bn')}</div>`;
   } else if (t.past) {
+    // Claims stay closed until a human moves or removes the demo time: say so, with both ways out.
     kind = 'freeze';
-    html = `<p><b>The demo time (${esc(when(t.deadline))}) has passed.</b> Agents have been told to wrap up and merge what they have. Write-up for your submission: the goal, who built what, the decisions you made and what's unfinished.</p>
-      <div class="inl">${exportBtns('bn')}</div>`;
+    html = `<p><b>The demo time (${esc(when(t.deadline))}) has passed.</b> Agents wrap up and merge what they have, and take no new tasks until you move or remove the demo time. Write-up for your submission: the goal, who built what, the decisions you made and what's unfinished.</p>
+      <div class="inl"><button type="button" class="ghost" data-act="clock" data-fk="bn-dl-move">Move the demo time</button><button type="button" class="ghost" data-act="dl-clear" data-fk="bn-dl-clear">Remove it</button>${exportBtns('bn')}</div>`;
   }
   // The feature freeze has no banner: the Demo chip names it, What to do now says what to do, and the Open column
   // dims what won't start.
@@ -145,9 +146,12 @@ function card(t) {
   const pr = prInfo(t);
   const merging = t.status === 'review' && t.reviewer;
   const prio = t.priority === 1 ? 'P1, high priority' : t.priority >= 3 ? 'low priority' : 'normal priority';
-  // Feature freeze: an open task that isn't a P1 bug fix won't be started before the demo.
-  const tm = timeNow(); const held = tm.frozen && !tm.past && (t.status === 'open' || prop) && t.priority !== 1;
-  const aria = `#${t.id} ${t.title}. ${LABEL[t.status]}${prop ? ` by ${t.created_by}, waiting for approval` : ''}, ${t.assignee ? 'assigned to ' + t.assignee : 'unassigned'}, ${prio}${waiting.length ? `, waits on ${waiting.map((d) => '#' + d.id).join(' and ')}` : ''}${size !== 'M' ? `, size ${size}` : ''}${rsv ? `, reserved for ${t.reserved_for}` : ''}${pr ? `, pull request${pr.text ? ': ' + pr.text : ''}` : ''}${merging ? `, being merged by ${t.reviewer}` : ''}${stale ? `, stale: no update for 15+ minutes${off ? ', owner offline: agents may take it over' : ''}` : ''}${outU ? ', owner out of usage: agents may take it over' : ''}${q ? ', question waiting' : ''}${note ? `, blocked: ${note}` : ''}${held ? ', on hold for the feature freeze' : ''}. Press Enter to open`;
+  // Feature freeze: an open task the freeze doesn't allow (the server's freezeAllows) won't be started before the demo;
+  // after the demo time nothing is. A stale task can't be taken over then either.
+  const tm = timeNow(); const hold = claimHold(t, tm);
+  const held = !!hold && (t.status === 'open' || prop);
+  const takeNote = hold ? `nobody can take it over (${hold})` : 'agents may take it over';
+  const aria = `#${t.id} ${t.title}. ${LABEL[t.status]}${prop ? ` by ${t.created_by}, waiting for approval` : ''}, ${t.assignee ? 'assigned to ' + t.assignee : 'unassigned'}, ${prio}${waiting.length ? `, waits on ${waiting.map((d) => '#' + d.id).join(' and ')}` : ''}${size !== 'M' ? `, size ${size}` : ''}${rsv ? `, reserved for ${t.reserved_for}` : ''}${pr ? `, pull request${pr.text ? ': ' + pr.text : ''}` : ''}${merging ? `, being merged by ${t.reviewer}` : ''}${stale ? `, stale: no update for 15+ minutes${off ? `, owner offline: ${takeNote}` : ''}` : ''}${outU ? `, owner out of usage: ${takeNote}` : ''}${q ? ', question waiting' : ''}${note ? `, blocked: ${note}` : ''}${held ? (tm.past ? ', not claimed: the demo time has passed' : ', on hold for the feature freeze') : ''}. Press Enter to open`;
   const menu = ui.moveMenu === t.id ? `<div class="mvmenu" role="group" aria-label="Move #${t.id} to"><span class="ml">Move to:</span>${COLS.filter((s) => s !== t.status).map((s) => `<button type="button" class="ghost" data-move-to="${s}" data-move-id="${t.id}" data-fk="mt-${t.id}-${s}">${LABEL[s]}</button>`).join('')}</div>` : '';
   const ask = moveAskHtml(t);
   const rej = ui.rejecting === t.id;
@@ -168,10 +172,10 @@ function card(t) {
       ${t.assignee ? `<span class="pc" ${hs(t.assignee)} title="Assigned to ${esc(t.assignee)}">${esc(t.assignee)}</span>` : t.status !== 'done' && t.status !== 'open' && !prop ? '<span class="pill warn" title="Nobody holds this task: open it to pick who it is for, or move it back to Open">unassigned</span>' : ''}
       ${t.status === 'claimed' ? '<span title="Claimed: an agent picked it up but hasn’t started yet">claimed, not started</span>' : ''}
       ${waiting.length ? `<span class="pill flag" title="Depends on other tasks: can't be picked up until these are done">waits on ${waiting.map((d) => '#' + d.id).join(' ')}</span>` : deps.length ? `<span class="cx" title="Dependencies done">after ${deps.map((d) => '#' + d.id).join(' ')} ✓</span>` : ''}
-      ${stale ? `<span class="pill flag" title="Stale: no update for 15+ minutes. The agent may be stuck: ping it, or release the task back to Open.${off ? ' Its owner is offline, so other agents may take it over.' : ''}">stale</span>` : ''}
+      ${stale ? `<span class="pill flag" title="Stale: no update for 15+ minutes. The agent may be stuck: ping it, or release the task back to Open.${off ? (hold ? ` Its owner is offline, but nobody can take it over (${hold}).` : ' Its owner is offline, so other agents may take it over.') : ''}">stale</span>` : ''}
       <span class="cx" title="Last update ${esc(fullTime(t.updated_at))}">${ago(t.updated_at)}</span>
       <button type="button" class="mv" data-move="${t.id}" data-fk="mv-${t.id}" aria-expanded="${ui.moveMenu === t.id}" aria-label="Move #${t.id} to another column" title="Change status">Move…</button></div>
-    ${q || stale || outU || prop ? `<div class="ca">${propActs}${q ? `<button type="button" class="qb" data-go-q="${q.id}" data-fk="cq-${t.id}" title="${esc(short(q.question, 120))}">question waiting</button>` : ''}${outU ? '<span class="own off">owner out of usage — agents may take it over</span>' : stale && t.assignee ? `<span class="own${off ? ' off' : ''}">${off ? `owner offline — agents may take it over` : `${esc(agentRoot(t.assignee))} is still online: ping it first`}</span>` : ''}${stale || outU ? `<button type="button" class="ghost" data-release="${t.id}" data-fk="rel-${t.id}">Release to Open</button>${t.assignee && !outU ? (pingedAt(t) ? `<span class="muted t-meta" title="You can ping again 10 minutes after the last ping">pinged ${ago(pingedAt(t))}</span>` : `<button type="button" class="ghost" data-ping="${t.id}" data-fk="ping-${t.id}" title="Post a message asking ${esc(t.assignee)} whether it's still on it">Ping @${esc(agentRoot(t.assignee))}</button>`) : ''}` : ''}</div>` : ''}
+    ${q || stale || outU || prop ? `<div class="ca">${propActs}${q ? `<button type="button" class="qb" data-go-q="${q.id}" data-fk="cq-${t.id}" title="${esc(short(q.question, 120))}">question waiting</button>` : ''}${outU ? `<span class="own off">owner out of usage — ${takeNote}</span>` : stale && t.assignee ? `<span class="own${off ? ' off' : ''}">${off ? `owner offline — ${takeNote}` : `${esc(agentRoot(t.assignee))} is still online: ping it first`}</span>` : ''}${stale || outU ? `<button type="button" class="ghost" data-release="${t.id}" data-fk="rel-${t.id}">Release to Open</button>${t.assignee && !outU ? (pingedAt(t) ? `<span class="muted t-meta" title="You can ping again 10 minutes after the last ping">pinged ${ago(pingedAt(t))}</span>` : `<button type="button" class="ghost" data-ping="${t.id}" data-fk="ping-${t.id}" title="Post a message asking ${esc(t.assignee)} whether it's still on it">Ping @${esc(agentRoot(t.assignee))}</button>`) : ''}` : ''}</div>` : ''}
     ${menu}${ask}</article>`;
 }
 function doneOpen() {
@@ -235,7 +239,7 @@ function renderBoardNow() {
   $('board').hidden = table || noMatch; $('tasktable').hidden = !table || !state.tasks.length || noMatch; $('cols-hint').hidden = table || noMatch;
   if (table) { if (state.tasks.length && !noMatch) renderTable(visible); return; }
   const dOpen = doneOpen();
-  const tm = timeNow(); const frozen = tm.frozen && !tm.past;
+  const tm = timeNow();
   const html = COLS.map((s) => {
     // Proposed tasks sit at the top of Open until someone approves them; claimed ones in In progress.
     let items = colSort(visible.filter((t) => colOf(t) === s), s);
@@ -257,8 +261,8 @@ function renderBoardNow() {
       items = shown;
     }
     const empty = !state.tasks.length ? '' : tv.q.trim() && !total ? 'No matches' : filterRoot() && !total ? `No tasks for ${esc(filterRoot())}` : COL_EMPTY[s];
-    // Feature freeze: Open says what can still start.
-    const desc = s === 'open' && frozen ? FROZEN_DESC : COL_DESC[s];
+    // Feature freeze: Open says what can still start; after the demo time, that nothing does.
+    const desc = s === 'open' && tm.past ? PAST_DESC : s === 'open' && tm.frozen ? FROZEN_DESC : COL_DESC[s];
     // The column's heading reads "Open, 5 tasks" (not "Open5"); the columns aren't landmarks of their own.
     return `<div class="col s-${s} ${total ? 'has' : ''}" data-status="${s}" id="col-${s}"><h3 title="${COL_DESC[s]}"><span id="colh-${s}">${LABEL[s]}</span><span><span class="vh">, </span><span id="colc-${s}">${total}</span><span class="vh"> ${total === 1 ? 'task' : 'tasks'}</span>${s === 'done' ? '<button type="button" class="dclose" data-act="done-toggle" data-fk="done-close" aria-expanded="true" aria-label="Collapse the Done column" title="Collapse"><span class="chev" aria-hidden="true">▾</span></button>' : ''}</span></h3><p class="cd${desc !== COL_DESC[s] ? ' fz-note' : ' vh'}" id="cold-${s}" title="${desc}">${desc}</p>
       ${items.length ? `<ul class="cards">${items.map((t) => `<li>${card(t)}</li>`).join('')}</ul>` : empty ? `<div class="empty-note">${empty}</div>` : ''}${more}</div>`;

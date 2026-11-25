@@ -4,8 +4,8 @@
 import './actions.js';
 import { $, HINT, HOLDING, LABEL, me, state, STATUSES } from './state.js';
 import { ago, esc, fmt, isStale, ownerOffline, patch, refreshTimes, taskById, toast, who } from './helpers.js';
-import { api, scheduleReload } from './data.js';
-import { agentInfo, agentLimited, agentState, capText, limitText, openQuestions } from './derived.js';
+import { api, load, scheduleReload } from './data.js';
+import { agentInfo, agentLimited, agentState, capText, claimHold, limitText, openQuestions, timeNow } from './derived.js';
 import { render } from './render.js';
 import { blockedNote, moveTask, prFeedback, prInfo } from './tasks.js';
 import { evHtml, growMsg } from './activity.js';
@@ -117,6 +117,14 @@ function openTask(id, { discard = false } = {}) {
   else if (t && matchMedia('(hover: none) and (pointer: coarse)').matches) { const h = $('td-title'); h.tabIndex = -1; h.focus(); }
   else { n.focus(); if (t && n.scrollWidth > n.clientWidth) { n.setSelectionRange(0, 0); n.scrollLeft = 0; } } // a title that fits keeps the caret at its end
 }
+// Whether others may take a task over now (nobody can after the demo time, or during the freeze unless it allows it).
+const takeNote = (t) => { const h = claimHold(t); return h ? `nobody can take it over (${h})` : 'agents may take it over'; };
+// Why agents won't claim an open task now, in full (the server says the same in freeze_note).
+function holdText(t) {
+  const tm = timeNow();
+  if (tm.past) return 'The demo time has passed: agents take no new tasks until it is moved or removed (the Demo chip).';
+  return 'Feature freeze: agents will not claim it before the demo. Only priority-1 fixes of size S or M, and work someone already started, can still be claimed.';
+}
 function renderDialogLive() {
   const t = editing && taskById(editing.id);
   if (!editing) { $('td-meta').innerHTML = ''; $('td-meta')._html = undefined; renderTaskBlock(null); patch($('td-deps-hint'), 'Task ids that must be done before this can be claimed. Optional.'); $('td-deps-hint').classList.add('vh'); resOptions(); return; }
@@ -141,10 +149,12 @@ function renderDialogLive() {
     t.branch ? `<span>branch <code>${esc(t.branch)}</code></span>` : '',
     (() => { const pr = prInfo(t); return pr ? `<span>pull request <a href="${esc(pr.url)}" target="_blank" rel="noopener noreferrer" data-fk="td-pr">${esc(pr.url.replace(/^https?:\/\/(www\.)?/, ''))}</a>${pr.text ? ` <span class="pill ${pr.cls}">${esc(pr.text)}</span>` : ''}</span>${prFeedback(t)}` : ''; })(),
     t.status === 'review' && t.reviewer ? `<span>being merged by ${who(t.reviewer)}</span>` : '',
-    t.assignee && HOLDING.includes(t.status) && agentLimited(t.assignee) ? '<span class="pill warn">owner out of usage — agents may take it over</span>' : '',
+    t.assignee && HOLDING.includes(t.status) && agentLimited(t.assignee) ? `<span class="pill warn">owner out of usage — ${takeNote(t)}</span>` : '',
+    // Open or proposed, and the demo time keeps agents from claiming it (the server's freeze_note, in short).
+    ['open', 'proposed'].includes(t.status) && claimHold(t) ? `<span class="pill warn" title="${esc(holdText(t))}">${timeNow().past ? 'demo time passed: no new claims' : 'on hold for the feature freeze'}</span>` : '',
     `<span>created by ${who(t.created_by)} ${ago(t.created_at)}</span>`,
     `<span>updated ${ago(t.updated_at)}</span>`,
-    isStale(t) ? `<span class="pill flag">stale: no update for 15+ min${t.assignee && ownerOffline(t) ? ' · owner offline — agents may take it over' : ''}</span>` : '',
+    isStale(t) ? `<span class="pill flag">stale: no update for 15+ min${t.assignee && ownerOffline(t) ? ` · owner offline — ${takeNote(t)}` : ''}</span>` : '',
   ].join(''));
   patch($('td-deps-hint'), deps.length ? `Depends on ${deps.join(', ')}. Dependencies are fixed after creation.` : ''); $('td-deps-hint').classList.remove('vh');
   const h = $('td-history'); const before = h._html;
@@ -339,7 +349,7 @@ async function saveTask() {
         if (!move && !approve) toast(`Saved #${o.id}`);
         scheduleReload();
       }
-      if (approve) { await api(`/tasks/${o.id}/decide`, { method: 'POST', body: JSON.stringify({ approve: true }) }); toast(`Approved #${o.id}: agents can claim it now`); scheduleReload(); }
+      if (approve) { const r = await api(`/tasks/${o.id}/decide`, { method: 'POST', body: JSON.stringify({ approve: true }) }); toast(r?.freeze_note ? `Approved #${o.id}. ${r.freeze_note}` : `Approved #${o.id}: agents can claim it now`); scheduleReload(); }
 
       if (move) {
         const t = taskById(o.id) || o; if ('assignee' in body) t.assignee = assignee;
@@ -357,7 +367,9 @@ async function saveTask() {
         try { await api(`/tasks/${t.id}`, { method: 'PATCH', body: JSON.stringify({ reserved_for }) }); }
         catch (e) { toast(`Created #${t.id}, but couldn't reserve it: ${e.message}`, true); scheduleReload(); dlg.close(); return; }
       }
-      toast(`Created #${t.id} ${t.title}${reserved_for ? ` (reserved for ${reserved_for})` : ''}`); scheduleReload();
+      toast(`Created #${t.id} ${t.title}${reserved_for ? ` (reserved for ${reserved_for})` : ''}${t.freeze_note ? `. ${t.freeze_note}` : ''}`);
+      // Focus goes to the new card (not back to where the dialog was opened from, which may be gone, or the page).
+      dlg.close(); await load(); return focusTask(t.id);
     }
     dlg.close();
   } catch (e) { showFieldError(e.message); }

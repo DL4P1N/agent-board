@@ -2,7 +2,7 @@
 // Starts its own throwaway board. Run all suites with: npm test
 import fs from 'node:fs';
 import path from 'node:path';
-import { startBoard, launchBrowser, shotsDir, finish, agent, rest } from '../helpers.mjs';
+import { startBoard, launchBrowser, shotsDir, finish, agent, rest, ageTask } from '../helpers.mjs';
 
 const board = await startBoard();
 const BASE = board.base;
@@ -118,7 +118,7 @@ try {
   // t1 is priority 1 (bug fixes stay claimable during the freeze), so try a normal-priority task.
   const refused = await alice('claim_task', { id: t2.id });
   check('frozen: an agent claim is refused', /Feature freeze/.test(errText(refused)), errText(refused).slice(0, 120));
-  check('frozen: the Open column says priority-1 bug fixes can still be claimed', /Priority-1 tasks \(bug fixes\) can still be claimed/.test(await txt(page, '#col-open .cd')));
+  check('frozen: the Open column says priority-1 fixes of size S or M, and work already started, can still be claimed', /Priority-1 fixes of size S or M, and work someone already started, can still be claimed/.test(await txt(page, '#col-open .cd')), await txt(page, '#col-open .cd'));
   await page.click('#now [data-go="wrapup"]'); await sleep(400);
   check('"Write-up for your submission" jumps to the export buttons', await page.evaluate(() => document.activeElement?.dataset.act === 'export-md'));
   await page.keyboard.press('Escape'); await sleep(200); // before the demo they are in the help dialog
@@ -275,6 +275,58 @@ try {
   const mdf = files.find((f) => /^agent-board-summary-.*\.md$/.test(f)); const jsf = files.find((f) => /^agent-board-export-.*\.json$/.test(f));
   check('download buttons save the .md and .json files', !!mdf && !!jsf && /^# Team board summary/.test(fs.readFileSync(path.join(dl, mdf), 'utf8')) && !!JSON.parse(fs.readFileSync(path.join(dl, jsf), 'utf8')).tasks, files.join(','));
   await page.keyboard.press('Escape');
+
+  // ================= round 5b: what the freeze still allows (M1), and after the demo time (H1) =================
+  await page.evaluate(() => { localStorage.setItem('board-setup', 'closed'); ui.forceSetup = false; render(); });
+  // A task that will be stale, its owner offline, once the demo time has passed (claimed now, while claims are open).
+  const zed = await agent(board, 'zed'); await zed('board_status');
+  const zt = await rest(board, 'dana', '/tasks', 'POST', { title: 'Share buttons' });
+  const zc = await zed('claim_task', { id: zt.id });
+  check('round 5b setup: zed holds a task', zc?.status === 'claimed', errText(zc).slice(0, 120));
+  await settings({ deadline: Date.now() + 30 * 60e3, freeze_minutes: 60 });
+  await reload(page); await sleep(200);
+  const bigP1 = await rest(board, 'dana', '/tasks', 'POST', { title: 'Big P1 rewrite', priority: 1, size: 'L' });
+  await until(page, (id) => !!document.querySelector(`.card[data-id="${id}"]`), bigP1.id);
+  check('M1 frozen: a P1 task of size L is dimmed too (the freeze allows only S or M)', await page.evaluate((id) => document.querySelector(`.card[data-id="${id}"]`).classList.contains('held'), bigP1.id));
+  const prop = await bob('create_task', { title: 'Confetti on every vote' });
+  check('round 5b setup: a proposal from bob', prop?.status === 'proposed', errText(prop).slice(0, 120));
+  await until(page, (id) => !!document.querySelector(`[data-approve="${id}"]`), prop.id);
+  await page.evaluate(() => document.getElementById('toasts').replaceChildren());
+  await clickStill(page, `[data-approve="${prop.id}"]`);
+  const apOk = await until(page, () => /Approved #\d+\. Feature freeze/.test($('toasts').textContent));
+  check('M1 frozen: approving a proposal says nobody can claim it before the demo (the server\'s freeze_note), not "agents can claim it now"', apOk && await page.evaluate(() => !/can claim it now/.test($('toasts').textContent)), await page.evaluate(() => $('toasts').textContent));
+  check('M12 approving from the card: focus lands on the approved card', await until(page, (id) => document.activeElement?.dataset?.id === String(id), prop.id), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
+  await page.evaluate(() => { document.activeElement?.blur(); document.getElementById('toasts').replaceChildren(); });
+  await page.click('#new-task-btn'); await page.waitForSelector('#task-dlg[open]');
+  await page.type('#td-name', 'Polish the footer'); await page.focus('#td-desc');
+  await page.keyboard.down('Control'); await page.keyboard.press('Enter'); await page.keyboard.up('Control');
+  const crOk = await until(page, () => /Created #\d+ Polish the footer\. Feature freeze/.test($('toasts').textContent));
+  check('M1 frozen: creating a task says nobody can claim it before the demo (freeze_note)', crOk, await page.evaluate(() => $('toasts').textContent));
+  check('M12 Ctrl+Enter create: focus lands on the new card', await until(page, () => { const t = state.tasks.find((x) => x.title === 'Polish the footer'); return !!t && document.activeElement?.dataset?.id === String(t.id); }), await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
+  await page.evaluate(() => openTask(state.tasks.find((x) => x.title === 'Polish the footer').id)); await sleep(150);
+  check('M1 the task dialog of a held task says it is on hold for the feature freeze', /on hold for the feature freeze/.test(await txt(page, '#td-meta')), await txt(page, '#td-meta'));
+  await page.keyboard.press('Escape'); await sleep(200);
+
+  // H1: the demo time passes while agents are still on the board (nothing else waiting on a human, so it leads).
+  for (const oq of (await rest(board, 'dana', '/state')).questions.filter((x) => !x.answer)) await rest(board, 'dana', `/questions/${oq.id}/answer`, 'POST', { answer: 'yes' });
+  for (const bt of (await rest(board, 'dana', '/state')).tasks.filter((x) => x.status === 'blocked')) await rest(board, 'dana', `/tasks/${bt.id}`, 'PATCH', { status: 'in_progress' });
+  await ageTask(board, zt.id, 40);
+  { const { DatabaseSync } = await import('node:sqlite'); const db = new DatabaseSync(path.join(board.dataDir, 'board.db')); db.prepare("UPDATE presence_v2 SET last_seen = ? WHERE name = 'zed' AND kind = 'agent'").run(Date.now() - 120 * 60e3); db.close(); }
+  await settings({ deadline: Date.now() + 1200, freeze_minutes: 60 }); await sleep(1600);
+  await reload(page); await sleep(300);
+  const bn = await page.evaluate(() => ({ text: $('board-note').innerText.replace(/\s+/g, ' '), move: !!$('board-note').querySelector('[data-act="clock"]'), rm: !!$('board-note').querySelector('[data-act="dl-clear"]') }));
+  check('H1 after the demo time: the banner says agents take no new tasks until the demo time is moved or removed, with Move and Remove', /take no new tasks until you move or remove the demo time/.test(bn.text) && bn.move && bn.rm, JSON.stringify(bn));
+  const nowP = await txt(page, '#now');
+  check('H1 after the demo time (agents still on): Needs attention says so, not "All good", with a way to remove it', /has passed: agents take no new tasks until you move it or remove it/.test(nowP) && /Remove the demo time/.test(nowP) && !/All good/.test(nowP), nowP);
+  check('H1 after the demo time: the Open column says nothing starts, and open cards are dimmed', /demo time has passed/.test(await txt(page, '#col-open .cd')) && await page.evaluate((id) => !!document.querySelector(`.card[data-id="${id}"]`)?.classList.contains('held'), bigP1.id), await txt(page, '#col-open .cd'));
+  const own = await page.evaluate((id) => document.querySelector(`.card[data-id="${id}"] .own`)?.textContent || '', zt.id);
+  check('H1 after the demo time: a stale card with its owner offline doesn\'t offer a takeover', /owner offline/.test(own) && !/may take it over/.test(own) && /nobody can take it over/.test(own), own);
+  await page.click('#now [data-go="demo"]');
+  check('H1 "Move it" opens the Demo popover', await until(page, () => !$('o-dl').hidden && !!$('o-dl-in')));
+  await page.keyboard.press('Escape'); await sleep(150);
+  await page.click('#now [data-go="dl-clear"]');
+  check('H1 "Remove the demo time" removes it: the banner and the line go', await until(page, () => $('clock').classList.contains('unset') && $('board-note').hidden && !/has passed/.test($('now').innerText)));
+  await settings({ deadline: '' }); await reload(page);
 
   // All done: the write-up is offered prominently.
   for (const oq of (await rest(board, 'dana', '/state')).questions.filter((x) => !x.answer)) await rest(board, 'dana', `/questions/${oq.id}/answer`, 'POST', { answer: 'yes' });

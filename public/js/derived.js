@@ -230,6 +230,23 @@ function dur(ms) {
   return h ? `${h}h ${m % 60}m` : `${m}m`;
 }
 const approvalWait = () => state.phase === 'awaiting_approval';
+// What the server's freezeAllows lets an agent claim during the feature freeze (src/board.js): a priority-1 fix that
+// isn't large, or a task someone already started (it has a branch, and was in progress or further, or has a PR) and
+// that was released. After the demo time nothing is claimed.
+const STARTED = ['in_progress', 'blocked', 'review', 'done'];
+function wasStarted(t) {
+  if (!t?.branch) return false;
+  if (t.pr_url || t.pr?.url || ['in_progress', 'blocked', 'review'].includes(t.status)) return true;
+  return state.events.some((e) => e.task_id === t.id && e.kind === 'task_updated' && STARTED.includes(e.data?.status));
+}
+const freezeAllows = (t) => (t.priority === 1 && t.size !== 'L') || wasStarted(t);
+// Can an agent claim (or take over) this task right now, as far as the demo time goes: '' if so, else why not, short
+// ('demo time passed', 'feature freeze').
+function claimHold(t, tm = timeNow()) {
+  if (tm.past) return 'demo time passed';
+  if (tm.frozen && !freezeAllows(t)) return 'feature freeze';
+  return '';
+}
 // Keep in sync with outlook() in office/src/live/board.ts (the 3D presenter; a separate bundle) and public/present-classic.html.
 // Will the work left fit before the freeze (or the demo, once frozen)? Work left = every task not done or proposed,
 // at this board's median minutes for its size (state.stats, null until 3 are done), shared over the slots of the
@@ -293,7 +310,7 @@ function outlook(t = timeNow()) {
 const colOf = (t) => (t.status === 'proposed' ? 'open' : t.status === 'claimed' ? 'in_progress' : t.status);
 // What to do now's links that stay in the 3D view (what they lead to is in its panels or the Setup popover); the rest
 // open the Board view (the task columns), and say so there.
-const STAYS = ['cut', 'rejected', 'now', 'questions', 'blocked', 'conflict', 'compose', 'mentions', 'idle'];
+const STAYS = ['cut', 'rejected', 'now', 'questions', 'blocked', 'conflict', 'compose', 'mentions', 'idle', 'demo', 'dl-clear'];
 // Setup steps stay too: Setup opens as a popover in the 3D view.
 const stays = (g) => STAYS.includes(g) || String(g).startsWith('step-');
 // "7 agents online · 1 out of usage" (board) / "7 online · 1 out of usage" (the 3D Agents dock): the same numbers.
@@ -320,7 +337,7 @@ function cutTasks(tm = timeNow()) {
 }
 
 export { agentInfo, agentInfoNow, agentLimited, agentOf, agentsLine, agentState, approvalWait, blockedSplit,
-  bouncedTasks, capText, capTip, clientOf, colOf, copilotLaunch, cutTasks, dlSkipped, dur, filterRoot, inPass,
+  bouncedTasks, capText, capTip, claimHold, clientOf, colOf, copilotLaunch, cutTasks, dlSkipped, dur, filterRoot, inPass,
   isLimited, limitText, mergingBy, notStartedText, openQuestions, outlook, people, questionFor, roster, setupInfo,
   setupOpen, setupShown, startCmd, stays, stepOpen, taskVisible, tasksOf, tasksOwnedBy, teamCapacity, timeNow,
   unreadMentions };

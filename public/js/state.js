@@ -13,7 +13,9 @@ const COLS = ['open', 'in_progress', 'blocked', 'review', 'done'];
 const LABEL = { proposed: 'Proposed', open: 'Open', claimed: 'Claimed', in_progress: 'In progress', blocked: 'Blocked', review: 'Review', done: 'Done' };
 const HINT = { proposed: 'Proposed: waiting for the planner or you to approve', open: 'Ready for an agent to claim', claimed: 'Picked up, not started yet', in_progress: 'Being worked on', blocked: 'Stuck: needs help', review: 'Waiting to be merged', done: 'Merged / finished' };
 const COL_DESC = { open: 'Ready for an agent to pick up', in_progress: 'An agent took it and is working on it (or about to start)', blocked: 'Stuck: needs a decision or help', review: 'Pushed to a branch, waiting to be merged into main', done: 'Merged into main' };
-const FROZEN_DESC = 'Feature freeze: only Priority-1 tasks (bug fixes) can still be claimed';
+// What the feature freeze still lets agents claim (the server's freezeAllows, src/board.js), and the demo time passed.
+const FROZEN_DESC = 'Feature freeze: only Priority-1 fixes of size S or M, and work someone already started, can still be claimed';
+const PAST_DESC = 'The demo time has passed: agents take no new tasks until it is moved or removed';
 const COL_EMPTY = { open: 'No open tasks. Add one with + New task.', in_progress: 'No tasks in progress.', blocked: 'No blocked tasks.', review: 'No tasks to merge.', done: 'No tasks merged yet.' };
 const PHASES = [['needs_goal', 'Set the goal'], ['needs_plan', 'Write tasks'], ['building', 'Build'], ['all_done', 'Done']];
 const ALL_PHASES = [['connect', 'Connect'], ...PHASES]; // 'connect' is client-side: shown while no laptop is connected yet
@@ -69,5 +71,5 @@ function setState(s) { state = s; }
 function setSeenMention(id) { seenMention = id; }
 
 export { $, ACTIVE, AGENT_ONLINE_MS, ALL_PHASES, ANYONE, BASE, cleanName, COL_DESC, COL_EMPTY, COL_SHOWN, COLS, DEFAULT_SETTINGS,
-  DONE_SHOWN, FROZEN_DESC, HINT, HOLDING, HUES, LABEL, linkName, linkNameAsIs, me, NAME_MAX, nsKey, oSave, oUi, pending, qs, reduceMotion, seenMention,
+  DONE_SHOWN, FROZEN_DESC, HINT, PAST_DESC, HOLDING, HUES, LABEL, linkName, linkNameAsIs, me, NAME_MAX, nsKey, oSave, oUi, pending, qs, reduceMotion, seenMention,
   setMe, setSeenMention, setState, setToken, SIZE_TIP, SLUG, smooth, STALE_MS, state, STATUSES, store, token, ui };

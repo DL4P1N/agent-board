@@ -26,7 +26,6 @@ async function once(key, fn) { if (busy.has(key)) return; busy.add(key); try { r
 let keysOn = store.get('board-keys') !== 'off';
 
 // ---------- events (delegated) ----------
-function focusCard(id) { document.querySelector(`.card[data-id="${id}"]`)?.focus({ preventScroll: true }); }
 // Moving a task to Claimed / In progress without an owner asks who it is for, under its card (both views: pre keeps
 // the 3D card's focus keys apart).
 function moveAskHtml(t, pre = '') {
@@ -134,16 +133,25 @@ document.addEventListener('click', (ev) => {
   const d = el.dataset;
   if (el.classList.contains('card')) return openTask(Number(d.id));
   if (d.move) { const id = Number(d.move); ui.moveMenu = ui.moveMenu === id ? null : id; snapCards(redrawTasks); return (ui.moveMenu ? document.querySelector(`.card[data-id="${id}"] .mvmenu button`) : document.querySelector(`[data-fk="mv-${id}"]`))?.focus({ preventScroll: true }); }
-  if (d.moveTo) { const id = Number(d.moveId); const t = taskById(id); ui.moveMenu = null; if (t && t.status !== d.moveTo) moveTask(t, d.moveTo); render(); return ui.moveAsk?.id === id ? document.querySelector(`.card[data-id="${id}"] .mvask button`)?.focus({ preventScroll: true }) : focusCard(id); }
+  if (d.moveTo) { const id = Number(d.moveId); const t = taskById(id); ui.moveMenu = null; if (t && t.status !== d.moveTo) moveTask(t, d.moveTo); render(); return ui.moveAsk?.id === id ? document.querySelector(`.card[data-id="${id}"] .mvask button`)?.focus({ preventScroll: true }) : focusTask(id); }
   if (d.askTo) { const id = Number(d.askId); const t = taskById(id); const { to, force } = ui.moveAsk || {}; ui.moveAsk = null; if (t && to) moveTask(t, to, { force, assignee: d.askTo }); render(); return focusTask(id); }
   if (d.askCancel) { const id = Number(d.askCancel); ui.moveAsk = null; snapCards(redrawTasks); return focusTask(id); }
   if (d.release) { const t = taskById(Number(d.release)); if (t) { moveTask(t, 'open'); render(); } return; }
-  if (d.approve) { const id = Number(d.approve); act(api(`/tasks/${id}/decide`, { method: 'POST', body: JSON.stringify({ approve: true }) }), `Approved #${id}: agents can claim it now`).then(() => focusCard(id)).catch(() => {}); return; }
+  if (d.approve) {
+    // The server says when the freeze (or the demo time having passed) keeps agents from claiming it (freeze_note).
+    const id = Number(d.approve);
+    api(`/tasks/${id}/decide`, { method: 'POST', body: JSON.stringify({ approve: true }) })
+      .then(async (r) => { toast(r?.freeze_note ? `Approved #${id}. ${r.freeze_note}` : `Approved #${id}: agents can claim it now`); await load(); focusTask(id); }, (e) => toast(e.message, true));
+    return;
+  }
   if (d.reject) { ui.rejecting = Number(d.reject); snapCards(redrawTasks); return $('rj-' + d.reject)?.focus(); }
   if (d.rejectNo) return cancelReject();
   if (d.limit) { ui.limitForm = d.limit; render(); return $('lu-' + d.limit)?.focus(); }
   if (d.limcancel) { const n = d.limcancel; ui.limitForm = null; render(); return document.querySelector(`[data-fk="lm-${CSS.escape(n)}"]`)?.focus(); }
   if (d.unlimit) { const n = d.unlimit; act(api(`/agents/${encodeURIComponent(n)}`, { method: 'PATCH', body: JSON.stringify({ limited: false }) }), `${n} counts as available again`).catch(() => {}); return; }
+  // Needs attention after the demo time: the Demo popover (move it), or remove it.
+  if (d.go === 'demo') return doAct('clock', el);
+  if (d.go === 'dl-clear') return doAct('dl-clear', el);
   if (d.go === 'ci') { const n = $('ci-note'); n.scrollIntoView({ behavior: smooth(), block: 'center' }); return (n.querySelector('a') || n).focus({ preventScroll: true }); }
   if (d.go === 'proposed') return goCards((t) => t.status === 'proposed', '.card.proposed');
   if (d.ping) {
