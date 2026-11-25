@@ -119,10 +119,17 @@ export async function launchBrowser({ office = false, ...opts } = {}) {
   const browser = await puppeteer.launch({ headless: true, ...opts, args, executablePath: findBrowser() });
   browsers.add(browser);
   browser.once('disconnected', () => browsers.delete(browser));
+  // Downloads (Download summary/export, a test clicking them) go to a temp folder of this suite, deleted when it ends,
+  // never the user's own Downloads folder: in the default context and in every context made later.
+  // browser.downloadDir is that folder, for a suite that checks what was saved.
+  browser.downloadDir = tempDir('agent-board-downloads-');
+  const cdp = await browser.target().createCDPSession();
+  const keepDownloads = (browserContextId) => cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: browser.downloadDir, ...(browserContextId ? { browserContextId } : {}) });
+  await keepDownloads();
   const mouse = (target) => { const np = target.newPage.bind(target); target.newPage = async (...a) => pinMouse(await np(...a)); return target; };
   mouse(browser);
   const cbc0 = browser.createBrowserContext.bind(browser);
-  browser.createBrowserContext = async (...a) => mouse(await cbc0(...a));
+  browser.createBrowserContext = async (...a) => { const ctx = await cbc0(...a); await keepDownloads(ctx.id); return mouse(ctx); };
   // The board turns the live 3D office on by default (wherever WebGL runs, software WebGL included). Most suites test
   // the board itself, so their pages start with 3D off, as if the switch had been turned off; a suite that tests the
   // office passes { office: true } (or sets 'agent-board-3d' itself).
