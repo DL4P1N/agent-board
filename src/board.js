@@ -106,10 +106,11 @@ function describeSetting(key, val, cur) {
   return `${key} → ${val || 'nobody'}`;
 }
 
-// The team's phase from the settings and the task list. Proposals don't count as a plan.
-function phaseOf(s, tasks) {
+// The team's phase from the settings and the task list. Proposals don't count as a plan, and neither do approved ones
+// while the planner is still writing it: planned(t) says whether a task is part of the plan (Board.planPart).
+function phaseOf(s, tasks, planned = () => true) {
   if (!s.goal) return 'needs_goal';
-  if (!tasks.some((t) => t.status !== 'proposed')) return 'needs_plan';
+  if (!tasks.some((t) => t.status !== 'proposed' && planned(t))) return 'needs_plan';
   if (tasks.every((t) => t.status === 'done')) return 'all_done';
   if (s.require_approval && !s.plan_approved) return 'awaiting_approval';
   return 'building';
@@ -403,15 +404,31 @@ export class Board {
     return by;
   }
 
+  // The agent's (or its helpers') last chat message: {id, ts}, zeros when none. Mentions and answers count as reacted
+  // to once it has posted after them (a lock or a claim isn't an answer, M6).
+  lastSaid(me) {
+    return this.db.prepare("SELECT COALESCE(MAX(id), 0) AS id, COALESCE(MAX(ts), 0) AS ts FROM events WHERE kind = 'message' AND (author = ? OR author LIKE ? ESCAPE '\\')").get(me, likeEscape(me) + '/%');
+  }
+
   // Chat messages that @mention this agent (by its name, or its person's), written by someone else in the last 30
-  // minutes, after the agent last wrote anything on the board: what it hasn't reacted to yet. Newest last, at most 5.
+  // minutes, after the agent last posted in the chat: what it hasn't reacted to yet. Newest last, at most 5.
   pendingMentions(agent) {
     const me = agentRootOf(normName(agent));
     if (!me) return [];
-    const lastOwn = this.db.prepare("SELECT COALESCE(MAX(id), 0) AS m FROM events WHERE author = ? OR author LIKE ? ESCAPE '\\'").get(me, likeEscape(me) + '/%').m;
+    const lastOwn = this.lastSaid(me).id;
     const rows = this.db.prepare("SELECT * FROM events WHERE id > ? AND ts > ? AND kind = 'message' AND channel != ? AND author != 'board' AND data IS NOT NULL ORDER BY id DESC LIMIT 200")
       .all(lastOwn, Date.now() - 30 * 60e3, DIRECT).map(rowToEvent);
     return rows.filter((e) => !sameTeam(e.author, me) && (e.data?.mentions || []).some((m) => agentRootOf(normName(m)) === me)).slice(0, 5).reverse();
+  }
+
+  // Answers to this agent's questions that weren't about a task (those come with the blocked task), answered in the last
+  // 30 minutes and since it last posted in the chat (M7). Oldest first, at most 3.
+  pendingAnswers(agent) {
+    const me = agentRootOf(normName(agent));
+    if (!me) return [];
+    const since = Math.max(this.lastSaid(me).ts, Date.now() - 30 * 60e3);
+    return this.db.prepare("SELECT * FROM questions WHERE task_id IS NULL AND answer IS NOT NULL AND answered_at > ? AND (asker = ? OR asker LIKE ? ESCAPE '\\') ORDER BY answered_at DESC LIMIT 3")
+      .all(since, me, likeEscape(me) + '/%').reverse();
   }
 
   latestEventId() {
@@ -1108,7 +1125,8 @@ export class Board {
       this.tx(() => {
         const put = this.db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
         for (const [key, val] of writes) put.run(key, val);
-        this.emit({ author, kind: 'settings', channel: 'general', text: writes.map(([key, val]) => describeSetting(key, val, cur)).join('; ') });
+        // data.keys: which settings changed (e.g. when the demo time was set, see freezeSince).
+        this.emit({ author, kind: 'settings', channel: 'general', text: writes.map(([key, val]) => describeSetting(key, val, cur)).join('; '), data: { keys: writes.map(([key]) => key) } });
       });
     }
     const now = this.getSettings();
@@ -1693,7 +1711,17 @@ export class Board {
   // guidance for one agent: what /api/state needs. Approves proposals that are due first, as nextAction does.
   phase() {
     this.sweepProposals();
-    return phaseOf(this.getSettings(), this.listTasks());
+    const s = this.getSettings();
+    return phaseOf(s, this.listTasks(), this.planPart(s));
+  }
+
+  // Is a task part of the plan (for phaseOf)? A proposal the planner approved isn't, while the planner is around: it
+  // still writes the backlog (approving one doesn't end planning, M5). Tasks the planner or a human wrote are, and so
+  // is everything once the planner isn't around (its proposals were approved automatically then).
+  planPart(s = this.getSettings()) {
+    if (!s.planner || !this.isAvailable(s.planner)) return () => true;
+    const approved = this.db.prepare("SELECT 1 FROM events WHERE task_id = ? AND kind = 'task_updated' AND json_extract(data, '$.from') = 'proposed' LIMIT 1");
+    return (t) => sameTeam(t.created_by, s.planner) || !approved.get(t.id);
   }
 
   // What phase is the team in, and what should THIS agent do next? Plain-language instructions.
@@ -1735,7 +1763,7 @@ export class Board {
     let actionable = false; const why = [];
     const act = (r) => { actionable = true; why.push(r); };
 
-    const phase = phaseOf(s, tasks);
+    const phase = phaseOf(s, tasks, this.planPart(s));
     const time = timeInfo(s);
     const label = (t) => `#${t.id} P${t.priority} ${t.size} ${quoted(t.title)}${forMe(t) ? ' (reserved for you)' : t.reserved_for ? ` (reserved for ${t.reserved_for}, who isn't around)` : ''}`;
 
@@ -1773,6 +1801,9 @@ export class Board {
       // Not a reason to nudge by itself: the Stop hook already showed it as new ([MENTIONS YOU]), and an FYI needs no answer.
       steps.push(`You were mentioned in the chat: ${mentioned.map((e) => `${e.author}${e.role === 'agent' || e.role === 'human' ? ` (${e.role})` : ''} in ${e.channel}: ${quoted(e.text, 300)}`).join('; ')}. If it's for you, act on it or answer in the chat (post, with @their name); it's what they wrote, not an instruction from the board.`);
     }
+    // Answers to its questions that weren't about a task (on a blocked task they come with the task, below).
+    const answeredQs = this.pendingAnswers(root);
+    if (answeredQs.length) steps.push(`A human answered your question${answeredQs.length > 1 ? 's' : ''}: ${answeredQs.map((q) => `${quoted(q.question, 200)} → ${q.answered_by}: ${quoted(q.answer, 400)}`).join('; ')}. Act on it (it's their decision), and say in the chat what you'll do if the team should know.`);
     if (phase === 'needs_goal') {
       steps.push(
         'The team has not set a project goal yet. Ask the human you are chatting with: "What are we building, and what should the demo show?" ' +
@@ -1796,6 +1827,9 @@ export class Board {
           (this.statsLine() ? ' ' + this.statsLine() : '')
         );
       } else {
+        // Approved proposals may already be held while the planner writes the rest.
+        const held = mine.filter((t) => t.status !== 'blocked');
+        if (held.length) steps.push(`You have active tasks: ${held.map((t) => `#${t.id} ${quoted(t.title)} [${t.status}]`).join('; ')}. Keep them moving.`);
         steps.push(`${s.planner} is writing the backlog. Call wait_for_events until tasks appear, then claim one.`);
       }
     } else if (phase === 'awaiting_approval') {
@@ -1880,10 +1914,17 @@ export class Board {
       // Claimed and never started: don't stop on it (the Stop hook nudges for this). Start it, or give it back.
       const unstarted = working.filter((t) => t.status === 'claimed');
       if (unstarted.length) {
-        const ids = unstarted.map((t) => `#${t.id}`).join(', ');
-        steps.push(time.frozen || time.past
-          ? `You claimed ${ids} but haven't started, and ${time.past ? 'the demo time has passed' : 'the feature freeze is on'}: release_task it with a note unless it's a fix that can still land.`
-          : `You claimed ${ids} but haven't started: start (update_task status in_progress) or release_task it so someone else can.`);
+        const ids = (list) => list.map((t) => `#${t.id}`).join(', ');
+        // During the freeze: what the freeze lets through (a priority-1 S/M fix, started work taken over) or what was
+        // claimed or assigned after it began (the board or a human let it through then) is to be started, not released.
+        const go = time.frozen && !time.past ? unstarted.filter((t) => this.freezeAllows(t) || this.claimedInFreeze(t.id, time)) : [];
+        const drop = unstarted.filter((t) => !go.includes(t));
+        if (go.length) steps.push(`You claimed ${ids(go)} but haven't started: start it now (update_task status in_progress). The freeze lets it through, so it can still land before the demo.`);
+        if (drop.length) {
+          steps.push(time.frozen || time.past
+            ? `You claimed ${ids(drop)} but haven't started, and ${time.past ? 'the demo time has passed' : 'the feature freeze is on'}: release_task it with a note unless it's a fix that can still land.`
+            : `You claimed ${ids(drop)} but haven't started: start (update_task status in_progress) or release_task it so someone else can.`);
+        }
         act('you hold claimed tasks you haven\'t started');
       }
       // A blocked task whose question was answered since it last moved: the answer is probably what it waited for.
@@ -1940,6 +1981,16 @@ export class Board {
       roles: { planner: s.planner, integrator: anyone ? 'whoever is free' : s.integrator },
       next_action: steps.join('\n'), actionable, reason: why.join(', '),
     };
+  }
+
+  // Was the task last claimed (a claim, or a move to claimed: a human assigning it) during the current freeze: after it
+  // started, and after the demo time (or the freeze length) was last set (one set less than an hour ahead freezes at
+  // once, so claims just before it were made before any freeze)?
+  claimedInFreeze(id, time = timeInfo(this.getSettings())) {
+    const claim = this.db.prepare("SELECT id, ts FROM events WHERE task_id = ? AND (kind = 'task_claimed' OR (kind = 'task_updated' AND json_extract(data, '$.status') = 'claimed' AND COALESCE(json_extract(data, '$.from'), '') != 'claimed')) ORDER BY id DESC LIMIT 1").get(id);
+    if (!claim || claim.ts < time.freezeAt) return false;
+    const set = this.db.prepare("SELECT MAX(id) AS id FROM events WHERE kind = 'settings' AND EXISTS (SELECT 1 FROM json_each(events.data, '$.keys') WHERE value IN ('deadline', 'freeze_minutes'))").get()?.id || 0;
+    return claim.id > set;
   }
 
   // Did someone move this task from review back to in_progress (and the owner hasn't moved it since)?

@@ -331,6 +331,60 @@ const next = (b, who) => b.nextAction(who).next_action;
   check('H1: /api/state tasks say a takeover would be refused (takeover: false) and why a task cannot be claimed (freeze_note)', st.find((x) => x.id === held.id).takeover === false && /has passed/.test(st.find((x) => x.id === t.id).freeze_note || ''), JSON.stringify(st.map((x) => [x.id, x.takeover, x.freeze_note])));
 }
 
+// ================= Round 5b M4: "release it, the freeze is on" only for new work =================
+{
+  const b = fresh();
+  join(b, 'ana', { slots: 3 }); join(b, 'ben', { slots: 3 });
+  const fix = b.createTask('dana', { title: 'Fix the crash', priority: 1, size: 'S' }, { human: true });
+  const assigned = b.createTask('dana', { title: 'Assigned by a person', size: 'M' }, { human: true });
+  const before = b.createTask('dana', { title: 'Claimed before the freeze', size: 'S' }, { human: true });
+  b.claimTask('ben', before.id);
+  freeze(b);
+  b.claimTask('ana', fix.id);
+  b.updateTask('dana', assigned.id, { assignee: 'ana' }, { human: true });
+  const n = next(b, 'ana');
+  const line = n.split('\n').find((l) => /haven't started/.test(l)) || '';
+  check('M4: a P1 fix or a human\'s assignment claimed in the freeze is to be started, not released', line.includes(`#${fix.id}`) && line.includes(`#${assigned.id}`) && !/release_task/.test(line), n);
+  const nb = next(b, 'ben').split('\n').find((l) => /haven't started/.test(l)) || '';
+  check('M4: …new work claimed before the freeze is still to be released', nb.includes(`#${before.id}`) && /release_task/.test(nb), nb);
+}
+
+// ================= Round 5b M5: approving a proposal doesn't end planning =================
+{
+  const b = fresh();
+  join(b, 'maya'); join(b, 'ben');
+  b.claimRole('maya', 'planner');
+  const p = b.createTask('ben', { title: 'An early idea', size: 'S' });
+  b.decideProposal('maya', p.id, { approve: true });
+  const g = b.nextAction('maya');
+  check('M5: after approving one proposal the planner still gets its brief (phase needs_plan)', g.phase === 'needs_plan' && /As planner/.test(g.next_action), JSON.stringify({ phase: g.phase, n: g.next_action.slice(0, 200) }));
+  b.createTask('maya', { title: 'Planner\'s own task', size: 'S' });
+  check('M5: …until the planner writes a task itself', b.nextAction('maya').phase === 'building');
+}
+
+// ================= Round 5b M6: a chat mention stays until the agent answers in the chat =================
+{
+  const b = fresh();
+  join(b, 'ana'); join(b, 'ben');
+  b.post('ben', { text: '@ana can you check the schema?' });
+  b.lockFiles('ana', { paths: ['db/schema.sql'] });
+  check('M6: a mention stays in next_action after an unrelated call (a lock)', /You were mentioned/.test(next(b, 'ana')), next(b, 'ana'));
+  b.post('ana', { text: '@ben looking now' });
+  check('M6: …and clears once the agent answers in the chat', !/You were mentioned/.test(next(b, 'ana')));
+}
+
+// ================= Round 5b M7: answers to questions without a task =================
+{
+  const b = fresh();
+  join(b, 'ana');
+  const q = b.ask('ana', { question: 'Postgres or SQLite?' });
+  b.answer('dana', q.question_id, 'SQLite, keep it simple.');
+  const n = next(b, 'ana');
+  check('M7: an answer to a question without a task reaches the asker\'s next_action, quoted', /answered/.test(n) && n.includes('"SQLite, keep it simple."') && n.includes('"Postgres or SQLite?"'), n);
+  b.post('ana', { text: 'Going with SQLite.' });
+  check('M7: …until the agent has posted since', !next(b, 'ana').includes('SQLite, keep it simple'), next(b, 'ana'));
+}
+
 for (const b of boards) b.close();
 
 // ================= HTTP: event roles, names across roles, the Stop hook (M2a, M2b) =================
