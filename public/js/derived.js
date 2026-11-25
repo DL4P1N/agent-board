@@ -198,8 +198,8 @@ function setupInfoFresh() {
 }
 // Online as the server sees it (its presence row) when there is one; recent board events otherwise.
 const agentLive = (a) => { const p = (state.presence || []).find((x) => x.kind === 'agent' && String(x.name).toLowerCase() === a.name); return p ? !!p.online : a.online; };
-// The host chose "No demo time" in step 2 (this browser only).
-const dlSkipped = () => store.get('board-dl-skip') === '1';
+// The humans chose "No demo time" (a board setting, so a teammate's goal save doesn't put a suggested time back).
+const dlSkipped = () => state.settings.no_deadline === '1';
 // Open until it's done, unless closed (remembered); opened again for this visit only (ui.forceSetup).
 function setupOpen(complete) { if (ui.forceSetup) return true; return !complete && store.get('board-setup') !== 'closed'; }
 // Setup is a panel above the board on the Board view and a popover under the top bar in the 3D view, open or closed

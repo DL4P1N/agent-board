@@ -23,9 +23,10 @@ const ACTIVITY_MS = 30 * 60 * 1000;
 // A task in review this long with nobody on it (no claim_review) is "stalled": the web board flags it, and during the
 // feature freeze any agent may take it.
 const REVIEW_STALL_MIN = 10;
-const HUMAN_ONLY = ['deadline', 'freeze_minutes', 'require_approval', 'plan_approved', 'planner_extra'];
-const SETTING_KEYS = ['goal', 'repo', 'integrator', 'planner', 'deadline', 'freeze_minutes', 'require_approval', 'plan_approved', 'planner_extra'];
-const DEFAULT_SETTINGS = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '', planner_extra: '2' };
+// no_deadline: the humans chose "No demo time" (the web board stops suggesting one, for everyone).
+const HUMAN_ONLY = ['deadline', 'freeze_minutes', 'require_approval', 'plan_approved', 'planner_extra', 'no_deadline'];
+const SETTING_KEYS = ['goal', 'repo', 'integrator', 'planner', 'deadline', 'freeze_minutes', 'require_approval', 'plan_approved', 'planner_extra', 'no_deadline'];
+const DEFAULT_SETTINGS = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '', planner_extra: '2', no_deadline: '' };
 // settings.integrator = ANYONE: any free agent may take a task in review and merge it.
 export const ANYONE = '*';
 // The channel of direct messages: one thread per agent, plus the planner's thread (DIRECT_PLANNER).
@@ -115,6 +116,7 @@ function describeSetting(key, val, cur) {
   if (key === 'require_approval') return val ? 'turned on plan approval: agents wait for a human OK before starting tasks' : 'turned off plan approval';
   if (key === 'plan_approved') return val ? 'approved the task list: agents can start' : 'withdrew approval of the task list';
   if (key === 'integrator') return val === ANYONE ? 'integrator → whoever is free (any agent with room merges reviewed work)' : `integrator → ${val || 'nobody (the first agent with work in review takes it)'}`;
+  if (key === 'no_deadline') return val ? 'chose no demo time: no countdown or feature freeze' : 'a demo time may be suggested again';
   if (key === 'planner_extra') return `the planner may take up to ${val} extra task(s) with subagents when nobody else is free`;
   return `${key} → ${val || 'nobody'}`;
 }
@@ -1168,7 +1170,7 @@ export class Board {
         val = String(t);
       }
       if (key === 'freeze_minutes') val = String(Math.max(0, Math.min(600, Math.round(Number(val) || 0))));
-      if (key === 'require_approval' || key === 'plan_approved') val = /^(1|true|yes|on)$/i.test(val) ? '1' : '';
+      if (key === 'require_approval' || key === 'plan_approved' || key === 'no_deadline') val = /^(1|true|yes|on)$/i.test(val) ? '1' : '';
       if (val === cur[key]) continue;
       if (!human && key === 'goal' && cur.goal) throw new Error(`The goal is already set: "${cur.goal}". Only humans can change it (on the web board).`);
       writes.push([key, val]);

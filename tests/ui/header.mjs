@@ -62,12 +62,17 @@ try {
   // No demo time: the field is left empty and Save keeps it that way; with Setup closed the strip then doesn't ask for it.
   await page.click('[data-act="goal-edit"]'); await sleep(200);
   await page.click('[data-fk="dl-clear"]');
-  await page.waitForFunction(() => !Number(state.settings.deadline) && !!document.querySelector('[data-fk="dl-skip"]'), { timeout: 5000 });
-  await page.click('[data-fk="dl-skip"]'); await sleep(200);
-  check('ONB-2 "No demo time" empties the field', await page.evaluate(() => $('dl-in').value === ''));
+  // Removing it is the board's choice too (M10 of round 5b): the field empties and no time is suggested again.
+  const rm = await page.waitForFunction(() => !Number(state.settings.deadline) && state.settings.no_deadline === '1' && $('dl-in')?.value === '' && !document.querySelector('[data-fk="dl-skip"]'), { timeout: 5000 }).then(() => true, () => false);
+  check('ONB-2 "Remove the demo time" empties the field and suggests none again', rm);
+  await rest('dana', '/settings', 'PUT', { no_deadline: '' }); await page.evaluate(() => load());
+  await page.waitForFunction(() => !!document.querySelector('[data-fk="dl-skip"]'), { timeout: 5000 });
+  await page.click('[data-fk="dl-skip"]'); await sleep(300);
+  check('ONB-2 "No demo time" empties the field', await page.evaluate(() => $('dl-in').value === '' && state.settings.no_deadline === '1'));
   await page.click('[data-fk="goal-save"]'); await sleep(500);
   check('ONB-2 saved without a demo time', !Number((await rest('dana', '/state')).settings.deadline) && /no demo time/.test(await txt('#step-goal')), await txt('#step-goal'));
-  await page.evaluate(() => { localStorage.removeItem('board-dl-skip'); localStorage.setItem('board-setup', 'closed'); ui.forceSetup = false; render(); }); await sleep(200);
+  await rest('dana', '/settings', 'PUT', { no_deadline: '' });
+  await page.evaluate(() => { localStorage.setItem('board-setup', 'closed'); ui.forceSetup = false; return load(); }); await sleep(200);
   check('ONB-2 Setup closed, no demo time: the strip asks for it', /Set the demo time so agents stop on time/.test(await txt('#nyou .also')), await txt('#nyou'));
   await page.click('#nyou .also [data-act="clock"]'); await sleep(400);
   check('ONB-2 the hint opens the demo time under the Demo chip, focus in its field', await page.evaluate(() => document.activeElement?.id === 'o-dl-in' && !$('o-dl').hidden));

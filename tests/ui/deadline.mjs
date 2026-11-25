@@ -225,8 +225,8 @@ try {
   await np.close();
 
   // ================= UM9: the suggested demo time saved with the goal =================
-  await settings({ deadline: '' });
-  await page.evaluate(() => { localStorage.removeItem('board-dl-skip'); document.querySelectorAll('#toasts > *').forEach((t) => t.remove()); });
+  await settings({ deadline: '', no_deadline: '' });
+  await page.evaluate(() => { document.querySelectorAll('#toasts > *').forEach((t) => t.remove()); });
   await reload(page);
   await page.evaluate(() => goStep('goal', 'dl')); await sleep(400);
   await clickStill(page, '[data-fk="goal-save"]');
@@ -236,8 +236,21 @@ try {
   await page.evaluate(() => [...document.querySelectorAll('#toasts .toast button')].find((b) => /No demo time/.test(b.textContent))?.click());
   await until(page, () => document.getElementById('clock').classList.contains('unset'));
   const unS = await rest(board, 'dana', '/state');
-  check('UM9 and that button takes the demo time back (no countdown), and stops suggesting one', !Number(unS.settings.deadline) && await page.evaluate(() => localStorage.getItem('board-dl-skip') === '1'), JSON.stringify(unS.settings.deadline));
-  await page.evaluate(() => localStorage.removeItem('board-dl-skip'));
+  check('UM9 and that button takes the demo time back (no countdown), and stops suggesting one', !Number(unS.settings.deadline) && unS.settings.no_deadline === '1', JSON.stringify([unS.settings.deadline, unS.settings.no_deadline]));
+  // M10 (round 5b): "No demo time" is the board's, not this browser's: a teammate's page doesn't suggest a time, and
+  // their goal save doesn't put one back.
+  {
+    const tp = await browser.newPage(); watch(tp);
+    await tp.evaluateOnNewDocument(() => { try { localStorage.setItem('board-token', 'testtok'); localStorage.setItem('board-name', 'erin'); } catch {} });
+    await tp.goto(BASE + '/'); await tp.waitForFunction(() => document.getElementById('conn').classList.contains('live'), { timeout: 5000 });
+    await tp.evaluate(() => goStep('goal', 'dl')); await sleep(400);
+    const tf = await tp.evaluate(() => ({ dl: $('dl-in')?.value, skip: !!document.querySelector('[data-act="dl-skip"]'), sum: document.querySelector('#step-goal .step-s')?.textContent }));
+    await clickStill(tp, '[data-fk="goal-save"]'); await sleep(500);
+    const ts = await rest(board, 'dana', '/state');
+    check('M10 a teammate\'s step 2 suggests no demo time after "No demo time", and their goal save keeps it unset', tf.dl === '' && !tf.skip && !Number(ts.settings.deadline), JSON.stringify({ ...tf, deadline: ts.settings.deadline }));
+    await tp.close();
+  }
+  await settings({ no_deadline: '' });
 
   // ================= the Demo popover: a time inside the freeze window =================
   await page.evaluate(() => { localStorage.setItem('board-setup', 'closed'); ui.forceSetup = false; render(); }); await sleep(150);

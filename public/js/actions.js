@@ -470,9 +470,12 @@ function doAct(a, el) {
   if (a === 'rotate-yes') return rotateToken();
   if (a === 'sec-go') { const b = document.querySelector('[data-fk="rot"], [data-fk="rot-no"]'); b?.scrollIntoView({ behavior: smooth(), block: 'center' }); return b?.focus({ preventScroll: true }); }
   if (a === 'dl-skip') {
-    store.set('board-dl-skip', '1'); render(); if ($('dl-in')) $('dl-in').value = '';
-    toast('No demo time: no countdown or feature freeze. Set one any time in step 2.');
-    return document.querySelector('[data-fk="goal-save"], [data-fk="sh-goal"]')?.focus({ preventScroll: true });
+    // For the whole board: nobody's step 2 suggests a time again (the field empties; what else was typed stays).
+    return api('/settings', { method: 'PUT', body: JSON.stringify({ no_deadline: true }) }).then((st) => {
+      state.settings = st; if ($('dl-in')) $('dl-in').value = ''; render(); scheduleReload();
+      toast('No demo time: no countdown or feature freeze. Set one any time in step 2.');
+      document.querySelector('[data-fk="goal-save"], [data-fk="sh-goal"]')?.focus({ preventScroll: true });
+    }).catch((e) => toast(e.message, true));
   }
   if (a === 'other-tools') { ui.otherTools = !ui.otherTools; renderSetup(setupInfo()); return document.querySelector('[data-fk="other-tools"]')?.focus({ preventScroll: true }); }
   // Setup's step 4 points to where the planner is chosen: the Roles chip (the Planner chip from 1600px).
@@ -487,13 +490,14 @@ function doAct(a, el) {
   if (a === 'o-goal-cancel') { dropDrafts($('o-goal-b')); ui.oGoalEdit = false; ui.goalErr = ''; renderDocks(); return document.querySelector('[data-fk="o-goal-edit"]')?.focus(); }
   // The toast after step 2 saved the suggested demo time: take it back, and don't suggest one again.
   if (a === 'dl-skip-saved') {
-    return api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: '' }) }).then((st) => {
-      state.settings = st; store.set('board-dl-skip', '1'); render(); scheduleReload();
+    return api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: '', no_deadline: true }) }).then((st) => {
+      state.settings = st; render(); scheduleReload();
       toast('No demo time: no countdown or feature freeze. Set one any time in step 2.');
     }).catch((e) => toast(e.message, true));
   }
   if (a === 'dl-clear') {
-    return api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: '' }) }).then((st) => {
+    // Removed on purpose: nobody's step 2 suggests one again either.
+    return api('/settings', { method: 'PUT', body: JSON.stringify({ deadline: '', no_deadline: true }) }).then((st) => {
       state.settings = st; ui.dlErr = ''; dropDrafts($('o-dl-b')); toast('Demo time removed. No countdown or feature freeze.');
       if (ui.oDl) { ui.oDl = false; render(); scheduleReload(); return $('clock').hidden ? focusNow() : $('clock').focus(); }
       render(); scheduleReload();
