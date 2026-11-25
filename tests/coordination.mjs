@@ -231,6 +231,77 @@ const next = (b, who) => b.nextAction(who).next_action;
   check('H3: …and claim_review lets it take the review', !r && b.getTask(t0.id).reviewer === 'bo', r);
 }
 
+// ================= Round 5b M3: the integrator doesn't merge its own work while others can =================
+{
+  const b = fresh();
+  join(b, 'lin'); join(b, 'kai');
+  const own = b.createTask('dana', { title: 'Routes', size: 'S' }, { human: true });
+  b.claimTask('lin', own.id); b.updateTask('lin', own.id, { status: 'in_progress' });
+  b.claimRole('lin', 'integrator');
+  b.updateTask('lin', own.id, { status: 'review' });
+  const done = refusal(() => b.updateTask('lin', own.id, { status: 'done' }));
+  check('M3: the integrator can\'t mark its own task done while another agent is online', /claim_review/.test(done) && b.getTask(own.id).status === 'review', done);
+  const nl = b.nextAction('lin').next_action;
+  check('M3: …its next_action doesn\'t list its own task to merge', !/Merge first: #/.test(nl), nl);
+  const nk = b.nextAction('kai');
+  check('M3: another agent is offered the integrator\'s own task to review', nk.actionable && nk.next_action.includes(`#${own.id}`) && /claim_review/.test(nk.next_action), JSON.stringify(nk));
+  const cr = refusal(() => b.claimReview('kai', own.id));
+  check('M3: …and may take it with claim_review although lin is the integrator', !cr && b.getTask(own.id).reviewer === 'kai', cr);
+  check('M3: …then merge it', !refusal(() => b.updateTask('kai', own.id, { status: 'done' })) && b.getTask(own.id).status === 'done');
+  const pb = fs.readFileSync(path.join(ROOT, 'templates', 'playbook.md'), 'utf8');
+  check('M3: the playbook no longer tells the author to claim the integrator role for its own work', !/first agent with work in review calls `claim_role\("integrator"\)`/.test(pb) && /integrator[^.\n]*own (task|work)/i.test(pb), '');
+}
+{
+  const b = fresh();
+  join(b, 'ana');
+  b.createTask('dana', { title: 'Anything', size: 'S' }, { human: true });
+  const n = next(b, 'ana');
+  check('M3: next_action\'s no-integrator note agrees with the playbook (not "the first agent with work in review")', /nobody owns main yet/.test(n) && !/first agent with work in review/.test(n), n);
+}
+
+// ================= Round 5b M2: a review nobody takes =================
+{
+  // Alone: the author may merge its own work, and next_action says so (actionable).
+  const b = fresh();
+  join(b, 'ana'); join(b, 'bo');
+  b.setSettings('dana', { integrator: '*' }, { human: true });
+  const t = b.createTask('dana', { title: 'Lonely review', size: 'S' }, { human: true });
+  b.claimTask('ana', t.id); b.updateTask('ana', t.id, { status: 'review' });
+  check('M2: while another agent could review it, the author isn\'t told to merge its own work', !b.nextAction('ana').actionable);
+  b.db.prepare("UPDATE presence_v2 SET last_seen = ? WHERE name = 'bo'").run(Date.now() - 11 * 60e3);
+  const g = b.nextAction('ana');
+  check('M2: once nobody else is around, the author\'s next_action is actionable and names its own task', g.actionable && g.next_action.includes(`#${t.id}`) && /claim_review|merge/.test(g.next_action), JSON.stringify(g));
+}
+{
+  // The freeze opens a review that has waited with nobody on it to anyone, whatever the integrator setting.
+  const b = fresh();
+  join(b, 'ana'); join(b, 'bo'); join(b, 'lin');
+  b.setSettings('dana', { integrator: 'lin' }, { human: true });
+  const t = b.createTask('dana', { title: 'Fix the crash', priority: 1, size: 'S' }, { human: true });
+  b.claimTask('ana', t.id); b.updateTask('ana', t.id, { status: 'review' });
+  freeze(b);
+  // It went to review 15 minutes ago and nobody took it.
+  b.db.prepare("UPDATE events SET ts = ? WHERE task_id = ? AND kind = 'task_updated'").run(Date.now() - 15 * 60e3, t.id);
+  const st = b.reviewState(b.getTask(t.id));
+  check('M2: a review with nobody on it for 10+ min is flagged (review_stalled, review_wait_min)', st.review_stalled === true && st.review_wait_min >= 14, JSON.stringify(st));
+  const inState = b.stateTasks().find((x) => x.id === t.id);
+  check('M2: /api/state tasks carry the flag for the web board', inState.review_stalled === true && inState.review_wait_min >= 14, JSON.stringify(inState));
+  const g = b.nextAction('bo');
+  check('M2: during the freeze another agent is offered a stalled review although lin is the integrator', g.actionable && g.next_action.includes(`#${t.id}`) && /claim_review/.test(g.next_action), JSON.stringify(g));
+  check('M2: …and claim_review lets it', !refusal(() => b.claimReview('bo', t.id)) && b.getTask(t.id).reviewer === 'bo');
+  check('M2: a review someone is on isn\'t stalled', b.reviewState?.(b.getTask(t.id))?.review_stalled === false);
+}
+{
+  // No integrator chosen, in the freeze: claim_review works without taking the role first.
+  const b = fresh();
+  join(b, 'ana'); join(b, 'bo');
+  const t = b.createTask('dana', { title: 'Small fix', priority: 1, size: 'S' }, { human: true });
+  b.claimTask('ana', t.id); b.updateTask('ana', t.id, { status: 'review' });
+  freeze(b);
+  const r = refusal(() => b.claimReview('bo', t.id));
+  check('M2: in the freeze with no integrator chosen, any agent may take a review', !r, r);
+}
+
 // ================= Round 5b H1: after the demo time =================
 {
   const b = fresh();
@@ -256,6 +327,8 @@ const next = (b, who) => b.nextAction(who).next_action;
   b.db.prepare("UPDATE presence_v2 SET last_seen = ? WHERE name = 'ben'").run(Date.now() - 20 * 60e3);
   const take = refusal(() => b.releaseTask('ana', held.id, 'owner offline'));
   check('H1: after the demo time a takeover release is refused (nobody could claim it back)', /demo time/.test(take) && b.getTask(held.id).assignee === 'ben', take);
+  const st = b.stateTasks();
+  check('H1: /api/state tasks say a takeover would be refused (takeover: false) and why a task cannot be claimed (freeze_note)', st.find((x) => x.id === held.id).takeover === false && /has passed/.test(st.find((x) => x.id === t.id).freeze_note || ''), JSON.stringify(st.map((x) => [x.id, x.takeover, x.freeze_note])));
 }
 
 for (const b of boards) b.close();

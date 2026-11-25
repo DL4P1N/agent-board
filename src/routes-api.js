@@ -93,7 +93,8 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
     // Only humans get `setup`: it holds the board token (join commands, web links). Agents and the
     // presenter view must never be able to read it, or every human-only route is one GET away.
     return {
-      tasks: board.listTasks(),
+      // With review_wait_min / review_stalled, freeze_note and takeover where they apply (see board.stateTasks).
+      tasks: board.stateTasks(),
       locks: board.listLocks(),
       questions: board.listQuestions(),
       events: board.recentEvents(200),
@@ -102,7 +103,7 @@ export function mountApiRoutes(api, { board, slug, registry, tokens, isDefault, 
       cursor: board.latestEventId(),
       settings: board.getSettings(),
       phase,
-      // Deadline / feature freeze: {deadline, freezeAt, frozen} (ms), so the page can count down.
+      // Deadline / feature freeze: {deadline, freezeAt, frozen, past, past_demo} (ms), so the page can count down.
       time: timeInfo(board.getSettings()),
       presence: board.presence(onlineHumans()),
       // Which board this is (several can run on one server).

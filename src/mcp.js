@@ -300,7 +300,7 @@ export function buildMcpServer(board, baseAgent, { tokenCurrent = () => true } =
       title: 'Take a review',
       description:
         'Take a task that is in review so you can merge it (atomic: two agents never merge the same task). Not your own work, one review at a time. ' +
-        'Allowed when the integrator setting is "whoever is free", or when you are the integrator. Then review, merge, test, and update_task done, or send it back with update_task status in_progress and what to fix.',
+        'Allowed when the integrator setting is "whoever is free", when you are the integrator, for the integrator\'s own work (it doesn\'t merge that itself), and during the feature freeze for a review nobody is on. Then review, merge, test, and update_task done, or send it back with update_task status in_progress and what to fix.',
       inputSchema: { id: z.number().int(), as: asArg },
     },
     wrap(({ id, as }) => board.claimReview(who(as), id))

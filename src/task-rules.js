@@ -43,7 +43,7 @@ export function claimRefusal({ id, task, reservedElsewhere, waits, capacity, idl
 //   id, task, the requested fields (status, branch, assignee, reserved_for, size, pr_url, force), human;
 //   owner: the asker holds the task (or is on its team); canMerge: the asker merges it (the integrator,
 //   or the agent that took its review); isPlanner; integrator: settings.integrator; anyone: the integrator
-//   is "whoever is free". Lookups: capacity() of the asker, waitingOn() its unfinished dependency ids,
+//   is "whoever is free"; ownIntegrator: the asker is the integrator and holds the task (it doesn't merge its own). Lookups: capacity() of the asker, waitingOn() its unfinished dependency ids,
 //   othersOnline() another agent is online, ownerAway() its owner crashed (stale and offline) or is out
 //   of usage.
 export function updateRefusal(c) {
@@ -90,14 +90,16 @@ function agentChangeRefusal(c, changingStatus) {
   // review it (no other agent online) may the owner mark its own work done; with no integrator chosen yet, another
   // agent takes the role and merges it. (Someone else's task: the ownership check below refuses it.)
   if (owner && changingStatus && status === 'done' && !(task.status === 'review' && canMerge) && c.othersOnline()) {
-    const who = anyone ? 'another agent takes it with claim_review' : integrator ? `${integrator} reviews it` : 'another agent reviews it (nobody owns main yet: the first one free calls claim_role("integrator"))';
+    // The integrator's own work is reviewed by another agent too (claim_review), like with "whoever is free".
+    const open = anyone || c.ownIntegrator;
+    const who = open ? 'another agent takes it with claim_review' : integrator ? `${integrator} reviews it` : 'another agent reviews it (nobody owns main yet: the first one free calls claim_role("integrator"))';
     if (task.status !== 'review') {
       return canMerge
         ? `Move #${id} to review first (update_task status "review"), then merge it and mark it done.`
         : `Move #${id} to review first (update_task status "review", with pr_url if you opened a PR): ${who} and marks it done once it's merged.`;
     }
-    return anyone
-      ? `#${id} is waiting for review: another agent takes it with claim_review and merges it. Carry on with other work.`
+    return open
+      ? `#${id} is waiting for review: another agent takes it with claim_review and merges it${c.ownIntegrator ? ' (the integrator doesn\'t merge its own work while others are online)' : ''}. Carry on with other work.`
       : integrator ? `#${id} is waiting for ${integrator} to review and merge it. Carry on with other work.`
         : `#${id} is waiting for review: nobody owns main yet, so another agent calls claim_role("integrator") and merges it. Carry on with other work.`;
   }

@@ -20,6 +20,9 @@ const NAME_LEASE_MS = 30 * 60 * 1000;
 const ACTIVE_MS = 5 * 60 * 1000;
 // What an agent said it's doing outside board tasks (set_activity) counts for this long.
 const ACTIVITY_MS = 30 * 60 * 1000;
+// A task in review this long with nobody on it (no claim_review) is "stalled": the web board flags it, and during the
+// feature freeze any agent may take it.
+const REVIEW_STALL_MIN = 10;
 const HUMAN_ONLY = ['deadline', 'freeze_minutes', 'require_approval', 'plan_approved', 'planner_extra'];
 const SETTING_KEYS = ['goal', 'repo', 'integrator', 'planner', 'deadline', 'freeze_minutes', 'require_approval', 'plan_approved', 'planner_extra'];
 const DEFAULT_SETTINGS = { goal: '', repo: '', integrator: '', planner: '', deadline: '', freeze_minutes: '60', require_approval: '', plan_approved: '', planner_extra: '2' };
@@ -643,6 +646,21 @@ export class Board {
     return this.db.prepare(sql).all(...args).map((r) => this.withPr(rowToTask(r)));
   }
 
+  // The task list as the web board gets it (/api/state), with what only the server can work out:
+  // - tasks in review: review_since, review_wait_min and review_stalled (reviewState);
+  // - open and proposed tasks the freeze or the demo time keep anyone from claiming: freeze_note, the text agents get;
+  // - tasks someone may take over (stale with the owner offline, or the owner out of usage): takeover, true when it is
+  //   allowed now, false when the freeze or the demo time would refuse it (nobody could claim it again).
+  stateTasks() {
+    const time = timeInfo(this.getSettings());
+    return this.listTasks().map((t) => {
+      const extra = t.status === 'review' ? this.reviewState(t) : {};
+      if (time.frozen && ['open', 'proposed'].includes(t.status)) { const note = this.freezeNote(t); if (note) extra.freeze_note = note; }
+      if (['claimed', 'in_progress', 'blocked'].includes(t.status) && t.assignee && ((t.stale && !this.isOnline(t.assignee)) || this.isLimited(t.assignee))) extra.takeover = !this.claimGate(t);
+      return { ...t, ...extra };
+    });
+  }
+
   withPr(t) {
     return { ...t, pr: (t.pr_url && this.prStatus.get(t.pr_url)) || null };
   }
@@ -772,8 +790,10 @@ export class Board {
     if (assignee !== undefined) assignee = normName(assignee) || null;
     const owner = !!task.assignee && sameTeam(author, task.assignee);
     const s = this.getSettings();
-    // Whoever merges it: the integrator, or (integrator = whoever is free) the agent that took the review.
-    const canMerge = (!!s.integrator && s.integrator !== ANYONE && sameTeam(author, s.integrator)) || (!!task.reviewer && sameTeam(author, task.reviewer));
+    // Whoever merges it: the integrator (not its own work: another agent reviews that, M3), or the agent that took the
+    // review (claim_review).
+    const ownIntegrator = owner && !!s.integrator && s.integrator !== ANYONE && sameTeam(author, s.integrator);
+    const canMerge = (!!s.integrator && s.integrator !== ANYONE && sameTeam(author, s.integrator) && !owner) || (!!task.reviewer && sameTeam(author, task.reviewer));
     // A human changing only the owner moves the task too: handing an open task to an agent claims it for them
     // (with the same checks as a move to claimed, force included), and taking the owner off an active task
     // puts it back to open (its locks freed).
@@ -781,7 +801,7 @@ export class Board {
       : assignee ? (task.status === 'open' ? 'claimed' : undefined)
         : (['claimed', 'in_progress'].includes(task.status) ? 'open' : undefined));
     const refusal = updateRefusal({
-      id, task, status: moveTo, branch, assignee, reserved_for, size, pr_url, force, human, owner, canMerge,
+      id, task, status: moveTo, branch, assignee, reserved_for, size, pr_url, force, human, owner, canMerge, ownIntegrator,
       isPlanner: !!s.planner && sameTeam(author, s.planner), integrator: s.integrator, anyone: s.integrator === ANYONE,
       capacity: () => this.capacity(author),
       waitingOn: () => task.depends_on.filter((d) => { const x = this.getTask(d); return x && x.status !== 'done'; }),
@@ -872,9 +892,12 @@ export class Board {
     if (!task) throw new Error(`task #${id} not found`);
     if (task.status !== 'review') throw new Error(`task #${id} isn't in review (status ${task.status}).`);
     const s = this.getSettings();
-    if (!s.integrator) throw new Error('Nobody merges to main yet: call claim_role("integrator") to take the job (or ask a human to pick "whoever is free" on the web board).');
-    if (s.integrator !== ANYONE && !sameTeam(author, s.integrator) && this.isAvailable(s.integrator)) throw new Error(`${s.integrator} is the integrator and merges reviewed work. Carry on with your own tasks.`);
-    if (s.integrator === ANYONE && !this.mayReview(author, task)) throw new Error('You have no free slot. Leave the review to an agent with room, and finish your own tasks first.');
+    const integrator = !!s.integrator && s.integrator !== ANYONE && sameTeam(author, s.integrator);
+    if (!integrator && !this.reviewOpen(task, s)) {
+      if (!s.integrator) throw new Error('Nobody merges to main yet: call claim_role("integrator") to take the job (or ask a human to pick "whoever is free" on the web board).');
+      throw new Error(`${s.integrator} is the integrator and merges reviewed work. Carry on with your own tasks.`);
+    }
+    if (!integrator && !this.mayReview(author, task)) throw new Error('You have no free slot. Leave the review to an agent with room, and finish your own tasks first.');
     if (task.reviewer && sameTeam(author, task.reviewer)) return { ...task, already: true };
     if (task.reviewer && this.isAvailable(task.reviewer)) throw new Error(`${task.reviewer} is already reviewing #${id}. Pick another review or task.`);
     const others = this.onlineAgents().filter((n) => !sameTeam(n, author));
@@ -887,6 +910,28 @@ export class Board {
       this.emit({ author, kind: 'task_updated', channel: 'tasks', task_id: id, text: `#${id} reviewing to merge${task.pr_url ? ` (${task.pr_url})` : ''}`, data: { status: 'review' } });
       return this.getTask(id);
     });
+  }
+
+  // May any agent take this review (claim_review), whoever the integrator is? With "whoever is free", or a named
+  // integrator who isn't around; the integrator's own work (it doesn't merge that itself while others are online, M3);
+  // and during the feature freeze a review nobody is on: no integrator chosen, or stalled (see reviewState; M2).
+  reviewOpen(task, s = this.getSettings(), time = timeInfo(s)) {
+    if (task?.status !== 'review') return false;
+    if (s.integrator === ANYONE) return true;
+    if (s.integrator && (sameTeam(task.assignee, s.integrator) || !this.isAvailable(s.integrator))) return true;
+    return time.frozen && (!s.integrator || this.reviewState(task).review_stalled);
+  }
+
+  // How long a task has waited in review (since its last move to review), and whether it's stalled: REVIEW_STALL_MIN
+  // or more with nobody on it (nobody took it with claim_review, or whoever did isn't around). A named integrator
+  // merges without claim_review, so its reviews count as stalled too once they wait that long. For the web board.
+  reviewState(task) {
+    if (task?.status !== 'review') return { review_since: null, review_wait_min: null, review_stalled: false };
+    const row = this.db.prepare("SELECT ts FROM events WHERE task_id = ? AND kind = 'task_updated' AND json_extract(data, '$.status') = 'review' AND COALESCE(json_extract(data, '$.from'), '') != 'review' ORDER BY id DESC LIMIT 1").get(task.id);
+    const since = row?.ts ?? task.updated_at;
+    const min = Math.max(0, Math.floor((Date.now() - since) / 60e3));
+    const onIt = !!task.reviewer && this.isAvailable(task.reviewer);
+    return { review_since: since, review_wait_min: min, review_stalled: !onIt && min >= REVIEW_STALL_MIN };
   }
 
   // Humans only (web board): remove a task, its locks, and references to it from other tasks' depends_on.
@@ -1796,20 +1841,32 @@ export class Board {
         else steps.push(`Note: ${line}. Don't build on top of it: pull main once it's green again; if your change broke it, help fix it.`);
       }
 
-      // Merging.
+      // Merging. A review this agent took comes first, whoever the integrator is.
+      if (reviewingNow.length) { steps.push(`You're reviewing ${reviewingNow.map((t) => `#${t.id}`).join(', ')}: finish it (merge, test, update_task done) or send it back with update_task status in_progress and a note saying what to fix.`); act('your review in progress'); }
+      // Reviews any agent may take, whoever the integrator is (reviewOpen), that this agent may take now.
+      const mayTake = reviewable.filter((t) => this.reviewOpen(t, s, time) && this.mayReview(agent, t));
+      const reviewLine = (list) => list.slice(0, 5).map((t) => `#${t.id} ${quoted(t.title)} by ${t.assignee}${t.pr_url ? ' ' + quoted(t.pr_url) : ''}`).join('; ');
       if (isIntegrator) {
+        // Not its own work while others are online (M3), nor what another agent is reviewing.
+        const toMerge = review.filter((t) => (!sameTeam(agent, t.assignee) || !others.length) && (!t.reviewer || sameTeam(agent, t.reviewer) || !this.isAvailable(t.reviewer)));
+        const ownWaiting = review.filter((t) => sameTeam(agent, t.assignee) && others.length);
         steps.push(
-          review.length
-            ? `You own main. Merge first: ${review.map((t) => `#${t.id} (${t.branch}${t.pr_url ? ', ' + t.pr_url : ''})`).join(', ')}. For each: review the diff, wait for checks, merge into main, RUN THE TESTS YOURSELF on the merged result, push, then update_task done. Never merge with failing checks or unresolved "changes requested" (review bots count): send it back with update_task(id, status="in_progress", note="what to fix") and move on to the next one. If you can't run the tests, set the task to blocked with the reason.`
-            : 'You own main. Nothing is waiting in review right now, so work as a worker below and check back when something reaches review.'
+          toMerge.length
+            ? `You own main. Merge first: ${toMerge.map((t) => `#${t.id} (${quoted(t.branch)}${t.pr_url ? ', ' + quoted(t.pr_url) : ''})`).join(', ')}. For each: review the diff, wait for checks, merge into main, RUN THE TESTS YOURSELF on the merged result, push, then update_task done. Never merge with failing checks or unresolved "changes requested" (review bots count): send it back with update_task(id, status="in_progress", note="what to fix") and move on to the next one. If you can't run the tests, set the task to blocked with the reason.`
+            : 'You own main. Nothing is waiting in review for you right now, so work as a worker below and check back when something reaches review.'
         );
-        if (review.length) act('work waiting in review');
+        if (ownWaiting.length) steps.push(`Your own ${ownWaiting.map((t) => `#${t.id}`).join(', ')} in review: another agent reviews and merges it (claim_review). The integrator doesn't merge its own work while others are online.`);
+        if (toMerge.length) act('work waiting in review');
       } else if (anyone) {
-        if (reviewingNow.length) { steps.push(`You're reviewing ${reviewingNow.map((t) => `#${t.id}`).join(', ')}: finish it (merge, test, update_task done) or send it back with update_task status in_progress and a note saying what to fix.`); act('your review in progress'); }
-        else if (reviewable.some((t) => this.mayReview(agent, t))) {
-          steps.push(`Reviews waiting (merging is shared: whoever is free; do these before new tasks): ${reviewable.filter((t) => this.mayReview(agent, t)).slice(0, 5).map((t) => `#${t.id} ${quoted(t.title)} by ${t.assignee}${t.pr_url ? ' ' + t.pr_url : ''}`).join('; ')}. Call claim_review(id), then merge it as the playbook's integrator section says.`);
+        if (!reviewingNow.length && mayTake.length) {
+          steps.push(`Reviews waiting (merging is shared: whoever is free; do these before new tasks): ${reviewLine(mayTake)}. Call claim_review(id), then merge it as the playbook's integrator section says.`);
           act('reviews waiting');
         }
+      } else if (!reviewingNow.length && mayTake.length) {
+        // The integrator's own work, or (feature freeze) a review nobody is on.
+        const why = mayTake.every((t) => s.integrator && sameTeam(t.assignee, s.integrator)) ? `the integrator's own work: ${s.integrator} doesn't merge it itself` : 'feature freeze: nobody is on them, and merging is what matters now';
+        steps.push(`Reviews you may take (${why}): ${reviewLine(mayTake)}. Call claim_review(id), then merge it as the playbook's integrator section says.`);
+        act('reviews waiting');
       } else if (!s.integrator && review.length && (review.some((t) => !sameTeam(agent, t.assignee)) || !others.length)) {
         // Not to the author when the only reviews are its own (it can't merge its own work while others are around).
         steps.push(`${countOf(review.length, 'task is', 'tasks are')} waiting in review and nobody owns main. Call claim_role("integrator"). If you get it, merge them; if not, carry on.`);
@@ -1875,7 +1932,7 @@ export class Board {
     }
     if (time.deadline && !time.frozen && phase !== 'all_done') steps.push(`Demo at ${time.deadlineStamp} (${time.leftLabel} left); feature freeze at ${time.freezeStamp}. Prefer small tasks that can land before the freeze.`);
     if (openQs.length) steps.push(`${countOf(openQs.length, 'question is', 'questions are')} waiting for humans. Don't re-ask them; answers arrive as "answer" events.`);
-    if (!s.integrator && phase === 'building' && role !== 'integrator' && !review.length) steps.push('Note: nobody owns main yet. The first agent with work in review should claim_role("integrator").');
+    if (!s.integrator && phase === 'building' && role !== 'integrator' && !review.length) steps.push('Note: nobody owns main yet. When a teammate\'s work reaches review, claim_role("integrator") and merge it (nobody merges their own work while others are online).');
     if (this.claimGate() && phase === 'building' && why.every((r) => r === 'claimable tasks')) actionable = false;
 
     return {
