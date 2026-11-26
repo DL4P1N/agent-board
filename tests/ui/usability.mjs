@@ -312,7 +312,8 @@ try {
   await p.reload(); await p.waitForFunction(() => document.querySelectorAll('.card').length > 20); await sleep(300);
   let stops = 0; let first = null;
   for (; stops < 80; ) { await p.keyboard.press('Tab'); stops++; const d = await p.evaluate(() => ({ card: document.activeElement?.classList.contains('card'), t: document.activeElement?.textContent.slice(0, 20) })); if (stops === 1) first = d.t; if (d.card) break; }
-  check('B first card within 30 Tab stops (was 39)', stops <= 30, `${stops} stops`);
+  // 32: Needs attention's two resize separators (width, height) are Tab stops before it; the skip link jumps them all.
+  check('B first card within 32 Tab stops (was 39)', stops <= 32, `${stops} stops`);
   await p.reload(); await p.waitForFunction(() => document.querySelectorAll('.card').length > 20); await sleep(300);
   await p.keyboard.press('Tab');
   const sk0 = await p.evaluate(() => document.activeElement?.textContent);

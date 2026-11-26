@@ -1,7 +1,7 @@
 // The panels, the same in both views: folding them to their title bars, the Tasks window's states in 3D (expanded,
 // docked, folded, maximised: oExpand, oApply, oFrame), the top bar's popovers, the docks, and the 3D room's agent picking.
 
-import './office.js';
+import './resize.js';
 import { $, nsKey, oSave, oUi, smooth, state, store, ui } from './state.js';
 import { agentRoot, dropDrafts, esc, glide, hasDraft, nameTag, patch, setText, short, stashDrafts } from './helpers.js';
 import { blockedSplit, inPass, openQuestions, setupInfo, setupShown, timeNow } from './derived.js';
@@ -13,6 +13,7 @@ import { blockedNote } from './tasks.js';
 import { ac, settingsText } from './activity.js';
 import { themePop } from './theme.js';
 import { boardView, office, oRate } from './office.js';
+import { rsOnChange, rsSoon, rsTasksH } from './resize.js';
 
 // ---------- the panels, the same in both views ----------
 // Needs attention (left), Agents, Activity and File locks (right), the top bar with the goal, the demo time under the header
@@ -38,7 +39,7 @@ const oMax = () => (office.dockOnce ? false : typeof oUi.max === 'boolean' ? oUi
 let oMoving = 0, qOutWait = null; // qOutWait: Needs attention folding (oFold)
 function oMotion(run) {
   oMoving++; oRate();
-  return run().then(() => { if (--oMoving) return; oRate(); oFrame(); });
+  return run().then(() => { if (--oMoving) return; oRate(); oFrame(); rsSoon(); });
 }
 // Expanded <-> docked: the board's top stays under the top bar and its bottom edge slides between the foot and the
 // docked window's (its glass covering the room as it goes down, or uncovering it going up); one element, the columns
@@ -94,6 +95,7 @@ function oApply() {
   if (ui.oDl) placePop('o-dl', 'clock', 400);
   syncNeeds();
   frameSoon();
+  rsSoon(); // the dragged sizes, kept inside the room the folds leave (resize.js)
 }
 // The top bar's height, for the CSS of what sits under it (the goal popover, and Setup and the Tasks window with 3D on):
 // kept by a ResizeObserver, so nothing measures it while drawing.
@@ -101,6 +103,7 @@ if ('ResizeObserver' in window) new ResizeObserver(([e]) => $('main').style.setP
 // The camera's framing measures the panels: once per frame at most, when the layout is done anyway.
 let frameReq = 0;
 function frameSoon() { if (!frameReq) frameReq = requestAnimationFrame(() => { frameReq = 0; oFrame(); }); }
+rsOnChange(frameSoon); // a panel resized: the room is framed again
 // The room is framed in the part of the view the docks, the top bar and the Tasks window (or its title bar, under the
 // top bar) leave free: below them, between the side columns (the camera is told the insets).
 let oDockH = 0;
@@ -111,11 +114,12 @@ function oFrame() {
   const R = (...ids) => { const e = ids.map($).find((x) => x && !x.hidden && x.offsetWidth && !x.classList.contains('folded')); return e ? e.getBoundingClientRect() : null; };
   const l = R('o-left'), r = R('o-right', 'o-act', 'o-locks'), t = $('o-tasks').offsetWidth ? $('o-tasks').getBoundingClientRect() : null, top = $('topbar').getBoundingClientRect();
   // Expanded, the board covers the room: it's framed as if docked (as tall as it last was docked, at most 65% of the
-  // room under the top bar and leaving 320px of it, as in office.css), so sliding the board down or up doesn't move the camera.
+  // room under the top bar and leaving 320px of it, as in office.css, or the height its foot was dragged to:
+  // resize.js), so sliding the board down or up doesn't move the camera.
   const covered = t && $('o-tasks').classList.contains('max');
   if (t && !covered) oDockH = t.height;
   const roomH = () => v.bottom - parseFloat(getComputedStyle($('main')).getPropertyValue('--edge')) - t.top;
-  const dockBottom = () => t.top + Math.min(oDockH || Infinity, Math.max(160, Math.min(0.65 * roomH(), roomH() - 320)));
+  const dockBottom = () => t.top + (rsTasksH() || Math.min(oDockH || Infinity, Math.max(160, Math.min(0.65 * roomH(), roomH() - 320))));
   office.mod.setInsets({
     left: l ? (l.right - v.left) / v.width : 0,
     right: r ? (v.right - r.left) / v.width : 0,

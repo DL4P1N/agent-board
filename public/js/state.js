@@ -62,6 +62,10 @@ let ui = { nf: { open: false, loaded: false, loading: false, url: '', kind: null
 // folded; the Tasks window starts open and docked.
 const oUi = (() => { try { const v = JSON.parse(store.get('board-office-ui') || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } })();
 const oSave = () => store.set('board-office-ui', JSON.stringify(oUi));
+// Sizes dragged (resize.js), per board in this browser, in px: the side columns' widths (left, right) and heights (leftH,
+// rcolH), Agents' and File locks' (agents, locks), the Tasks panel's (tasks; tasks3d: docked with 3D on). Unset, the layout's own.
+const sizes = (() => { try { const v = JSON.parse(store.get('board-sizes') || '{}'); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch { return {}; } })();
+const sizesSave = () => store.set('board-sizes', JSON.stringify(sizes));
 let seenMention = Number(store.get('board-seen-mention') || 0);
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const smooth = () => (reduceMotion() ? 'auto' : 'smooth');
@@ -74,4 +78,4 @@ function setSeenMention(id) { seenMention = id; }
 
 export { $, ACTIVE, AGENT_ONLINE_MS, ALL_PHASES, ANYONE, BASE, cleanName, COL_DESC, COL_EMPTY, COL_SHOWN, COLS, DEFAULT_SETTINGS,
   DONE_SHOWN, linkNameCut, FROZEN_DESC, HINT, PAST_DESC, HOLDING, HUES, LABEL, linkName, linkNameAsIs, me, NAME_MAX, nsKey, oSave, oUi, pending, qs, reduceMotion, seenMention,
-  setMe, setSeenMention, setState, setToken, SIZE_TIP, SLUG, smooth, STALE_MS, state, STATUSES, store, token, ui };
+  setMe, setSeenMention, setState, setToken, SIZE_TIP, sizes, sizesSave, SLUG, smooth, STALE_MS, state, STATUSES, store, token, ui };

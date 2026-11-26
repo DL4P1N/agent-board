@@ -220,7 +220,7 @@ try {
     const tk = (n) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n)), edge = tk('--edge'), gut = tk('--gutter');
     const R = (e) => e.getBoundingClientRect(), near = (a, b) => Math.abs(a - b) < 1;
     const hdr = R(document.querySelector('#app > header')).bottom, tb = R($('topbar'));
-    const rs = [...$('o-rcol').children].filter((e) => e.offsetWidth).map(R);
+    const rs = [...$('o-rcol').children].filter((e) => e.offsetWidth && !e.classList.contains('rsz')).map(R); // the resize separators take no room
     const tall = document.createElement('div'); tall.style.height = '3000px'; $('o-blocked').append(tall);
     await new Promise((r) => requestAnimationFrame(r)); const l = R($('o-left')); tall.remove();
     return { edge: near(l.left, edge) && rs.every((r) => near(innerWidth - r.right, edge)) && [l.top, tb.top, rs[0].top].every((t) => near(t - hdr, edge)) && near(innerHeight - rs.at(-1).bottom, edge),
@@ -518,7 +518,7 @@ try {
     // Activity: the board's own feed (with its filters) and chat, in the right column under Agents.
     check('Activity, under Agents, has the feed with its filters', await page.evaluate(() => $('o-rcol').contains($('o-act')) && $('o-act').contains($('feed')) && $('o-act').contains($('tabs')) && $('feed').offsetHeight > 150 && /vote API is up/.test($('feed').innerText)), await page.evaluate(() => $('feed').offsetHeight));
     // Its filters are clickable: the feed doesn't cover them, and the room's name tags never paint over the window.
-    const corners = await page.evaluate(() => { const r = $('o-act').getBoundingClientRect(); return [[r.left + 4, r.top + 4], [r.right - 4, r.top + 4], [r.left + 4, r.bottom - 4], [r.right - 4, r.bottom - 4], [r.left + r.width / 2, r.top + r.height / 2]].filter(([x, y]) => !$('o-act').contains(document.elementFromPoint(x, y))).length; });
+    const corners = await page.evaluate(() => { const r = $('o-act').getBoundingClientRect(); return [[r.left + 4, r.top + 4], [r.right - 4, r.top + 4], [r.left + 4, r.bottom - 4], [r.right - 4, r.bottom - 4], [r.left + r.width / 2, r.top + r.height / 2]].filter(([x, y]) => { const e = document.elementFromPoint(x, y); return !$('o-act').contains(e) && !e?.classList.contains('rsz'); }).length; }); // a resize separator on its edge is the board's own
     check('nothing from the room covers Activity (its corners and middle are its own)', corners === 0, String(corners));
     check('the room\'s name tags sit under every panel (the scene is its own stacking layer)', await page.evaluate(() => { const s = getComputedStyle($('office-scene')); return s.zIndex === '0' && s.isolation === 'isolate'; }));
     for (const tab of ['chat', 'me', 'all']) {

@@ -805,9 +805,11 @@ button.tbc:hover { background: var(--raised); border-color: var(--field-line); }
    folded panels stack at the top. The panels sit --edge from the window's edges (and under the header) and --gutter
    apart (focus rings are drawn inside each control, so nothing needs room around it). */
 /* --dock (the side columns' width) is on the root: the toasts (outside main) keep clear of the side columns with it. */
+/* Dragging a side column's inner edge sets that side's width (--dock-l, --dock-r, on the root too: resize.js); unset,
+   both are --dock. */
 :root { --dock: clamp(272px, 20vw, 340px); }
 main { --top: calc(var(--hdr, 54px) + var(--edge)); isolation: isolate;
-  display: grid; grid-template-columns: var(--dock) minmax(0, 1fr) var(--dock); grid-template-areas: "left centre right" "left foot right"; grid-template-rows: 1fr auto; gap: 0 var(--gutter); align-items: start;
+  display: grid; grid-template-columns: var(--dock-l, var(--dock)) minmax(0, 1fr) var(--dock-r, var(--dock)); grid-template-areas: "left centre right" "left foot right"; grid-template-rows: 1fr auto; gap: 0 var(--gutter); align-items: start;
   padding: var(--edge); }
 /* The narrowest three columns (1280 to 1400px): the side columns go from 240px at 1280 to 280px at 1400, and below
    1400 the task columns sit a little closer with a narrower folded Done rail, so four columns keep room for a title. */
@@ -826,7 +828,7 @@ html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top)
 .o-rcol > .o-right { flex: 0 1 auto; min-height: 120px; max-height: 45%; }
 .o-rcol > .o-act { flex: 0 100 auto; min-height: 0; }
 .o-rcol > .o-act:not(.folded) { min-height: min(300px, 45%); }
-.o-rcol > .o-right.folded + .o-act:not(.folded) { flex: 1 1 auto; } /* Agents folded: Activity takes the column */
+.o-rcol > .o-right.folded ~ .o-act:not(.folded) { flex: 1 1 auto; } /* Agents folded: Activity takes the column */
 .o-rcol > .o-locks { flex: 0 1 auto; min-height: 120px; max-height: 30%; }
 .o-rcol > :is(.o-right, .o-act, .o-locks).folded { flex: 0 0 auto; min-height: 0; }
 .o-rcol > .o-act.folded ~ .o-locks:not(.folded) { max-height: none; }
@@ -853,6 +855,69 @@ html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top)
 /* Tablets and phones: one column, in order of what matters: what needs attention, the board, the agents, Activity. */
 @media (max-width: 1000px) {
   main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "left" "centre" "right" "foot"; grid-template-rows: none; }
+}
+
+/* ---------- resizing the panels (three columns, both views; resize.js) ---------- */
+/* Each side column's inner edge and foot, the edges between Agents, Activity and File locks, and the Tasks panel's
+   foot: dragged, or with the arrow keys once focused (Home / End: smallest / largest; Enter or a double-click: back to
+   the default), remembered in this browser. Each is a --ctl-xs strip (--ctl on a touch screen) centred on its gutter
+   or edge, drawn only while it is hovered, focused or dragged: a 2px line along the gutter (the accent while focused or
+   dragged) and, focused, the app's ring around the gutter. The right column's edges between panels are in its flow but
+   take no room (their margins give back their height and the gap they add). A folded panel has none of its own. */
+.rsz { display: none; }
+@media (min-width: 1280px) {
+  .rsz { --rsz-hit: var(--ctl-xs); --rsz-in: calc((var(--rsz-hit) - var(--gutter)) / 2); display: block; position: absolute; z-index: 2; touch-action: none; -webkit-user-select: none; user-select: none; }
+  .rsz:focus-visible { outline: none; }
+  .rsz::before, .rsz::after { content: ""; position: absolute; pointer-events: none; }
+  .rsz-x::before, .rsz-x::after { inset: 0 var(--rsz-in); }
+  .rsz-y::before, .rsz-y::after { inset: var(--rsz-in) 0; }
+  .rsz::before { --rsz-c: var(--line-strong); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+  .rsz-x::before { background: linear-gradient(var(--rsz-c), var(--rsz-c)) center / 2px 100% no-repeat; }
+  .rsz-y::before { background: linear-gradient(var(--rsz-c), var(--rsz-c)) center / 100% 2px no-repeat; }
+  .rsz:is(:hover, :focus-visible, .on)::before { opacity: 1; }
+  .rsz:is(:focus-visible, .on)::before { --rsz-c: var(--accent); }
+  .rsz:focus-visible::after { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .rsz-x { top: -2px; bottom: -2px; width: var(--rsz-hit); cursor: col-resize; }
+  .rsz-y { left: -2px; right: -2px; height: var(--rsz-hit); cursor: row-resize; }
+  /* A panel's foot: centred on its bottom edge (past its 2px border). */
+  :is(#rsz-lefth, #rsz-tasks) { bottom: calc(-2px - var(--rsz-hit) / 2); }
+  #rsz-left { left: calc(100% + 2px - var(--rsz-in)); } /* past Needs attention's 2px border, centred on the gutter */
+  /* The right column's: its inner edge as tall as its panels, its foot under the last one (--rsz-end: the room left
+     under them). */
+  #rsz-right { top: 0; bottom: var(--rsz-end, 0px); right: calc(100% - var(--rsz-in)); }
+  #rsz-rcolh { left: 0; right: 0; bottom: calc(var(--rsz-end, 0px) - var(--rsz-hit) / 2); }
+  .o-rcol > .rsz-split { position: relative; flex: none; margin: calc((var(--gutter) + var(--rsz-hit)) / -2) 0; left: 0; right: 0; }
+  .o-panel.folded > .rsz-y, .o-right.folded + .rsz, .rsz:has(+ .o-locks.folded), .o-rcol:not(:has(> .o-panel:not(.folded))) > #rsz-rcolh, html[data-board-view="office"] .o-tasks.max > #rsz-tasks { display: none; }
+  /* A size set here (resize.js: .sized, --rsz-h): the panel or the right column that tall. Needs attention keeps its
+     largest height and scrolls inside; Agents and File locks keep their minimums, Activity still giving way first; the
+     Tasks panel's columns (or table) scroll inside it, down to its foot. */
+  #o-left.sized:not(.folded) { height: var(--rsz-h); }
+  /* Agents or File locks sized: exactly that tall; Activity, between them, takes the rest of the column (growing to it
+     too), down to its minimum. Short of room (the column made shorter), resize.js lowers the sized ones' heights. */
+  .o-rcol > .sized:not(.folded) { flex: none; height: var(--rsz-h); max-height: none; }
+  /* The column given a height: Activity keeps a fixed minimum (45% of a shortened column would let it shrink with the
+     column, below its tabs, a few events and the chat box). */
+  .o-rcol.sized > .o-act:not(.folded) { min-height: min(300px, 100%); }
+  .o-rcol:is(.sized, :has(> .sized:not(.folded))) > .o-act:not(.folded) { flex-grow: 1; }
+  .o-rcol.sized.sized { height: var(--rsz-h); }
+  html[data-board-view="office"] .o-rcol.sized { bottom: auto; }
+  html:not([data-board-view="office"]) .o-tasks.sized:not(.folded) { height: var(--rsz-h); }
+  html:not([data-board-view="office"]) .o-tasks.sized > .o-body { overflow: hidden; }
+  html:not([data-board-view="office"]) .o-tasks.sized :is(.board, .ttable) { max-height: none; }
+  html:not([data-board-view="office"]) .o-tasks.sized .ttable { overflow: auto; }
+  html:not([data-board-view="office"]) .o-tasks.sized .board { grid-template-rows: minmax(0, 1fr); overflow-y: hidden; }
+  html:not([data-board-view="office"]) .o-tasks.sized .col { display: flex; flex-direction: column; min-height: 0; max-height: 100%; }
+  html:not([data-board-view="office"]) .o-tasks.sized .col > :is(h3, .cd, .more) { flex: none; }
+  html:not([data-board-view="office"]) .o-tasks.sized .col .cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+}
+@media (min-width: 1280px) and (hover: none) and (pointer: coarse) { .rsz { --rsz-hit: var(--ctl); } }
+html.rsz-drag-x, html.rsz-drag-x * { cursor: col-resize !important; }
+html.rsz-drag-y, html.rsz-drag-y * { cursor: row-resize !important; }
+html:is(.rsz-drag-x, .rsz-drag-y) body { -webkit-user-select: none; user-select: none; }
+@media (forced-colors: active) {
+  .rsz::before { forced-color-adjust: none; --rsz-c: CanvasText; }
+  .rsz:is(:focus-visible, .on)::before { --rsz-c: Highlight; }
+  .rsz:focus-visible::after { outline-color: Highlight; }
 }
 
 /* ---------- command palette (Ctrl+K) ---------- */
@@ -887,7 +952,7 @@ html:not([data-board-view="office"]) .o-rcol { position: sticky; top: var(--top)
    (--toast-room, set by toast() in helpers.js) and the last item scrolls clear of it. */
 @media (max-width: 1000px) { main { padding-bottom: calc(var(--edge) + var(--toast-room, 0px)); } }
 #toasts.top { bottom: auto; top: calc(var(--s6) + env(safe-area-inset-top, 0px)); } /* a phone typing near the foot (helpers.js) */
-@media (min-width: 1280px) { #toasts { left: calc(var(--edge) + var(--dock) + var(--gutter)); right: calc(var(--edge) + var(--dock) + var(--gutter)); } }
+@media (min-width: 1280px) { #toasts { left: calc(var(--edge) + var(--dock-l, var(--dock)) + var(--gutter)); right: calc(var(--edge) + var(--dock-r, var(--dock)) + var(--gutter)); } }
 .toast { background: var(--toast); color: var(--toast-ink); border: 2px solid var(--border); padding: var(--s4) var(--s5); border-radius: var(--r-md); font-size: var(--fs-sm); max-width: 420px; box-shadow: var(--e2); pointer-events: none; overflow-wrap: anywhere; display: flex; align-items: center; gap: var(--s4);
   transition: opacity var(--t-base) var(--ease), transform var(--t-slow) var(--ease); }
 @starting-style { .toast { opacity: 0; transform: translateY(8px); } }

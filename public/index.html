@@ -158,6 +158,10 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
         </div>
         <div id="o-blocked"></div>
       </div>
+      <!-- Resizing (resize.js, three columns only): this column's inner edge and foot; the right column's inner edge,
+           foot and the edges between Agents, Activity and File locks; the Tasks panel's foot. -->
+      <div class="rsz rsz-x" id="rsz-left" data-rsz="left" role="separator" tabindex="0" aria-orientation="vertical" aria-controls="o-left" aria-label="Width of Needs attention" title="Drag to resize · Enter or a double-click resets"></div>
+      <div class="rsz rsz-y" id="rsz-lefth" data-rsz="lefth" role="separator" tabindex="0" aria-orientation="horizontal" aria-controls="o-left" aria-label="Height of Needs attention" title="Drag to resize · Enter or a double-click resets"></div>
     </aside>
 
     <div class="centre" id="centre">
@@ -211,6 +215,7 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
             <div class="board" id="board" tabindex="-1"></div>
             <div class="ttable" id="tasktable" hidden></div>
           </div>
+          <div class="rsz rsz-y" id="rsz-tasks" data-rsz="tasks" role="separator" tabindex="0" aria-orientation="horizontal" aria-controls="o-tasks" aria-label="Height of Tasks" title="Drag to resize · Enter or a double-click resets"></div>
         </section>
       </div>
     </div>
@@ -221,10 +226,12 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
     </section>
 
     <div class="o-rcol" id="o-rcol">
+      <div class="rsz rsz-x" id="rsz-right" data-rsz="right" role="separator" tabindex="0" aria-orientation="vertical" aria-controls="o-rcol" aria-label="Width of the right column" title="Drag to resize · Enter or a double-click resets"></div>
       <aside class="o-panel o-dock o-right" id="o-right" aria-labelledby="o-right-h">
         <div class="o-head"><h2 id="o-right-h">Agents</h2><span class="o-sub" id="o-right-sub"></span><button type="button" class="o-ib" data-o-fold="right" aria-expanded="true" aria-controls="o-agents" aria-label="Fold Agents" title="Fold Agents"><span class="chev" aria-hidden="true">▾</span></button></div>
         <div class="o-body" id="o-agents"><ul class="o-agents" id="people"></ul></div>
       </aside>
+      <div class="rsz rsz-y rsz-split" id="rsz-agents" data-rsz="agents" role="separator" tabindex="0" aria-orientation="horizontal" aria-controls="o-right" aria-label="Height of Agents" title="Drag to resize · Enter or a double-click resets"></div>
       <section class="o-panel o-act" id="o-act" aria-labelledby="f-h">
         <div class="o-head"><h2 id="f-h">Activity</h2><span class="o-sub" id="o-act-x"></span><button type="button" class="o-ib" id="o-act-fold" data-o-fold="act" aria-expanded="true" aria-controls="o-act-b" aria-label="Fold Activity" title="Fold Activity"><span class="chev" aria-hidden="true">▾</span></button></div>
         <div class="o-body" id="o-act-b">
@@ -251,12 +258,14 @@ try { window.applyTheme(localStorage.getItem('board-theme')); } catch (e) {}
           </div>
         </div>
       </section>
+      <div class="rsz rsz-y rsz-split" id="rsz-locks" data-rsz="locks" role="separator" tabindex="0" aria-orientation="horizontal" aria-controls="o-locks" aria-label="Height of File locks" title="Drag to resize · Enter or a double-click resets"></div>
       <section class="o-panel o-locks folded" id="o-locks" aria-labelledby="l-h">
         <div class="o-head"><h2 id="l-h">File locks</h2><span class="o-sub" id="l-count"></span><button type="button" class="o-ib" id="l-tog" data-o-fold="locks" aria-expanded="false" aria-controls="l-body" aria-label="Open File locks" title="Open File locks"><span class="chev" aria-hidden="true">▾</span></button></div>
         <div class="o-body" id="l-body">
           <ul class="locks" id="locks"></ul>
         </div>
       </section>
+      <div class="rsz rsz-y" id="rsz-rcolh" data-rsz="rcolh" role="separator" tabindex="0" aria-orientation="horizontal" aria-controls="o-rcol" aria-label="Height of the right column" title="Drag to resize · Enter or a double-click resets"></div>
     </div>
     <!-- How the board's cards work: one muted line at the foot of the page (the Board view's columns only). -->
     <footer class="pagefoot"><p class="hint" id="cols-hint"><span class="kb">Drag a card to another column, or use its <b>Move…</b> button, to change its status. Open a card (click / Enter) to edit it.</span><span class="touch">Use a card's <b>Move…</b> button to change its status. Tap a card to edit it.</span> Cards flag priority (P1, P3) and size (S, L) only when it isn't the usual P2 and M.</p></footer>

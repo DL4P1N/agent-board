@@ -1,7 +1,7 @@
 // The entry point: <script type="module" src="js/boot.js"> in index.html. The page's modules, in the order they run
 // (each imports the one before it first, so the order is the one the page's old inline script had):
 // state, helpers, data, derived, render, needs, topbar, setup, agents, tasks, activity, actions, task-dialog, theme,
-// office, panels, palette, boot.
+// office, resize, panels, palette, boot.
 
 import './palette.js';
 import { $, HUES, linkName, linkNameAsIs, linkNameCut, me, nsKey, oSave, oUi, qs, setMe, SLUG, state, store, token, ui } from './state.js';

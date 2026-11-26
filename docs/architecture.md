@@ -171,7 +171,7 @@ The web board is `public/index.html` (the page's markup, plus a small inline scr
 | `js/needs.js`, `js/topbar.js`, `js/setup.js` | Needs attention and What to do now; the clock, desktop notifications and the top bar; the setup guide and export. |
 | `js/agents.js`, `js/tasks.js`, `js/activity.js` | The Agents panel; the task board (cards, Columns and Table, drag and drop); the feed, direct messages and chat. |
 | `js/actions.js`, `js/task-dialog.js` | The page's delegated click, key and form handlers; the task dialog. |
-| `js/theme.js`, `js/office.js`, `js/panels.js`, `js/palette.js` | The theme chooser; the 3D office on or off; folding the panels and the Tasks window's states; the Ctrl+K palette. |
+| `js/theme.js`, `js/office.js`, `js/resize.js`, `js/panels.js`, `js/palette.js` | The theme chooser; the 3D office on or off; resizing the panels (their edges dragged or moved with the keys, the sizes kept in this browser); folding the panels and the Tasks window's states; the Ctrl+K palette. |
 | `js/boot.js` | The entry point (`<script type="module">`): `start()`, and the few names the browser tests read on `window`. |
 
 The modules run in the order of this table: each imports the one before it first, so `state.js` runs first and `boot.js` last, the order the page's code had when it was one inline script.
