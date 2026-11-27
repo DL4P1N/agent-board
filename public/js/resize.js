@@ -150,8 +150,10 @@ function rsEnd() {
   if (col.style.getPropertyValue('--rsz-end') !== end) col.style.setProperty('--rsz-end', end);
 }
 if ('ResizeObserver' in window) {
-  const ro = new ResizeObserver(() => { if (!endReq) endReq = requestAnimationFrame(() => { endReq = 0; if (WIDE.matches) { rsEnd(); aria('rcolh'); } }); });
-  for (const id of ['o-rcol', 'o-right', 'o-act', 'o-locks']) ro.observe($(id));
+  // Any panel changing size (the page laid out, a panel opened or folded, the window resized): the right column's foot
+  // follows its panels, and every separator shown has its value and range (one shown late still gets them).
+  const ro = new ResizeObserver(() => { if (!endReq) endReq = requestAnimationFrame(() => { endReq = 0; if (WIDE.matches) { rsEnd(); for (const k of Object.keys(H)) aria(k); } }); });
+  for (const id of ['main', 'o-left', 'o-tasks', 'o-rcol', 'o-right', 'o-act', 'o-locks']) ro.observe($(id));
 }
 function aria(k) {
   const el = $(`rsz-${k}`); if (!el?.offsetWidth) return;

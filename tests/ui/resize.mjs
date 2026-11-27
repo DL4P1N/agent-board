@@ -49,6 +49,9 @@ async function load(page, view, reload = false) {
   if (reload) await page.reload({ waitUntil: 'load' }); else await page.goto(url, { waitUntil: 'load' });
   await until(page, () => document.getElementById('conn')?.classList.contains('live') && document.querySelectorAll('#board .card').length > 10, null, 15000);
   if (view === 'office') webgl = await until(page, () => document.documentElement.dataset.boardView === 'office' && !document.querySelector('.office-view.loading'), null, 20000);
+  // Toasts (the "on the board as you" one on load) aren't this suite's: one over the Tasks panel's foot would take the drag.
+  await page.addStyleTag({ content: '#toasts { display: none !important; }' });
+  await page.evaluate(() => document.fonts.ready.then(() => {}));
   await settle(page);
 }
 async function block(name, fn) { try { await fn(); } catch (e) { check(name, false, 'threw: ' + e.message.split('\n')[0]); } }
