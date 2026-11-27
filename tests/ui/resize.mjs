@@ -67,7 +67,7 @@ const geo = (page) => page.evaluate(() => {
 });
 // Drags a separator from its middle by (dx, dy), in steps, with the mouse.
 async function drag(page, id, dx, dy) {
-  const c = await page.$eval(`#${id}`, (e) => { const b = e.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + Math.min(b.height / 2, 200) }; });
+  const c = await page.$eval(`#${id}`, (e) => { e.scrollIntoView({ block: 'nearest', inline: 'nearest' }); const b = e.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + Math.min(b.height / 2, 200) }; });
   await page.mouse.move(c.x, c.y); await page.mouse.down();
   for (let i = 1; i <= 5; i++) await page.mouse.move(c.x + (dx * i) / 5, c.y + (dy * i) / 5);
   await page.mouse.up(); await sleep(60);
@@ -82,11 +82,14 @@ try {
     const p = await open({ w: 1440, h: 900 });
     const s = await shown(p);
     check('1440, 3D off: separators on the side columns\' inner edges and feet, between Agents and Activity and on the Tasks panel\'s foot (none on folded File locks)', ['left', 'lefth', 'right', 'rcolh', 'agents', 'tasks'].every((k) => s.includes(k)) && !s.includes('locks'), s.join(','));
+    // Each scrolled into view first: with taller cards (Linux fonts) the Tasks panel's foot is under the window's.
     const a = await p.evaluate(() => [...document.querySelectorAll('.rsz')].filter((e) => e.offsetWidth).map((e) => {
+      e.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       const b = e.getBoundingClientRect(), before = getComputedStyle(e, '::before'), x = e.getAttribute('aria-orientation') === 'vertical';
       return { k: e.dataset.rsz, role: e.getAttribute('role'), label: e.getAttribute('aria-label'), o: e.getAttribute('aria-orientation'), tab: e.tabIndex, now: e.getAttribute('aria-valuenow'), min: e.getAttribute('aria-valuemin'), max: e.getAttribute('aria-valuemax'),
         hit: Math.round(x ? b.width : b.height), ink: before.opacity, at: document.elementFromPoint(b.left + b.width / 2, b.top + Math.min(b.height / 2, 100)) === e };
     }));
+    await p.evaluate(() => scrollTo(0, 0));
     check('each is role="separator" with a label, an orientation, a Tab stop and aria-valuenow/min/max', a.every((e) => e.role === 'separator' && e.label && /^(vertical|horizontal)$/.test(e.o) && e.tab === 0 && [e.now, e.min, e.max].every((v) => v !== null && Number.isFinite(Number(v))) && Number(e.min) <= Number(e.now) && Number(e.now) <= Number(e.max)), JSON.stringify(a));
     check('each is a 24px target (across its edge) and on top there, and nothing is drawn until hovered or focused', a.every((e) => e.hit >= 24 && e.at && e.ink === '0'), JSON.stringify(a.map((e) => [e.k, e.hit, e.at, e.ink])));
     const g0 = await geo(p);

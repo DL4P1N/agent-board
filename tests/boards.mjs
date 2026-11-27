@@ -174,7 +174,12 @@ const poll = (wait) => fetch(`${board.base}/b/poll/api/events?since=${pollCur}&w
 const holdPoll = async () => { for (let i = 0; i < 50; i++) { const r = await poll(20); if (r.status !== 429) return r; await r.body?.cancel(); await new Promise((x) => setTimeout(x, 200)); } return poll(20); };
 const polls = Array.from({ length: WAITS }, () => holdPoll().then((r) => ({ status: r.status, at: Date.now() })).catch((e) => ({ status: `error ${e.message}`, at: Date.now() })));
 let allWaiting = false;
-for (const t0 = Date.now(); !allWaiting && Date.now() - t0 < 10e3;) allWaiting = (await poll(1).then((r) => r.status).catch(() => 0)) === 429;
+// A probe that got a slot pauses before the next one (longer than a refused poll's retry), so the refused poll gets
+// the slot it frees instead of the next probe taking it again and again (as on a slow Windows runner).
+for (const t0 = Date.now(); !allWaiting && Date.now() - t0 < 10e3;) {
+  allWaiting = (await poll(1).then((r) => r.status).catch(() => 0)) === 429;
+  if (!allWaiting) await new Promise((x) => setTimeout(x, 400));
+}
 const archivedAt = Date.now();
 const archPoll = await admin("/boards/poll/archive", "POST");
 const ended = await Promise.all(polls);
